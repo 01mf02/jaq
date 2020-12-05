@@ -1,0 +1,72 @@
+main = _{ SOI ~ expr ~ EOI }
+
+expr = { term ~ (op ~ term)* }
+term = _{ "(" ~ expr ~ ")" | atom | array | obj | path | ite | function }
+
+atom = { null | boole | num | str }
+
+null = { "null" }
+boole = { "true" | "false" }
+
+num = @{ int ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ int)? }
+    int = { ("+" | "-")? ~ ASCII_DIGIT+ }
+
+str = ${ "\"" ~ inner ~ "\"" }
+    inner = @{ char* }
+    char = {
+        !("\"" | "\\") ~ ANY
+        | "\\" ~ ("\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t")
+        | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+    }
+
+array = { "[" ~ expr? ~ "]" }
+
+obj = { "{" ~ pairs? ~ "}" }
+    pairs = _{ pair ~ ("," ~ pair)* }
+    pair = { key ~ (":" ~ term)? }
+    key = _{ ident | str | "(" ~ expr ~ ")" }
+
+op = _{ filter_op | logic_op | math_op }
+
+filter_op = _{ pipe | comma }
+    pipe  = { "|" }
+    comma = { "," }
+
+logic_op = _{ or | and | eq | ne | gt | ge | lt | le }
+    or  = { "or"  }
+    and = { "and" }
+    eq = { "==" }
+    ne = { "!=" }
+    gt = { ">"  }
+    ge = { ">=" }
+    lt = { "<"  }
+    le = { "<=" }
+
+math_op = _{ add | sub | mul | div | rem }
+    add = { "+" }
+    sub = { "-" }
+    mul = { "*" }
+    div = { "/" }
+    rem = { "%" }
+
+path = { path_head ~ path_tail* }
+    path_head  = { "." ~ path_ident? ~ path_range* }
+    path_tail  = { "." ~ path_ident  ~ path_range* }
+    path_ident = { ident ~ question? }
+    path_range = { range ~ question? }
+    range      = { "[" ~ (from_until | until | from | at)? ~ "]" }
+    from_until = { expr ~ ":" ~ expr }
+    until      =        { ":" ~ expr }
+    from       = { expr ~ ":" }
+    at         = { expr }
+    question   = { "?" }
+
+ite = { "if" ~ expr ~ "then" ~ expr ~ "else" ~ expr ~ "end" }
+
+function = { ident ~ args? }
+args = { "(" ~ expr ~ (";" ~ expr)* ~ ")" }
+
+
+ident = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
+
+WHITESPACE = _{ " " | "\t" }
