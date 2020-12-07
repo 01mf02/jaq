@@ -96,7 +96,7 @@ impl Filter {
                 ("not", 0) => Val::Bool(!v.as_bool()).into(),
                 ("add", 0) => {
                     let iter = v.iter().unwrap().map(|x| (*x).clone());
-                    v.fold(Val::Null, |acc, x| (acc + x).unwrap()).into()
+                    iter.fold(Val::Null, |acc, x| (acc + x).unwrap()).into()
                 }
                 (name, len) => panic!("unrecognised function: {}/{}", name, len),
             }, //_ => todo!(),
