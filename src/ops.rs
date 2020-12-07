@@ -101,7 +101,7 @@ impl PartialOrd for Val {
 }
 
 impl Val {
-    fn as_bool(&self) -> bool {
+    pub fn as_bool(&self) -> bool {
         !matches!(self, Val::Null | Val::Bool(false))
     }
 }

@@ -28,6 +28,14 @@ impl Val {
             _ => None,
         }
     }
+
+    pub fn iter(&self) -> Option<Vals> {
+        match self {
+            Self::Arr(a) => Some(Box::new(a.iter().cloned())),
+            Self::Obj(o) => Some(Box::new(o.values().cloned())),
+            _ => None,
+        }
+    }
 }
 
 impl From<serde_json::Value> for Val {

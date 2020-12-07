@@ -91,16 +91,13 @@ impl Filter {
             Self::Function(name, args) => match (name.as_str(), args.len()) {
                 // TODO: Map to Self::Empty
                 ("empty", 0) => Box::new(core::iter::empty()),
-                ("any", 0) => todo!(),
-                ("all", 0) => todo!(),
-                ("not", 0) => todo!(),
-                ("add", 0) => match &*v {
-                    Val::Arr(a) => {
-                        let iter = a.iter().map(|x| (**x).clone());
-                        iter.fold(Val::Null, |acc, x| (acc + x).unwrap()).into()
-                    }
-                    _ => todo!(),
-                },
+                ("any", 0) => Val::Bool(v.iter().unwrap().any(|v| v.as_bool())).into(),
+                ("all", 0) => Val::Bool(v.iter().unwrap().all(|v| v.as_bool())).into(),
+                ("not", 0) => Val::Bool(!v.as_bool()).into(),
+                ("add", 0) => {
+                    let iter = v.iter().unwrap().map(|x| (*x).clone());
+                    v.fold(Val::Null, |acc, x| (acc + x).unwrap()).into()
+                }
                 (name, len) => panic!("unrecognised function: {}/{}", name, len),
             }, //_ => todo!(),
         }
