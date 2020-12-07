@@ -1,3 +1,4 @@
+use crate::filter::Filter;
 use crate::val::{Val, Vals};
 use std::rc::Rc;
 
@@ -9,6 +10,8 @@ pub enum Function {
     Any,
     Add,
     Length,
+    Map(Box<Filter>),
+    Select(Box<Filter>),
 }
 
 impl Function {
@@ -24,6 +27,20 @@ impl Function {
                 iter.fold(Val::Null, |acc, x| (acc + x).unwrap()).into()
             }
             Length => Val::Num(v.len().unwrap()).into(),
+            Map(f) => {
+                let iter = v.iter().unwrap().flat_map(move |x| f.run(x));
+                Box::new(iter.collect::<Vec<_>>().into_iter())
+            }
+            Select(f) => {
+                let iter = f.run(Rc::clone(&v)).flat_map(|y| {
+                    if y.as_bool() {
+                        Box::new(core::iter::once(Rc::clone(&v)))
+                    } else {
+                        Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
+                    }
+                });
+                Box::new(iter.collect::<Vec<_>>().into_iter())
+            }
         }
     }
 }

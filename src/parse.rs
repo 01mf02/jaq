@@ -209,9 +209,19 @@ impl TryFrom<Rule> for MathOp {
 
 impl Function {
     fn from(name: &str, mut args: impl Iterator<Item = Filter>) -> Option<Self> {
-        if let Some(_) = args.next() {
+        if let Some(arg1) = args.next().map(Box::new) {
             // unary or higher-arity function
-            None
+            if let Some(_arg2) = args.next() {
+                // binary or higher-arity function
+                None
+            } else {
+                // unary function
+                match name {
+                    "map" => Some(Self::Map(arg1)),
+                    "select" => Some(Self::Select(arg1)),
+                    _ => None,
+                }
+            }
         } else {
             // nullary function
             match name {
