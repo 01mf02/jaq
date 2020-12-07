@@ -112,14 +112,7 @@ impl From<Pair<'_, Rule>> for Filter {
                 assert_eq!(iter.next(), None);
                 Filter::Function(name, args)
             }
-            Rule::path => {
-                let mut iter = pair.into_inner();
-                let head = iter.next().unwrap();
-                let path = head.into_inner().chain(iter.flat_map(|i| i.into_inner()));
-                let path = path.map(PathElem::from).collect();
-                //println!("{:?}", path);
-                Filter::Path(path)
-            }
+            Rule::path => Filter::Path(pair.into_inner().flat_map(PathElem::from_path).collect()),
             _ => unreachable!(),
         }
     }
@@ -137,33 +130,47 @@ impl From<Pair<'_, Rule>> for Atom {
     }
 }
 
-impl From<Pair<'_, Rule>> for PathElem {
-    fn from(pair: Pair<Rule>) -> Self {
-        let kind = pair.as_rule();
+impl PathElem {
+    fn from_path(pair: Pair<Rule>) -> impl Iterator<Item = Self> + '_ {
+        use core::iter::{empty, once};
         let mut iter = pair.into_inner();
-        let head = iter.next().unwrap();
-        // TODO
-        let _question = iter.next().is_some();
+        let index = iter.next().unwrap();
+        let index = match index.as_rule() {
+            Rule::path_index => {
+                let index = Self::from_index(index).0.to_string();
+                Box::new(once(Self::Index(Filter::Atom(Atom::Str(index)))))
+            }
+            // just a dot
+            _ => Box::new(empty()) as Box<dyn Iterator<Item = _>>,
+        };
+        index.chain(iter.map(PathElem::from_range))
+    }
+
+    fn from_index(pair: Pair<Rule>) -> (&str, bool) {
+        let mut iter = pair.into_inner();
+        let index = iter.next().unwrap().into_inner().next().unwrap().as_str();
+        let question = iter.next().is_some();
         assert_eq!(iter.next(), None);
-        match kind {
-            Rule::path_ident => Self::Index(Filter::Atom(Atom::Str(head.as_str().to_string()))),
-            Rule::path_range => match head.into_inner().next() {
-                None => Self::Range(None, None),
-                Some(range) => match range.as_rule() {
-                    Rule::at => Self::Index(Filter::from(range.into_inner())),
-                    Rule::from => Self::Range(Some(Filter::from(range.into_inner())), None),
-                    Rule::until => Self::Range(None, Some(Filter::from(range.into_inner()))),
-                    Rule::from_until => {
-                        let mut iter = range.into_inner().map(|r| Some(Filter::from(r)));
-                        let from = iter.next().unwrap();
-                        let until = iter.next().unwrap();
-                        assert!(iter.next().is_none());
-                        Self::Range(from, until)
-                    }
-                    _ => unreachable!(),
-                },
+        (index, question)
+    }
+
+    fn from_range(pair: Pair<Rule>) -> PathElem {
+        println!("range: {:?}", pair.as_rule());
+        match pair.into_inner().next() {
+            None => Self::Range(None, None),
+            Some(range) => match range.as_rule() {
+                Rule::at => Self::Index(Filter::from(range.into_inner())),
+                Rule::from => Self::Range(Some(Filter::from(range.into_inner())), None),
+                Rule::until => Self::Range(None, Some(Filter::from(range.into_inner()))),
+                Rule::from_until => {
+                    let mut iter = range.into_inner().map(|r| Some(Filter::from(r)));
+                    let from = iter.next().unwrap();
+                    let until = iter.next().unwrap();
+                    assert!(iter.next().is_none());
+                    Self::Range(from, until)
+                }
+                _ => unreachable!(),
             },
-            _ => unreachable!(),
         }
     }
 }

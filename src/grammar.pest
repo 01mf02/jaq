@@ -50,16 +50,23 @@ math_op = _{ add | sub | mul | div | rem }
     rem = { "%" }
 
 path = { path_head ~ path_tail* }
-    path_head  = { "." ~ path_ident? ~ path_range* }
-    path_tail  = { "." ~ path_ident  ~ path_range* }
-    path_ident = { ident ~ question? }
-    path_range = { range ~ question? }
-    range      = { "[" ~ (from_until | until | from | at)? ~ "]" }
+    path_head = { (path_index | dot) ~ path_range* }
+    path_tail = { path_index ~ path_range* }
+
+    path_index =  { index ~ question? }
+    path_range = _{ range ~ question? }
+
+    index      = _{ dot_id | dot_str }
+    dot_id     = ${ "." ~ ident }
+    dot_str    =  { "." ~ str }
+    dot        =  { "." }
+    question   =  { "?" }
+
+range = { "[" ~ (from_until | until | from | at)? ~ "]" }
     from_until = { expr ~ ":" ~ expr }
     until      =        { ":" ~ expr }
     from       = { expr ~ ":" }
     at         = { expr }
-    question   = { "?" }
 
 ite = { "if" ~ expr ~ "then" ~ expr ~ "else" ~ expr ~ "end" }
 
