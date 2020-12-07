@@ -85,9 +85,13 @@ impl Filter {
                 });
                 Box::new(v.into_iter())
             }
-            Self::IfThenElse(_cond, _truth, _falsity) => {
-                todo!()
-            }
+            Self::IfThenElse(cond, truth, falsity) => Box::new(cond.run(v).flat_map(move |x| {
+                if x.as_bool() {
+                    truth.run(x)
+                } else {
+                    falsity.run(x)
+                }
+            })),
             Self::Function(name, args) => match (name.as_str(), args.len()) {
                 // TODO: Map to Self::Empty
                 ("empty", 0) => Box::new(core::iter::empty()),
