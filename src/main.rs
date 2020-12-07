@@ -1,5 +1,6 @@
 //mod numpair;
 mod filter;
+mod functions;
 mod ops;
 mod parse;
 mod path;

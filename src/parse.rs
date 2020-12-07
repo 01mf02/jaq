@@ -1,4 +1,5 @@
 use crate::filter::{Atom, Filter};
+use crate::functions::Function;
 use crate::ops::{LogicOp, MathOp};
 use crate::path::PathElem;
 use core::convert::TryFrom;
@@ -104,13 +105,13 @@ impl From<Pair<'_, Rule>> for Filter {
             }
             Rule::function => {
                 let mut iter = pair.into_inner();
-                let name = iter.next().unwrap().as_str().to_string();
+                let name = iter.next().unwrap().as_str();
                 let args = match iter.next() {
-                    None => vec![],
-                    Some(args) => args.into_inner().map(Self::from).collect(),
+                    None => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
+                    Some(args) => Box::new(args.into_inner().map(Self::from)),
                 };
                 assert_eq!(iter.next(), None);
-                Filter::Function(name, args)
+                Filter::Function(Function::from(name, args).unwrap())
             }
             Rule::path => Filter::Path(pair.into_inner().flat_map(PathElem::from_path).collect()),
             _ => unreachable!(),
@@ -202,6 +203,26 @@ impl TryFrom<Rule> for MathOp {
             Rule::div => Ok(MathOp::Div),
             Rule::rem => Ok(MathOp::Rem),
             _ => Err(()),
+        }
+    }
+}
+
+impl Function {
+    fn from(name: &str, mut args: impl Iterator<Item = Filter>) -> Option<Self> {
+        if let Some(_) = args.next() {
+            // unary or higher-arity function
+            None
+        } else {
+            // nullary function
+            match name {
+                "empty" => Some(Self::Empty),
+                "any" => Some(Self::Any),
+                "all" => Some(Self::All),
+                "not" => Some(Self::Not),
+                "length" => Some(Self::Length),
+                "add" => Some(Self::Add),
+                _ => None,
+            }
         }
     }
 }

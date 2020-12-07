@@ -1,3 +1,4 @@
+use crate::functions::Function;
 use crate::ops::{LogicOp, MathOp};
 use crate::path::Path;
 use crate::val::{Val, Vals};
@@ -15,7 +16,7 @@ pub enum Filter {
     Empty,
     Path(Path),
     IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
-    Function(String, Vec<Filter>),
+    Function(Function),
 }
 
 #[derive(Clone, Debug)]
@@ -92,18 +93,7 @@ impl Filter {
                     falsity.run(x)
                 }
             })),
-            Self::Function(name, args) => match (name.as_str(), args.len()) {
-                // TODO: Map to Self::Empty
-                ("empty", 0) => Box::new(core::iter::empty()),
-                ("any", 0) => Val::Bool(v.iter().unwrap().any(|v| v.as_bool())).into(),
-                ("all", 0) => Val::Bool(v.iter().unwrap().all(|v| v.as_bool())).into(),
-                ("not", 0) => Val::Bool(!v.as_bool()).into(),
-                ("add", 0) => {
-                    let iter = v.iter().unwrap().map(|x| (*x).clone());
-                    iter.fold(Val::Null, |acc, x| (acc + x).unwrap()).into()
-                }
-                (name, len) => panic!("unrecognised function: {}/{}", name, len),
-            }, //_ => todo!(),
+            Self::Function(f) => f.run(v),
         }
     }
 
