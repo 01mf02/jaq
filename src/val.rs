@@ -7,12 +7,14 @@ use std::rc::Rc;
 /// A map that preserves the order of its elements.
 type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
+type Number = f64;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Val {
     Null,
     Bool(bool),
     // TODO: use a type that preserves numbers as long as possible
-    Num(f64),
+    Num(Number),
     Str(String),
     Arr(Vec<Rc<Val>>),
     Obj(FxIndexMap<String, Rc<Val>>),
@@ -26,6 +28,17 @@ impl Val {
         match self {
             Self::Str(s) => Some(s),
             _ => None,
+        }
+    }
+
+    pub fn len(&self) -> Option<Number> {
+        match self {
+            Self::Null => Some(0.0),
+            Self::Bool(_) => None,
+            Self::Num(n) => Some(*n),
+            Self::Str(s) => Some(s.chars().count() as Number),
+            Self::Arr(a) => Some(a.len() as Number),
+            Self::Obj(o) => Some(o.keys().count() as Number),
         }
     }
 
