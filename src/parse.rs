@@ -75,13 +75,13 @@ impl From<Pair<'_, Rule>> for Filter {
                 };
                 Filter::Array(Box::new(contents))
             }
-            Rule::obj => {
+            Rule::object => {
                 let contents = pair.into_inner().map(|kv| {
                     let mut iter = kv.into_inner();
                     let key = iter.next().unwrap();
                     let key = match key.as_rule() {
-                        Rule::ident => Filter::Atom(Atom::Str(key.as_str().to_string())),
-                        Rule::str => Filter::Atom(Atom::from(key)),
+                        Rule::identifier => Filter::Atom(Atom::Str(key.as_str().to_string())),
+                        Rule::string => Filter::Atom(Atom::from(key)),
                         Rule::expr => Filter::from(key),
                         _ => unreachable!(),
                     };
@@ -123,8 +123,8 @@ impl From<Pair<'_, Rule>> for Atom {
         match pair.as_rule() {
             Rule::null => Atom::Null,
             Rule::boole => Atom::Bool(pair.as_str().parse::<bool>().unwrap()),
-            Rule::num => Atom::Num(pair.as_str().parse::<f64>().unwrap()),
-            Rule::str => Atom::Str(pair.into_inner().next().unwrap().as_str().to_string()),
+            Rule::number => Atom::Num(pair.as_str().parse::<f64>().unwrap()),
+            Rule::string => Atom::Str(pair.into_inner().next().unwrap().as_str().to_string()),
             _ => unreachable!(),
         }
     }

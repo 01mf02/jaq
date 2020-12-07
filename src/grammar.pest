@@ -1,17 +1,17 @@
 main = _{ SOI ~ expr ~ EOI }
 
 expr = { term ~ (op ~ term)* }
-term = _{ "(" ~ expr ~ ")" | atom | array | obj | path | ite | function }
+term = _{ "(" ~ expr ~ ")" | atom | array | object | path | ite | function }
 
-atom = { null | boole | num | str }
+atom = { null | boole | number | string }
 
 null = { "null" }
 boole = { "true" | "false" }
 
-num = @{ int ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ int)? }
-    int = { ("+" | "-")? ~ ASCII_DIGIT+ }
+number = @{ integer ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ integer)? }
+    integer = { ("+" | "-")? ~ ASCII_DIGIT+ }
 
-str = ${ "\"" ~ inner ~ "\"" }
+string = ${ "\"" ~ inner ~ "\"" }
     inner = @{ char* }
     char = {
         !("\"" | "\\") ~ ANY
@@ -21,10 +21,10 @@ str = ${ "\"" ~ inner ~ "\"" }
 
 array = { "[" ~ expr? ~ "]" }
 
-obj = { "{" ~ pairs? ~ "}" }
+object = { "{" ~ pairs? ~ "}" }
     pairs = _{ pair ~ ("," ~ pair)* }
     pair = { key ~ (":" ~ term)? }
-    key = _{ ident | str | "(" ~ expr ~ ")" }
+    key = _{ identifier | string | "(" ~ expr ~ ")" }
 
 op = _{ filter_op | logic_op | math_op }
 
@@ -57,8 +57,8 @@ path = { path_head ~ path_tail* }
     path_range = _{ range ~ question? }
 
     index      = _{ dot_id | dot_str }
-    dot_id     = ${ "." ~ ident }
-    dot_str    =  { "." ~ str }
+    dot_id     = ${ "." ~ identifier }
+    dot_str    =  { "." ~ string }
     dot        =  { "." }
     question   =  { "?" }
 
@@ -70,10 +70,10 @@ range = { "[" ~ (from_until | until | from | at)? ~ "]" }
 
 ite = { "if" ~ expr ~ "then" ~ expr ~ "else" ~ expr ~ "end" }
 
-function = { ident ~ args? }
+function = { identifier ~ args? }
 args = { "(" ~ expr ~ (";" ~ expr)* ~ ")" }
 
 
-ident = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
+identifier = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
 
 WHITESPACE = _{ " " | "\t" }
