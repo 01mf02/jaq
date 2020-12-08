@@ -219,6 +219,7 @@ impl Function {
                 match name {
                     "map" => Some(Self::Map(arg1)),
                     "select" => Some(Self::Select(arg1)),
+                    "recurse" => Some(Self::Recurse(arg1)),
                     _ => None,
                 }
             }

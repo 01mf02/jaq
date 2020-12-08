@@ -1,5 +1,6 @@
 use crate::filter::Filter;
 use crate::val::{Val, Vals};
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 #[derive(Debug)]
@@ -12,6 +13,7 @@ pub enum Function {
     Length,
     Map(Box<Filter>),
     Select(Box<Filter>),
+    Recurse(Box<Filter>),
 }
 
 impl Function {
@@ -41,6 +43,45 @@ impl Function {
                 });
                 Box::new(iter.collect::<Vec<_>>().into_iter())
             }
+            Recurse(f) => Box::new(crate::functions::Recurse::new(f, v)),
+        }
+    }
+}
+
+struct Recurse<'f> {
+    filter: &'f Filter,
+    input: VecDeque<Rc<Val>>,
+    output: VecDeque<Rc<Val>>,
+}
+
+impl<'f> Recurse<'f> {
+    pub fn new(filter: &'f Filter, val: Rc<Val>) -> Self {
+        let mut output = VecDeque::new();
+        output.push_back(val);
+        Recurse {
+            filter,
+            input: VecDeque::new(),
+            output,
+        }
+    }
+}
+
+impl<'f> Iterator for Recurse<'f> {
+    type Item = Rc<Val>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.output.pop_front() {
+            Some(o) => {
+                self.input.push_back(Rc::clone(&o));
+                Some(o)
+            }
+            None => match self.input.pop_front() {
+                None => None,
+                Some(i) => {
+                    self.output = self.filter.run(i).collect();
+                    self.next()
+                }
+            },
         }
     }
 }
