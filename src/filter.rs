@@ -86,13 +86,15 @@ impl Filter {
                 });
                 Box::new(v.into_iter())
             }
-            Self::IfThenElse(cond, truth, falsity) => Box::new(cond.run(v).flat_map(move |x| {
-                if x.as_bool() {
-                    truth.run(x)
-                } else {
-                    falsity.run(x)
-                }
-            })),
+            Self::IfThenElse(cond, truth, falsity) => {
+                Box::new(cond.run(Rc::clone(&v)).flat_map(move |x| {
+                    if x.as_bool() {
+                        truth.run(Rc::clone(&v))
+                    } else {
+                        falsity.run(Rc::clone(&v))
+                    }
+                }))
+            }
             Self::Function(f) => f.run(v),
         }
     }
