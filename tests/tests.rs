@@ -74,6 +74,15 @@ fn map() {
 }
 
 #[test]
+fn recurse() {
+    gives(
+        json!(1),
+        "recurse(if . < 3 then .+1 else empty end)",
+        vec![json!(1), json!(2), json!(3)],
+    );
+}
+
+#[test]
 fn ord() {
     give(json!(false), ". < true", json!(true));
     give(json!({"a": 2}), r#". < {"a": 1, "b": 0}"#, json!(true));
