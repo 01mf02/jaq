@@ -18,9 +18,10 @@ pub enum Function {
 
 impl Function {
     pub fn run(&self, v: Rc<Val>) -> Vals {
+        use core::iter::{empty, once};
         use Function::*;
         match self {
-            Empty => Box::new(core::iter::empty()),
+            Empty => Box::new(empty()),
             Any => Val::Bool(v.iter().unwrap().any(|v| v.as_bool())).into(),
             All => Val::Bool(v.iter().unwrap().all(|v| v.as_bool())).into(),
             Not => Val::Bool(!v.as_bool()).into(),
@@ -31,14 +32,14 @@ impl Function {
             Length => Val::Num(v.len().unwrap()).into(),
             Map(f) => {
                 let iter = v.iter().unwrap().flat_map(move |x| f.run(x));
-                Box::new(iter.collect::<Vec<_>>().into_iter())
+                Box::new(once(Rc::new(Val::Arr(iter.collect()))))
             }
             Select(f) => {
                 let iter = f.run(Rc::clone(&v)).flat_map(|y| {
                     if y.as_bool() {
-                        Box::new(core::iter::once(Rc::clone(&v)))
+                        Box::new(once(Rc::clone(&v)))
                     } else {
-                        Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
+                        Box::new(empty()) as Box<dyn Iterator<Item = _>>
                     }
                 });
                 Box::new(iter.collect::<Vec<_>>().into_iter())
