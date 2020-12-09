@@ -1,15 +1,11 @@
 //! JSON values with reference-counted sharing.
 
-use fxhash::FxBuildHasher;
-use indexmap::IndexMap;
+use crate::map::Map;
 use std::rc::Rc;
-
-/// A map that preserves the order of its elements.
-type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 
 type Number = f64;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Val {
     Null,
     Bool(bool),
@@ -17,7 +13,7 @@ pub enum Val {
     Num(Number),
     Str(String),
     Arr(Vec<Rc<Val>>),
-    Obj(FxIndexMap<String, Rc<Val>>),
+    Obj(Map<String, Rc<Val>>),
 }
 
 /// A stream of reference-counted values.

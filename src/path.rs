@@ -22,7 +22,7 @@ impl PathElem {
                         _ => panic!("cannot index array with non-numeric value"),
                     })),
                     Val::Obj(o) => Box::new(index.map(move |i| match &*i {
-                        Val::Str(s) => Rc::clone(&o[s]),
+                        Val::Str(s) => Rc::clone(&o.get(s).unwrap()),
                         _ => todo!(),
                     })),
                     _ => panic!("index"),

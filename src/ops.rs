@@ -94,12 +94,6 @@ impl core::ops::Rem for Val {
     }
 }
 
-impl PartialOrd for Val {
-    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
-        todo!()
-    }
-}
-
 impl Val {
     pub fn as_bool(&self) -> bool {
         !matches!(self, Val::Null | Val::Bool(false))
