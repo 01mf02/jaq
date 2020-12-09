@@ -58,7 +58,7 @@ path = { path_head ~ path_tail* }
 
     index      = _{ dot_id | dot_str }
     dot_id     = ${ "." ~ identifier }
-    dot_str    =  { "." ~ string }
+    dot_str    = _{ "." ~ string }
     dot        =  { "." }
     question   =  { "?" }
 
