@@ -29,7 +29,7 @@ impl Val {
 
     pub fn len(&self) -> Option<Number> {
         match self {
-            Self::Null => Some(0.0),
+            Self::Null => Some(0 as Number),
             Self::Bool(_) => None,
             Self::Num(n) => Some(*n),
             Self::Str(s) => Some(s.chars().count() as Number),
