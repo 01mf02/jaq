@@ -1,20 +1,7 @@
-//mod numpair;
-mod filter;
-mod functions;
-mod map;
-mod ops;
-mod parse;
-mod path;
-mod val;
-
-use crate::val::Val;
 use clap::Clap;
+use jaq::{Filter, Val};
 use std::io::Write;
 use std::rc::Rc;
-
-extern crate pest;
-#[macro_use]
-extern crate pest_derive;
 
 #[derive(Clap)]
 struct Cli {
@@ -29,7 +16,7 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let filter = match crate::filter::Filter::parse(&cli.filter) {
+    let filter = match Filter::parse(&cli.filter) {
         Ok(filter) => filter,
         Err(e) => {
             eprintln!("Failed to parse filter:");

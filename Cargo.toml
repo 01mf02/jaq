@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2018"
 
+[lib]
+name = "jaq"
+path = "src/lib.rs"
+
+[[bin]]
+name = "jaq"
+path = "src/main.rs"
+
 [dependencies]
 clap = "3.0.0-beta.2"
 colored_json = "2.1.0"
