@@ -86,4 +86,19 @@ fn recurse() {
 fn ord() {
     give(json!(false), ". < true", json!(true));
     give(json!({"a": 2}), r#". < {"a": 1, "b": 0}"#, json!(true));
+
+    give(json!(1), ". > 0.0", json!(true));
+    give(json!(1), ". < 1.5", json!(true));
+}
+
+#[test]
+fn eq() {
+    give(json!(1), ". == 1", json!(true));
+    give(json!(1), "0 == . - .", json!(true));
+    give(json!(1), ". == -1 * -1", json!(true));
+    give(json!(1), ". == 2 / 2", json!(true));
+
+    // here, we diverge from jq, which outputs true
+    give(json!(1), ". == 1.0", json!(false));
+    give(json!(1), ". == 2 / 2.0", json!(false));
 }
