@@ -3,21 +3,27 @@ use serde_json::Number;
 
 pub type Num = Typ<u64, i64, f64>;
 type Pair = Typ<(u64, u64), (i64, i64), (f64, f64)>;
-type Kind = Typ<(), (), ()>;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Typ<N, I, F> {
     Nat(N),
     Int(I),
     Flt(F),
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub enum Kind {
+    Nat,
+    Int,
+    Flt,
+}
+
 impl<N, I, F> Typ<N, I, F> {
     fn kind(&self) -> Kind {
         match self {
-            Typ::Nat(_) => Typ::Nat(()),
-            Typ::Int(_) => Typ::Int(()),
-            Typ::Flt(_) => Typ::Flt(()),
+            Typ::Nat(_) => Kind::Nat,
+            Typ::Int(_) => Kind::Int,
+            Typ::Flt(_) => Kind::Flt,
         }
     }
 }
@@ -58,9 +64,9 @@ impl Num {
     /// Cast both numbers to the higher kind of both.
     fn pair(self, other: Self) -> Pair {
         match core::cmp::max(self.kind(), other.kind()) {
-            Typ::Nat(()) => Typ::Nat((self.as_nat(), other.as_nat())),
-            Typ::Int(()) => Typ::Int((self.as_int(), other.as_int())),
-            Typ::Flt(()) => Typ::Flt((self.as_flt(), other.as_flt())),
+            Kind::Nat => Typ::Nat((self.as_nat(), other.as_nat())),
+            Kind::Int => Typ::Int((self.as_int(), other.as_int())),
+            Kind::Flt => Typ::Flt((self.as_flt(), other.as_flt())),
         }
     }
 }
@@ -167,6 +173,16 @@ impl Pair {
             Typ::Nat((l, r)) => Typ::Nat(l % r),
             Typ::Int((l, r)) => Typ::Int(l % r),
             Typ::Flt((l, r)) => Typ::Flt(l % r),
+        }
+    }
+}
+
+impl PartialOrd for Num {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.pair(*other) {
+            Typ::Nat((l, r)) => l.partial_cmp(&r),
+            Typ::Int((l, r)) => l.partial_cmp(&r),
+            Typ::Flt((l, r)) => l.partial_cmp(&r),
         }
     }
 }
