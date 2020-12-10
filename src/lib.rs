@@ -1,6 +1,7 @@
 pub mod filter;
 pub mod functions;
 pub mod map;
+pub mod number;
 pub mod ops;
 pub mod parse;
 pub mod path;

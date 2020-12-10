@@ -18,7 +18,7 @@ impl PathElem {
                 let index = filter.run(root);
                 match current {
                     Val::Arr(vals) => Box::new(index.map(move |i| match *i {
-                        Val::Num(i) => Rc::clone(&vals[i as usize]),
+                        Val::Num(i) => Rc::clone(&vals[i.to_usize().unwrap()]),
                         _ => panic!("cannot index array with non-numeric value"),
                     })),
                     Val::Obj(o) => Box::new(index.map(move |i| match &*i {

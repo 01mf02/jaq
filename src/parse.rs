@@ -121,10 +121,12 @@ impl From<Pair<'_, Rule>> for Filter {
 
 impl From<Pair<'_, Rule>> for Atom {
     fn from(pair: Pair<Rule>) -> Self {
+        use core::convert::TryInto;
+        use serde_json::Number;
         match pair.as_rule() {
             Rule::null => Atom::Null,
             Rule::boole => Atom::Bool(pair.as_str().parse::<bool>().unwrap()),
-            Rule::number => Atom::Num(pair.as_str().parse::<f64>().unwrap()),
+            Rule::number => Atom::Num(pair.as_str().parse::<Number>().unwrap().try_into().unwrap()),
             Rule::string => Atom::Str(pair.into_inner().next().unwrap().as_str().to_string()),
             _ => unreachable!(),
         }

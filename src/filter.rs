@@ -1,4 +1,5 @@
 use crate::functions::Function;
+use crate::number::Num;
 use crate::ops::{LogicOp, MathOp};
 use crate::path::Path;
 use crate::val::{Val, Vals};
@@ -23,7 +24,7 @@ pub enum Filter {
 pub enum Atom {
     Null,
     Bool(bool),
-    Num(f64),
+    Num(Num),
     Str(String),
 }
 
