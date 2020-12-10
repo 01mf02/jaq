@@ -37,6 +37,14 @@ impl Num {
         }
     }
 
+    pub fn to_isize(self) -> Option<isize> {
+        match self {
+            Typ::Nat(n) => Some(n as isize),
+            Typ::Int(i) => Some(i as isize),
+            _ => None,
+        }
+    }
+
     fn as_nat(self) -> u64 {
         match self {
             Typ::Nat(n) => n,
