@@ -54,6 +54,33 @@ fn path() {
 }
 
 #[test]
+fn index() {
+    give(json!([0, 1, 2]), ".[-4]", json!(null));
+    give(json!([0, 1, 2]), ".[-3]", json!(0));
+    give(json!([0, 1, 2]), ".[-1]", json!(2));
+    give(json!([0, 1, 2]), ".[ 0]", json!(0));
+    give(json!([0, 1, 2]), ".[ 2]", json!(2));
+    give(json!([0, 1, 2]), ".[ 3]", json!(null));
+}
+
+#[test]
+fn iter() {
+    give(json!([0, 1, 2]), "[.[]]", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "[.[]]", json!([1, 2]));
+    give(json!({"b": 2, "a": 1}), "[.[]]", json!([2, 1]));
+}
+
+#[test]
+fn range() {
+    give(json!([0, 1, 2]), ".[-4:4]", json!([0, 1, 2]));
+    give(json!([0, 1, 2]), ".[0:3]", json!([0, 1, 2]));
+    give(json!([0, 1, 2]), ".[1:]", json!([1, 2]));
+    give(json!([0, 1, 2]), ".[:-1]", json!([0, 1]));
+    give(json!([0, 1, 2]), ".[1:0]", json!([]));
+    give(json!([0, 1, 2]), ".[4:5]", json!([]));
+}
+
+#[test]
 fn if_then_else() {
     gives(
         json!([-1, 42, -42]),

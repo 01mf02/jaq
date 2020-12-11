@@ -12,18 +12,23 @@ pub enum PathElem {
     Range(Option<Filter>, Option<Filter>),
 }
 
-fn get_index(i: &Val, len: usize) -> usize {
+fn get_isize(i: &Val) -> Option<isize> {
     match *i {
-        Val::Num(i) => {
-            let i = i.to_isize().unwrap();
-            if i < 0 {
-                (len as isize + i).try_into().unwrap_or(0)
-            } else {
-                i as usize
-            }
-        }
-        _ => panic!("cannot index array with non-numeric index"),
+        Val::Num(i) => i.to_isize(),
+        _ => None,
     }
+}
+
+fn wrap(i: isize, len: usize) -> isize {
+    if i < 0 {
+        len as isize + i
+    } else {
+        i
+    }
+}
+
+fn get_index(i: &Val, len: usize) -> usize {
+    wrap(get_isize(i).unwrap(), len).try_into().unwrap_or(0)
 }
 
 impl PathElem {
@@ -32,9 +37,14 @@ impl PathElem {
             Self::Index(filter) => {
                 let index = filter.run(root);
                 match current {
-                    Val::Arr(vals) => {
-                        Box::new(index.map(move |i| Rc::clone(&vals[get_index(&i, vals.len())])))
-                    }
+                    Val::Arr(a) => Box::new(index.map(move |i| {
+                        let i = wrap(get_isize(&i).unwrap(), a.len());
+                        if i < 0 || i as usize >= a.len() {
+                            Rc::new(Val::Null)
+                        } else {
+                            Rc::clone(&a[i as usize])
+                        }
+                    })),
                     Val::Obj(o) => Box::new(index.map(move |i| match &*i {
                         Val::Str(s) => Rc::clone(&o.get(s).unwrap()),
                         _ => todo!(),
@@ -69,7 +79,8 @@ impl PathElem {
                         Rc::new(Val::Arr(a.iter().cloned().skip(from).take(take).collect()))
                     }))
                 }
-                _ => todo!(),
+                Val::Str(_) => todo!(),
+                _ => panic!("cannot obtain slice of element (neither array nor string)"),
             },
         }
     }
