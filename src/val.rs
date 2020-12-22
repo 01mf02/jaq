@@ -19,6 +19,13 @@ pub enum Val {
 pub type Vals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
 
 impl Val {
+    pub fn as_isize(&self) -> Option<isize> {
+        match self {
+            Self::Num(n) => n.to_isize(),
+            _ => None,
+        }
+    }
+
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s),
