@@ -1,53 +1,38 @@
-use crate::functions::Function;
-use crate::number::Num;
+use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::path::Path;
-use crate::val::{Val, Vals};
+use crate::val::{Atom, Val, Vals};
 use std::rc::Rc;
 
 #[derive(Debug)]
 pub enum Filter {
+    New(New),
+    Ref(Ref),
+}
+
+#[derive(Debug)]
+pub enum New {
     Atom(Atom),
     Array(Box<Filter>),
     Object(Vec<(Filter, Filter)>),
     Math(Box<Filter>, MathOp, Box<Filter>),
     Logic(Box<Filter>, LogicOp, Box<Filter>),
+    Function(NewFunc),
+}
+
+#[derive(Debug)]
+pub enum Ref {
     Pipe(Box<Filter>, Box<Filter>),
     Comma(Box<Filter>, Box<Filter>),
     Empty,
     Path(Path),
     IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
-    Function(Function),
-}
-
-#[derive(Clone, Debug)]
-pub enum Atom {
-    Null,
-    Bool(bool),
-    Num(Num),
-    Str(String),
-}
-
-impl From<Atom> for Val {
-    fn from(a: Atom) -> Self {
-        match a {
-            Atom::Null => Self::Null,
-            Atom::Bool(b) => Self::Bool(b),
-            Atom::Num(n) => Self::Num(n),
-            Atom::Str(s) => Self::Str(s),
-        }
-    }
+    Function(RefFunc),
 }
 
 type Product = (Rc<Val>, Rc<Val>);
 
-impl From<Val> for Vals<'_> {
-    fn from(v: Val) -> Self {
-        Box::new(core::iter::once(Rc::new(v)))
-    }
-}
-
-impl Filter {
+impl New {
     pub fn run<'a: 'iter, 'iter>(&'a self, v: Rc<Val>) -> Vals<'iter> {
         match self {
             Self::Atom(a) => Val::from(a.clone()).into(),
@@ -55,7 +40,7 @@ impl Filter {
             Self::Object(o) => {
                 let iter = o
                     .iter()
-                    .map(|(kf, vf)| Self::cartesian(kf, vf, Rc::clone(&v)).collect::<Vec<_>>());
+                    .map(|(kf, vf)| Filter::cartesian(kf, vf, Rc::clone(&v)).collect::<Vec<_>>());
                 use itertools::Itertools;
                 let iter = iter.multi_cartesian_product();
                 Box::new(iter.map(|kvs| {
@@ -67,15 +52,23 @@ impl Filter {
                 }))
             }
             Self::Math(l, op, r) => {
-                let prod = Self::cartesian(l, r, v);
+                let prod = Filter::cartesian(l, r, v);
                 let results = prod.map(move |(x, y)| op.run((*x).clone(), (*y).clone()).unwrap());
                 Box::new(results.map(Rc::new))
             }
             Self::Logic(l, op, r) => {
-                let prod = Self::cartesian(l, r, v);
+                let prod = Filter::cartesian(l, r, v);
                 let results = prod.map(move |(x, y)| op.run(&x, &y));
                 Box::new(results.map(|x| Rc::new(Val::Bool(x))))
             }
+            Self::Function(f) => f.run(v),
+        }
+    }
+}
+
+impl Ref {
+    pub fn run<'a: 'iter, 'iter>(&'a self, v: Rc<Val>) -> Vals<'iter> {
+        match self {
             Self::Pipe(l, r) => Box::new(l.run(v).flat_map(move |y| r.run(y))),
             Self::Comma(l, r) => Box::new(l.run(Rc::clone(&v)).chain(r.run(v))),
             Self::Empty => Box::new(core::iter::empty()),
@@ -99,11 +92,26 @@ impl Filter {
             Self::Function(f) => f.run(v),
         }
     }
+}
+
+impl Filter {
+    pub fn run<'a: 'iter, 'iter>(&'a self, v: Rc<Val>) -> Vals<'iter> {
+        match self {
+            Self::New(n) => n.run(v),
+            Self::Ref(r) => r.run(v),
+        }
+    }
 
     pub fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
         let l = self.run(Rc::clone(&v));
         let r: Vec<_> = other.run(v).collect();
         use itertools::Itertools;
         l.into_iter().cartesian_product(r)
+    }
+}
+
+impl From<Atom> for New {
+    fn from(a: Atom) -> Self {
+        New::Atom(a)
     }
 }

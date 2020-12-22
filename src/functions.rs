@@ -1,27 +1,29 @@
-use crate::filter::Filter;
 use crate::val::{Val, Vals};
+use crate::Filter;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub enum Function {
-    Empty,
+pub enum NewFunc {
     Not,
     All,
     Any,
     Add,
     Length,
     Map(Box<Filter>),
+}
+
+#[derive(Debug)]
+pub enum RefFunc {
+    Empty,
     Select(Box<Filter>),
     Recurse(Box<Filter>),
 }
 
-impl Function {
+impl NewFunc {
     pub fn run(&self, v: Rc<Val>) -> Vals {
-        use core::iter::{empty, once};
-        use Function::*;
+        use NewFunc::*;
         match self {
-            Empty => Box::new(empty()),
             Any => Val::Bool(v.iter().unwrap().any(|v| v.as_bool())).into(),
             All => Val::Bool(v.iter().unwrap().all(|v| v.as_bool())).into(),
             Not => Val::Bool(!v.as_bool()).into(),
@@ -32,8 +34,18 @@ impl Function {
             Length => Val::Num(v.len().unwrap()).into(),
             Map(f) => {
                 let iter = v.iter().unwrap().flat_map(move |x| f.run(x));
-                Box::new(once(Rc::new(Val::Arr(iter.collect()))))
+                Box::new(core::iter::once(Rc::new(Val::Arr(iter.collect()))))
             }
+        }
+    }
+}
+
+impl RefFunc {
+    pub fn run(&self, v: Rc<Val>) -> Vals {
+        use core::iter::{empty, once};
+        use RefFunc::*;
+        match self {
+            Empty => Box::new(empty()),
             Select(f) => {
                 let iter = f.run(Rc::clone(&v)).flat_map(|y| {
                     if y.as_bool() {
