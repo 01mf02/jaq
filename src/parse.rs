@@ -65,11 +65,12 @@ impl From<Pairs<'_, Rule>> for Filter {
 
 impl From<Pair<'_, Rule>> for Filter {
     fn from(pair: Pair<Rule>) -> Self {
-        match pair.as_rule() {
-            Rule::expr => Self::from(pair.into_inner()),
-            Rule::atom => Self::Atom(pair.into_inner().next().unwrap().into()),
+        let rule = pair.as_rule();
+        let mut inner = pair.into_inner();
+        match rule {
+            Rule::expr => Self::from(inner),
+            Rule::atom => Self::Atom(inner.next().unwrap().into()),
             Rule::array => {
-                let inner = pair.into_inner();
                 let contents = if inner.peek().is_none() {
                     Self::Ref(Ref::Empty)
                 } else {
@@ -78,7 +79,7 @@ impl From<Pair<'_, Rule>> for Filter {
                 Self::Array(Box::new(contents))
             }
             Rule::object => {
-                let contents = pair.into_inner().map(|kv| {
+                let contents = inner.map(|kv| {
                     let mut iter = kv.into_inner();
                     let key = iter.next().unwrap();
                     let key = match key.as_rule() {
@@ -97,7 +98,7 @@ impl From<Pair<'_, Rule>> for Filter {
                 Self::Object(contents.collect())
             }
             Rule::ite => {
-                let mut ite = pair.into_inner().map(|p| Box::new(Self::from(p)));
+                let mut ite = inner.map(|p| Box::new(Self::from(p)));
                 let cond = ite.next().unwrap();
                 let truth = ite.next().unwrap();
                 let falsity = ite.next().unwrap();
@@ -105,18 +106,15 @@ impl From<Pair<'_, Rule>> for Filter {
                 Self::Ref(Ref::IfThenElse(cond, truth, falsity))
             }
             Rule::function => {
-                let mut iter = pair.into_inner();
-                let name = iter.next().unwrap().as_str();
-                let args = match iter.next() {
+                let name = inner.next().unwrap().as_str();
+                let args = match inner.next() {
                     None => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
                     Some(args) => Box::new(args.into_inner().map(Self::from)),
                 };
-                assert_eq!(iter.next(), None);
+                assert_eq!(inner.next(), None);
                 Self::try_from(name, args).unwrap()
             }
-            Rule::path => Self::Ref(Ref::Path(
-                pair.into_inner().flat_map(PathElem::from_path).collect(),
-            )),
+            Rule::path => Self::Ref(Ref::Path(inner.flat_map(PathElem::from_path).collect())),
             _ => unreachable!(),
         }
     }
