@@ -4,6 +4,10 @@ use crate::path::Path;
 use crate::val::{Atom, Val, Vals};
 use std::rc::Rc;
 
+pub trait FilterT: core::fmt::Debug {
+    fn run(&self, v: Rc<Val>) -> Vals;
+}
+
 #[derive(Debug)]
 pub enum Filter {
     New(New),
@@ -32,8 +36,8 @@ pub enum Ref {
 
 type Product = (Rc<Val>, Rc<Val>);
 
-impl New {
-    pub fn run<'a: 'iter, 'iter>(&'a self, v: Rc<Val>) -> Vals<'iter> {
+impl FilterT for New {
+    fn run(&self, v: Rc<Val>) -> Vals {
         match self {
             Self::Atom(a) => Val::from(a.clone()).into(),
             Self::Array(f) => Val::Arr(f.run(v).collect()).into(),
@@ -66,8 +70,8 @@ impl New {
     }
 }
 
-impl Ref {
-    pub fn run<'a: 'iter, 'iter>(&'a self, v: Rc<Val>) -> Vals<'iter> {
+impl FilterT for Ref {
+    fn run(&self, v: Rc<Val>) -> Vals {
         match self {
             Self::Pipe(l, r) => Box::new(l.run(v).flat_map(move |y| r.run(y))),
             Self::Comma(l, r) => Box::new(l.run(Rc::clone(&v)).chain(r.run(v))),
@@ -94,14 +98,22 @@ impl Ref {
     }
 }
 
-impl Filter {
-    pub fn run<'a: 'iter, 'iter>(&'a self, v: Rc<Val>) -> Vals<'iter> {
+impl FilterT for Filter {
+    fn run(&self, v: Rc<Val>) -> Vals {
         match self {
             Self::New(n) => n.run(v),
             Self::Ref(r) => r.run(v),
         }
     }
+}
 
+impl<F: FilterT> FilterT for Box<F> {
+    fn run(&self, v: Rc<Val>) -> Vals {
+        (**self).run(v)
+    }
+}
+
+impl Filter {
     pub fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
         let l = self.run(Rc::clone(&v));
         let r: Vec<_> = other.run(v).collect();

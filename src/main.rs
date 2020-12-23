@@ -51,6 +51,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         };
         //println!("Got {:?}", input);
+        use jaq::filter::FilterT;
         for output in filter.run(input) {
             let output = (*output).clone().into();
             colored_json::write_colored_json(&output, &mut stdout)?;

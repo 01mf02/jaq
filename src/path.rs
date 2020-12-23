@@ -1,4 +1,4 @@
-use crate::filter::Filter;
+use crate::filter::{Filter, FilterT};
 use crate::val::{Val, Vals};
 use std::convert::TryInto;
 use std::rc::Rc;

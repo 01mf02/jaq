@@ -1,5 +1,5 @@
+use crate::filter::{Filter, FilterT};
 use crate::val::{Val, Vals};
-use crate::Filter;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
