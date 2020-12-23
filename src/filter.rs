@@ -11,7 +11,7 @@ pub trait FilterT: core::fmt::Debug {
 #[derive(Debug)]
 pub enum Filter {
     New(New),
-    Ref(Ref),
+    Ref(Ref<Box<Filter>>),
 }
 
 #[derive(Debug)]
@@ -25,12 +25,12 @@ pub enum New {
 }
 
 #[derive(Debug)]
-pub enum Ref {
-    Pipe(Box<Filter>, Box<Filter>),
-    Comma(Box<Filter>, Box<Filter>),
+pub enum Ref<F> {
+    Pipe(F, F),
+    Comma(F, F),
     Empty,
     Path(Path),
-    IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
+    IfThenElse(Box<Filter>, F, F),
     Function(RefFunc),
 }
 
@@ -70,7 +70,7 @@ impl FilterT for New {
     }
 }
 
-impl FilterT for Ref {
+impl<F: FilterT> FilterT for Ref<F> {
     fn run(&self, v: Rc<Val>) -> Vals {
         match self {
             Self::Pipe(l, r) => Box::new(l.run(v).flat_map(move |y| r.run(y))),
