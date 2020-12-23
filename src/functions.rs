@@ -41,20 +41,16 @@ impl FilterT for NewFunc {
 
 impl FilterT for RefFunc {
     fn run(&self, v: Rc<Val>) -> Vals {
-        use core::iter::{empty, once};
         use RefFunc::*;
         match self {
-            Empty => Box::new(empty()),
-            Select(f) => {
-                let iter = f.run(Rc::clone(&v)).flat_map(|y| {
-                    if y.as_bool() {
-                        Box::new(once(Rc::clone(&v)))
-                    } else {
-                        Box::new(empty()) as Box<dyn Iterator<Item = _>>
-                    }
-                });
-                Box::new(iter.collect::<Vec<_>>().into_iter())
-            }
+            Empty => Box::new(core::iter::empty()),
+            Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| {
+                if y.as_bool() {
+                    Some(Rc::clone(&v))
+                } else {
+                    None
+                }
+            })),
             Recurse(f) => Box::new(crate::Recurse::new(f, v)),
         }
     }
