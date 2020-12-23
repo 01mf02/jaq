@@ -102,6 +102,12 @@ fn map() {
 }
 
 #[test]
+fn select() {
+    give(json!([1, 2]), ".[] | select(.>1)", json!(2));
+    give(json!([0, 1, 2]), "[.[] | select(.<1, 1<.)]", json!([0, 2]));
+}
+
+#[test]
 fn recurse() {
     gives(
         json!(1),
