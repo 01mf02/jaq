@@ -10,18 +10,13 @@ pub trait FilterT: core::fmt::Debug {
 
 #[derive(Debug)]
 pub enum Filter {
-    New(New),
-    Ref(Ref<Box<Filter>>),
-}
-
-#[derive(Debug)]
-pub enum New {
     Atom(Atom),
     Array(Box<Filter>),
     Object(Vec<(Filter, Filter)>),
     Math(Box<Filter>, MathOp, Box<Filter>),
     Logic(Box<Filter>, LogicOp, Box<Filter>),
     Function(NewFunc),
+    Ref(Ref<Box<Filter>>),
 }
 
 #[derive(Debug)]
@@ -36,7 +31,7 @@ pub enum Ref<F> {
 
 type Product = (Rc<Val>, Rc<Val>);
 
-impl FilterT for New {
+impl FilterT for Filter {
     fn run(&self, v: Rc<Val>) -> Vals {
         match self {
             Self::Atom(a) => Val::from(a.clone()).into(),
@@ -66,6 +61,7 @@ impl FilterT for New {
                 Box::new(results.map(|x| Rc::new(Val::Bool(x))))
             }
             Self::Function(f) => f.run(v),
+            Self::Ref(r) => r.run(v),
         }
     }
 }
@@ -98,15 +94,6 @@ impl<F: FilterT> FilterT for Ref<F> {
     }
 }
 
-impl FilterT for Filter {
-    fn run(&self, v: Rc<Val>) -> Vals {
-        match self {
-            Self::New(n) => n.run(v),
-            Self::Ref(r) => r.run(v),
-        }
-    }
-}
-
 impl<F: FilterT> FilterT for Box<F> {
     fn run(&self, v: Rc<Val>) -> Vals {
         (**self).run(v)
@@ -128,8 +115,8 @@ impl Filter {
     }
 }
 
-impl From<Atom> for New {
+impl From<Atom> for Filter {
     fn from(a: Atom) -> Self {
-        New::Atom(a)
+        Self::Atom(a)
     }
 }

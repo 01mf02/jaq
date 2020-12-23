@@ -1,4 +1,4 @@
-use crate::filter::{Filter, New, Ref};
+use crate::filter::{Filter, Ref};
 use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::path::PathElem;
@@ -50,9 +50,9 @@ impl From<Pairs<'_, Rule>> for Filter {
                     Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),
                     rule => {
                         if let Ok(op) = LogicOp::try_from(rule) {
-                            Self::New(New::Logic(lhs, op, rhs))
+                            Self::Logic(lhs, op, rhs)
                         } else if let Ok(op) = MathOp::try_from(rule) {
-                            Self::New(New::Math(lhs, op, rhs))
+                            Self::Math(lhs, op, rhs)
                         } else {
                             unreachable!()
                         }
@@ -67,7 +67,7 @@ impl From<Pair<'_, Rule>> for Filter {
     fn from(pair: Pair<Rule>) -> Self {
         match pair.as_rule() {
             Rule::expr => Self::from(pair.into_inner()),
-            Rule::atom => Self::New(New::Atom(pair.into_inner().next().unwrap().into())),
+            Rule::atom => Self::Atom(pair.into_inner().next().unwrap().into()),
             Rule::array => {
                 let inner = pair.into_inner();
                 let contents = if inner.peek().is_none() {
@@ -75,15 +75,15 @@ impl From<Pair<'_, Rule>> for Filter {
                 } else {
                     Self::from(inner)
                 };
-                Self::New(New::Array(Box::new(contents)))
+                Self::Array(Box::new(contents))
             }
             Rule::object => {
                 let contents = pair.into_inner().map(|kv| {
                     let mut iter = kv.into_inner();
                     let key = iter.next().unwrap();
                     let key = match key.as_rule() {
-                        Rule::identifier => Self::New(Atom::Str(key.as_str().to_string()).into()),
-                        Rule::string => Self::New(Atom::from(key).into()),
+                        Rule::identifier => Atom::Str(key.as_str().to_string()).into(),
+                        Rule::string => Atom::from(key).into(),
                         Rule::expr => Self::from(key),
                         _ => unreachable!(),
                     };
@@ -94,7 +94,7 @@ impl From<Pair<'_, Rule>> for Filter {
                     assert_eq!(iter.next(), None);
                     (key, value)
                 });
-                Self::New(New::Object(contents.collect()))
+                Self::Object(contents.collect())
             }
             Rule::ite => {
                 let mut ite = pair.into_inner().map(|p| Box::new(Self::from(p)));
@@ -144,7 +144,7 @@ impl PathElem {
         let index = match index.as_rule() {
             Rule::path_index => {
                 let index = Self::from_index(index).0.to_string();
-                Box::new(once(Self::Index(Filter::New(Atom::Str(index).into()))))
+                Box::new(once(Self::Index(Atom::Str(index).into())))
             }
             // just a dot
             _ => Box::new(empty()) as Box<dyn Iterator<Item = _>>,
@@ -222,7 +222,7 @@ impl Filter {
             } else {
                 // unary function
                 match name {
-                    "map" => Some(Self::New(New::Function(NewFunc::Map(arg1)))),
+                    "map" => Some(Self::Function(NewFunc::Map(arg1))),
                     "select" => Some(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
                     "recurse" => Some(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
                     _ => None,
@@ -232,11 +232,11 @@ impl Filter {
             // nullary function
             match name {
                 "empty" => Some(Self::Ref(Ref::Function(RefFunc::Empty))),
-                "any" => Some(Self::New(New::Function(NewFunc::Any))),
-                "all" => Some(Self::New(New::Function(NewFunc::All))),
-                "not" => Some(Self::New(New::Function(NewFunc::Not))),
-                "length" => Some(Self::New(New::Function(NewFunc::Length))),
-                "add" => Some(Self::New(New::Function(NewFunc::Add))),
+                "any" => Some(Self::Function(NewFunc::Any)),
+                "all" => Some(Self::Function(NewFunc::All)),
+                "not" => Some(Self::Function(NewFunc::Not)),
+                "length" => Some(Self::Function(NewFunc::Length)),
+                "add" => Some(Self::Function(NewFunc::Add)),
                 _ => None,
             }
         }
