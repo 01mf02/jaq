@@ -113,6 +113,12 @@ impl<F: FilterT> FilterT for Box<F> {
     }
 }
 
+impl<F: FilterT> FilterT for &Box<F> {
+    fn run(&self, v: Rc<Val>) -> Vals {
+        (*self).run(v)
+    }
+}
+
 impl Filter {
     pub fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
         let l = self.run(Rc::clone(&v));
