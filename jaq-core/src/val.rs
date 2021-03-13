@@ -2,8 +2,8 @@
 
 use crate::map::Map;
 use crate::number::Num;
-use std::convert::TryFrom;
-use std::rc::Rc;
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use core::convert::TryFrom;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Val {

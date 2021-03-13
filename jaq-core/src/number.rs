@@ -115,7 +115,7 @@ impl Pair {
 }
 
 impl PartialOrd for Num {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         match self.pair(*other) {
             Typ::Int((l, r)) => l.partial_cmp(&r),
             Typ::Flt((l, r)) => l.partial_cmp(&r),

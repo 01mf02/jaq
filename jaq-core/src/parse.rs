@@ -3,6 +3,7 @@ use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::path::PathElem;
 use crate::val::Atom;
+use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::convert::TryFrom;
 use pest::iterators::{Pair, Pairs};
 use pest::prec_climber::PrecClimber;
@@ -23,7 +24,7 @@ lazy_static::lazy_static! {
         use Rule::*;
         use pest::prec_climber::{Operator, Assoc::*};
 
-        PrecClimber::new(vec![
+        PrecClimber::new(Vec::from([
             Operator::new(pipe, Left),
             Operator::new(comma, Left),
             Operator::new(or, Left),
@@ -33,7 +34,7 @@ lazy_static::lazy_static! {
             Operator::new(add, Left) | Operator::new(sub, Left),
             Operator::new(mul, Left) | Operator::new(div, Left),
             Operator::new(rem, Left)
-        ])
+        ]))
     };
 }
 
@@ -159,7 +160,7 @@ impl PathElem {
     }
 
     fn from_range(pair: Pair<Rule>) -> PathElem {
-        println!("range: {:?}", pair.as_rule());
+        //println!("range: {:?}", pair.as_rule());
         match pair.into_inner().next() {
             None => Self::Range(None, None),
             Some(range) => match range.as_rule() {

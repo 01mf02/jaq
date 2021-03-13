@@ -2,7 +2,7 @@ use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::path::Path;
 use crate::val::{Atom, Val, Vals};
-use std::rc::Rc;
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 
 pub trait FilterT: core::fmt::Debug {
     fn run(&self, v: Rc<Val>) -> Vals;
@@ -73,7 +73,7 @@ impl<F: FilterT> FilterT for Ref<F> {
             Self::Comma(l, r) => Box::new(l.run(Rc::clone(&v)).chain(r.run(v))),
             Self::Empty => Box::new(core::iter::empty()),
             Self::Path(p) => {
-                let v = p.iter().fold(vec![Rc::clone(&v)], |acc, p| {
+                let v = p.iter().fold(Vec::from([Rc::clone(&v)]), |acc, p| {
                     acc.into_iter()
                         .flat_map(|x| p.follow(Rc::clone(&v), (*x).clone()))
                         .collect()

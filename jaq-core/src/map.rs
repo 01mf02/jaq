@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::hash::Hash;
 use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
@@ -39,7 +40,7 @@ impl<K: Eq + Ord, V: PartialEq> PartialEq for Map<K, V> {
 }
 
 impl<K: Ord, V: PartialOrd> PartialOrd for Map<K, V> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         let l = self.sorted_by_key();
         let r = other.sorted_by_key();
         // TODO: make this nicer

@@ -1,6 +1,6 @@
 use crate::filter::{Filter, FilterT};
 use crate::val::{Val, Vals};
-use std::rc::Rc;
+use alloc::{boxed::Box, rc::Rc};
 
 #[derive(Debug)]
 pub enum NewFunc {
