@@ -1,5 +1,5 @@
 use clap::Clap;
-use jaq::{Filter, Val};
+use jaq_core::{Filter, Val};
 use std::io::Write;
 use std::rc::Rc;
 

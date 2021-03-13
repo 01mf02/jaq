@@ -1,0 +1,16 @@
+[package]
+name = "jaq-core"
+version = "0.1.0"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
+edition = "2018"
+license = "MIT"
+readme = "README.md"
+
+[dependencies]
+fxhash = "0.2.1"
+indexmap = "1.6.0"
+itertools = "0.9"
+lazy_static = "1.4"
+pest = "2.1"
+pest_derive = "2.1"
+serde_json = { version = "1.0", features = [ "preserve_order" ] }
