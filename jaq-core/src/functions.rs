@@ -1,27 +1,28 @@
-use crate::filter::Filter;
+use crate::filter::{Filter, FilterT};
 use crate::val::{Val, Vals};
-use std::collections::VecDeque;
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub enum Function {
-    Empty,
+pub enum NewFunc {
     Not,
     All,
     Any,
     Add,
     Length,
     Map(Box<Filter>),
+}
+
+#[derive(Debug)]
+pub enum RefFunc {
+    Empty,
     Select(Box<Filter>),
     Recurse(Box<Filter>),
 }
 
-impl Function {
-    pub fn run(&self, v: Rc<Val>) -> Vals {
-        use core::iter::{empty, once};
-        use Function::*;
+impl FilterT for NewFunc {
+    fn run(&self, v: Rc<Val>) -> Vals {
+        use NewFunc::*;
         match self {
-            Empty => Box::new(empty()),
             Any => Val::Bool(v.iter().unwrap().any(|v| v.as_bool())).into(),
             All => Val::Bool(v.iter().unwrap().all(|v| v.as_bool())).into(),
             Not => Val::Bool(!v.as_bool()).into(),
@@ -32,57 +33,25 @@ impl Function {
             Length => Val::Num(v.len().unwrap()).into(),
             Map(f) => {
                 let iter = v.iter().unwrap().flat_map(move |x| f.run(x));
-                Box::new(once(Rc::new(Val::Arr(iter.collect()))))
+                Box::new(core::iter::once(Rc::new(Val::Arr(iter.collect()))))
             }
-            Select(f) => {
-                let iter = f.run(Rc::clone(&v)).flat_map(|y| {
-                    if y.as_bool() {
-                        Box::new(once(Rc::clone(&v)))
-                    } else {
-                        Box::new(empty()) as Box<dyn Iterator<Item = _>>
-                    }
-                });
-                Box::new(iter.collect::<Vec<_>>().into_iter())
-            }
-            Recurse(f) => Box::new(crate::functions::Recurse::new(f, v)),
         }
     }
 }
 
-struct Recurse<'f> {
-    filter: &'f Filter,
-    input: VecDeque<Rc<Val>>,
-    output: VecDeque<Rc<Val>>,
-}
-
-impl<'f> Recurse<'f> {
-    pub fn new(filter: &'f Filter, val: Rc<Val>) -> Self {
-        let mut output = VecDeque::new();
-        output.push_back(val);
-        Recurse {
-            filter,
-            input: VecDeque::new(),
-            output,
-        }
-    }
-}
-
-impl<'f> Iterator for Recurse<'f> {
-    type Item = Rc<Val>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.output.pop_front() {
-            Some(o) => {
-                self.input.push_back(Rc::clone(&o));
-                Some(o)
-            }
-            None => match self.input.pop_front() {
-                None => None,
-                Some(i) => {
-                    self.output = self.filter.run(i).collect();
-                    self.next()
+impl FilterT for RefFunc {
+    fn run(&self, v: Rc<Val>) -> Vals {
+        use RefFunc::*;
+        match self {
+            Empty => Box::new(core::iter::empty()),
+            Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| {
+                if y.as_bool() {
+                    Some(Rc::clone(&v))
+                } else {
+                    None
                 }
-            },
+            })),
+            Recurse(f) => Box::new(crate::Recurse::new(f, v)),
         }
     }
 }

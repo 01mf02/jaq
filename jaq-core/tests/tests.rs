@@ -15,6 +15,7 @@ fn gives(x: serde_json::Value, f: &str, ys: Vec<serde_json::Value>) {
     let f = Filter::parse(f).unwrap();
     let ys: Vec<_> = ys.into_iter().map(to).collect();
 
+    use jaq::filter::FilterT;
     let out: Vec<_> = f.run(x).collect();
     assert_eq!(out, ys);
 }
@@ -98,6 +99,12 @@ fn length() {
 #[test]
 fn map() {
     give(json!([1, 2]), "map(.+1)", json!([2, 3]));
+}
+
+#[test]
+fn select() {
+    give(json!([1, 2]), ".[] | select(.>1)", json!(2));
+    give(json!([0, 1, 2]), "map(select(.<1, 1<.))", json!([0, 2]));
 }
 
 #[test]

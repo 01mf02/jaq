@@ -15,10 +15,25 @@ pub enum Val {
     Obj(Map<String, Rc<Val>>),
 }
 
+#[derive(Clone, Debug)]
+pub enum Atom {
+    Null,
+    Bool(bool),
+    Num(Num),
+    Str(String),
+}
+
 /// A stream of reference-counted values.
 pub type Vals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
 
 impl Val {
+    pub fn as_isize(&self) -> Option<isize> {
+        match self {
+            Self::Num(n) => n.to_isize(),
+            _ => None,
+        }
+    }
+
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s),
@@ -42,6 +57,23 @@ impl Val {
             Self::Arr(a) => Some(Box::new(a.iter().cloned())),
             Self::Obj(o) => Some(Box::new(o.values().cloned())),
             _ => None,
+        }
+    }
+}
+
+impl From<Val> for Vals<'_> {
+    fn from(v: Val) -> Self {
+        Box::new(core::iter::once(Rc::new(v)))
+    }
+}
+
+impl From<Atom> for Val {
+    fn from(a: Atom) -> Self {
+        match a {
+            Atom::Null => Self::Null,
+            Atom::Bool(b) => Self::Bool(b),
+            Atom::Num(n) => Self::Num(n),
+            Atom::Str(s) => Self::Str(s),
         }
     }
 }

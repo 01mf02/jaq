@@ -1,4 +1,4 @@
-use crate::filter::Filter;
+use crate::filter::{Filter, FilterT};
 use crate::val::{Val, Vals};
 use std::convert::TryInto;
 use std::rc::Rc;
@@ -12,13 +12,6 @@ pub enum PathElem {
     Range(Option<Filter>, Option<Filter>),
 }
 
-fn get_isize(i: &Val) -> Option<isize> {
-    match *i {
-        Val::Num(i) => i.to_isize(),
-        _ => None,
-    }
-}
-
 fn wrap(i: isize, len: usize) -> isize {
     if i < 0 {
         len as isize + i
@@ -28,7 +21,7 @@ fn wrap(i: isize, len: usize) -> isize {
 }
 
 fn get_index(i: &Val, len: usize) -> usize {
-    wrap(get_isize(i).unwrap(), len).try_into().unwrap_or(0)
+    wrap(i.as_isize().unwrap(), len).try_into().unwrap_or(0)
 }
 
 impl PathElem {
@@ -38,7 +31,7 @@ impl PathElem {
                 let index = filter.run(root);
                 match current {
                     Val::Arr(a) => Box::new(index.map(move |i| {
-                        let i = wrap(get_isize(&i).unwrap(), a.len());
+                        let i = wrap(i.as_isize().unwrap(), a.len());
                         if i < 0 || i as usize >= a.len() {
                             Rc::new(Val::Null)
                         } else {

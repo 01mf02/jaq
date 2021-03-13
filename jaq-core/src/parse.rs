@@ -1,7 +1,8 @@
-use crate::filter::{Atom, Filter};
-use crate::functions::Function;
+use crate::filter::{Filter, Ref};
+use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::path::PathElem;
+use crate::val::Atom;
 use core::convert::TryFrom;
 use pest::iterators::{Pair, Pairs};
 use pest::prec_climber::PrecClimber;
@@ -40,18 +41,18 @@ impl From<Pairs<'_, Rule>> for Filter {
     fn from(pairs: Pairs<Rule>) -> Self {
         PREC_CLIMBER.climb(
             pairs,
-            |pair: Pair<Rule>| Filter::from(pair),
-            |lhs: Filter, op: Pair<Rule>, rhs: Filter| {
+            |pair: Pair<Rule>| Self::from(pair),
+            |lhs: Self, op: Pair<Rule>, rhs: Self| {
                 let lhs = Box::new(lhs);
                 let rhs = Box::new(rhs);
                 match op.as_rule() {
-                    Rule::pipe => Filter::Pipe(lhs, rhs),
-                    Rule::comma => Filter::Comma(lhs, rhs),
+                    Rule::pipe => Self::Ref(Ref::Pipe(lhs, rhs)),
+                    Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),
                     rule => {
                         if let Ok(op) = LogicOp::try_from(rule) {
-                            Filter::Logic(lhs, op, rhs)
+                            Self::Logic(lhs, op, rhs)
                         } else if let Ok(op) = MathOp::try_from(rule) {
-                            Filter::Math(lhs, op, rhs)
+                            Self::Math(lhs, op, rhs)
                         } else {
                             unreachable!()
                         }
@@ -64,56 +65,56 @@ impl From<Pairs<'_, Rule>> for Filter {
 
 impl From<Pair<'_, Rule>> for Filter {
     fn from(pair: Pair<Rule>) -> Self {
-        match pair.as_rule() {
-            Rule::expr => Self::from(pair.into_inner()),
-            Rule::atom => Filter::Atom(pair.into_inner().next().unwrap().into()),
+        let rule = pair.as_rule();
+        let mut inner = pair.into_inner();
+        match rule {
+            Rule::expr => Self::from(inner),
+            Rule::atom => Self::Atom(inner.next().unwrap().into()),
             Rule::array => {
-                let inner = pair.into_inner();
                 let contents = if inner.peek().is_none() {
-                    Filter::Empty
+                    Self::Ref(Ref::Empty)
                 } else {
                     Self::from(inner)
                 };
-                Filter::Array(Box::new(contents))
+                Self::Array(Box::new(contents))
             }
             Rule::object => {
-                let contents = pair.into_inner().map(|kv| {
+                let contents = inner.map(|kv| {
                     let mut iter = kv.into_inner();
                     let key = iter.next().unwrap();
                     let key = match key.as_rule() {
-                        Rule::identifier => Filter::Atom(Atom::Str(key.as_str().to_string())),
-                        Rule::string => Filter::Atom(Atom::from(key)),
-                        Rule::expr => Filter::from(key),
+                        Rule::identifier => Atom::Str(key.as_str().to_string()).into(),
+                        Rule::string => Atom::from(key).into(),
+                        Rule::expr => Self::from(key),
                         _ => unreachable!(),
                     };
                     let value = match iter.next() {
-                        Some(value) => Filter::from(value),
+                        Some(value) => Self::from(value),
                         None => todo!(),
                     };
                     assert_eq!(iter.next(), None);
                     (key, value)
                 });
-                Filter::Object(contents.collect())
+                Self::Object(contents.collect())
             }
             Rule::ite => {
-                let mut ite = pair.into_inner().map(|p| Box::new(Self::from(p)));
+                let mut ite = inner.map(|p| Box::new(Self::from(p)));
                 let cond = ite.next().unwrap();
                 let truth = ite.next().unwrap();
                 let falsity = ite.next().unwrap();
                 assert!(ite.next().is_none());
-                Filter::IfThenElse(cond, truth, falsity)
+                Self::Ref(Ref::IfThenElse(cond, truth, falsity))
             }
             Rule::function => {
-                let mut iter = pair.into_inner();
-                let name = iter.next().unwrap().as_str();
-                let args = match iter.next() {
+                let name = inner.next().unwrap().as_str();
+                let args = match inner.next() {
                     None => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
                     Some(args) => Box::new(args.into_inner().map(Self::from)),
                 };
-                assert_eq!(iter.next(), None);
-                Filter::Function(Function::from(name, args).unwrap())
+                assert_eq!(inner.next(), None);
+                Self::try_from(name, args).unwrap()
             }
-            Rule::path => Filter::Path(pair.into_inner().flat_map(PathElem::from_path).collect()),
+            Rule::path => Self::Ref(Ref::Path(inner.flat_map(PathElem::from_path).collect())),
             _ => unreachable!(),
         }
     }
@@ -124,10 +125,10 @@ impl From<Pair<'_, Rule>> for Atom {
         use core::convert::TryInto;
         use serde_json::Number;
         match pair.as_rule() {
-            Rule::null => Atom::Null,
-            Rule::boole => Atom::Bool(pair.as_str().parse::<bool>().unwrap()),
-            Rule::number => Atom::Num(pair.as_str().parse::<Number>().unwrap().try_into().unwrap()),
-            Rule::string => Atom::Str(pair.into_inner().next().unwrap().as_str().to_string()),
+            Rule::null => Self::Null,
+            Rule::boole => Self::Bool(pair.as_str().parse::<bool>().unwrap()),
+            Rule::number => Self::Num(pair.as_str().parse::<Number>().unwrap().try_into().unwrap()),
+            Rule::string => Self::Str(pair.into_inner().next().unwrap().as_str().to_string()),
             _ => unreachable!(),
         }
     }
@@ -141,7 +142,7 @@ impl PathElem {
         let index = match index.as_rule() {
             Rule::path_index => {
                 let index = Self::from_index(index).0.to_string();
-                Box::new(once(Self::Index(Filter::Atom(Atom::Str(index)))))
+                Box::new(once(Self::Index(Atom::Str(index).into())))
             }
             // just a dot
             _ => Box::new(empty()) as Box<dyn Iterator<Item = _>>,
@@ -209,8 +210,8 @@ impl TryFrom<Rule> for MathOp {
     }
 }
 
-impl Function {
-    fn from(name: &str, mut args: impl Iterator<Item = Filter>) -> Option<Self> {
+impl Filter {
+    fn try_from(name: &str, mut args: impl Iterator<Item = Filter>) -> Option<Self> {
         if let Some(arg1) = args.next().map(Box::new) {
             // unary or higher-arity function
             if let Some(_arg2) = args.next() {
@@ -219,21 +220,21 @@ impl Function {
             } else {
                 // unary function
                 match name {
-                    "map" => Some(Self::Map(arg1)),
-                    "select" => Some(Self::Select(arg1)),
-                    "recurse" => Some(Self::Recurse(arg1)),
+                    "map" => Some(Self::Function(NewFunc::Map(arg1))),
+                    "select" => Some(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
+                    "recurse" => Some(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
                     _ => None,
                 }
             }
         } else {
             // nullary function
             match name {
-                "empty" => Some(Self::Empty),
-                "any" => Some(Self::Any),
-                "all" => Some(Self::All),
-                "not" => Some(Self::Not),
-                "length" => Some(Self::Length),
-                "add" => Some(Self::Add),
+                "empty" => Some(Self::Ref(Ref::Function(RefFunc::Empty))),
+                "any" => Some(Self::Function(NewFunc::Any)),
+                "all" => Some(Self::Function(NewFunc::All)),
+                "not" => Some(Self::Function(NewFunc::Not)),
+                "length" => Some(Self::Function(NewFunc::Length)),
+                "add" => Some(Self::Function(NewFunc::Add)),
                 _ => None,
             }
         }
