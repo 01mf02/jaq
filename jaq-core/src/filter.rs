@@ -54,11 +54,11 @@ impl FilterT for Filter {
                 use itertools::Itertools;
                 let iter = iter.multi_cartesian_product();
                 Box::new(iter.map(|kvs| {
-                    Rc::new(Val::Obj(
-                        kvs.into_iter()
-                            .map(|(k, v)| (k.as_obj_key().unwrap(), v))
-                            .collect(),
-                    ))
+                    let kvs: Result<_, Error> = kvs
+                        .into_iter()
+                        .map(|(k, v)| Ok((k.as_obj_key()?, v)))
+                        .collect();
+                    Rc::new(Val::Obj(kvs.unwrap()))
                 }))
             }
             Self::Math(l, op, r) => {
