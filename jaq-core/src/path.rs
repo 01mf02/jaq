@@ -20,6 +20,20 @@ fn wrap(i: isize, len: usize) -> isize {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn wrap() {
+        use super::wrap;
+        let len = 4;
+        assert_eq!(wrap(0, len), 0);
+        assert_eq!(wrap(8, len), 8);
+        assert_eq!(wrap(-1, len), 3);
+        assert_eq!(wrap(-4, len), 0);
+        assert_eq!(wrap(-8, len), -4);
+    }
+}
+
 fn get_index(i: &Val, len: usize) -> usize {
     wrap(i.as_isize().unwrap(), len).try_into().unwrap_or(0)
 }
