@@ -125,7 +125,7 @@ impl PartialOrd for Num {
 }
 
 impl fmt::Display for Num {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::Int(n) => n.fmt(f),
             Self::Flt(n) => n.fmt(f),

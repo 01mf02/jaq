@@ -4,6 +4,7 @@ use crate::map::Map;
 use crate::number::Num;
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 use core::convert::TryFrom;
+use core::fmt;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Val {
@@ -106,6 +107,18 @@ impl From<Val> for serde_json::Value {
                     .map(|(k, v)| (k, (*v).clone().into()))
                     .collect(),
             ),
+        }
+    }
+}
+
+impl fmt::Display for Val {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
+        match self {
+            Self::Null => write!(f, "null"),
+            Self::Bool(b) => write!(f, "bool ({})", b),
+            Self::Num(n) => write!(f, "number ({})", n),
+            Self::Str(s) => write!(f, "string (\"{}\")", s),
+            _ => todo!(),
         }
     }
 }
