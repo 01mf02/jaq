@@ -1,8 +1,8 @@
 //! Logical and mathematical operations on values.
 
-use crate::val::Val;
+use crate::{Error, Val};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum MathOp {
     /// Addition (+).
     Add,
@@ -38,58 +38,58 @@ pub enum LogicOp {
 }
 
 impl core::ops::Add for Val {
-    type Output = Option<Val>;
+    type Output = Result<Val, Error>;
     fn add(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
             // `null` is a neutral element for addition
-            (Null, x) | (x, Null) => Some(x),
-            (Num(l), Num(r)) => Some(Num(l + r)),
-            _ => None,
+            (Null, x) | (x, Null) => Ok(x),
+            (Num(l), Num(r)) => Ok(Num(l + r)),
+            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Add)),
         }
     }
 }
 
 impl core::ops::Sub for Val {
-    type Output = Option<Val>;
+    type Output = Result<Val, Error>;
     fn sub(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Num(l), Num(r)) => Some(Num(l - r)),
-            _ => None,
+            (Num(l), Num(r)) => Ok(Num(l - r)),
+            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Sub)),
         }
     }
 }
 
 impl core::ops::Mul for Val {
-    type Output = Option<Val>;
+    type Output = Result<Val, Error>;
     fn mul(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Num(l), Num(r)) => Some(Num(l * r)),
-            _ => None,
+            (Num(l), Num(r)) => Ok(Num(l * r)),
+            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Mul)),
         }
     }
 }
 
 impl core::ops::Div for Val {
-    type Output = Option<Val>;
+    type Output = Result<Val, Error>;
     fn div(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Num(l), Num(r)) => Some(Num(l / r)),
-            _ => None,
+            (Num(l), Num(r)) => Ok(Num(l / r)),
+            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Div)),
         }
     }
 }
 
 impl core::ops::Rem for Val {
-    type Output = Option<Val>;
+    type Output = Result<Val, Error>;
     fn rem(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Num(l), Num(r)) => Some(Num(l % r)),
-            _ => None,
+            (Num(l), Num(r)) => Ok(Num(l % r)),
+            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Rem)),
         }
     }
 }
@@ -101,7 +101,7 @@ impl Val {
 }
 
 impl MathOp {
-    pub fn run(&self, l: Val, r: Val) -> Option<Val> {
+    pub fn run(&self, l: Val, r: Val) -> Result<Val, Error> {
         use MathOp::*;
         match self {
             Add => l + r,
