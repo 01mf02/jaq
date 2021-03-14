@@ -20,6 +20,11 @@ pub enum Filter {
 }
 
 #[derive(Debug)]
+enum Error {
+    ObjKey(Val),
+}
+
+#[derive(Debug)]
 pub enum Ref<F> {
     Pipe(F, F),
     Comma(F, F),
@@ -27,6 +32,12 @@ pub enum Ref<F> {
     Path(Path),
     IfThenElse(Box<Filter>, F, F),
     Function(RefFunc),
+}
+
+impl Val {
+    fn as_obj_key(&self) -> Result<String, Error> {
+        self.as_string().ok_or_else(|| Error::ObjKey(self.clone()))
+    }
 }
 
 type Product = (Rc<Val>, Rc<Val>);
@@ -45,7 +56,7 @@ impl FilterT for Filter {
                 Box::new(iter.map(|kvs| {
                     Rc::new(Val::Obj(
                         kvs.into_iter()
-                            .map(|(k, v)| (k.as_str().unwrap().to_string(), v))
+                            .map(|(k, v)| (k.as_obj_key().unwrap(), v))
                             .collect(),
                     ))
                 }))

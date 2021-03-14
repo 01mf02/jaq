@@ -42,6 +42,10 @@ impl Val {
         }
     }
 
+    pub fn as_string(&self) -> Option<String> {
+        self.as_str().map(|s| s.to_string())
+    }
+
     pub fn len(&self) -> Option<Num> {
         match self {
             Self::Null => Some(0.into()),
