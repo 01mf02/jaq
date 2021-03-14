@@ -76,7 +76,10 @@ impl PathElem {
             Self::Range(None, None) => match current {
                 Val::Arr(a) => Box::new(a.into_iter()),
                 Val::Obj(o) => Box::new(o.into_iter().map(|(_k, v)| v)),
-                _ => todo!(),
+                Val::Str(s) => panic!("cannot iterate over string (\"{}\")", s),
+                Val::Num(n) => panic!("cannot iterate over number ({})", n),
+                Val::Bool(b) => panic!("cannot iterate over boolean ({})", b),
+                Val::Null => panic!("cannot iterate over null"),
             },
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
