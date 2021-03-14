@@ -115,7 +115,7 @@ impl fmt::Display for Val {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::Null => write!(f, "null"),
-            Self::Bool(b) => write!(f, "bool ({})", b),
+            Self::Bool(b) => write!(f, "boolean ({})", b),
             Self::Num(n) => write!(f, "number ({})", n),
             Self::Str(s) => write!(f, "string (\"{}\")", s),
             _ => todo!(),
