@@ -1,4 +1,5 @@
 use core::convert::{TryFrom, TryInto};
+use core::fmt;
 use serde_json::Number;
 
 pub type Num = Typ<i64, f64>;
@@ -119,6 +120,15 @@ impl PartialOrd for Num {
         match self.pair(*other) {
             Typ::Int((l, r)) => l.partial_cmp(&r),
             Typ::Flt((l, r)) => l.partial_cmp(&r),
+        }
+    }
+}
+
+impl fmt::Display for Num {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        match self {
+            Self::Int(n) => n.fmt(f),
+            Self::Flt(n) => n.fmt(f),
         }
     }
 }
