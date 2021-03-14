@@ -34,8 +34,22 @@ mod tests {
     }
 }
 
-fn get_index(i: &Val, len: usize) -> usize {
-    wrap(i.as_isize().unwrap(), len).try_into().unwrap_or(0)
+fn get_index(i: &Val, len: usize) -> Result<usize, ()> {
+    let i = i.as_isize().ok_or(())?;
+    // make index 0 if it is smaller than 0
+    Ok(wrap(i, len).try_into().unwrap_or(0))
+}
+
+fn get_indices(
+    f: &Option<Filter>,
+    v: Rc<Val>,
+    len: usize,
+    default: usize,
+) -> Box<dyn Iterator<Item = Result<usize, ()>> + '_> {
+    match f {
+        Some(f) => Box::new(f.run(v).map(move |i| get_index(&i, len))),
+        None => Box::new(core::iter::once(Ok(default))),
+    }
 }
 
 impl PathElem {
@@ -66,22 +80,14 @@ impl PathElem {
             },
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
-                    use core::iter::once;
-                    let len = a.len();
-                    let from = match from {
-                        Some(from) => {
-                            Box::new(from.run(Rc::clone(&root)).map(move |i| get_index(&i, len)))
-                        }
-                        None => Box::new(once(0 as usize)) as Box<dyn Iterator<Item = _>>,
-                    };
-                    let until = match until {
-                        Some(until) => Box::new(until.run(root).map(|i| get_index(&i, len))),
-                        None => Box::new(once(a.len())) as Box<dyn Iterator<Item = _>>,
-                    };
+                    let from = get_indices(from, Rc::clone(&root), a.len(), 0);
+                    let until = get_indices(until, root, a.len(), a.len());
                     let until: Vec<_> = until.collect();
                     use itertools::Itertools;
                     let from_until = from.into_iter().cartesian_product(until);
                     Box::new(from_until.map(move |(from, until)| {
+                        let from = from.unwrap();
+                        let until = until.unwrap();
                         let take = if until > from { until - from } else { 0 };
                         Rc::new(Val::Arr(a.iter().cloned().skip(from).take(take).collect()))
                     }))
