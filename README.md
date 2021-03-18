@@ -114,6 +114,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [ ] More numeric functions (`sqrt`, `floor`, ...)
 - [ ] More string functions (`explode`, `split`, `join`, ...)
 - [ ] More array functions (`sort`, `min`, `unique`, `reverse`, ...)
+- [ ] More object functions (`to_entries`, `from_entries`, `with_entries`)
 
 ## Assignment
 

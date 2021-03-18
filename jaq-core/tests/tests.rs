@@ -54,6 +54,12 @@ fn path() {
     give(json!({"a": 1}), r#". ["a"]"#, json!(1));
 }
 
+// TODO!
+//#[test]
+fn update() {
+    give(json!({"a": 1, "b": 2}), "{a, c: 3}", json!({"a": 1, "c": 3}));
+}
+
 #[test]
 fn index() {
     give(json!([0, 1, 2]), ".[-4]", json!(null));
