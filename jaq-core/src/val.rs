@@ -29,6 +29,9 @@ pub enum Atom {
 /// A stream of reference-counted values.
 pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
 
+/// A stream of value results.
+pub type ValRs<'a> = Box<dyn Iterator<Item = Result<Val, Error>> + 'a>;
+
 /// A reference-counted value result.
 pub type RValR = Result<Rc<Val>, Error>;
 

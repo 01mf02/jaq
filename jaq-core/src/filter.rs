@@ -1,6 +1,6 @@
 use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
-use crate::val::{Atom, RValR, RValRs, Val};
+use crate::val::{Atom, RValR, RValRs, Val, ValRs};
 use crate::{Error, Path};
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
@@ -43,7 +43,7 @@ impl Val {
 type Product = (RValR, RValR);
 
 impl NewFilter {
-    fn run(&self, v: Rc<Val>) -> Box<dyn Iterator<Item = Result<Val, Error>> + '_> {
+    fn run(&self, v: Rc<Val>) -> ValRs {
         use core::iter::once;
         match self {
             Self::Atom(a) => Box::new(once(Ok(Val::from(a.clone())))),
