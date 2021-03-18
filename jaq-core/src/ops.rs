@@ -45,7 +45,7 @@ impl core::ops::Add for Val {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
             (Num(l), Num(r)) => Ok(Num(l + r)),
-            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Add)),
+            (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
         }
     }
 }
@@ -56,7 +56,7 @@ impl core::ops::Sub for Val {
         use Val::*;
         match (self, rhs) {
             (Num(l), Num(r)) => Ok(Num(l - r)),
-            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Sub)),
+            (l, r) => Err(Error::MathOp(l, r, MathOp::Sub)),
         }
     }
 }
@@ -67,7 +67,7 @@ impl core::ops::Mul for Val {
         use Val::*;
         match (self, rhs) {
             (Num(l), Num(r)) => Ok(Num(l * r)),
-            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Mul)),
+            (l, r) => Err(Error::MathOp(l, r, MathOp::Mul)),
         }
     }
 }
@@ -78,7 +78,7 @@ impl core::ops::Div for Val {
         use Val::*;
         match (self, rhs) {
             (Num(l), Num(r)) => Ok(Num(l / r)),
-            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Div)),
+            (l, r) => Err(Error::MathOp(l, r, MathOp::Div)),
         }
     }
 }
@@ -89,7 +89,7 @@ impl core::ops::Rem for Val {
         use Val::*;
         match (self, rhs) {
             (Num(l), Num(r)) => Ok(Num(l % r)),
-            (l, r) => Err(Error::MathOp(l.clone(), r.clone(), MathOp::Rem)),
+            (l, r) => Err(Error::MathOp(l, r, MathOp::Rem)),
         }
     }
 }
