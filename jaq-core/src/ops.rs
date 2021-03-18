@@ -111,6 +111,16 @@ impl MathOp {
             Rem => l % r,
         }
     }
+
+    pub fn passive(&self) -> &str {
+        match self {
+            MathOp::Add => "added",
+            MathOp::Sub => "subtracted",
+            MathOp::Mul => "multiplied",
+            MathOp::Div => "divided",
+            MathOp::Rem => "divided (remainder)",
+        }
+    }
 }
 
 impl LogicOp {
