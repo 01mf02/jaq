@@ -1,4 +1,4 @@
-use crate::filter::FilterT;
+use crate::Filter;
 use crate::val::{RValR, Val};
 use alloc::collections::VecDeque;
 use alloc::rc::Rc;
@@ -21,7 +21,7 @@ impl<F> Recurse<F> {
     }
 }
 
-impl<F: FilterT> Iterator for Recurse<F> {
+impl Iterator for Recurse<&Box<Filter>> {
     type Item = RValR;
 
     fn next(&mut self) -> Option<Self::Item> {

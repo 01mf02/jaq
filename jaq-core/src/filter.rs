@@ -11,7 +11,7 @@ pub trait FilterT {
 #[derive(Debug)]
 pub enum Filter {
     New(NewFilter),
-    Ref(Ref<Box<Filter>>),
+    Ref(Ref),
 }
 
 #[derive(Debug)]
@@ -25,12 +25,12 @@ pub enum NewFilter {
 }
 
 #[derive(Debug)]
-pub enum Ref<F> {
-    Pipe(F, F),
-    Comma(F, F),
+pub enum Ref {
+    Pipe(Box<Filter>, Box<Filter>),
+    Comma(Box<Filter>, Box<Filter>),
     Empty,
     Path(Path),
-    IfThenElse(Box<Filter>, F, F),
+    IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
     Function(RefFunc),
 }
 
@@ -74,8 +74,8 @@ impl NewFilter {
     }
 }
 
-impl FilterT for Filter {
-    fn run(&self, v: Rc<Val>) -> RValRs {
+impl Filter {
+    pub fn run(&self, v: Rc<Val>) -> RValRs {
         match self {
             Self::New(n) => Box::new(n.run(v).map(|x| x.map(Rc::new))),
             Self::Ref(r) => r.run(v),
@@ -83,7 +83,7 @@ impl FilterT for Filter {
     }
 }
 
-impl<F: FilterT> FilterT for Ref<F> {
+impl Ref {
     fn run(&self, v: Rc<Val>) -> RValRs {
         use core::iter::once;
         match self {

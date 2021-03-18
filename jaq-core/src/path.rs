@@ -1,6 +1,5 @@
-use crate::filter::{Filter, FilterT};
 use crate::val::{RValRs, Val};
-use crate::Error;
+use crate::{Error, Filter};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
