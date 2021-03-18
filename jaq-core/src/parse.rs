@@ -1,4 +1,4 @@
-use crate::filter::{Filter, Ref};
+use crate::filter::{Filter, NewFilter, Ref};
 use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::path::PathElem;
@@ -51,9 +51,9 @@ impl From<Pairs<'_, Rule>> for Filter {
                     Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),
                     rule => {
                         if let Ok(op) = LogicOp::try_from(rule) {
-                            Self::Logic(lhs, op, rhs)
+                            Self::New(NewFilter::Logic(lhs, op, rhs))
                         } else if let Ok(op) = MathOp::try_from(rule) {
-                            Self::Math(lhs, op, rhs)
+                            Self::New(NewFilter::Math(lhs, op, rhs))
                         } else {
                             unreachable!()
                         }
@@ -70,14 +70,14 @@ impl From<Pair<'_, Rule>> for Filter {
         let mut inner = pair.into_inner();
         match rule {
             Rule::expr => Self::from(inner),
-            Rule::atom => Self::Atom(inner.next().unwrap().into()),
+            Rule::atom => Self::New(NewFilter::Atom(inner.next().unwrap().into())),
             Rule::array => {
                 let contents = if inner.peek().is_none() {
                     Self::Ref(Ref::Empty)
                 } else {
                     Self::from(inner)
                 };
-                Self::Array(Box::new(contents))
+                Self::New(NewFilter::Array(Box::new(contents)))
             }
             Rule::object => {
                 let contents = inner.map(|kv| {
@@ -96,7 +96,7 @@ impl From<Pair<'_, Rule>> for Filter {
                     assert_eq!(iter.next(), None);
                     (key, value)
                 });
-                Self::Object(contents.collect())
+                Self::New(NewFilter::Object(contents.collect()))
             }
             Rule::ite => {
                 let mut ite = inner.map(|p| Box::new(Self::from(p)));
@@ -221,7 +221,7 @@ impl Filter {
             } else {
                 // unary function
                 match name {
-                    "map" => Some(Self::Function(NewFunc::Map(arg1))),
+                    "map" => Some(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
                     "select" => Some(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
                     "recurse" => Some(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
                     _ => None,
@@ -231,11 +231,11 @@ impl Filter {
             // nullary function
             match name {
                 "empty" => Some(Self::Ref(Ref::Function(RefFunc::Empty))),
-                "any" => Some(Self::Function(NewFunc::Any)),
-                "all" => Some(Self::Function(NewFunc::All)),
-                "not" => Some(Self::Function(NewFunc::Not)),
-                "length" => Some(Self::Function(NewFunc::Length)),
-                "add" => Some(Self::Function(NewFunc::Add)),
+                "any" => Some(Self::New(NewFilter::Function(NewFunc::Any))),
+                "all" => Some(Self::New(NewFilter::Function(NewFunc::All))),
+                "not" => Some(Self::New(NewFilter::Function(NewFunc::Not))),
+                "length" => Some(Self::New(NewFilter::Function(NewFunc::Length))),
+                "add" => Some(Self::New(NewFilter::Function(NewFunc::Add))),
                 _ => None,
             }
         }

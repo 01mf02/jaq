@@ -21,7 +21,7 @@ pub enum RefFunc {
 }
 
 impl NewFunc {
-    fn run_single(&self, v: Rc<Val>) -> Result<Val, Error> {
+    pub fn run(&self, v: Rc<Val>) -> Result<Val, Error> {
         use NewFunc::*;
         match self {
             Any => Ok(Val::Bool(v.iter()?.any(|v| v.as_bool()))),
@@ -36,12 +36,6 @@ impl NewFunc {
                 v.iter()?.flat_map(|x| f.run(x)).collect::<Result<_, _>>()?,
             )),
         }
-    }
-}
-
-impl FilterT for NewFunc {
-    fn run(&self, v: Rc<Val>) -> RVals {
-        Box::new(core::iter::once(self.run_single(v).map(Rc::new)))
     }
 }
 

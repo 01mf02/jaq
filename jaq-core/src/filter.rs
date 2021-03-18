@@ -10,13 +10,18 @@ pub trait FilterT: core::fmt::Debug {
 
 #[derive(Debug)]
 pub enum Filter {
+    New(NewFilter),
+    Ref(Ref<Box<Filter>>),
+}
+
+#[derive(Debug)]
+pub enum NewFilter {
     Atom(Atom),
     Array(Box<Filter>),
     Object(Vec<(Filter, Filter)>),
     Math(Box<Filter>, MathOp, Box<Filter>),
     Logic(Box<Filter>, LogicOp, Box<Filter>),
     Function(NewFunc),
-    Ref(Ref<Box<Filter>>),
 }
 
 #[derive(Debug)]
@@ -37,14 +42,12 @@ impl Val {
 
 type Product = (RVal, RVal);
 
-impl FilterT for Filter {
-    fn run(&self, v: Rc<Val>) -> RVals {
+impl NewFilter {
+    fn run(&self, v: Rc<Val>) -> Box<dyn Iterator<Item = Result<Val, Error>> + '_> {
+        use core::iter::once;
         match self {
-            Self::Atom(a) => Val::from(a.clone()).into(),
-            Self::Array(f) => match f.run(v).collect() {
-                Ok(arr) => Val::Arr(arr).into(),
-                Err(e) => Box::new(core::iter::once(Err(e))),
-            },
+            Self::Atom(a) => Box::new(once(Ok(Val::from(a.clone())))),
+            Self::Array(f) => Box::new(once(f.run(v).collect::<Result<_, _>>().map(Val::Arr))),
             Self::Object(o) => {
                 let iter = o
                     .iter()
@@ -56,20 +59,25 @@ impl FilterT for Filter {
                         .into_iter()
                         .map(|(k, v)| Ok((k?.as_obj_key()?, v?)))
                         .collect();
-                    Ok(Rc::new(Val::Obj(kvs?)))
+                    Ok(Val::Obj(kvs?))
                 }))
             }
-            Self::Math(l, op, r) => {
-                let prod = Filter::cartesian(l, r, v);
-                let results = prod.map(move |(x, y)| Ok(op.run((*x?).clone(), (*y?).clone())?));
-                Box::new(results.map(|x| Ok(Rc::new(x?))))
-            }
-            Self::Logic(l, op, r) => {
-                let prod = Filter::cartesian(l, r, v);
-                let results = prod.map(move |(x, y)| Ok(op.run(&*x?, &*y?)));
-                Box::new(results.map(|x| Ok(Rc::new(Val::Bool(x?)))))
-            }
-            Self::Function(f) => f.run(v),
+            Self::Math(l, op, r) => Box::new(
+                Filter::cartesian(l, r, v)
+                    .map(move |(x, y)| Ok(op.run((*x?).clone(), (*y?).clone())?)),
+            ),
+            Self::Logic(l, op, r) => Box::new(
+                Filter::cartesian(l, r, v).map(move |(x, y)| Ok(Val::Bool(op.run(&*x?, &*y?)))),
+            ),
+            Self::Function(f) => Box::new(once(f.run(v))),
+        }
+    }
+}
+
+impl FilterT for Filter {
+    fn run(&self, v: Rc<Val>) -> RVals {
+        match self {
+            Self::New(n) => Box::new(n.run(v).map(|x| x.map(Rc::new))),
             Self::Ref(r) => r.run(v),
         }
     }
@@ -130,6 +138,6 @@ impl Filter {
 
 impl From<Atom> for Filter {
     fn from(a: Atom) -> Self {
-        Self::Atom(a)
+        Self::New(NewFilter::Atom(a))
     }
 }
