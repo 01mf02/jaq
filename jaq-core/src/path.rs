@@ -55,6 +55,7 @@ fn get_indices(
 
 impl PathElem {
     pub fn follow(&self, root: Rc<Val>, current: Val) -> RValRs {
+        use core::iter::once;
         match self {
             Self::Index(filter) => {
                 let index = filter.run(root);
@@ -68,16 +69,16 @@ impl PathElem {
                         })
                     })),
                     Val::Obj(o) => Box::new(index.map(move |i| match &*i? {
-                        Val::Str(s) => Ok(Rc::clone(&o.get(s).unwrap())),
-                        _ => todo!(),
+                        Val::Str(s) => Ok(o.get(s).map_or_else(|| Rc::new(Val::Null), Rc::clone)),
+                        i => Err(Error::IndexWith(Val::Obj(o.clone()), i.clone())),
                     })),
-                    _ => panic!("index"),
+                    _ => Box::new(once(Err(Error::Index(current)))),
                 }
             }
             Self::Range(None, None) => match current {
                 Val::Arr(a) => Box::new(a.into_iter().map(Ok)),
                 Val::Obj(o) => Box::new(o.into_iter().map(|(_k, v)| Ok(v))),
-                v => panic!("cannot iterate over {}", v),
+                v => Box::new(once(Err(Error::Iter(v)))),
             },
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
@@ -95,7 +96,7 @@ impl PathElem {
                     }))
                 }
                 Val::Str(_) => todo!(),
-                _ => panic!("cannot obtain slice of element (neither array nor string)"),
+                _ => Box::new(once(Err(Error::Index(current)))),
             },
         }
     }

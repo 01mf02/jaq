@@ -8,6 +8,8 @@ pub enum Error {
     Length(Val),
     Iter(Val),
     MathOp(Val, Val, MathOp),
+    Index(Val),
+    IndexWith(Val, Val),
     IndexIsize,
 }
 
@@ -19,6 +21,8 @@ impl fmt::Display for Error {
             Length(v) => write!(f, "{} has no length", v),
             Iter(v) => write!(f, "cannot iterate over {}", v),
             MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, op.passive()),
+            Index(v) => write!(f, "cannot index {}", v),
+            IndexWith(v, i) => write!(f, "cannot index {} with {}", v, i),
             IndexIsize => write!(f, "cannot use ??? as index"),
         }
     }
