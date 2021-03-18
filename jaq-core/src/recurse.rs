@@ -1,19 +1,19 @@
 use crate::filter::FilterT;
-use crate::val::Val;
+use crate::val::{RVal, Val};
 use alloc::collections::VecDeque;
 use alloc::rc::Rc;
 
 pub struct Recurse<F> {
     filter: F,
     input: VecDeque<Rc<Val>>,
-    output: VecDeque<Rc<Val>>,
+    output: VecDeque<RVal>,
 }
 
 impl<F> Recurse<F> {
     pub fn new(filter: F, val: Rc<Val>) -> Self {
         let mut output = VecDeque::new();
-        output.push_back(val);
-        Recurse {
+        output.push_back(Ok(val));
+        Self {
             filter,
             input: VecDeque::new(),
             output,
@@ -22,12 +22,14 @@ impl<F> Recurse<F> {
 }
 
 impl<F: FilterT> Iterator for Recurse<F> {
-    type Item = Rc<Val>;
+    type Item = RVal;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.output.pop_front() {
             Some(o) => {
-                self.input.push_back(Rc::clone(&o));
+                if let Ok(ref o) = o {
+                    self.input.push_back(Rc::clone(&o));
+                };
                 Some(o)
             }
             None => match self.input.pop_front() {

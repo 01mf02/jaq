@@ -1,5 +1,5 @@
 use crate::filter::{Filter, FilterT};
-use crate::val::{Val, Vals};
+use crate::val::{RVals, Val};
 use alloc::{boxed::Box, rc::Rc};
 
 #[derive(Debug)]
@@ -20,7 +20,8 @@ pub enum RefFunc {
 }
 
 impl FilterT for NewFunc {
-    fn run(&self, v: Rc<Val>) -> Vals {
+    // TODO: all these function return at most a single value
+    fn run(&self, v: Rc<Val>) -> RVals {
         use NewFunc::*;
         match self {
             Any => Val::Bool(v.iter().unwrap().any(|v| v.as_bool())).into(),
@@ -33,23 +34,28 @@ impl FilterT for NewFunc {
             Length => Val::Num(v.len().unwrap()).into(),
             Map(f) => {
                 let iter = v.iter().unwrap().flat_map(move |x| f.run(x));
-                Box::new(core::iter::once(Rc::new(Val::Arr(iter.collect()))))
+                let arr: Result<Vec<_>, _> = iter.collect();
+                let arr = arr.map(|arr| Rc::new(Val::Arr(arr)));
+                Box::new(core::iter::once(arr))
             }
         }
     }
 }
 
 impl FilterT for RefFunc {
-    fn run(&self, v: Rc<Val>) -> Vals {
+    fn run(&self, v: Rc<Val>) -> RVals {
         use RefFunc::*;
         match self {
             Empty => Box::new(core::iter::empty()),
-            Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| {
-                if y.as_bool() {
-                    Some(Rc::clone(&v))
-                } else {
-                    None
+            Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| match y {
+                Ok(y) => {
+                    if y.as_bool() {
+                        Some(Ok(Rc::clone(&v)))
+                    } else {
+                        None
+                    }
                 }
+                Err(e) => Some(Err(e)),
             })),
             Recurse(f) => Box::new(crate::Recurse::new(f, v)),
         }

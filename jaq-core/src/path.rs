@@ -1,5 +1,6 @@
 use crate::filter::{Filter, FilterT};
-use crate::val::{Val, Vals};
+use crate::val::{RVals, Val};
+use crate::Error;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
@@ -34,8 +35,8 @@ mod tests {
     }
 }
 
-fn get_index(i: &Val, len: usize) -> Result<usize, ()> {
-    let i = i.as_isize().ok_or(())?;
+fn get_index(i: &Val, len: usize) -> Result<usize, Error> {
+    let i = i.as_isize().ok_or(Error::IndexIsize)?;
     // make index 0 if it is smaller than 0
     Ok(wrap(i, len).try_into().unwrap_or(0))
 }
@@ -45,37 +46,37 @@ fn get_indices(
     v: Rc<Val>,
     len: usize,
     default: usize,
-) -> Box<dyn Iterator<Item = Result<usize, ()>> + '_> {
+) -> Box<dyn Iterator<Item = Result<usize, Error>> + '_> {
     match f {
-        Some(f) => Box::new(f.run(v).map(move |i| get_index(&i, len))),
+        Some(f) => Box::new(f.run(v).map(move |i| Ok(get_index(&*i?, len)?))),
         None => Box::new(core::iter::once(Ok(default))),
     }
 }
 
 impl PathElem {
-    pub fn follow(&self, root: Rc<Val>, current: Val) -> Vals {
+    pub fn follow(&self, root: Rc<Val>, current: Val) -> RVals {
         match self {
             Self::Index(filter) => {
                 let index = filter.run(root);
                 match current {
                     Val::Arr(a) => Box::new(index.map(move |i| {
-                        let i = wrap(i.as_isize().unwrap(), a.len());
-                        if i < 0 || i as usize >= a.len() {
+                        let i = wrap(i?.as_isize().ok_or(Error::IndexIsize)?, a.len());
+                        Ok(if i < 0 || i as usize >= a.len() {
                             Rc::new(Val::Null)
                         } else {
                             Rc::clone(&a[i as usize])
-                        }
+                        })
                     })),
-                    Val::Obj(o) => Box::new(index.map(move |i| match &*i {
-                        Val::Str(s) => Rc::clone(&o.get(s).unwrap()),
+                    Val::Obj(o) => Box::new(index.map(move |i| match &*i? {
+                        Val::Str(s) => Ok(Rc::clone(&o.get(s).unwrap())),
                         _ => todo!(),
                     })),
                     _ => panic!("index"),
                 }
             }
             Self::Range(None, None) => match current {
-                Val::Arr(a) => Box::new(a.into_iter()),
-                Val::Obj(o) => Box::new(o.into_iter().map(|(_k, v)| v)),
+                Val::Arr(a) => Box::new(a.into_iter().map(Ok)),
+                Val::Obj(o) => Box::new(o.into_iter().map(|(_k, v)| Ok(v))),
                 v => panic!("cannot iterate over {}", v),
             },
             Self::Range(from, until) => match current {
@@ -86,10 +87,11 @@ impl PathElem {
                     use itertools::Itertools;
                     let from_until = from.into_iter().cartesian_product(until);
                     Box::new(from_until.map(move |(from, until)| {
-                        let from = from.unwrap();
-                        let until = until.unwrap();
+                        let from = from?;
+                        let until = until?;
                         let take = if until > from { until - from } else { 0 };
-                        Rc::new(Val::Arr(a.iter().cloned().skip(from).take(take).collect()))
+                        let iter = a.iter().cloned().skip(from).take(take);
+                        Ok(Rc::new(Val::Arr(iter.collect())))
                     }))
                 }
                 Val::Str(_) => todo!(),

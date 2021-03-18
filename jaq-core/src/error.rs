@@ -6,4 +6,5 @@ pub enum Error {
     ObjKey(Val),
     Iter(Val),
     MathOp(Val, Val, MathOp),
+    IndexIsize,
 }

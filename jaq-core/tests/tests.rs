@@ -16,7 +16,7 @@ fn gives(x: serde_json::Value, f: &str, ys: Vec<serde_json::Value>) {
     let ys: Vec<_> = ys.into_iter().map(to).collect();
 
     use jaq_core::filter::FilterT;
-    let out: Vec<_> = f.run(x).collect();
+    let out: Vec<_> = f.run(x).map(|y| y.unwrap()).collect();
     assert_eq!(out, ys);
 }
 
@@ -52,12 +52,22 @@ fn path() {
     give(json!({"a": 1}), r#". "a""#, json!(1));
     give(json!({"a": 1}), r#".["a"]"#, json!(1));
     give(json!({"a": 1}), r#". ["a"]"#, json!(1));
+
+    gives(
+        json!({"a": 1, "b": 2}),
+        r#".["b", "a"]"#,
+        vec![json!(2), json!(1)],
+    );
 }
 
 // TODO!
 //#[test]
 fn update() {
-    give(json!({"a": 1, "b": 2}), "{a, c: 3}", json!({"a": 1, "c": 3}));
+    give(
+        json!({"a": 1, "b": 2}),
+        "{a, c: 3}",
+        json!({"a": 1, "c": 3}),
+    );
 }
 
 #[test]

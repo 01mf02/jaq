@@ -2,6 +2,7 @@
 
 use crate::map::Map;
 use crate::number::Num;
+use crate::Error;
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 use core::convert::TryFrom;
 use core::fmt;
@@ -26,6 +27,9 @@ pub enum Atom {
 
 /// A stream of reference-counted values.
 pub type Vals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
+
+pub type RVal = Result<Rc<Val>, Error>;
+pub type RVals<'a> = Box<dyn Iterator<Item = RVal> + 'a>;
 
 impl Val {
     pub fn as_isize(&self) -> Option<isize> {
@@ -66,9 +70,9 @@ impl Val {
     }
 }
 
-impl From<Val> for Vals<'_> {
+impl From<Val> for RVals<'_> {
     fn from(v: Val) -> Self {
-        Box::new(core::iter::once(Rc::new(v)))
+        Box::new(core::iter::once(Ok(Rc::new(v))))
     }
 }
 
