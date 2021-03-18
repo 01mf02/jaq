@@ -18,8 +18,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
+    - name: Check (without default features)
+      working-directory: jaq-core
+      run: cargo check --no-default-features
     - name: Run tests
       run: cargo test --verbose
-    - name: Run tests (without default features)
-      working-directory: jaq-core
-      run: cargo test --no-default-features
