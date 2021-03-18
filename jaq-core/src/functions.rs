@@ -1,5 +1,5 @@
 use crate::filter::{Filter, FilterT};
-use crate::val::{RVals, Val};
+use crate::val::{RValRs, Val};
 use crate::Error;
 use alloc::{boxed::Box, rc::Rc};
 
@@ -40,7 +40,7 @@ impl NewFunc {
 }
 
 impl FilterT for RefFunc {
-    fn run(&self, v: Rc<Val>) -> RVals {
+    fn run(&self, v: Rc<Val>) -> RValRs {
         use RefFunc::*;
         match self {
             Empty => Box::new(core::iter::empty()),

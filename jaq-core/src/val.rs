@@ -26,10 +26,13 @@ pub enum Atom {
 }
 
 /// A stream of reference-counted values.
-pub type Vals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
+pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
 
-pub type RVal = Result<Rc<Val>, Error>;
-pub type RVals<'a> = Box<dyn Iterator<Item = RVal> + 'a>;
+/// A reference-counted value result.
+pub type RValR = Result<Rc<Val>, Error>;
+
+/// A stream of reference-counted value results.
+pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;
 
 impl Val {
     pub fn as_isize(&self) -> Option<isize> {
@@ -61,18 +64,12 @@ impl Val {
         }
     }
 
-    pub fn iter(&self) -> Result<Vals, Error> {
+    pub fn iter(&self) -> Result<RVals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
             Self::Obj(o) => Ok(Box::new(o.values().cloned())),
             _ => Err(Error::Iter(self.clone())),
         }
-    }
-}
-
-impl From<Val> for RVals<'_> {
-    fn from(v: Val) -> Self {
-        Box::new(core::iter::once(Ok(Rc::new(v))))
     }
 }
 

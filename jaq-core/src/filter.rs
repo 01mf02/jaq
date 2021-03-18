@@ -1,11 +1,11 @@
 use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
-use crate::val::{Atom, RVal, RVals, Val};
+use crate::val::{Atom, RValR, RValRs, Val};
 use crate::{Error, Path};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 
 pub trait FilterT: core::fmt::Debug {
-    fn run(&self, v: Rc<Val>) -> RVals;
+    fn run(&self, v: Rc<Val>) -> RValRs;
 }
 
 #[derive(Debug)]
@@ -40,7 +40,7 @@ impl Val {
     }
 }
 
-type Product = (RVal, RVal);
+type Product = (RValR, RValR);
 
 impl NewFilter {
     fn run(&self, v: Rc<Val>) -> Box<dyn Iterator<Item = Result<Val, Error>> + '_> {
@@ -75,7 +75,7 @@ impl NewFilter {
 }
 
 impl FilterT for Filter {
-    fn run(&self, v: Rc<Val>) -> RVals {
+    fn run(&self, v: Rc<Val>) -> RValRs {
         match self {
             Self::New(n) => Box::new(n.run(v).map(|x| x.map(Rc::new))),
             Self::Ref(r) => r.run(v),
@@ -84,7 +84,7 @@ impl FilterT for Filter {
 }
 
 impl<F: FilterT> FilterT for Ref<F> {
-    fn run(&self, v: Rc<Val>) -> RVals {
+    fn run(&self, v: Rc<Val>) -> RValRs {
         use core::iter::once;
         match self {
             Self::Pipe(l, r) => Box::new(l.run(v).flat_map(move |y| match y {
@@ -116,13 +116,13 @@ impl<F: FilterT> FilterT for Ref<F> {
 }
 
 impl<F: FilterT> FilterT for Box<F> {
-    fn run(&self, v: Rc<Val>) -> RVals {
+    fn run(&self, v: Rc<Val>) -> RValRs {
         (**self).run(v)
     }
 }
 
 impl<F: FilterT> FilterT for &Box<F> {
-    fn run(&self, v: Rc<Val>) -> RVals {
+    fn run(&self, v: Rc<Val>) -> RValRs {
         (*self).run(v)
     }
 }

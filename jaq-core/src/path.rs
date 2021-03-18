@@ -1,5 +1,5 @@
 use crate::filter::{Filter, FilterT};
-use crate::val::{RVals, Val};
+use crate::val::{RValRs, Val};
 use crate::Error;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
@@ -54,7 +54,7 @@ fn get_indices(
 }
 
 impl PathElem {
-    pub fn follow(&self, root: Rc<Val>, current: Val) -> RVals {
+    pub fn follow(&self, root: Rc<Val>, current: Val) -> RValRs {
         match self {
             Self::Index(filter) => {
                 let index = filter.run(root);
