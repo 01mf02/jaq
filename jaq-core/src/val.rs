@@ -50,22 +50,22 @@ impl Val {
         self.as_str().map(|s| s.to_string())
     }
 
-    pub fn len(&self) -> Option<Num> {
+    pub fn len(&self) -> Result<Num, Error> {
         match self {
-            Self::Null => Some(0.into()),
-            Self::Bool(_) => None,
-            Self::Num(n) => Some(*n),
-            Self::Str(s) => Some(s.chars().count().into()),
-            Self::Arr(a) => Some(a.len().into()),
-            Self::Obj(o) => Some(o.keys().count().into()),
+            Self::Null => Ok(0.into()),
+            Self::Bool(_) => Err(Error::Length(self.clone())),
+            Self::Num(n) => Ok(*n),
+            Self::Str(s) => Ok(s.chars().count().into()),
+            Self::Arr(a) => Ok(a.len().into()),
+            Self::Obj(o) => Ok(o.keys().count().into()),
         }
     }
 
-    pub fn iter(&self) -> Option<Vals> {
+    pub fn iter(&self) -> Result<Vals, Error> {
         match self {
-            Self::Arr(a) => Some(Box::new(a.iter().cloned())),
-            Self::Obj(o) => Some(Box::new(o.values().cloned())),
-            _ => None,
+            Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
+            Self::Obj(o) => Ok(Box::new(o.values().cloned())),
+            _ => Err(Error::Iter(self.clone())),
         }
     }
 }
