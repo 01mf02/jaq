@@ -4,7 +4,7 @@ use crate::val::{Atom, RValR, RValRs, Val, ValRs};
 use crate::{Error, Path};
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
-pub trait FilterT: core::fmt::Debug {
+pub trait FilterT {
     fn run(&self, v: Rc<Val>) -> RValRs;
 }
 
