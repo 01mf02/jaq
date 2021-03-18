@@ -2,7 +2,7 @@ use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
 use crate::val::{Atom, RValR, RValRs, Val};
 use crate::{Error, Path};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
 pub trait FilterT: core::fmt::Debug {
     fn run(&self, v: Rc<Val>) -> RValRs;

@@ -3,7 +3,8 @@
 use crate::map::Map;
 use crate::number::Num;
 use crate::Error;
-use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::string::{String, ToString};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryFrom;
 use core::fmt;
 
