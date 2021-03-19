@@ -15,7 +15,6 @@ fn gives(x: serde_json::Value, f: &str, ys: Vec<serde_json::Value>) {
     let f = Filter::parse(f).unwrap();
     let ys: Vec<_> = ys.into_iter().map(to).collect();
 
-    use jaq_core::filter::FilterT;
     let out: Vec<_> = f.run(x).map(|y| y.unwrap()).collect();
     assert_eq!(out, ys);
 }
