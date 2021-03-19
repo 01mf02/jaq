@@ -1,5 +1,4 @@
-use crate::val::{RValRs, Val};
-use crate::{Error, Filter};
+use crate::{Error, Filter, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc};
 
 #[derive(Debug)]

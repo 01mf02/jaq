@@ -1,8 +1,7 @@
 //! JSON values with reference-counted sharing.
 
-use crate::map::Map;
 use crate::number::Num;
-use crate::Error;
+use crate::{Error, RVals, Map};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryFrom;
@@ -25,18 +24,6 @@ pub enum Atom {
     Num(Num),
     Str(String),
 }
-
-/// A stream of reference-counted values.
-pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
-
-/// A stream of value results.
-pub type ValRs<'a> = Box<dyn Iterator<Item = Result<Val, Error>> + 'a>;
-
-/// A reference-counted value result.
-pub type RValR = Result<Rc<Val>, Error>;
-
-/// A stream of reference-counted value results.
-pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;
 
 impl Val {
     pub fn as_isize(&self) -> Option<isize> {

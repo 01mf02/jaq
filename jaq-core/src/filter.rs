@@ -1,7 +1,7 @@
 use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
-use crate::val::{Atom, RValR, RValRs, Val, ValRs};
-use crate::{Error, Path};
+use crate::val::{Atom, Val};
+use crate::{Error, Path, RValR, RValRs, ValRs};
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
 #[derive(Debug)]

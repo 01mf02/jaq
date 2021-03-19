@@ -1,5 +1,4 @@
-use crate::val::{RValR, Val};
-use crate::Filter;
+use crate::{Filter, RValR, Val};
 use alloc::collections::VecDeque;
 use alloc::rc::Rc;
 
