@@ -4,10 +4,6 @@ use crate::val::{Atom, RValR, RValRs, Val, ValRs};
 use crate::{Error, Path};
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
-pub trait FilterT {
-    fn run(&self, v: Rc<Val>) -> RValRs;
-}
-
 #[derive(Debug)]
 pub enum Filter {
     New(NewFilter),
@@ -112,18 +108,6 @@ impl Ref {
             }
             Self::Function(f) => f.run(v),
         }
-    }
-}
-
-impl<F: FilterT> FilterT for Box<F> {
-    fn run(&self, v: Rc<Val>) -> RValRs {
-        (**self).run(v)
-    }
-}
-
-impl<F: FilterT> FilterT for &Box<F> {
-    fn run(&self, v: Rc<Val>) -> RValRs {
-        (*self).run(v)
     }
 }
 
