@@ -1,5 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+extern crate std;
+
+extern crate alloc;
+#[cfg(feature = "parse")]
+extern crate pest;
+#[cfg(feature = "parse")]
+#[macro_use]
+extern crate pest_derive;
+
 pub mod error;
 pub mod filter;
 pub mod functions;
@@ -17,13 +27,3 @@ pub use filter::Filter;
 pub use path::Path;
 pub use recurse::Recurse;
 pub use val::Val;
-
-#[cfg(feature = "std")]
-extern crate std;
-
-extern crate alloc;
-#[cfg(feature = "parse")]
-extern crate pest;
-#[cfg(feature = "parse")]
-#[macro_use]
-extern crate pest_derive;
