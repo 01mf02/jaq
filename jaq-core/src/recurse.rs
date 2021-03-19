@@ -1,7 +1,7 @@
 use crate::val::{RValR, Val};
 use crate::Filter;
 use alloc::collections::VecDeque;
-use alloc::{boxed::Box, rc::Rc};
+use alloc::rc::Rc;
 
 pub struct Recurse<F> {
     filter: F,
@@ -21,7 +21,7 @@ impl<F> Recurse<F> {
     }
 }
 
-impl Iterator for Recurse<&Box<Filter>> {
+impl<F: core::ops::Deref<Target = Filter>> Iterator for Recurse<&F> {
     type Item = RValR;
 
     fn next(&mut self) -> Option<Self::Item> {
