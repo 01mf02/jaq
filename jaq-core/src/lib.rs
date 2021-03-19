@@ -14,7 +14,7 @@ pub mod error;
 pub mod filter;
 pub mod functions;
 pub mod map;
-pub mod number;
+pub mod num;
 pub mod ops;
 #[cfg(feature = "parse")]
 pub mod parse;
@@ -28,6 +28,7 @@ pub use map::Map;
 pub use path::Path;
 pub use recurse::Recurse;
 pub use val::Val;
+pub use num::Num;
 
 use alloc::{boxed::Box, rc::Rc};
 
