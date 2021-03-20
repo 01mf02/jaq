@@ -48,12 +48,11 @@ impl core::ops::Add for Val {
             (Str(mut l), Str(r)) => {
                 l.push_str(&r);
                 Ok(Str(l))
-
             }
             (Arr(mut l), Arr(r)) => {
                 l.extend(r);
                 Ok(Arr(l))
-            },
+            }
             (Obj(l), Obj(r)) => Ok(Obj(l + r)),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
         }
