@@ -1,6 +1,6 @@
 //! JSON values with reference-counted sharing.
 
-use crate::{Error, RVals, Map, Num};
+use crate::{Error, Map, Num, RVals};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryFrom;
