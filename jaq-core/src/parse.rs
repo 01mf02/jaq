@@ -221,6 +221,8 @@ impl Filter {
             } else {
                 // unary function
                 match name {
+                    "first" => Some(Self::Ref(Ref::Function(RefFunc::First(arg1)))),
+                    "last" => Some(Self::Ref(Ref::Function(RefFunc::Last(arg1)))),
                     "map" => Some(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
                     "select" => Some(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
                     "recurse" => Some(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),

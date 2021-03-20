@@ -144,6 +144,14 @@ fn recurse() {
 }
 
 #[test]
+fn first_last() {
+    gives(json!([]), "first(.[])", vec![]);
+    gives(json!([]), "last(.[])", vec![]);
+    give(json!([1, 2, 3]), "first(.[])", json!(1));
+    give(json!([1, 2, 3]), "last(.[])", json!(3));
+}
+
+#[test]
 fn ord() {
     give(json!(null), ". < false", json!(true));
     give(json!(false), ". < true", json!(true));

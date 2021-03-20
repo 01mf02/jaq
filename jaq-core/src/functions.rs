@@ -14,6 +14,8 @@ pub enum NewFunc {
 #[derive(Debug)]
 pub enum RefFunc {
     Empty,
+    First(Box<Filter>),
+    Last(Box<Filter>),
     Select(Box<Filter>),
     Recurse(Box<Filter>),
 }
@@ -42,6 +44,12 @@ impl RefFunc {
         use RefFunc::*;
         match self {
             Empty => Box::new(core::iter::empty()),
+            First(f) => Box::new(f.run(v).take(1)),
+            Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
+                Ok(None) => Box::new(core::iter::empty()),
+                Ok(Some(y)) => Box::new(core::iter::once(Ok(y))),
+                Err(e) => Box::new(core::iter::once(Err(e))),
+            }
             Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| match y {
                 Ok(y) => {
                     if y.as_bool() {
