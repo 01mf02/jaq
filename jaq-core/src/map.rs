@@ -67,3 +67,12 @@ impl<K, V> IntoIterator for Map<K, V> {
         self.0.into_iter()
     }
 }
+
+impl<K: Eq + Hash, V> core::ops::Add for Map<K, V> {
+    type Output = Self;
+
+    fn add(mut self, other: Self) -> Self {
+        self.0.extend(other);
+        self
+    }
+}

@@ -31,6 +31,18 @@ fn all() {
 }
 
 #[test]
+fn math() {
+    give(json!(1), ". + 2", json!(3));
+    give(json!("Hello "), ". + \"world\"", json!("Hello world"));
+    give(json!([1, 2]), ". + [3, 4]", json!([1, 2, 3, 4]));
+    give(
+        json!({"a": 1, "b": 2}),
+        ". + {c: 3, a: 4}",
+        json!({"a": 4, "b": 2, "c": 3}),
+    );
+}
+
+#[test]
 fn add() {
     give(json!({"a": 1, "b": 2}), "add", json!(3));
 }

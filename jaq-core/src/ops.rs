@@ -45,6 +45,16 @@ impl core::ops::Add for Val {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
             (Num(l), Num(r)) => Ok(Num(l + r)),
+            (Str(mut l), Str(r)) => {
+                l.push_str(&r);
+                Ok(Str(l))
+
+            }
+            (Arr(mut l), Arr(r)) => {
+                l.extend(r);
+                Ok(Arr(l))
+            },
+            (Obj(l), Obj(r)) => Ok(Obj(l + r)),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
         }
     }
