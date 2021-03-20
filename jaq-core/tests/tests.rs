@@ -145,11 +145,13 @@ fn recurse() {
 
 #[test]
 fn ord() {
+    give(json!(null), ". < false", json!(true));
     give(json!(false), ". < true", json!(true));
-    give(json!({"a": 2}), r#". < {"a": 1, "b": 0}"#, json!(true));
-
     give(json!(1), ". > 0.0", json!(true));
     give(json!(1), ". < 1.5", json!(true));
+    give(json!("ab"), ". < \"b\"", json!(true));
+    give(json!("a"), ". < \"ab\"", json!(true));
+    give(json!({"a": 2}), r#". < {"a": 1, "b": 0}"#, json!(true));
 }
 
 #[test]

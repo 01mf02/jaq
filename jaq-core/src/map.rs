@@ -48,9 +48,10 @@ impl<K: Ord, V: PartialOrd> PartialOrd for Map<K, V> {
         let kr = r.iter().map(|(k, _v)| k);
         let vl = l.iter().map(|(_k, v)| v);
         let vr = r.iter().map(|(_k, v)| v);
-        // TODO: remove unwrap
-        let bla = kl.cmp(kr).then_with(|| vl.partial_cmp(vr).unwrap());
-        Some(bla)
+        match kl.cmp(kr) {
+            core::cmp::Ordering::Equal => vl.partial_cmp(vr),
+            ord => Some(ord),
+        }
     }
 }
 
