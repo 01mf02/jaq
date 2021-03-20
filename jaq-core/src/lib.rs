@@ -25,10 +25,10 @@ pub mod val;
 pub use error::Error;
 pub use filter::Filter;
 pub use map::Map;
+pub use num::Num;
 pub use path::Path;
 pub use recurse::Recurse;
 pub use val::Val;
-pub use num::Num;
 
 use alloc::{boxed::Box, rc::Rc};
 
