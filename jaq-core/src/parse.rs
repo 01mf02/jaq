@@ -234,10 +234,7 @@ impl Filter {
                     }
                 } else {
                     // binary function
-                    match name {
-                        "fold" => Some(Self::New(NewFilter::Function(NewFunc::Fold(arg1, arg2)))),
-                        _ => None,
-                    }
+                    None
                 }
             } else {
                 // unary function
