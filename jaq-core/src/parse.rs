@@ -212,12 +212,22 @@ impl TryFrom<Rule> for MathOp {
 }
 
 impl Filter {
-    fn try_from(name: &str, mut args: impl Iterator<Item = Filter>) -> Option<Self> {
-        if let Some(arg1) = args.next().map(Box::new) {
+    fn try_from(name: &str, args: impl Iterator<Item = Filter>) -> Option<Self> {
+        let mut args = args.map(Box::new);
+        if let Some(arg1) = args.next() {
             // unary or higher-arity function
-            if let Some(_arg2) = args.next() {
+            if let Some(arg2) = args.next() {
                 // binary or higher-arity function
-                None
+                if let Some(_arg3) = args.next() {
+                    // ternary or higher-arity function
+                    None
+                } else {
+                    // binary function
+                    match name {
+                        "fold" => Some(Self::New(NewFilter::Function(NewFunc::Fold(arg1, arg2)))),
+                        _ => None,
+                    }
+                }
             } else {
                 // unary function
                 match name {

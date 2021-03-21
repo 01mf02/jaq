@@ -144,6 +144,17 @@ fn recurse() {
 }
 
 #[test]
+fn fold() {
+    // the corresponding jq command is:
+    //     reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)
+    give(
+        json!(0),
+        "[recurse(if . == 1000 then empty else .+1 end)] | fold(0; .acc + .x)",
+        json!([500500]),
+    );
+}
+
+#[test]
 fn first_last() {
     gives(json!([]), "first(.[])", vec![]);
     gives(json!([]), "last(.[])", vec![]);

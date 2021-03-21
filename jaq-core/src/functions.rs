@@ -9,6 +9,7 @@ pub enum NewFunc {
     Add,
     Length,
     Map(Box<Filter>),
+    Fold(Box<Filter>, Box<Filter>),
 }
 
 #[derive(Debug)]
@@ -35,6 +36,19 @@ impl NewFunc {
             Map(f) => Ok(Val::Arr(
                 v.iter()?.flat_map(|x| f.run(x)).collect::<Result<_, _>>()?,
             )),
+            Fold(init, f) => {
+                let init: Result<Vec<_>, _> = init.run(Rc::clone(&v)).collect();
+                let out: Result<_, _> = v.iter()?.try_fold(init?, |acc, x| {
+                    acc.into_iter()
+                        .flat_map(|acc| {
+                            let obj = [("acc".to_string(), acc), ("x".to_string(), Rc::clone(&x))];
+                            let obj = Val::Obj(Vec::from(obj).into_iter().collect());
+                            f.run(Rc::new(obj))
+                        })
+                        .collect()
+                });
+                Ok(Val::Arr(out?))
+            }
         }
     }
 }
