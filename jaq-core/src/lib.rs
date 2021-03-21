@@ -32,6 +32,9 @@ pub use val::Val;
 
 use alloc::{boxed::Box, rc::Rc};
 
+/// A value result.
+pub type ValR = Result<Val, Error>;
+
 /// A reference-counted value result.
 pub type RValR = Result<Rc<Val>, Error>;
 
@@ -39,7 +42,7 @@ pub type RValR = Result<Rc<Val>, Error>;
 pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
 
 /// A stream of value results.
-pub type ValRs<'a> = Box<dyn Iterator<Item = Result<Val, Error>> + 'a>;
+pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
 /// A stream of reference-counted value results.
 pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;

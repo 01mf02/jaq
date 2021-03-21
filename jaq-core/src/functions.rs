@@ -1,4 +1,4 @@
-use crate::{Error, Filter, RValRs, Val};
+use crate::{Filter, RValRs, Val, ValR};
 use alloc::{boxed::Box, rc::Rc};
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ pub enum RefFunc {
 }
 
 impl NewFunc {
-    pub fn run(&self, v: Rc<Val>) -> Result<Val, Error> {
+    pub fn run(&self, v: Rc<Val>) -> ValR {
         use NewFunc::*;
         match self {
             Any => Ok(Val::Bool(v.iter()?.any(|v| v.as_bool()))),

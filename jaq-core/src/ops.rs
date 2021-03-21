@@ -1,6 +1,6 @@
 //! Logical and mathematical operations on values.
 
-use crate::{Error, Val};
+use crate::{Error, Val, ValR};
 
 #[derive(Clone, Debug)]
 pub enum MathOp {
@@ -38,7 +38,7 @@ pub enum LogicOp {
 }
 
 impl core::ops::Add for Val {
-    type Output = Result<Val, Error>;
+    type Output = ValR;
     fn add(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
@@ -60,7 +60,7 @@ impl core::ops::Add for Val {
 }
 
 impl core::ops::Sub for Val {
-    type Output = Result<Val, Error>;
+    type Output = ValR;
     fn sub(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
@@ -71,7 +71,7 @@ impl core::ops::Sub for Val {
 }
 
 impl core::ops::Mul for Val {
-    type Output = Result<Val, Error>;
+    type Output = ValR;
     fn mul(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
@@ -82,7 +82,7 @@ impl core::ops::Mul for Val {
 }
 
 impl core::ops::Div for Val {
-    type Output = Result<Val, Error>;
+    type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
@@ -93,7 +93,7 @@ impl core::ops::Div for Val {
 }
 
 impl core::ops::Rem for Val {
-    type Output = Result<Val, Error>;
+    type Output = ValR;
     fn rem(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
@@ -110,7 +110,7 @@ impl Val {
 }
 
 impl MathOp {
-    pub fn run(&self, l: Val, r: Val) -> Result<Val, Error> {
+    pub fn run(&self, l: Val, r: Val) -> ValR {
         use MathOp::*;
         match self {
             Add => l + r,
