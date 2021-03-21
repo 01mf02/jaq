@@ -49,7 +49,7 @@ impl RefFunc {
                 Ok(None) => Box::new(core::iter::empty()),
                 Ok(Some(y)) => Box::new(core::iter::once(Ok(y))),
                 Err(e) => Box::new(core::iter::once(Err(e))),
-            }
+            },
             Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| match y {
                 Ok(y) => {
                     if y.as_bool() {
