@@ -1,7 +1,7 @@
 use crate::filter::{Filter, NewFilter, Ref};
 use crate::functions::{NewFunc, RefFunc};
 use crate::ops::{LogicOp, MathOp};
-use crate::path::PathElem;
+use crate::path::{Path, PathElem};
 use crate::val::Atom;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::convert::TryFrom;
@@ -115,7 +115,7 @@ impl From<Pair<'_, Rule>> for Filter {
                 assert_eq!(inner.next(), None);
                 Self::try_from(name, args).unwrap()
             }
-            Rule::path => Self::Ref(Ref::Path(inner.flat_map(PathElem::from_path).collect())),
+            Rule::path => Self::Ref(Ref::Path(Path::new(inner.flat_map(PathElem::from_path)))),
             _ => unreachable!(),
         }
     }

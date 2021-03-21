@@ -89,17 +89,10 @@ impl Ref {
             })),
             Self::Comma(l, r) => Box::new(l.run(Rc::clone(&v)).chain(r.run(v))),
             Self::Empty => Box::new(core::iter::empty()),
-            Self::Path(p) => {
-                let v = p.iter().fold(Vec::from([Ok(Rc::clone(&v))]), |acc, p| {
-                    acc.into_iter()
-                        .flat_map(|x| match x {
-                            Ok(x) => p.follow(Rc::clone(&v), (*x).clone()),
-                            Err(e) => Box::new(once(Err(e))),
-                        })
-                        .collect()
-                });
-                Box::new(v.into_iter())
-            }
+            Self::Path(p) => match p.run(v) {
+                Ok(y) => Box::new(y.into_iter().map(Ok)),
+                Err(e) => Box::new(core::iter::once(Err(e))),
+            },
             Self::IfThenElse(cond, truth, falsity) => {
                 Box::new(cond.run(Rc::clone(&v)).flat_map(move |y| match y {
                     Ok(y) => (if y.as_bool() { truth } else { falsity }).run(Rc::clone(&v)),

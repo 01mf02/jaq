@@ -2,7 +2,8 @@ use crate::{Error, Filter, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
-pub type Path = Vec<PathElem>;
+#[derive(Debug)]
+pub struct Path(Vec<PathElem>);
 
 #[derive(Debug)]
 pub enum PathElem {
@@ -48,6 +49,21 @@ fn get_indices(
     match f {
         Some(f) => Box::new(f.run(v).map(move |i| Ok(get_index(&*i?, len)?))),
         None => Box::new(core::iter::once(Ok(default))),
+    }
+}
+
+impl Path {
+    pub fn new(path: impl Iterator<Item = PathElem>) -> Self {
+        Self(path.collect())
+    }
+
+    pub fn run(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
+        let mut path = self.0.iter();
+        path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
+            acc.into_iter()
+                .flat_map(|x| p.follow(Rc::clone(&v), (*x).clone()))
+                .collect()
+        })
     }
 }
 
