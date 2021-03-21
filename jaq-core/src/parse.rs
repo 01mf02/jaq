@@ -218,9 +218,20 @@ impl Filter {
             // unary or higher-arity function
             if let Some(arg2) = args.next() {
                 // binary or higher-arity function
-                if let Some(_arg3) = args.next() {
+                if let Some(arg3) = args.next() {
                     // ternary or higher-arity function
-                    None
+                    if let Some(_arg4) = args.next() {
+                        // quaternary or higher-arity function
+                        None
+                    } else {
+                        // ternary function
+                        match name {
+                            "fold" => {
+                                Some(Self::Ref(Ref::Function(RefFunc::Fold(arg1, arg2, arg3))))
+                            }
+                            _ => None,
+                        }
+                    }
                 } else {
                     // binary function
                     match name {

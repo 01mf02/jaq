@@ -152,6 +152,11 @@ fn fold() {
         "[recurse(if . == 1000 then empty else .+1 end)] | fold(0; .acc + .x)",
         json!([500500]),
     );
+    give(
+        json!(0),
+        "fold(recurse(if . == 1000 then empty else .+1 end); 0; .acc + .x)",
+        json!(500500),
+    );
 }
 
 #[test]
