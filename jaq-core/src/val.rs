@@ -61,6 +61,17 @@ impl Val {
             _ => Err(Error::Iter(self.clone())),
         }
     }
+
+    pub fn typ(&self) -> &str {
+        match self {
+            Self::Null => "null",
+            Self::Bool(_) => "boolean",
+            Self::Num(_) => "number",
+            Self::Str(_) => "string",
+            Self::Arr(_) => "array",
+            Self::Obj(_) => "object",
+        }
+    }
 }
 
 impl From<Atom> for Val {

@@ -8,6 +8,7 @@ pub enum NewFunc {
     Any,
     Add,
     Length,
+    Type,
     Map(Box<Filter>),
 }
 
@@ -33,6 +34,7 @@ impl NewFunc {
                 .map(|x| (*x).clone())
                 .try_fold(Val::Null, |acc, x| acc + x),
             Length => Ok(Val::Num(v.len()?)),
+            Type => Ok(Val::Str(v.typ().to_string())),
             Map(f) => Ok(Val::Arr(
                 v.iter()?.flat_map(|x| f.run(x)).collect::<Result<_, _>>()?,
             )),

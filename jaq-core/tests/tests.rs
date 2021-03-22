@@ -124,6 +124,16 @@ fn length() {
 }
 
 #[test]
+fn typ() {
+    give(json!({"a": 1, "b": 2}), "type", json!("object"));
+    give(json!("Hello"), "type", json!("string"));
+    give(json!(1), "type", json!("number"));
+    give(json!(1.0), "type", json!("number"));
+    give(json!(true), "type", json!("boolean"));
+    give(json!(null), "type", json!("null"));
+}
+
+#[test]
 fn map() {
     give(json!([1, 2]), "map(.+1)", json!([2, 3]));
 }

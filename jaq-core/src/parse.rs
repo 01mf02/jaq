@@ -255,6 +255,7 @@ impl Filter {
                 "all" => Some(Self::New(NewFilter::Function(NewFunc::All))),
                 "not" => Some(Self::New(NewFilter::Function(NewFunc::Not))),
                 "length" => Some(Self::New(NewFilter::Function(NewFunc::Length))),
+                "type" => Some(Self::New(NewFilter::Function(NewFunc::Type))),
                 "add" => Some(Self::New(NewFilter::Function(NewFunc::Add))),
                 _ => None,
             }
