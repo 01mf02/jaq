@@ -5,6 +5,10 @@ use std::rc::Rc;
 
 #[derive(Clap)]
 struct Cli {
+    /// Use null as single input value
+    #[clap(short)]
+    null: bool,
+
     #[clap(short)]
     /// Read (slurp) all input values into one array
     slurp: bool,
@@ -26,15 +30,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     //println!("Filter: {:?}", filter);
 
+    use std::iter::once;
     let stdin = std::io::stdin();
-    let stdin = stdin.lock();
-    let deserializer = serde_json::Deserializer::from_reader(stdin);
-    let iter = deserializer.into_iter::<serde_json::Value>();
-    let iter = iter.map(|r| r.map(|x| Rc::new(Val::from(x))));
+    let iter = if cli.null {
+        Box::new(once(Ok(Rc::new(Val::Null)))) as Box<dyn Iterator<Item = _>>
+    } else {
+        let stdin = stdin.lock();
+        let deserializer = serde_json::Deserializer::from_reader(stdin);
+        let iter = deserializer.into_iter::<serde_json::Value>();
+        Box::new(iter.map(|r| r.map(|x| Rc::new(Val::from(x)))))
+    };
 
     let iter = if cli.slurp {
         let slurped: Result<Vec<_>, _> = iter.collect();
-        Box::new(std::iter::once(slurped.map(|v| Rc::new(Val::Arr(v)))))
+        Box::new(once(slurped.map(|v| Rc::new(Val::Arr(v)))))
     } else {
         Box::new(iter) as Box<dyn Iterator<Item = _>>
     };
