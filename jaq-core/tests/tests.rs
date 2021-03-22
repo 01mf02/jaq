@@ -143,6 +143,16 @@ fn recurse() {
     );
 }
 
+// TODO!
+//#[test]
+fn fib() {
+    give(
+        json!(10),
+        "nth(.; [0,1] | recurse([.[1], add]) | .[0])",
+        json!(55),
+    );
+}
+
 #[test]
 fn fold() {
     // the corresponding jq command is:
