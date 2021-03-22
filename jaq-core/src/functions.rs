@@ -1,5 +1,5 @@
 use crate::{Error, Filter, RValRs, Val, ValR};
-use alloc::{boxed::Box, rc::Rc};
+use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 
 #[derive(Debug)]
 pub enum NewFunc {
