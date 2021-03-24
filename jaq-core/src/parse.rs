@@ -135,7 +135,7 @@ impl From<Pair<'_, Rule>> for Atom {
     }
 }
 
-impl PathElem {
+impl PathElem<Filter> {
     fn from_path(pair: Pair<Rule>) -> impl Iterator<Item = Self> + '_ {
         use core::iter::{empty, once};
         let mut iter = pair.into_inner();
@@ -159,7 +159,7 @@ impl PathElem {
         (index, question)
     }
 
-    fn from_range(pair: Pair<Rule>) -> PathElem {
+    fn from_range(pair: Pair<Rule>) -> PathElem<Filter> {
         //println!("range: {:?}", pair.as_rule());
         match pair.into_inner().next() {
             None => Self::Range(None, None),

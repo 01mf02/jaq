@@ -3,13 +3,13 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
 #[derive(Debug)]
-pub struct Path(Vec<PathElem>);
+pub struct Path(Vec<PathElem<Filter>>);
 
 #[derive(Debug)]
-pub enum PathElem {
-    Index(Filter),
+pub enum PathElem<I> {
+    Index(I),
     /// if both are `None`, return iterator over whole array/object
-    Range(Option<Filter>, Option<Filter>),
+    Range(Option<I>, Option<I>),
 }
 
 fn wrap(i: isize, len: usize) -> isize {
@@ -40,55 +40,63 @@ fn get_index(i: &Val, len: usize) -> Result<usize, Error> {
     Ok(wrap(i, len).try_into().unwrap_or(0))
 }
 
-fn get_indices(
-    f: &Option<Filter>,
-    v: Rc<Val>,
-    len: usize,
-    default: usize,
-) -> Box<dyn Iterator<Item = Result<usize, Error>> + '_> {
+type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
+
+fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<'_> {
     match f {
-        Some(f) => Box::new(f.run(v).map(move |i| Ok(get_index(&*i?, len)?))),
+        Some(f) => Box::new(f.iter().map(move |i| Ok(get_index(&*i, len)?))),
         None => Box::new(core::iter::once(Ok(default))),
     }
 }
 
 impl Path {
-    pub fn new(path: impl Iterator<Item = PathElem>) -> Self {
+    pub fn new(path: impl Iterator<Item = PathElem<Filter>>) -> Self {
         Self(path.collect())
     }
 
     pub fn run(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        let mut path = self.0.iter();
+        let mut path = self.0.iter().map(|p| p.run(Rc::clone(&v)));
         path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
-            acc.into_iter()
-                .flat_map(|x| p.follow(Rc::clone(&v), (*x).clone()))
-                .collect()
+            let p = p?;
+            let iter = acc.into_iter().flat_map(|x| p.follow((*x).clone()));
+            Ok(iter.collect::<Result<_, _>>()?)
         })
     }
 }
 
-impl PathElem {
-    pub fn follow(&self, root: Rc<Val>, current: Val) -> RValRs {
+impl PathElem<Filter> {
+    pub fn run(&self, v: Rc<Val>) -> Result<PathElem<Vec<Rc<Val>>>, Error> {
+        use PathElem::*;
+        match self {
+            Index(i) => Ok(Index(i.run(v).collect::<Result<_, _>>()?)),
+            Range(from, until) => {
+                let from = from.as_ref().map(|f| f.run(Rc::clone(&v)).collect());
+                let until = until.as_ref().map(|u| u.run(v).collect());
+                Ok(Range(from.transpose()?, until.transpose()?))
+            }
+        }
+    }
+}
+
+impl PathElem<Vec<Rc<Val>>> {
+    pub fn follow(&self, current: Val) -> RValRs {
         use core::iter::once;
         match self {
-            Self::Index(filter) => {
-                let index = filter.run(root);
-                match current {
-                    Val::Arr(a) => Box::new(index.map(move |i| {
-                        let i = wrap(i?.as_isize().ok_or(Error::IndexIsize)?, a.len());
-                        Ok(if i < 0 || i as usize >= a.len() {
-                            Rc::new(Val::Null)
-                        } else {
-                            Rc::clone(&a[i as usize])
-                        })
-                    })),
-                    Val::Obj(o) => Box::new(index.map(move |i| match &*i? {
-                        Val::Str(s) => Ok(o.get(s).map_or_else(|| Rc::new(Val::Null), Rc::clone)),
-                        i => Err(Error::IndexWith(Val::Obj(o.clone()), i.clone())),
-                    })),
-                    _ => Box::new(once(Err(Error::Index(current)))),
-                }
-            }
+            Self::Index(indices) => match current {
+                Val::Arr(a) => Box::new(indices.iter().map(move |i| {
+                    let i = wrap(i.as_isize().ok_or(Error::IndexIsize)?, a.len());
+                    Ok(if i < 0 || i as usize >= a.len() {
+                        Rc::new(Val::Null)
+                    } else {
+                        Rc::clone(&a[i as usize])
+                    })
+                })),
+                Val::Obj(o) => Box::new(indices.iter().map(move |i| match &**i {
+                    Val::Str(s) => Ok(o.get(s).map_or_else(|| Rc::new(Val::Null), Rc::clone)),
+                    i => Err(Error::IndexWith(Val::Obj(o.clone()), i.clone())),
+                })),
+                _ => Box::new(once(Err(Error::Index(current)))),
+            },
             Self::Range(None, None) => match current {
                 Val::Arr(a) => Box::new(a.into_iter().map(Ok)),
                 Val::Obj(o) => Box::new(o.into_iter().map(|(_k, v)| Ok(v))),
@@ -96,8 +104,8 @@ impl PathElem {
             },
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
-                    let from = get_indices(from, Rc::clone(&root), a.len(), 0);
-                    let until = get_indices(until, root, a.len(), a.len());
+                    let from = get_indices(from, a.len(), 0);
+                    let until = get_indices(until, a.len(), a.len());
                     let until: Vec<_> = until.collect();
                     use itertools::Itertools;
                     let from_until = from.into_iter().cartesian_product(until);
