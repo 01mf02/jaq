@@ -4,7 +4,7 @@ use crate::ops::{LogicOp, MathOp};
 use crate::path::{Path, PathElem};
 use crate::val::Atom;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
-use core::convert::TryFrom;
+use core::convert::{TryFrom, TryInto};
 use pest::iterators::{Pair, Pairs};
 use pest::prec_climber::PrecClimber;
 use pest::Parser;
@@ -27,6 +27,7 @@ lazy_static::lazy_static! {
         PrecClimber::new(Vec::from([
             Operator::new(pipe, Left),
             Operator::new(comma, Left),
+            Operator::new(update, Right),
             Operator::new(or, Left),
             Operator::new(and, Left),
             Operator::new(eq, Left) | Operator::new(ne, Left),
@@ -47,6 +48,7 @@ impl From<Pairs<'_, Rule>> for Filter {
                 let lhs = Box::new(lhs);
                 let rhs = Box::new(rhs);
                 match op.as_rule() {
+                    Rule::update => Self::Ref(Ref::Update((*lhs).try_into().unwrap(), rhs)),
                     Rule::pipe => Self::Ref(Ref::Pipe(lhs, rhs)),
                     Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),
                     rule => {
@@ -61,6 +63,17 @@ impl From<Pairs<'_, Rule>> for Filter {
                 }
             },
         )
+    }
+}
+
+impl TryFrom<Filter> for Path {
+    type Error = ();
+
+    fn try_from(f: Filter) -> Result<Self, Self::Error> {
+        match f {
+            Filter::Ref(Ref::Path(p)) => Ok(p),
+            _ => Err(()),
+        }
     }
 }
 
@@ -123,7 +136,6 @@ impl From<Pair<'_, Rule>> for Filter {
 
 impl From<Pair<'_, Rule>> for Atom {
     fn from(pair: Pair<Rule>) -> Self {
-        use core::convert::TryInto;
         use serde_json::Number;
         match pair.as_rule() {
             Rule::null => Self::Null,

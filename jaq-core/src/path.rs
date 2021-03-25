@@ -1,4 +1,4 @@
-use crate::{Error, Filter, RValRs, Val};
+use crate::{Error, Filter, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
@@ -54,18 +54,27 @@ impl Path {
         Self(path.collect())
     }
 
-    pub fn run(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        let mut path = self.0.iter().map(|p| p.run(Rc::clone(&v)));
+    pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
+        let mut path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
         path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
             let p = p?;
-            let iter = acc.into_iter().flat_map(|x| p.follow((*x).clone()));
+            let iter = acc.into_iter().flat_map(|x| p.collect((*x).clone()));
             Ok(iter.collect::<Result<_, _>>()?)
         })
+    }
+
+    pub fn run<'f>(&self, v: Rc<Val>, f: &'f Filter) -> RValRs<'f> {
+        let path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
+        let path: Result<Vec<_>, _> = path.collect();
+        match path {
+            Ok(path) => PathElem::run(path.iter(), v, f),
+            Err(e) => Box::new(core::iter::once(Err(e))),
+        }
     }
 }
 
 impl PathElem<Filter> {
-    pub fn run(&self, v: Rc<Val>) -> Result<PathElem<Vec<Rc<Val>>>, Error> {
+    pub fn run_indices(&self, v: Rc<Val>) -> Result<PathElem<Vec<Rc<Val>>>, Error> {
         use PathElem::*;
         match self {
             Index(i) => Ok(Index(i.run(v).collect::<Result<_, _>>()?)),
@@ -79,7 +88,7 @@ impl PathElem<Filter> {
 }
 
 impl PathElem<Vec<Rc<Val>>> {
-    pub fn follow(&self, current: Val) -> RValRs {
+    pub fn collect(&self, current: Val) -> RValRs {
         use core::iter::once;
         match self {
             Self::Index(indices) => match current {
@@ -120,6 +129,50 @@ impl PathElem<Vec<Rc<Val>>> {
                 Val::Str(_) => todo!(),
                 _ => Box::new(once(Err(Error::Index(current)))),
             },
+        }
+    }
+
+    pub fn run<'p, P>(mut path: P, v: Rc<Val>, f: &Filter) -> RValRs
+    where
+        P: Iterator<Item = &'p Self> + Clone,
+    {
+        if let Some(p) = path.next() {
+            let f = |v| Self::run(path.clone(), v, f);
+            Box::new(core::iter::once(p.map((*v).clone(), f).map(Rc::new)))
+        } else {
+            f.run(v)
+        }
+    }
+
+    pub fn map<F, I>(&self, v: Val, f: F) -> Result<Val, Error>
+    where
+        F: Fn(Rc<Val>) -> I,
+        I: Iterator<Item = RValR>,
+    {
+        match self {
+            Self::Index(indices) => match v {
+                Val::Obj(mut o) => {
+                    indices.iter().try_for_each(|i| {
+                        if let Val::Str(s) = &**i {
+                            let some = |v: &Rc<Val>| f(Rc::clone(v)).next().transpose();
+                            let none = || f(Rc::new(Val::Null)).next().transpose();
+                            o.insert_or_remove(s.clone(), some, none)
+                        } else {
+                            Err(Error::IndexWith(Val::Obj(o.clone()), (&**i).clone()))
+                        }
+                    })?;
+                    Ok(Val::Obj(o))
+                }
+                _ => todo!(),
+            },
+            Self::Range(None, None) => match v {
+                Val::Arr(a) => Ok(Val::Arr(
+                    a.into_iter().flat_map(f).collect::<Result<_, _>>()?,
+                )),
+                Val::Obj(_o) => todo!(),
+                v => Err(Error::Iter(v)),
+            },
+            _ => todo!(),
         }
     }
 }

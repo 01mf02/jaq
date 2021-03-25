@@ -26,11 +26,14 @@ object = { "{" ~ pairs? ~ "}" }
     pair = { key ~ (":" ~ term)? }
     key = _{ identifier | string | "(" ~ expr ~ ")" }
 
-op = _{ filter_op | logic_op | math_op }
+op = _{ assign_op | filter_op | logic_op | math_op }
+
+assign_op = _{ update }
+    update = { "|=" }
 
 filter_op = _{ pipe | comma }
-    pipe  = { "|" }
-    comma = { "," }
+    pipe   = { "|" }
+    comma  = { "," }
 
 logic_op = _{ or | and | eq | ne | gt | ge | lt | le }
     or  = { "or"  }

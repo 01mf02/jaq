@@ -31,6 +31,29 @@ impl<K: Eq + Hash, V> Map<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         self.0.get(key)
     }
+
+    pub fn insert_or_remove<E, F, G>(&mut self, key: K, f: F, g: G) -> Result<(), E>
+    where
+        F: Fn(&V) -> Result<Option<V>, E>,
+        G: Fn() -> Result<Option<V>, E>,
+    {
+        use indexmap::map::Entry::*;
+        match self.0.entry(key) {
+            Occupied(mut e) => {
+                match f(e.get())? {
+                    Some(y) => e.insert(y),
+                    None => e.remove(),
+                };
+                Ok(())
+            }
+            Vacant(e) => {
+                if let Some(y) = g()? {
+                    e.insert(y);
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 impl<K: Eq + Ord, V: PartialEq> PartialEq for Map<K, V> {

@@ -71,9 +71,54 @@ fn path() {
     );
 }
 
+#[test]
+fn update() {
+    // precedence tests
+    give(json!([]), ".[] |= . or true", json!([]));
+    gives(json!([]), ".[] |= .,.", vec![json!([]), json!([])]);
+    give(json!([]), ".[] |= (.,.)", json!([]));
+    // this yields a syntax error in jq, but it is consistent to permit this
+    give(json!([[1]]), ".[] |= .[] |= .+1", json!([[2]]));
+
+    give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
+    give(json!({"a": 1}), ".b |= 1", json!({"a": 1, "b": 1}));
+    give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
+    give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
+    give(
+        json!({"a": 1, "b": 2}),
+        ".a |= .+1",
+        json!({"a": 2, "b": 2}),
+    );
+
+    give(json!([1]), ".[] |= .+1", json!([2]));
+    give(json!([[1]]), ".[][] |= .+1", json!([[2]]));
+}
+
+// Test what happens when update filter returns multiple values.
+// Watch out: here, jaq diverges frequently from jq;
+// jq considers only the first value of the filter regardless of the updated value,
+// whereas jaq may consider multiple values depending on the updated value.
+// This behaviour is easier to implement and more flexible.
+#[test]
+fn update_mult() {
+    // first the cases where jaq and jq agree
+    give(json!({"a": 1}), ".a |= (.,.+1)", json!({"a": 1}));
+
+    // jq returns null here
+    gives(json!(1), ". |= empty", vec![]);
+    // jq returns just 1 here
+    gives(json!(1), ". |= (.,.)", vec![json!(1), json!(1)]);
+    // jq returns just [1] here
+    give(json!([1]), ".[] |= (., .+1)", json!([1, 2]));
+    // jq returns just [1,2] here
+    give(json!([1, 3]), ".[] |= (., .+1)", json!([1, 2, 3, 4]));
+    // here comes a huge WTF: jq returns [2,4] here -- looks like a bug?
+    give(json!([1, 2, 3, 4, 5]), ".[] |= empty", json!([]));
+}
+
 // TODO!
 //#[test]
-fn update() {
+fn punning() {
     give(
         json!({"a": 1, "b": 2}),
         "{a, c: 3}",
