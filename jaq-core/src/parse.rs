@@ -27,6 +27,7 @@ lazy_static::lazy_static! {
         PrecClimber::new(Vec::from([
             Operator::new(pipe, Left),
             Operator::new(comma, Left),
+            Operator::new(assign, Right),
             Operator::new(update, Right),
             Operator::new(or, Left),
             Operator::new(and, Left),
@@ -48,6 +49,8 @@ impl From<Pairs<'_, Rule>> for Filter {
                 let lhs = Box::new(lhs);
                 let rhs = Box::new(rhs);
                 match op.as_rule() {
+                    // TODO: make this nicer
+                    Rule::assign => Self::Ref(Ref::Assign((*lhs).try_into().unwrap(), rhs)),
                     Rule::update => Self::Ref(Ref::Update((*lhs).try_into().unwrap(), rhs)),
                     Rule::pipe => Self::Ref(Ref::Pipe(lhs, rhs)),
                     Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),

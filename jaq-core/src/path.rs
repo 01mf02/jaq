@@ -63,7 +63,10 @@ impl Path {
         })
     }
 
-    pub fn run<'f>(&self, v: Rc<Val>, f: &'f Filter) -> RValRs<'f> {
+    pub fn run<'f, F>(&self, v: Rc<Val>, f: F) -> RValRs<'f>
+    where
+        F: Fn(Rc<Val>) -> RValRs<'f> + Copy,
+    {
         let path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
         let path: Result<Vec<_>, _> = path.collect();
         match path {
@@ -132,15 +135,16 @@ impl PathElem<Vec<Rc<Val>>> {
         }
     }
 
-    pub fn run<'p, P>(mut path: P, v: Rc<Val>, f: &Filter) -> RValRs
+    pub fn run<'a, 'f, P, F>(mut path: P, v: Rc<Val>, f: F) -> RValRs<'f>
     where
-        P: Iterator<Item = &'p Self> + Clone,
+        P: Iterator<Item = &'a Self> + Clone,
+        F: Fn(Rc<Val>) -> RValRs<'f> + Copy,
     {
         if let Some(p) = path.next() {
             let f = |v| Self::run(path.clone(), v, f);
             Box::new(core::iter::once(p.map((*v).clone(), f).map(Rc::new)))
         } else {
-            f.run(v)
+            f(v)
         }
     }
 

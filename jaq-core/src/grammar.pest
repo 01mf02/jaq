@@ -26,9 +26,14 @@ object = { "{" ~ pairs? ~ "}" }
     pair = { key ~ (":" ~ term)? }
     key = _{ identifier | string | "(" ~ expr ~ ")" }
 
-op = _{ assign_op | filter_op | logic_op | math_op }
+// Logic has to come before assignment, because "=" is a prefix of "==".
+// Assignment has to come before filters and math, because
+// "|" is a prefix of "|=" and
+// "+" is a prefix of "+=".
+op = _{ logic_op | assign_op | filter_op | math_op }
 
-assign_op = _{ update }
+assign_op = _{ assign | update }
+    assign = {  "=" }
     update = { "|=" }
 
 filter_op = _{ pipe | comma }

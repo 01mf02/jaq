@@ -26,6 +26,7 @@ pub enum Ref {
     Comma(Box<Filter>, Box<Filter>),
     Empty,
     Path(Path),
+    Assign(Path, Box<Filter>),
     Update(Path, Box<Filter>),
     IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
     Function(RefFunc),
@@ -94,7 +95,8 @@ impl Ref {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
                 Err(e) => Box::new(core::iter::once(Err(e))),
             },
-            Self::Update(path, f) => path.run(v, f),
+            Self::Update(path, f) => path.run(v, |v| f.run(v)),
+            Self::Assign(path, f) => path.run(Rc::clone(&v), |_| f.run(Rc::clone(&v))),
             Self::IfThenElse(cond, truth, falsity) => {
                 Box::new(cond.run(Rc::clone(&v)).flat_map(move |y| match y {
                     Ok(y) => (if y.as_bool() { truth } else { falsity }).run(Rc::clone(&v)),

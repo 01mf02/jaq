@@ -72,6 +72,16 @@ fn path() {
 }
 
 #[test]
+fn assign() {
+    give(json!([1, 2]), ".[] = .", json!([[1, 2], [1, 2]]));
+    give(
+        json!({"a": [1,2], "b": 3}),
+        ".a[] = .b+.b",
+        json!({"a": [6,6], "b": 3}),
+    );
+}
+
+#[test]
 fn update() {
     // precedence tests
     give(json!([]), ".[] |= . or true", json!([]));
