@@ -27,9 +27,7 @@ lazy_static::lazy_static! {
         PrecClimber::new(Vec::from([
             Operator::new(pipe, Left),
             Operator::new(comma, Left),
-            Operator::new(assign, Right),
-            Operator::new(update, Right),
-            Operator::new(update_with, Right),
+            Operator::new(assign, Right) | Operator::new(update, Right) | Operator::new(update_with, Right),
             Operator::new(or, Left),
             Operator::new(and, Left),
             Operator::new(eq, Left) | Operator::new(ne, Left),
