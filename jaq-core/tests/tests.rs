@@ -210,8 +210,7 @@ fn recurse() {
     );
 }
 
-// TODO!
-//#[test]
+#[test]
 fn fib() {
     give(
         json!(10),

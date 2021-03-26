@@ -1,9 +1,9 @@
 use crate::functions::NewFunc;
 use crate::ops::{LogicOp, MathOp};
 use crate::val::{Atom, Val};
-use crate::{Error, Path, RValR, RValRs, ValRs};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use crate::{Error, Num, Path, RValR, RValRs, ValRs};
 use alloc::string::{String, ToString};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 
 #[derive(Debug)]
 pub enum Filter {
@@ -76,6 +76,14 @@ impl NewFilter {
             Self::Function(f) => Box::new(once(f.run(v))),
         }
     }
+
+    fn one() -> Self {
+        Self::Atom(Atom::Num(Num::Int(1)))
+    }
+
+    fn succ(f: Box<Filter>) -> Self {
+        Self::Math(f, MathOp::Add, Self::one().into())
+    }
 }
 
 impl Filter {
@@ -143,6 +151,10 @@ impl Ref {
     pub fn select(f: Box<Filter>) -> Self {
         Self::IfThenElse(f, Self::identity().into(), Self::Empty.into())
     }
+
+    pub fn nth(n: Box<Filter>, f: Box<Filter>) -> Self {
+        Self::Last(Self::Limit(NewFilter::succ(n).into(), f).into())
+    }
 }
 
 impl Filter {
@@ -173,5 +185,11 @@ impl From<Atom> for Filter {
 impl From<Ref> for Box<Filter> {
     fn from(r: Ref) -> Self {
         Box::new(Filter::Ref(r))
+    }
+}
+
+impl From<NewFilter> for Box<Filter> {
+    fn from(n: NewFilter) -> Self {
+        Box::new(Filter::New(n))
     }
 }

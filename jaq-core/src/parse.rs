@@ -267,6 +267,7 @@ impl TryFrom<(&str, [Box<Filter>; 2])> for Filter {
     fn try_from((name, [arg1, arg2]): (&str, [Box<Filter>; 2])) -> Result<Self, ()> {
         match name {
             "limit" => Ok(Self::Ref(Ref::Limit(arg1, arg2))),
+            "nth" => Ok(Self::Ref(Ref::nth(arg1, arg2))),
             _ => Err(()),
         }
     }
