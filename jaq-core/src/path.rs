@@ -2,7 +2,7 @@ use crate::{Error, Filter, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Path(Vec<PathElem<Filter>>);
 
 #[derive(Debug)]

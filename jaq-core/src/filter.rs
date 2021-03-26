@@ -106,6 +106,10 @@ impl Ref {
             Self::Function(f) => f.run(v),
         }
     }
+
+    pub fn identity() -> Self {
+        Self::Path(Path::default())
+    }
 }
 
 impl Filter {
