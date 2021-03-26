@@ -35,7 +35,7 @@ filter_op = _{ pipe | comma }
 assign_op = _{ assign | update | update_with }
     assign = {  "=" ~ !"=" }
     update = { "|=" }
-    update_with = { math_op ~ "=" }
+    update_with = ${ math_op ~ "=" }
 
 logic_op = _{ or | and | eq | ne | gt | ge | lt | le }
     or  = { "or"  }
