@@ -236,7 +236,7 @@ impl TryFrom<(&str, [Box<Filter>; 0])> for Filter {
     type Error = ();
     fn try_from((name, []): (&str, [Box<Filter>; 0])) -> Result<Self, ()> {
         match name {
-            "empty" => Ok(Self::Ref(Ref::Function(RefFunc::Empty))),
+            "empty" => Ok(Self::Ref(Ref::Empty)),
             "any" => Ok(Self::New(NewFilter::Function(NewFunc::Any))),
             "all" => Ok(Self::New(NewFilter::Function(NewFunc::All))),
             "not" => Ok(Self::New(NewFilter::Function(NewFunc::Not))),

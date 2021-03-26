@@ -14,7 +14,6 @@ pub enum NewFunc {
 
 #[derive(Debug)]
 pub enum RefFunc {
-    Empty,
     First(Box<Filter>),
     Last(Box<Filter>),
     Limit(Box<Filter>, Box<Filter>),
@@ -48,7 +47,6 @@ impl RefFunc {
         use core::iter::{empty, once};
         use RefFunc::*;
         match self {
-            Empty => Box::new(empty()),
             First(f) => Box::new(f.run(v).take(1)),
             Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(Some(y)) => Box::new(once(Ok(y))),
