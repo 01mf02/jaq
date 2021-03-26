@@ -240,6 +240,17 @@ fn first_last() {
 }
 
 #[test]
+fn limit() {
+    // a big WTF: jq outputs "1" here! that looks like another bug ...
+    gives(json!(null), "limit(0; 1,2)", vec![]);
+    give(
+        json!(null),
+        "[limit(1, -1, 3; 0, 1)]",
+        json!([0, 0, 1, 0, 1]),
+    );
+}
+
+#[test]
 fn ord() {
     give(json!(null), ". < false", json!(true));
     give(json!(false), ". < true", json!(true));

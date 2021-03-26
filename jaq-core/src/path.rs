@@ -35,9 +35,8 @@ mod tests {
 }
 
 fn get_index(i: &Val, len: usize) -> Result<usize, Error> {
-    let i = i.as_isize().ok_or(Error::IndexIsize)?;
     // make index 0 if it is smaller than 0
-    Ok(wrap(i, len).try_into().unwrap_or(0))
+    Ok(wrap(i.as_isize()?, len).try_into().unwrap_or(0))
 }
 
 type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
@@ -96,7 +95,7 @@ impl PathElem<Vec<Rc<Val>>> {
         match self {
             Self::Index(indices) => match current {
                 Val::Arr(a) => Box::new(indices.iter().map(move |i| {
-                    let i = wrap(i.as_isize().ok_or(Error::IndexIsize)?, a.len());
+                    let i = wrap(i.as_isize()?, a.len());
                     Ok(if i < 0 || i as usize >= a.len() {
                         Rc::new(Val::Null)
                     } else {

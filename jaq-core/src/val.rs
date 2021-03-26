@@ -25,10 +25,10 @@ pub enum Atom {
 }
 
 impl Val {
-    pub fn as_isize(&self) -> Option<isize> {
+    pub fn as_isize(&self) -> Result<isize, Error> {
         match self {
-            Self::Num(n) => n.to_isize(),
-            _ => None,
+            Self::Num(n) => n.to_isize().ok_or_else(|| Error::Isize(self.clone())),
+            _ => Err(Error::Isize(self.clone())),
         }
     }
 

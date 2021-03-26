@@ -10,7 +10,7 @@ pub enum Error {
     MathOp(Val, Val, MathOp),
     Index(Val),
     IndexWith(Val, Val),
-    IndexIsize,
+    Isize(Val),
 }
 
 impl fmt::Display for Error {
@@ -23,7 +23,7 @@ impl fmt::Display for Error {
             MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, op.passive()),
             Index(v) => write!(f, "cannot index {}", v),
             IndexWith(v, i) => write!(f, "cannot index {} with {}", v, i),
-            IndexIsize => write!(f, "cannot use ??? as index"),
+            Isize(v) => write!(f, "cannot use {} as (signed) integer", v),
         }
     }
 }

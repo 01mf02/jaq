@@ -255,7 +255,10 @@ impl Filter {
                     }
                 } else {
                     // binary function
-                    None
+                    match name {
+                        "limit" => Some(Self::Ref(Ref::Function(RefFunc::Limit(arg1, arg2)))),
+                        _ => None,
+                    }
                 }
             } else {
                 // unary function
