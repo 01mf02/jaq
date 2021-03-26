@@ -1,5 +1,5 @@
 use crate::filter::{Filter, NewFilter, Ref};
-use crate::functions::{NewFunc, RefFunc};
+use crate::functions::NewFunc;
 use crate::ops::{LogicOp, MathOp};
 use crate::path::{Path, PathElem};
 use crate::val::Atom;
@@ -252,11 +252,11 @@ impl TryFrom<(&str, [Box<Filter>; 1])> for Filter {
     type Error = ();
     fn try_from((name, [arg1]): (&str, [Box<Filter>; 1])) -> Result<Self, ()> {
         match name {
-            "first" => Ok(Self::Ref(Ref::Function(RefFunc::First(arg1)))),
-            "last" => Ok(Self::Ref(Ref::Function(RefFunc::Last(arg1)))),
+            "first" => Ok(Self::Ref(Ref::First(arg1))),
+            "last" => Ok(Self::Ref(Ref::Last(arg1))),
             "map" => Ok(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
             "select" => Ok(Self::Ref(Ref::select(arg1))),
-            "recurse" => Ok(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
+            "recurse" => Ok(Self::Ref(Ref::Recurse(arg1))),
             _ => Err(()),
         }
     }
@@ -266,7 +266,7 @@ impl TryFrom<(&str, [Box<Filter>; 2])> for Filter {
     type Error = ();
     fn try_from((name, [arg1, arg2]): (&str, [Box<Filter>; 2])) -> Result<Self, ()> {
         match name {
-            "limit" => Ok(Self::Ref(Ref::Function(RefFunc::Limit(arg1, arg2)))),
+            "limit" => Ok(Self::Ref(Ref::Limit(arg1, arg2))),
             _ => Err(()),
         }
     }
@@ -287,9 +287,7 @@ impl Filter {
                     } else {
                         // ternary function
                         match name {
-                            "fold" => {
-                                Some(Self::Ref(Ref::Function(RefFunc::Fold(arg1, arg2, arg3))))
-                            }
+                            "fold" => Some(Self::Ref(Ref::Fold(arg1, arg2, arg3))),
                             _ => None,
                         }
                     }

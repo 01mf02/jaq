@@ -1,8 +1,9 @@
-use crate::functions::{NewFunc, RefFunc};
+use crate::functions::NewFunc;
 use crate::ops::{LogicOp, MathOp};
 use crate::val::{Atom, Val};
 use crate::{Error, Path, RValR, RValRs, ValRs};
-use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::string::{String, ToString};
 
 #[derive(Debug)]
 pub enum Filter {
@@ -29,7 +30,12 @@ pub enum Ref {
     Assign(Path, Box<Filter>),
     Update(Path, Box<Filter>),
     IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
-    Function(RefFunc),
+
+    First(Box<Filter>),
+    Last(Box<Filter>),
+    Limit(Box<Filter>, Box<Filter>),
+    Recurse(Box<Filter>),
+    Fold(Box<Filter>, Box<Filter>, Box<Filter>),
 }
 
 impl Val {
@@ -83,17 +89,17 @@ impl Filter {
 
 impl Ref {
     fn run(&self, v: Rc<Val>) -> RValRs {
-        use core::iter::once;
+        use core::iter::{empty, once};
         match self {
             Self::Pipe(l, r) => Box::new(l.run(v).flat_map(move |y| match y {
                 Ok(y) => r.run(y),
                 Err(e) => Box::new(once(Err(e))),
             })),
             Self::Comma(l, r) => Box::new(l.run(Rc::clone(&v)).chain(r.run(v))),
-            Self::Empty => Box::new(core::iter::empty()),
+            Self::Empty => Box::new(empty()),
             Self::Path(p) => match p.collect(v) {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
-                Err(e) => Box::new(core::iter::once(Err(e))),
+                Err(e) => Box::new(once(Err(e))),
             },
             Self::Update(path, f) => path.run(v, |v| f.run(v)),
             Self::Assign(path, f) => path.run(Rc::clone(&v), |_| f.run(Rc::clone(&v))),
@@ -103,7 +109,30 @@ impl Ref {
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
-            Self::Function(f) => f.run(v),
+
+            Self::First(f) => Box::new(f.run(v).take(1)),
+            Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
+                Ok(Some(y)) => Box::new(once(Ok(y))),
+                Ok(None) => Box::new(empty()),
+                Err(e) => Box::new(once(Err(e))),
+            },
+            Self::Limit(n, f) => {
+                let n = n.run(Rc::clone(&v)).map(|n| n.and_then(|n| n.as_isize()));
+                Box::new(n.flat_map(move |n| match n {
+                    Ok(n) if n < 0 => f.run(Rc::clone(&v)),
+                    Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
+                    Err(e) => Box::new(once(Err(e))),
+                }))
+            }
+            Self::Recurse(f) => Box::new(crate::Recurse::new(f, v)),
+            Self::Fold(xs, init, f) => {
+                let mut xs = xs.run(Rc::clone(&v));
+                let init: Result<Vec<_>, _> = init.run(Rc::clone(&v)).collect();
+                match init.and_then(|init| xs.try_fold(init, |acc, x| Ok(f.fold_step(acc, x?)?))) {
+                    Ok(y) => Box::new(y.into_iter().map(Ok)),
+                    Err(e) => Box::new(once(Err(e))),
+                }
+            }
         }
     }
 
@@ -117,11 +146,21 @@ impl Ref {
 }
 
 impl Filter {
-    pub fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
+    fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
         let l = self.run(Rc::clone(&v));
         let r: Vec<_> = other.run(v).collect();
         use itertools::Itertools;
         l.into_iter().cartesian_product(r)
+    }
+
+    pub fn fold_step(&self, acc: Vec<Rc<Val>>, x: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
+        acc.into_iter()
+            .map(|acc| {
+                let obj = [("acc".to_string(), acc), ("x".to_string(), Rc::clone(&x))];
+                Val::Obj(Vec::from(obj).into_iter().collect())
+            })
+            .flat_map(|obj| self.run(Rc::new(obj)))
+            .collect()
     }
 }
 
