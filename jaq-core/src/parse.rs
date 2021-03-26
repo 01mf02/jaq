@@ -232,6 +232,46 @@ impl TryFrom<Rule> for MathOp {
     }
 }
 
+impl TryFrom<(&str, [Box<Filter>; 0])> for Filter {
+    type Error = ();
+    fn try_from((name, []): (&str, [Box<Filter>; 0])) -> Result<Self, ()> {
+        match name {
+            "empty" => Ok(Self::Ref(Ref::Function(RefFunc::Empty))),
+            "any" => Ok(Self::New(NewFilter::Function(NewFunc::Any))),
+            "all" => Ok(Self::New(NewFilter::Function(NewFunc::All))),
+            "not" => Ok(Self::New(NewFilter::Function(NewFunc::Not))),
+            "length" => Ok(Self::New(NewFilter::Function(NewFunc::Length))),
+            "type" => Ok(Self::New(NewFilter::Function(NewFunc::Type))),
+            "add" => Ok(Self::New(NewFilter::Function(NewFunc::Add))),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<(&str, [Box<Filter>; 1])> for Filter {
+    type Error = ();
+    fn try_from((name, [arg1]): (&str, [Box<Filter>; 1])) -> Result<Self, ()> {
+        match name {
+            "first" => Ok(Self::Ref(Ref::Function(RefFunc::First(arg1)))),
+            "last" => Ok(Self::Ref(Ref::Function(RefFunc::Last(arg1)))),
+            "map" => Ok(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
+            "select" => Ok(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
+            "recurse" => Ok(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<(&str, [Box<Filter>; 2])> for Filter {
+    type Error = ();
+    fn try_from((name, [arg1, arg2]): (&str, [Box<Filter>; 2])) -> Result<Self, ()> {
+        match name {
+            "limit" => Ok(Self::Ref(Ref::Function(RefFunc::Limit(arg1, arg2)))),
+            _ => Err(()),
+        }
+    }
+}
+
 impl Filter {
     fn try_from(name: &str, args: impl Iterator<Item = Filter>) -> Option<Self> {
         let mut args = args.map(Box::new);
@@ -255,34 +295,15 @@ impl Filter {
                     }
                 } else {
                     // binary function
-                    match name {
-                        "limit" => Some(Self::Ref(Ref::Function(RefFunc::Limit(arg1, arg2)))),
-                        _ => None,
-                    }
+                    (name, [arg1, arg2]).try_into().ok()
                 }
             } else {
                 // unary function
-                match name {
-                    "first" => Some(Self::Ref(Ref::Function(RefFunc::First(arg1)))),
-                    "last" => Some(Self::Ref(Ref::Function(RefFunc::Last(arg1)))),
-                    "map" => Some(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
-                    "select" => Some(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
-                    "recurse" => Some(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
-                    _ => None,
-                }
+                (name, [arg1]).try_into().ok()
             }
         } else {
             // nullary function
-            match name {
-                "empty" => Some(Self::Ref(Ref::Function(RefFunc::Empty))),
-                "any" => Some(Self::New(NewFilter::Function(NewFunc::Any))),
-                "all" => Some(Self::New(NewFilter::Function(NewFunc::All))),
-                "not" => Some(Self::New(NewFilter::Function(NewFunc::Not))),
-                "length" => Some(Self::New(NewFilter::Function(NewFunc::Length))),
-                "type" => Some(Self::New(NewFilter::Function(NewFunc::Type))),
-                "add" => Some(Self::New(NewFilter::Function(NewFunc::Add))),
-                _ => None,
-            }
+            (name, []).try_into().ok()
         }
     }
 }
