@@ -255,7 +255,7 @@ impl TryFrom<(&str, [Box<Filter>; 1])> for Filter {
             "first" => Ok(Self::Ref(Ref::Function(RefFunc::First(arg1)))),
             "last" => Ok(Self::Ref(Ref::Function(RefFunc::Last(arg1)))),
             "map" => Ok(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
-            "select" => Ok(Self::Ref(Ref::Function(RefFunc::Select(arg1)))),
+            "select" => Ok(Self::Ref(Ref::select(arg1))),
             "recurse" => Ok(Self::Ref(Ref::Function(RefFunc::Recurse(arg1)))),
             _ => Err(()),
         }

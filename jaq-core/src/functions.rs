@@ -17,7 +17,6 @@ pub enum RefFunc {
     First(Box<Filter>),
     Last(Box<Filter>),
     Limit(Box<Filter>, Box<Filter>),
-    Select(Box<Filter>),
     Recurse(Box<Filter>),
     Fold(Box<Filter>, Box<Filter>, Box<Filter>),
 }
@@ -61,11 +60,6 @@ impl RefFunc {
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
-            Select(f) => Box::new(f.run(Rc::clone(&v)).filter_map(move |y| match y {
-                Ok(y) if y.as_bool() => Some(Ok(Rc::clone(&v))),
-                Ok(_) => None,
-                Err(e) => Some(Err(e)),
-            })),
             Recurse(f) => Box::new(crate::Recurse::new(f, v)),
             Fold(xs, init, f) => {
                 let mut xs = xs.run(Rc::clone(&v));

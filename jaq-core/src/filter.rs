@@ -110,6 +110,10 @@ impl Ref {
     pub fn identity() -> Self {
         Self::Path(Path::default())
     }
+
+    pub fn select(f: Box<Filter>) -> Self {
+        Self::IfThenElse(f, Self::identity().into(), Self::Empty.into())
+    }
 }
 
 impl Filter {
@@ -124,5 +128,11 @@ impl Filter {
 impl From<Atom> for Filter {
     fn from(a: Atom) -> Self {
         Self::New(NewFilter::Atom(a))
+    }
+}
+
+impl From<Ref> for Box<Filter> {
+    fn from(r: Ref) -> Self {
+        Box::new(Filter::Ref(r))
     }
 }
