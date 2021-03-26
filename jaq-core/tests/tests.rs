@@ -52,6 +52,9 @@ fn precedence() {
     // conjunction binds stronger than disjunction
     give(json!(true), "false and . or .", json!(true));
     give(json!(true), "false and (. or .)", json!(false));
+
+    give(json!(null), "1 + 2 * 3", json!(7));
+    give(json!(null), "2 * 3 + 1", json!(7));
 }
 
 #[test]
