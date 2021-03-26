@@ -32,9 +32,10 @@ filter_op = _{ pipe | comma }
     pipe   = { "|" ~ !"=" }
     comma  = { "," }
 
-assign_op = _{ assign | update }
+assign_op = _{ assign | update | update_with }
     assign = {  "=" ~ !"=" }
     update = { "|=" }
+    update_with = { math_op ~ "=" }
 
 logic_op = _{ or | and | eq | ne | gt | ge | lt | le }
     or  = { "or"  }

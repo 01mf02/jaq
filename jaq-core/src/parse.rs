@@ -29,6 +29,7 @@ lazy_static::lazy_static! {
             Operator::new(comma, Left),
             Operator::new(assign, Right),
             Operator::new(update, Right),
+            Operator::new(update_with, Right),
             Operator::new(or, Left),
             Operator::new(and, Left),
             Operator::new(eq, Left) | Operator::new(ne, Left),
@@ -52,6 +53,13 @@ impl From<Pairs<'_, Rule>> for Filter {
                     // TODO: make this nicer
                     Rule::assign => Self::Ref(Ref::Assign((*lhs).try_into().unwrap(), rhs)),
                     Rule::update => Self::Ref(Ref::Update((*lhs).try_into().unwrap(), rhs)),
+                    Rule::update_with => {
+                        let op = op.into_inner().next().unwrap();
+                        let op = MathOp::try_from(op.as_rule()).unwrap();
+                        let id = Box::new(Self::Ref(Ref::identity()));
+                        let f = Box::new(Self::New(NewFilter::Math(id, op, rhs)));
+                        Self::Ref(Ref::Update((*lhs).try_into().unwrap(), f))
+                    }
                     Rule::pipe => Self::Ref(Ref::Pipe(lhs, rhs)),
                     Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),
                     rule => {

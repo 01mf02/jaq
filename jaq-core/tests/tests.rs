@@ -87,18 +87,17 @@ fn update() {
     give(json!([]), ".[] |= . or true", json!([]));
     gives(json!([]), ".[] |= .,.", vec![json!([]), json!([])]);
     give(json!([]), ".[] |= (.,.)", json!([]));
+    give(json!([0]), ".[] |= .+1 | .+[2]", json!([1, 2]));
     // this yields a syntax error in jq, but it is consistent to permit this
     give(json!([[1]]), ".[] |= .[] |= .+1", json!([[2]]));
+    // ditto
+    give(json!([[1]]), ".[] |= .[] += 1", json!([[2]]));
 
     give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
     give(json!({"a": 1}), ".b |= 1", json!({"a": 1, "b": 1}));
     give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
     give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
-    give(
-        json!({"a": 1, "b": 2}),
-        ".a |= .+1",
-        json!({"a": 2, "b": 2}),
-    );
+    give(json!({"a": 1, "b": 2}), ".a += 1", json!({"a": 2, "b": 2}));
 
     give(json!([1]), ".[] |= .+1", json!([2]));
     give(json!([[1]]), ".[][] |= .+1", json!([[2]]));
@@ -254,6 +253,8 @@ fn eq() {
     give(json!(1), "0 == . - .", json!(true));
     give(json!(1), ". == -1 * -1", json!(true));
     give(json!(1), ". == 2 / 2", json!(true));
+
+    gives(json!([0, 1]), ".[] == 0", vec![json!(true), json!(false)]);
 
     // here, we diverge from jq, which outputs true
     give(json!(1), ". == 1.0", json!(false));
