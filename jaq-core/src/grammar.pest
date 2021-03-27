@@ -23,8 +23,8 @@ array = { "[" ~ expr? ~ "]" }
 
 object = { "{" ~ pairs? ~ "}" }
     pairs = _{ pair ~ ("," ~ pair)* }
-    pair = { key ~ (":" ~ term)? }
-    key = _{ identifier | string | "(" ~ expr ~ ")" }
+    pair = { (identifier | string) ~ value? | "(" ~ expr ~ ")" ~ value }
+    value = _{ ":" ~ term }
 
 op = _{ filter_op | assign_op | logic_op | (math_op ~ !"=") }
 

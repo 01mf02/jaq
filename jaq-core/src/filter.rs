@@ -186,6 +186,12 @@ impl From<Atom> for Filter {
     }
 }
 
+impl From<Path> for Filter {
+    fn from(p: Path) -> Self {
+        Self::Ref(Ref::Path(p))
+    }
+}
+
 impl From<Ref> for Box<Filter> {
     fn from(r: Ref) -> Self {
         Box::new(Filter::Ref(r))

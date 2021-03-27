@@ -128,9 +128,18 @@ fn update_mult() {
     give(json!([1, 2, 3, 4, 5]), ".[] |= empty", json!([]));
 }
 
-// TODO!
-//#[test]
-fn punning() {
+#[test]
+fn object() {
+    gives(
+        json!(null),
+        r#"{("a", "b"): 1}"#,
+        vec![json!({"a": 1}), json!({"b": 1})],
+    );
+    give(
+        json!("c"),
+        r#"{a: 1, "b": 2, (.): 3}"#,
+        json!({"a": 1, "b": 2, "c": 3}),
+    );
     give(
         json!({"a": 1, "b": 2}),
         "{a, c: 3}",

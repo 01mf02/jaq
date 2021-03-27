@@ -119,7 +119,7 @@ impl TryFrom<Pair<'_, Rule>> for Filter {
         let mut inner = pair.into_inner();
         match rule {
             Rule::expr => Self::try_from(inner),
-            Rule::atom => Ok(Self::New(NewFilter::Atom(inner.next().unwrap().into()))),
+            Rule::atom => Ok(Atom::from(inner.next().unwrap()).into()),
             Rule::array => {
                 let contents = if inner.peek().is_none() {
                     Self::Ref(Ref::Empty)
@@ -132,18 +132,23 @@ impl TryFrom<Pair<'_, Rule>> for Filter {
                 let kvs = inner.map(|kv| {
                     let mut iter = kv.into_inner();
                     let key = iter.next().unwrap();
-                    let key = match key.as_rule() {
-                        Rule::identifier => Ok(Atom::Str(key.as_str().to_string()).into()),
-                        Rule::string => Ok(Atom::from(key).into()),
-                        Rule::expr => Self::try_from(key),
+                    match key.as_rule() {
+                        Rule::identifier | Rule::string => {
+                            let key = Atom::from(key);
+                            let value = match iter.next() {
+                                Some(value) => Self::try_from(value)?,
+                                None => Path::from(PathElem::Index(key.clone().into())).into(),
+                            };
+                            assert!(iter.next().is_none());
+                            Ok((key.into(), value))
+                        }
+                        Rule::expr => {
+                            let value = iter.next().unwrap();
+                            assert!(iter.next().is_none());
+                            Ok((Self::try_from(key)?, Self::try_from(value)?))
+                        }
                         _ => unreachable!(),
-                    };
-                    let value = match iter.next() {
-                        Some(value) => Self::try_from(value),
-                        None => todo!(),
-                    };
-                    assert_eq!(iter.next(), None);
-                    Ok((key?, value?))
+                    }
                 });
                 Ok(Self::New(NewFilter::Object(kvs.collect::<Result<_, _>>()?)))
             }
@@ -181,6 +186,7 @@ impl From<Pair<'_, Rule>> for Atom {
             Rule::boole => Self::Bool(pair.as_str().parse::<bool>().unwrap()),
             Rule::number => Self::Num(pair.as_str().parse::<Number>().unwrap().try_into().unwrap()),
             Rule::string => Self::Str(pair.into_inner().next().unwrap().as_str().to_string()),
+            Rule::identifier => Self::Str(pair.as_str().to_string()),
             _ => unreachable!(),
         }
     }

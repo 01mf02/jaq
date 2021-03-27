@@ -180,6 +180,12 @@ impl PathElem<Vec<Rc<Val>>> {
     }
 }
 
+impl From<PathElem<Filter>> for Path {
+    fn from(p: PathElem<Filter>) -> Self {
+        Path(Vec::from([p]))
+    }
+}
+
 /*
 enum OnError {
     Empty,
