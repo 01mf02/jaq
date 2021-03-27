@@ -148,6 +148,10 @@ impl Ref {
         Self::Path(Path::default())
     }
 
+    pub fn update_math(path: Path, op: MathOp, f: Box<Filter>) -> Self {
+        Ref::Update(path, NewFilter::Math(Self::identity().into(), op, f).into())
+    }
+
     pub fn select(f: Box<Filter>) -> Self {
         Self::IfThenElse(f, Self::identity().into(), Self::Empty.into())
     }

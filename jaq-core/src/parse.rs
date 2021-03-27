@@ -47,7 +47,7 @@ lazy_static::lazy_static! {
         PrecClimber::new(Vec::from([
             Operator::new(pipe, Left),
             Operator::new(comma, Left),
-            Operator::new(assign, Right) | Operator::new(update, Right) | Operator::new(update_with, Right),
+            Operator::new(assign_op, Right),
             Operator::new(or, Left),
             Operator::new(and, Left),
             Operator::new(eq, Left) | Operator::new(ne, Left),
@@ -69,15 +69,19 @@ impl TryFrom<Pairs<'_, Rule>> for Filter {
                 let lhs = Box::new(lhs?);
                 let rhs = Box::new(rhs?);
                 match op.as_rule() {
-                    // TODO: make this nicer
-                    Rule::assign => Ok(Self::Ref(Ref::Assign((*lhs).try_into()?, rhs))),
-                    Rule::update => Ok(Self::Ref(Ref::Update((*lhs).try_into()?, rhs))),
-                    Rule::update_with => {
+                    Rule::assign_op => {
+                        let path = (*lhs).try_into()?;
                         let op = op.into_inner().next().unwrap();
-                        let op = MathOp::try_from(op.as_rule()).unwrap();
-                        let id = Box::new(Self::Ref(Ref::identity()));
-                        let f = Box::new(Self::New(NewFilter::Math(id, op, rhs)));
-                        Ok(Self::Ref(Ref::Update((*lhs).try_into()?, f)))
+                        Ok(Self::Ref(match op.as_rule() {
+                            Rule::assign => Ref::Assign(path, rhs),
+                            Rule::update => Ref::Update(path, rhs),
+                            Rule::update_with => {
+                                let math = op.into_inner().next().unwrap();
+                                let math = MathOp::try_from(math.as_rule()).unwrap();
+                                Ref::update_math(path, math, rhs)
+                            }
+                            _ => unreachable!(),
+                        }))
                     }
                     Rule::pipe => Ok(Self::Ref(Ref::Pipe(lhs, rhs))),
                     Rule::comma => Ok(Self::Ref(Ref::Comma(lhs, rhs))),
