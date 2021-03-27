@@ -3,7 +3,7 @@
 use crate::{Error, Map, Num, RVals};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use core::convert::TryFrom;
+use core::convert::{TryFrom, TryInto};
 use core::fmt;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd)]
@@ -81,6 +81,16 @@ impl From<Atom> for Val {
             Atom::Bool(b) => Self::Bool(b),
             Atom::Num(n) => Self::Num(n),
             Atom::Str(s) => Self::Str(s),
+        }
+    }
+}
+
+impl TryFrom<&Val> for usize {
+    type Error = Error;
+    fn try_from(v: &Val) -> Result<usize, Error> {
+        match v {
+            Val::Num(n) => n.try_into().map_err(|_| Error::Usize(v.clone())),
+            _ => Err(Error::Usize(v.clone())),
         }
     }
 }

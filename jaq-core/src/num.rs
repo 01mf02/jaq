@@ -38,7 +38,18 @@ impl Num {
 
 impl From<usize> for Num {
     fn from(n: usize) -> Num {
+        // FIXME: this may fail!
         Num::Int(n as i64)
+    }
+}
+
+impl TryFrom<&Num> for usize {
+    type Error = ();
+    fn try_from(n: &Num) -> Result<usize, Self::Error> {
+        match n {
+            Typ::Int(i) => (*i).try_into().map_err(|_| ()),
+            _ => Err(()),
+        }
     }
 }
 

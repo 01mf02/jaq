@@ -242,11 +242,8 @@ fn first_last() {
 fn limit() {
     // a big WTF: jq outputs "1" here! that looks like another bug ...
     gives(json!(null), "limit(0; 1,2)", vec![]);
-    give(
-        json!(null),
-        "[limit(1, -1, 3; 0, 1)]",
-        json!([0, 0, 1, 0, 1]),
-    );
+    // jaq does not support negative indices in limit
+    give(json!(null), "[limit(1, 0, 3; 0, 1)]", json!([0, 0, 1]));
 }
 
 #[test]

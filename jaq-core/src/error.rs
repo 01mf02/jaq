@@ -11,6 +11,7 @@ pub enum Error {
     Index(Val),
     IndexWith(Val, Val),
     Isize(Val),
+    Usize(Val),
 }
 
 impl fmt::Display for Error {
@@ -24,6 +25,7 @@ impl fmt::Display for Error {
             Index(v) => write!(f, "cannot index {}", v),
             IndexWith(v, i) => write!(f, "cannot index {} with {}", v, i),
             Isize(v) => write!(f, "cannot use {} as (signed) integer", v),
+            Usize(v) => write!(f, "cannot use {} as unsigned integer", v),
         }
     }
 }

@@ -4,6 +4,7 @@ use crate::val::{Atom, Val};
 use crate::{Error, Num, Path, RValR, RValRs, ValRs};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use core::convert::TryFrom;
 
 #[derive(Debug)]
 pub enum Filter {
@@ -125,11 +126,10 @@ impl Ref {
                 Err(e) => Box::new(once(Err(e))),
             },
             Self::Limit(n, f) => {
-                let n = n.run(Rc::clone(&v)).map(|n| n.and_then(|n| n.as_isize()));
+                let n = n.run(Rc::clone(&v)).map(|n| Ok(usize::try_from(&*n?)?));
                 Box::new(n.flat_map(move |n| match n {
-                    Ok(n) if n < 0 => f.run(Rc::clone(&v)),
                     Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
-                    Err(e) => Box::new(once(Err(e))),
+                    Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
             Self::Recurse(f) => Box::new(crate::Recurse::new(f, v)),
