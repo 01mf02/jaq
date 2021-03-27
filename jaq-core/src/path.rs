@@ -49,8 +49,8 @@ fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<
 }
 
 impl Path {
-    pub fn new(path: impl Iterator<Item = PathElem<Filter>>) -> Self {
-        Self(path.collect())
+    pub fn new(path: Vec<PathElem<Filter>>) -> Self {
+        Self(path)
     }
 
     pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {

@@ -5,6 +5,7 @@ use crate::path::{Path, PathElem};
 use crate::val::Atom;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::convert::{TryFrom, TryInto};
+use core::fmt::{self, Display};
 use pest::iterators::{Pair, Pairs};
 use pest::prec_climber::PrecClimber;
 use pest::Parser;
@@ -13,9 +14,28 @@ use pest::Parser;
 #[grammar = "grammar.pest"]
 pub struct FilterParser;
 
+#[derive(Debug)]
+pub enum Error {
+    Pest(pest::error::Error<Rule>),
+    Undefined(String, usize),
+    PathAssign,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use Error::*;
+        match self {
+            Pest(e) => e.fmt(f),
+            Undefined(name, arity) => write!(f, "undefined function {}/{}", name, arity),
+            PathAssign => write!(f, "path expected before assignment operator"),
+        }
+    }
+}
+
 impl Filter {
-    pub fn parse(s: &str) -> Result<Self, pest::error::Error<Rule>> {
-        Ok(Self::from(FilterParser::parse(Rule::main, s)?))
+    pub fn parse(s: &str) -> Result<Self, Error> {
+        let pairs = FilterParser::parse(Rule::main, s).map_err(Error::Pest)?;
+        Ok(Self::try_from(pairs)?)
     }
 }
 
@@ -39,32 +59,33 @@ lazy_static::lazy_static! {
     };
 }
 
-impl From<Pairs<'_, Rule>> for Filter {
-    fn from(pairs: Pairs<Rule>) -> Self {
+impl TryFrom<Pairs<'_, Rule>> for Filter {
+    type Error = Error;
+    fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
         PREC_CLIMBER.climb(
             pairs,
-            |pair: Pair<Rule>| Self::from(pair),
-            |lhs: Self, op: Pair<Rule>, rhs: Self| {
-                let lhs = Box::new(lhs);
-                let rhs = Box::new(rhs);
+            Self::try_from,
+            |lhs: Result<Self, _>, op: Pair<Rule>, rhs: Result<Self, _>| {
+                let lhs = Box::new(lhs?);
+                let rhs = Box::new(rhs?);
                 match op.as_rule() {
                     // TODO: make this nicer
-                    Rule::assign => Self::Ref(Ref::Assign((*lhs).try_into().unwrap(), rhs)),
-                    Rule::update => Self::Ref(Ref::Update((*lhs).try_into().unwrap(), rhs)),
+                    Rule::assign => Ok(Self::Ref(Ref::Assign((*lhs).try_into()?, rhs))),
+                    Rule::update => Ok(Self::Ref(Ref::Update((*lhs).try_into()?, rhs))),
                     Rule::update_with => {
                         let op = op.into_inner().next().unwrap();
                         let op = MathOp::try_from(op.as_rule()).unwrap();
                         let id = Box::new(Self::Ref(Ref::identity()));
                         let f = Box::new(Self::New(NewFilter::Math(id, op, rhs)));
-                        Self::Ref(Ref::Update((*lhs).try_into().unwrap(), f))
+                        Ok(Self::Ref(Ref::Update((*lhs).try_into()?, f)))
                     }
-                    Rule::pipe => Self::Ref(Ref::Pipe(lhs, rhs)),
-                    Rule::comma => Self::Ref(Ref::Comma(lhs, rhs)),
+                    Rule::pipe => Ok(Self::Ref(Ref::Pipe(lhs, rhs))),
+                    Rule::comma => Ok(Self::Ref(Ref::Comma(lhs, rhs))),
                     rule => {
                         if let Ok(op) = LogicOp::try_from(rule) {
-                            Self::New(NewFilter::Logic(lhs, op, rhs))
+                            Ok(Self::New(NewFilter::Logic(lhs, op, rhs)))
                         } else if let Ok(op) = MathOp::try_from(rule) {
-                            Self::New(NewFilter::Math(lhs, op, rhs))
+                            Ok(Self::New(NewFilter::Math(lhs, op, rhs)))
                         } else {
                             unreachable!()
                         }
@@ -75,69 +96,74 @@ impl From<Pairs<'_, Rule>> for Filter {
     }
 }
 
+// TODO: move this somewhere else
 impl TryFrom<Filter> for Path {
-    type Error = ();
+    type Error = Error;
 
     fn try_from(f: Filter) -> Result<Self, Self::Error> {
         match f {
             Filter::Ref(Ref::Path(p)) => Ok(p),
-            _ => Err(()),
+            _ => Err(Error::PathAssign),
         }
     }
 }
 
-impl From<Pair<'_, Rule>> for Filter {
-    fn from(pair: Pair<Rule>) -> Self {
+impl TryFrom<Pair<'_, Rule>> for Filter {
+    type Error = Error;
+    fn try_from(pair: Pair<Rule>) -> Result<Self, Error> {
         let rule = pair.as_rule();
         let mut inner = pair.into_inner();
         match rule {
-            Rule::expr => Self::from(inner),
-            Rule::atom => Self::New(NewFilter::Atom(inner.next().unwrap().into())),
+            Rule::expr => Self::try_from(inner),
+            Rule::atom => Ok(Self::New(NewFilter::Atom(inner.next().unwrap().into()))),
             Rule::array => {
                 let contents = if inner.peek().is_none() {
                     Self::Ref(Ref::Empty)
                 } else {
-                    Self::from(inner)
+                    Self::try_from(inner)?
                 };
-                Self::New(NewFilter::Array(Box::new(contents)))
+                Ok(Self::New(NewFilter::Array(Box::new(contents))))
             }
             Rule::object => {
-                let contents = inner.map(|kv| {
+                let kvs = inner.map(|kv| {
                     let mut iter = kv.into_inner();
                     let key = iter.next().unwrap();
                     let key = match key.as_rule() {
-                        Rule::identifier => Atom::Str(key.as_str().to_string()).into(),
-                        Rule::string => Atom::from(key).into(),
-                        Rule::expr => Self::from(key),
+                        Rule::identifier => Ok(Atom::Str(key.as_str().to_string()).into()),
+                        Rule::string => Ok(Atom::from(key).into()),
+                        Rule::expr => Self::try_from(key),
                         _ => unreachable!(),
                     };
                     let value = match iter.next() {
-                        Some(value) => Self::from(value),
+                        Some(value) => Self::try_from(value),
                         None => todo!(),
                     };
                     assert_eq!(iter.next(), None);
-                    (key, value)
+                    Ok((key?, value?))
                 });
-                Self::New(NewFilter::Object(contents.collect()))
+                Ok(Self::New(NewFilter::Object(kvs.collect::<Result<_, _>>()?)))
             }
             Rule::ite => {
-                let mut ite = inner.map(|p| Box::new(Self::from(p)));
+                let mut ite = inner.map(|p| Self::try_from(p).map(Box::new));
                 let cond = ite.next().unwrap();
                 let truth = ite.next().unwrap();
                 let falsity = ite.next().unwrap();
                 assert!(ite.next().is_none());
-                Self::Ref(Ref::IfThenElse(cond, truth, falsity))
+                Ok(Self::Ref(Ref::IfThenElse(cond?, truth?, falsity?)))
             }
             Rule::function => {
                 let name = inner.next().unwrap().as_str();
                 let args = match inner.next() {
-                    None => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
-                    Some(args) => Box::new(args.into_inner().map(Self::from)),
+                    None => Ok(Vec::new()),
+                    Some(args) => args.into_inner().map(Self::try_from).collect(),
                 };
                 assert_eq!(inner.next(), None);
-                Self::try_from(name, args).unwrap()
+                Ok(Self::try_from((name, args?))?)
             }
-            Rule::path => Self::Ref(Ref::Path(Path::new(inner.flat_map(PathElem::from_path)))),
+            Rule::path => {
+                let path: Result<_, _> = inner.flat_map(PathElem::from_path).collect();
+                Ok(Self::Ref(Ref::Path(Path::new(path?))))
+            }
             _ => unreachable!(),
         }
     }
@@ -157,14 +183,14 @@ impl From<Pair<'_, Rule>> for Atom {
 }
 
 impl PathElem<Filter> {
-    fn from_path(pair: Pair<Rule>) -> impl Iterator<Item = Self> + '_ {
+    fn from_path(pair: Pair<Rule>) -> impl Iterator<Item = Result<Self, Error>> + '_ {
         use core::iter::{empty, once};
         let mut iter = pair.into_inner();
         let index = iter.next().unwrap();
         let index = match index.as_rule() {
             Rule::path_index => {
                 let index = Self::from_index(index).0.to_string();
-                Box::new(once(Self::Index(Atom::Str(index).into())))
+                Box::new(once(Ok(Self::Index(Atom::Str(index).into()))))
             }
             // just a dot
             _ => Box::new(empty()) as Box<dyn Iterator<Item = _>>,
@@ -180,20 +206,26 @@ impl PathElem<Filter> {
         (index, question)
     }
 
-    fn from_range(pair: Pair<Rule>) -> PathElem<Filter> {
+    fn from_range(pair: Pair<Rule>) -> Result<Self, Error> {
         //println!("range: {:?}", pair.as_rule());
         match pair.into_inner().next() {
-            None => Self::Range(None, None),
+            None => Ok(Self::Range(None, None)),
             Some(range) => match range.as_rule() {
-                Rule::at => Self::Index(Filter::from(range.into_inner())),
-                Rule::from => Self::Range(Some(Filter::from(range.into_inner())), None),
-                Rule::until => Self::Range(None, Some(Filter::from(range.into_inner()))),
+                Rule::at => Ok(Self::Index(Filter::try_from(range.into_inner())?)),
+                Rule::from => Ok(Self::Range(
+                    Some(Filter::try_from(range.into_inner())?),
+                    None,
+                )),
+                Rule::until => Ok(Self::Range(
+                    None,
+                    Some(Filter::try_from(range.into_inner())?),
+                )),
                 Rule::from_until => {
-                    let mut iter = range.into_inner().map(|r| Some(Filter::from(r)));
+                    let mut iter = range.into_inner().map(Filter::try_from);
                     let from = iter.next().unwrap();
                     let until = iter.next().unwrap();
                     assert!(iter.next().is_none());
-                    Self::Range(from, until)
+                    Ok(Self::Range(Some(from?), Some(until?)))
                 }
                 _ => unreachable!(),
             },
@@ -233,8 +265,8 @@ impl TryFrom<Rule> for MathOp {
 }
 
 impl TryFrom<(&str, [Box<Filter>; 0])> for Filter {
-    type Error = ();
-    fn try_from((name, []): (&str, [Box<Filter>; 0])) -> Result<Self, ()> {
+    type Error = Error;
+    fn try_from((name, []): (&str, [Box<Filter>; 0])) -> Result<Self, Error> {
         match name {
             "empty" => Ok(Self::Ref(Ref::Empty)),
             "any" => Ok(Self::New(NewFilter::Function(NewFunc::Any))),
@@ -243,39 +275,50 @@ impl TryFrom<(&str, [Box<Filter>; 0])> for Filter {
             "length" => Ok(Self::New(NewFilter::Function(NewFunc::Length))),
             "type" => Ok(Self::New(NewFilter::Function(NewFunc::Type))),
             "add" => Ok(Self::New(NewFilter::Function(NewFunc::Add))),
-            _ => Err(()),
+            _ => Err(Error::Undefined(name.to_string(), 0)),
         }
     }
 }
 
 impl TryFrom<(&str, [Box<Filter>; 1])> for Filter {
-    type Error = ();
-    fn try_from((name, [arg1]): (&str, [Box<Filter>; 1])) -> Result<Self, ()> {
+    type Error = Error;
+    fn try_from((name, [arg1]): (&str, [Box<Filter>; 1])) -> Result<Self, Error> {
         match name {
             "first" => Ok(Self::Ref(Ref::First(arg1))),
             "last" => Ok(Self::Ref(Ref::Last(arg1))),
             "map" => Ok(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
             "select" => Ok(Self::Ref(Ref::select(arg1))),
             "recurse" => Ok(Self::Ref(Ref::Recurse(arg1))),
-            _ => Err(()),
+            _ => Err(Error::Undefined(name.to_string(), 1)),
         }
     }
 }
 
 impl TryFrom<(&str, [Box<Filter>; 2])> for Filter {
-    type Error = ();
-    fn try_from((name, [arg1, arg2]): (&str, [Box<Filter>; 2])) -> Result<Self, ()> {
+    type Error = Error;
+    fn try_from((name, [arg1, arg2]): (&str, [Box<Filter>; 2])) -> Result<Self, Error> {
         match name {
             "limit" => Ok(Self::Ref(Ref::Limit(arg1, arg2))),
             "nth" => Ok(Self::Ref(Ref::nth(arg1, arg2))),
-            _ => Err(()),
+            _ => Err(Error::Undefined(name.to_string(), 2)),
         }
     }
 }
 
-impl Filter {
-    fn try_from(name: &str, args: impl Iterator<Item = Filter>) -> Option<Self> {
-        let mut args = args.map(Box::new);
+impl TryFrom<(&str, [Box<Filter>; 3])> for Filter {
+    type Error = Error;
+    fn try_from((name, [arg1, arg2, arg3]): (&str, [Box<Filter>; 3])) -> Result<Self, Error> {
+        match name {
+            "fold" => Ok(Self::Ref(Ref::Fold(arg1, arg2, arg3))),
+            _ => Err(Error::Undefined(name.to_string(), 3)),
+        }
+    }
+}
+
+impl TryFrom<(&str, Vec<Filter>)> for Filter {
+    type Error = Error;
+    fn try_from((name, args): (&str, Vec<Filter>)) -> Result<Self, Error> {
+        let mut args = args.into_iter().map(Box::new);
         if let Some(arg1) = args.next() {
             // unary or higher-arity function
             if let Some(arg2) = args.next() {
@@ -284,25 +327,22 @@ impl Filter {
                     // ternary or higher-arity function
                     if let Some(_arg4) = args.next() {
                         // quaternary or higher-arity function
-                        None
+                        Err(Error::Undefined(name.to_string(), 4 + args.len()))
                     } else {
                         // ternary function
-                        match name {
-                            "fold" => Some(Self::Ref(Ref::Fold(arg1, arg2, arg3))),
-                            _ => None,
-                        }
+                        (name, [arg1, arg2, arg3]).try_into()
                     }
                 } else {
                     // binary function
-                    (name, [arg1, arg2]).try_into().ok()
+                    (name, [arg1, arg2]).try_into()
                 }
             } else {
                 // unary function
-                (name, [arg1]).try_into().ok()
+                (name, [arg1]).try_into()
             }
         } else {
             // nullary function
-            (name, []).try_into().ok()
+            (name, []).try_into()
         }
     }
 }
