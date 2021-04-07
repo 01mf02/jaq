@@ -134,6 +134,7 @@ impl fmt::Display for Val {
             Self::Bool(b) => write!(f, "boolean ({})", b),
             Self::Num(n) => write!(f, "number ({})", n),
             Self::Str(s) => write!(f, "string (\"{}\")", s),
+            Self::Obj(o) => write!(f, "object ({})", o),
             _ => todo!(),
         }
     }

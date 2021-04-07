@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use core::fmt::{self, Display};
 use core::hash::Hash;
 use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
@@ -10,6 +11,10 @@ type FxIndexMap<K, V> = IndexMap<K, V, FxBuildHasher>;
 pub struct Map<K, V>(FxIndexMap<K, V>);
 
 impl<K, V> Map<K, V> {
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = &K> {
         self.0.keys()
     }
@@ -53,6 +58,18 @@ impl<K: Eq + Hash, V> Map<K, V> {
                 Ok(())
             }
         }
+    }
+}
+
+impl<K: Display, V: Display> Display for Map<K, V> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
+        "{".fmt(f)?;
+        let mut iter = self.0.iter();
+        if let Some((k, v)) = iter.next() {
+            write!(f, "{}: {}", k, v)?;
+        }
+        iter.try_for_each(|(k, v)| write!(f, ", {}: {}", k, v))?;
+        "}".fmt(f)
     }
 }
 
