@@ -1,7 +1,7 @@
 use crate::functions::NewFunc;
 use crate::ops::{LogicOp, MathOp};
 use crate::val::{Atom, Val};
-use crate::{Error, Num, Path, RValR, RValRs, ValRs};
+use crate::{Error, Map, Num, Path, RValR, RValRs, ValRs};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryFrom;
@@ -53,6 +53,7 @@ impl NewFilter {
         match self {
             Self::Atom(a) => Box::new(once(Ok(Val::from(a.clone())))),
             Self::Array(f) => Box::new(once(f.run(v).collect::<Result<_, _>>().map(Val::Arr))),
+            Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Map::new())))),
             Self::Object(o) => {
                 let iter = o
                     .iter()
