@@ -66,6 +66,9 @@ fn path() {
     give(json!({"a": 1}), r#". "a""#, json!(1));
     give(json!({"a": 1}), r#".["a"]"#, json!(1));
     give(json!({"a": 1}), r#". ["a"]"#, json!(1));
+    give(json!({"a_": 1}), ".a_", json!(1));
+    give(json!({"_a": 1}), "._a", json!(1));
+    give(json!({"_0": 1}), "._0", json!(1));
 
     gives(
         json!({"a": 1, "b": 2}),

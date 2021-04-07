@@ -79,6 +79,6 @@ function = { identifier ~ args? }
 args = { "(" ~ expr ~ (";" ~ expr)* ~ ")" }
 
 
-identifier = @{ ASCII_ALPHA ~ ASCII_ALPHANUMERIC* }
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 WHITESPACE = _{ " " | "\t" }
