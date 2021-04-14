@@ -46,6 +46,13 @@ fn math() {
 }
 
 #[test]
+fn logic() {
+    let tf = json!([true, false]);
+    give(tf.clone(), "[.[] and .[]]", json!([true, false, false]));
+    give(tf, "[.[] or .[]]", json!([true, true, false]));
+}
+
+#[test]
 fn add() {
     give(json!({"a": 1, "b": 2}), "add", json!(3));
 }

@@ -1,6 +1,6 @@
 //! Logical and mathematical operations on values.
 
-use crate::{Error, Val, ValR};
+use crate::{Error, RValRs, Val, ValR, ValRs};
 
 #[derive(Clone, Debug)]
 pub enum MathOp {
@@ -18,7 +18,7 @@ pub enum MathOp {
 
 /// An operation that takes two values and returns a boolean value.
 #[derive(Debug)]
-pub enum LogicOp {
+pub enum OrdOp {
     /// Less-than (<).
     Lt,
     /// Less-than or equal (<=).
@@ -31,6 +31,10 @@ pub enum LogicOp {
     Eq,
     /// Not equals (!=).
     Ne,
+}
+
+#[derive(Debug)]
+pub enum LogicOp {
     /// Logical conjunction (&&).
     And,
     /// Logical disjunction (||).
@@ -132,9 +136,9 @@ impl MathOp {
     }
 }
 
-impl LogicOp {
+impl OrdOp {
     pub fn run(&self, l: &Val, r: &Val) -> bool {
-        use LogicOp::*;
+        use OrdOp::*;
         match self {
             Gt => l > r,
             Ge => l >= r,
@@ -142,8 +146,16 @@ impl LogicOp {
             Le => l <= r,
             Eq => l == r,
             Ne => l != r,
-            And => l.as_bool() && r.as_bool(),
-            Or => l.as_bool() || r.as_bool(),
+        }
+    }
+}
+
+impl LogicOp {
+    pub fn run<'a>(&self, l: bool, r: impl Fn() -> RValRs<'a>) -> ValRs<'a> {
+        use core::iter::once;
+        match (l, self) {
+            (false, LogicOp::And) | (true, LogicOp::Or) => Box::new(once(Ok(Val::Bool(l)))),
+            _ => Box::new(r().map(|r| Ok(Val::Bool(r?.as_bool())))),
         }
     }
 }

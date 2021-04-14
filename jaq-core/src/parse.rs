@@ -1,6 +1,6 @@
 use crate::filter::{Filter, NewFilter, Ref};
 use crate::functions::NewFunc;
-use crate::ops::{LogicOp, MathOp};
+use crate::ops::{LogicOp, MathOp, OrdOp};
 use crate::path::{Path, PathElem};
 use crate::val::Atom;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
@@ -88,6 +88,8 @@ impl TryFrom<Pairs<'_, Rule>> for Filter {
                     rule => {
                         if let Ok(op) = LogicOp::try_from(rule) {
                             Ok(Self::New(NewFilter::Logic(lhs, op, rhs)))
+                        } else if let Ok(op) = OrdOp::try_from(rule) {
+                            Ok(Self::New(NewFilter::Ord(lhs, op, rhs)))
                         } else if let Ok(op) = MathOp::try_from(rule) {
                             Ok(Self::New(NewFilter::Math(lhs, op, rhs)))
                         } else {
@@ -249,12 +251,21 @@ impl TryFrom<Rule> for LogicOp {
         match rule {
             Rule::or => Ok(LogicOp::Or),
             Rule::and => Ok(LogicOp::And),
-            Rule::eq => Ok(LogicOp::Eq),
-            Rule::ne => Ok(LogicOp::Ne),
-            Rule::gt => Ok(LogicOp::Gt),
-            Rule::ge => Ok(LogicOp::Ge),
-            Rule::lt => Ok(LogicOp::Lt),
-            Rule::le => Ok(LogicOp::Le),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<Rule> for OrdOp {
+    type Error = ();
+    fn try_from(rule: Rule) -> Result<Self, Self::Error> {
+        match rule {
+            Rule::eq => Ok(OrdOp::Eq),
+            Rule::ne => Ok(OrdOp::Ne),
+            Rule::gt => Ok(OrdOp::Gt),
+            Rule::ge => Ok(OrdOp::Ge),
+            Rule::lt => Ok(OrdOp::Lt),
+            Rule::le => Ok(OrdOp::Le),
             _ => Err(()),
         }
     }

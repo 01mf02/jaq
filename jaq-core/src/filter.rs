@@ -1,5 +1,5 @@
 use crate::functions::NewFunc;
-use crate::ops::{LogicOp, MathOp};
+use crate::ops::{LogicOp, MathOp, OrdOp};
 use crate::val::{Atom, Val};
 use crate::{Error, Map, Num, Path, RValR, RValRs, ValRs};
 use alloc::string::{String, ToString};
@@ -17,8 +17,9 @@ pub enum NewFilter {
     Atom(Atom),
     Array(Box<Filter>),
     Object(Vec<(Filter, Filter)>),
-    Math(Box<Filter>, MathOp, Box<Filter>),
     Logic(Box<Filter>, LogicOp, Box<Filter>),
+    Math(Box<Filter>, MathOp, Box<Filter>),
+    Ord(Box<Filter>, OrdOp, Box<Filter>),
     Function(NewFunc),
 }
 
@@ -68,11 +69,15 @@ impl NewFilter {
                     Ok(Val::Obj(kvs?))
                 }))
             }
+            Self::Logic(l, op, r) => Box::new(l.run(Rc::clone(&v)).flat_map(move |l| match l {
+                Ok(l) => op.run(l.as_bool(), || r.run(Rc::clone(&v))),
+                Err(e) => Box::new(once(Err(e))),
+            })),
             Self::Math(l, op, r) => Box::new(
                 Filter::cartesian(l, r, v)
                     .map(move |(x, y)| Ok(op.run((*x?).clone(), (*y?).clone())?)),
             ),
-            Self::Logic(l, op, r) => Box::new(
+            Self::Ord(l, op, r) => Box::new(
                 Filter::cartesian(l, r, v).map(move |(x, y)| Ok(Val::Bool(op.run(&*x?, &*y?)))),
             ),
             Self::Function(f) => Box::new(once(f.run(v))),
