@@ -152,7 +152,7 @@ impl OrdOp {
 
 impl LogicOp {
     pub fn run<'a>(&self, l: bool, r: impl Fn() -> RValRs<'a>) -> ValRs<'a> {
-        use core::iter::once;
+        use {alloc::boxed::Box, core::iter::once};
         match (l, self) {
             (false, LogicOp::And) | (true, LogicOp::Or) => Box::new(once(Ok(Val::Bool(l)))),
             _ => Box::new(r().map(|r| Ok(Val::Bool(r?.as_bool())))),
