@@ -12,42 +12,6 @@ pub enum PathElem<I> {
     Range(Option<I>, Option<I>),
 }
 
-fn wrap(i: isize, len: usize) -> isize {
-    if i < 0 {
-        len as isize + i
-    } else {
-        i
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn wrap() {
-        use super::wrap;
-        let len = 4;
-        assert_eq!(wrap(0, len), 0);
-        assert_eq!(wrap(8, len), 8);
-        assert_eq!(wrap(-1, len), 3);
-        assert_eq!(wrap(-4, len), 0);
-        assert_eq!(wrap(-8, len), -4);
-    }
-}
-
-fn get_index(i: &Val, len: usize) -> Result<usize, Error> {
-    // make index 0 if it is smaller than 0
-    Ok(wrap(i.as_isize()?, len).try_into().unwrap_or(0))
-}
-
-type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
-
-fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<'_> {
-    match f {
-        Some(f) => Box::new(f.iter().map(move |i| get_index(&*i, len))),
-        None => Box::new(core::iter::once(Ok(default))),
-    }
-}
-
 impl Path {
     pub fn new(path: Vec<PathElem<Filter>>) -> Self {
         Self(path)
@@ -185,6 +149,38 @@ impl From<PathElem<Filter>> for Path {
     fn from(p: PathElem<Filter>) -> Self {
         Path(Vec::from([p]))
     }
+}
+
+type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
+
+fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<'_> {
+    match f {
+        Some(f) => Box::new(f.iter().map(move |i| Ok(get_index(i.as_isize()?, len)))),
+        None => Box::new(core::iter::once(Ok(default))),
+    }
+}
+
+fn get_index(i: isize, len: usize) -> usize {
+    // make index 0 if it is smaller than 0
+    wrap(i, len).try_into().unwrap_or(0)
+}
+
+fn wrap(i: isize, len: usize) -> isize {
+    if i < 0 {
+        len as isize + i
+    } else {
+        i
+    }
+}
+
+#[test]
+fn wrap_test() {
+    let len = 4;
+    assert_eq!(wrap(0, len), 0);
+    assert_eq!(wrap(8, len), 8);
+    assert_eq!(wrap(-1, len), 3);
+    assert_eq!(wrap(-4, len), 0);
+    assert_eq!(wrap(-8, len), -4);
 }
 
 /*
