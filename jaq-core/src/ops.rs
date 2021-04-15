@@ -108,12 +108,6 @@ impl core::ops::Rem for Val {
     }
 }
 
-impl Val {
-    pub fn as_bool(&self) -> bool {
-        !matches!(self, Val::Null | Val::Bool(false))
-    }
-}
-
 impl MathOp {
     pub fn run(&self, l: Val, r: Val) -> ValR {
         use MathOp::*;

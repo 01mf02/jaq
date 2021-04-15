@@ -25,6 +25,10 @@ pub enum Atom {
 }
 
 impl Val {
+    pub fn as_bool(&self) -> bool {
+        !matches!(self, Val::Null | Val::Bool(false))
+    }
+
     pub fn as_isize(&self) -> Result<isize, Error> {
         match self {
             Self::Num(n) => n.to_isize().ok_or_else(|| Error::Isize(self.clone())),
