@@ -74,8 +74,7 @@ impl NewFilter {
                 Err(e) => Box::new(once(Err(e))),
             })),
             Self::Math(l, op, r) => Box::new(
-                Filter::cartesian(l, r, v)
-                    .map(move |(x, y)| Ok(op.run((*x?).clone(), (*y?).clone())?)),
+                Filter::cartesian(l, r, v).map(move |(x, y)| op.run((*x?).clone(), (*y?).clone())),
             ),
             Self::Ord(l, op, r) => Box::new(
                 Filter::cartesian(l, r, v).map(move |(x, y)| Ok(Val::Bool(op.run(&*x?, &*y?)))),
@@ -132,7 +131,7 @@ impl Ref {
                 Err(e) => Box::new(once(Err(e))),
             },
             Self::Limit(n, f) => {
-                let n = n.run(Rc::clone(&v)).map(|n| Ok(usize::try_from(&*n?)?));
+                let n = n.run(Rc::clone(&v)).map(|n| usize::try_from(&*n?));
                 Box::new(n.flat_map(move |n| match n {
                     Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
@@ -142,7 +141,7 @@ impl Ref {
             Self::Fold(xs, init, f) => {
                 let mut xs = xs.run(Rc::clone(&v));
                 let init: Result<Vec<_>, _> = init.run(Rc::clone(&v)).collect();
-                match init.and_then(|init| xs.try_fold(init, |acc, x| Ok(f.fold_step(acc, x?)?))) {
+                match init.and_then(|init| xs.try_fold(init, |acc, x| f.fold_step(acc, x?))) {
                     Ok(y) => Box::new(y.into_iter().map(Ok)),
                     Err(e) => Box::new(once(Err(e))),
                 }

@@ -34,8 +34,7 @@ impl Display for Error {
 
 impl Filter {
     pub fn parse(s: &str) -> Result<Self, Error> {
-        let pairs = FilterParser::parse(Rule::main, s).map_err(Error::Pest)?;
-        Ok(Self::try_from(pairs)?)
+        Self::try_from(FilterParser::parse(Rule::main, s).map_err(Error::Pest)?)
     }
 }
 

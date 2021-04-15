@@ -43,7 +43,7 @@ type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
 
 fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<'_> {
     match f {
-        Some(f) => Box::new(f.iter().map(move |i| Ok(get_index(&*i, len)?))),
+        Some(f) => Box::new(f.iter().map(move |i| get_index(&*i, len))),
         None => Box::new(core::iter::once(Ok(default))),
     }
 }
@@ -57,8 +57,9 @@ impl Path {
         let mut path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
         path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
             let p = p?;
-            let iter = acc.into_iter().flat_map(|x| p.collect((*x).clone()));
-            Ok(iter.collect::<Result<_, _>>()?)
+            acc.into_iter()
+                .flat_map(|x| p.collect((*x).clone()))
+                .collect()
         })
     }
 
