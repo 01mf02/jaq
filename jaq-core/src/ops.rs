@@ -1,6 +1,7 @@
 //! Logical and mathematical operations on values.
 
 use crate::{Error, RValRs, Val, ValR, ValRs};
+use alloc::boxed::Box;
 
 #[derive(Clone, Debug)]
 pub enum MathOp {
@@ -152,7 +153,7 @@ impl OrdOp {
 
 impl LogicOp {
     pub fn run<'a>(&self, l: bool, r: impl Fn() -> RValRs<'a>) -> ValRs<'a> {
-        use {alloc::boxed::Box, core::iter::once};
+        use core::iter::once;
         match (l, self) {
             (false, LogicOp::And) | (true, LogicOp::Or) => Box::new(once(Ok(Val::Bool(l)))),
             _ => Box::new(r().map(|r| Ok(Val::Bool(r?.as_bool())))),
