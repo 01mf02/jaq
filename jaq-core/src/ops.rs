@@ -146,7 +146,7 @@ impl OrdOp {
 }
 
 impl LogicOp {
-    pub fn run<'a>(&self, l: bool, r: impl Fn() -> RValRs<'a>) -> ValRs<'a> {
+    pub fn run<'a>(&self, l: bool, r: impl FnOnce() -> RValRs<'a>) -> ValRs<'a> {
         use core::iter::once;
         match (l, self) {
             (false, LogicOp::And) | (true, LogicOp::Or) => Box::new(once(Ok(Val::Bool(l)))),
