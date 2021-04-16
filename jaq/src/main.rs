@@ -9,6 +9,10 @@ struct Cli {
     #[clap(short)]
     null: bool,
 
+    /// Use the last output value as exit status code
+    #[clap(short)]
+    exit: bool,
+
     #[clap(short)]
     /// Read (slurp) all input values into one array
     slurp: bool,
@@ -20,14 +24,11 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let filter = match Filter::parse(&cli.filter) {
-        Ok(filter) => filter,
-        Err(e) => {
-            eprintln!("Failed to parse filter:");
-            eprintln!("{}", e.to_string());
-            std::process::exit(1);
-        }
-    };
+    let filter = Filter::parse(&cli.filter).unwrap_or_else(|e| {
+        eprintln!("Failed to parse filter:");
+        eprintln!("{}", e.to_string());
+        std::process::exit(3);
+    });
     //println!("Filter: {:?}", filter);
 
     use std::iter::once;
@@ -51,22 +52,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
 
+    let mut last = None;
     for item in iter {
-        let input = match item {
-            Ok(item) => item,
-            Err(e) => {
-                eprintln!("Failed to parse JSON: {}", e.to_string());
-                std::process::exit(1);
-            }
-        };
+        let input = item.unwrap_or_else(|e| {
+            eprintln!("Failed to parse JSON: {}", e.to_string());
+            std::process::exit(4);
+        });
         //println!("Got {:?}", input);
         for output in filter.run(input) {
-            let output = (*output?).clone().into();
+            let output = output.unwrap_or_else(|e| {
+                eprintln!("Error: {}", e.to_string());
+                std::process::exit(5);
+            });
+            last = Some(output.as_bool());
+            let output = (*output).clone().into();
             colored_json::write_colored_json(&output, &mut stdout)?;
             println!();
         }
     }
     stdout.flush()?;
 
+    if cli.exit {
+        std::process::exit(last.map(|b| (!b).into()).unwrap_or(4));
+    }
     Ok(())
 }
