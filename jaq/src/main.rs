@@ -1,5 +1,6 @@
 use clap::Clap;
-use jaq_core::{Filter, Val};
+use jaq_core::{ClosedFilter, Main, Val};
+use std::convert::TryFrom;
 use std::io::Write;
 use std::rc::Rc;
 
@@ -24,11 +25,13 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let filter = Filter::parse(&cli.filter).unwrap_or_else(|e| {
+    let main = Main::parse(&cli.filter).unwrap_or_else(|e| {
         eprintln!("Failed to parse filter:");
         eprintln!("{}", e.to_string());
         std::process::exit(3);
     });
+    let filter = main.open(jaq_core::std()).unwrap();
+    let filter = ClosedFilter::try_from(filter).unwrap();
     //println!("Filter: {:?}", filter);
 
     use std::iter::once;

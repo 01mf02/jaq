@@ -1,4 +1,4 @@
-use crate::{Filter, RValR, Val};
+use crate::{ClosedFilter, RValR, Val};
 use alloc::collections::VecDeque;
 use alloc::rc::Rc;
 
@@ -20,7 +20,7 @@ impl<F> Recurse<F> {
     }
 }
 
-impl<F: core::ops::Deref<Target = Filter>> Iterator for Recurse<&F> {
+impl<F: core::ops::Deref<Target = ClosedFilter>> Iterator for Recurse<&F> {
     type Item = RValR;
 
     fn next(&mut self) -> Option<Self::Item> {

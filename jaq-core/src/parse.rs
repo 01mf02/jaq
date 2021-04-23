@@ -1,7 +1,8 @@
-use crate::filter::{Filter, NewFilter, Ref};
-use crate::functions::NewFunc;
+use crate::filter::{Filter, New, Ref};
 use crate::ops::{LogicOp, MathOp, OrdOp};
 use crate::path::{Path, PathElem};
+use crate::preprocess::{Call, PreFilter};
+use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::convert::{TryFrom, TryInto};
@@ -17,7 +18,6 @@ pub struct FilterParser;
 #[derive(Debug)]
 pub enum Error {
     Pest(pest::error::Error<Rule>),
-    Undefined(String, usize),
     PathAssign,
 }
 
@@ -26,15 +26,20 @@ impl Display for Error {
         use Error::*;
         match self {
             Pest(e) => e.fmt(f),
-            Undefined(name, arity) => write!(f, "undefined function {}/{}", name, arity),
             PathAssign => write!(f, "path expected before assignment operator"),
         }
     }
 }
 
-impl Filter {
+impl Main {
     pub fn parse(s: &str) -> Result<Self, Error> {
         Self::try_from(FilterParser::parse(Rule::main, s).map_err(Error::Pest)?)
+    }
+}
+
+impl Module {
+    pub fn parse(s: &str) -> Result<Self, Error> {
+        Self::try_from(FilterParser::parse(Rule::module, s).map_err(Error::Pest)?)
     }
 }
 
@@ -58,7 +63,43 @@ lazy_static::lazy_static! {
     };
 }
 
-impl TryFrom<Pairs<'_, Rule>> for Filter {
+impl TryFrom<Pairs<'_, Rule>> for Definition {
+    type Error = Error;
+    fn try_from(mut pairs: Pairs<Rule>) -> Result<Self, Error> {
+        let name = pairs.next().unwrap().as_str().to_string();
+        let args = pairs.next().unwrap();
+        let args = args.into_inner().map(|a| a.as_str().to_string()).collect();
+        let term = PreFilter::try_from(pairs.next().unwrap())?;
+        Ok(Self { name, args, term })
+    }
+}
+
+impl TryFrom<Pairs<'_, Rule>> for Definitions {
+    type Error = Error;
+    fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
+        let defs = pairs.map(|pair| Definition::try_from(pair.into_inner()));
+        Ok(Definitions::new(defs.collect::<Result<_, _>>()?))
+    }
+}
+
+impl TryFrom<Pairs<'_, Rule>> for Main {
+    type Error = Error;
+    fn try_from(mut pairs: Pairs<Rule>) -> Result<Self, Error> {
+        let defs = Definitions::try_from(pairs.next().unwrap().into_inner())?;
+        let term = PreFilter::try_from(pairs.next().unwrap())?;
+        Ok(Main { defs, term })
+    }
+}
+
+impl TryFrom<Pairs<'_, Rule>> for Module {
+    type Error = Error;
+    fn try_from(mut pairs: Pairs<Rule>) -> Result<Self, Error> {
+        let defs = Definitions::try_from(pairs.next().unwrap().into_inner());
+        Ok(Self::new(defs?))
+    }
+}
+
+impl TryFrom<Pairs<'_, Rule>> for PreFilter {
     type Error = Error;
     fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
         PREC_CLIMBER.climb(
@@ -69,7 +110,10 @@ impl TryFrom<Pairs<'_, Rule>> for Filter {
                 let rhs = Box::new(rhs?);
                 match op.as_rule() {
                     Rule::assign_op => {
-                        let path = (*lhs).try_into()?;
+                        let path = match *lhs {
+                            Filter::Ref(Ref::Path(p)) => p,
+                            _ => return Err(Error::PathAssign),
+                        };
                         let op = op.into_inner().next().unwrap();
                         Ok(Self::Ref(match op.as_rule() {
                             Rule::assign => Ref::Assign(path, rhs),
@@ -77,7 +121,7 @@ impl TryFrom<Pairs<'_, Rule>> for Filter {
                             Rule::update_with => {
                                 let math = op.into_inner().next().unwrap();
                                 let math = MathOp::try_from(math.as_rule()).unwrap();
-                                Ref::update_math(path, math, rhs)
+                                Ref::update_math(path, math, *rhs)
                             }
                             _ => unreachable!(),
                         }))
@@ -86,11 +130,11 @@ impl TryFrom<Pairs<'_, Rule>> for Filter {
                     Rule::comma => Ok(Self::Ref(Ref::Comma(lhs, rhs))),
                     rule => {
                         if let Ok(op) = LogicOp::try_from(rule) {
-                            Ok(Self::New(NewFilter::Logic(lhs, op, rhs)))
+                            Ok(Self::New(New::Logic(lhs, op, rhs)))
                         } else if let Ok(op) = OrdOp::try_from(rule) {
-                            Ok(Self::New(NewFilter::Ord(lhs, op, rhs)))
+                            Ok(Self::New(New::Ord(lhs, op, rhs)))
                         } else if let Ok(op) = MathOp::try_from(rule) {
-                            Ok(Self::New(NewFilter::Math(lhs, op, rhs)))
+                            Ok(Self::New(New::Math(lhs, op, rhs)))
                         } else {
                             unreachable!()
                         }
@@ -101,19 +145,7 @@ impl TryFrom<Pairs<'_, Rule>> for Filter {
     }
 }
 
-// TODO: move this somewhere else
-impl TryFrom<Filter> for Path {
-    type Error = Error;
-
-    fn try_from(f: Filter) -> Result<Self, Self::Error> {
-        match f {
-            Filter::Ref(Ref::Path(p)) => Ok(p),
-            _ => Err(Error::PathAssign),
-        }
-    }
-}
-
-impl TryFrom<Pair<'_, Rule>> for Filter {
+impl TryFrom<Pair<'_, Rule>> for PreFilter {
     type Error = Error;
     fn try_from(pair: Pair<Rule>) -> Result<Self, Error> {
         let rule = pair.as_rule();
@@ -127,7 +159,7 @@ impl TryFrom<Pair<'_, Rule>> for Filter {
                 } else {
                     Self::try_from(inner)?
                 };
-                Ok(Self::New(NewFilter::Array(Box::new(contents))))
+                Ok(Self::New(New::Array(Box::new(contents))))
             }
             Rule::object => {
                 let kvs = inner.map(|kv| {
@@ -138,7 +170,9 @@ impl TryFrom<Pair<'_, Rule>> for Filter {
                             let key = Atom::from(key);
                             let value = match iter.next() {
                                 Some(value) => Self::try_from(value)?,
-                                None => Path::from(PathElem::Index(key.clone().into())).into(),
+                                None => Self::Ref(Ref::Path(Path::from(PathElem::Index(
+                                    key.clone().into(),
+                                )))),
                             };
                             assert!(iter.next().is_none());
                             Ok((key.into(), value))
@@ -151,7 +185,7 @@ impl TryFrom<Pair<'_, Rule>> for Filter {
                         _ => unreachable!(),
                     }
                 });
-                Ok(Self::New(NewFilter::Object(kvs.collect::<Result<_, _>>()?)))
+                Ok(Self::New(New::Object(kvs.collect::<Result<_, _>>()?)))
             }
             Rule::ite => {
                 let mut ite = inner.map(|p| Self::try_from(p).map(Box::new));
@@ -168,7 +202,7 @@ impl TryFrom<Pair<'_, Rule>> for Filter {
                     Some(args) => args.into_inner().map(Self::try_from).collect(),
                 };
                 assert_eq!(inner.next(), None);
-                Ok(Self::try_from((name, args?))?)
+                Ok(Self::Named(Call::new(name.to_owned(), args?)))
             }
             Rule::path => {
                 let path: Result<_, _> = inner.flat_map(PathElem::from_path).collect();
@@ -183,8 +217,6 @@ impl From<Pair<'_, Rule>> for Atom {
     fn from(pair: Pair<Rule>) -> Self {
         use serde_json::Number;
         match pair.as_rule() {
-            Rule::null => Self::Null,
-            Rule::boole => Self::Bool(pair.as_str().parse::<bool>().unwrap()),
             Rule::number => Self::Num(pair.as_str().parse::<Number>().unwrap().try_into().unwrap()),
             Rule::string => Self::Str(pair.into_inner().next().unwrap().as_str().to_string()),
             Rule::identifier => Self::Str(pair.as_str().to_string()),
@@ -193,7 +225,7 @@ impl From<Pair<'_, Rule>> for Atom {
     }
 }
 
-impl PathElem<Filter> {
+impl PathElem<PreFilter> {
     fn from_path(pair: Pair<Rule>) -> impl Iterator<Item = Result<Self, Error>> + '_ {
         use core::iter::{empty, once};
         let mut iter = pair.into_inner();
@@ -280,89 +312,6 @@ impl TryFrom<Rule> for MathOp {
             Rule::div => Ok(MathOp::Div),
             Rule::rem => Ok(MathOp::Rem),
             _ => Err(()),
-        }
-    }
-}
-
-impl TryFrom<(&str, [Box<Filter>; 0])> for Filter {
-    type Error = Error;
-    fn try_from((name, []): (&str, [Box<Filter>; 0])) -> Result<Self, Error> {
-        match name {
-            "empty" => Ok(Self::Ref(Ref::Empty)),
-            "any" => Ok(Self::New(NewFilter::Function(NewFunc::Any))),
-            "all" => Ok(Self::New(NewFilter::Function(NewFunc::All))),
-            "not" => Ok(Self::New(NewFilter::Function(NewFunc::Not))),
-            "length" => Ok(Self::New(NewFilter::Function(NewFunc::Length))),
-            "type" => Ok(Self::New(NewFilter::Function(NewFunc::Type))),
-            "add" => Ok(Self::New(NewFilter::Function(NewFunc::Add))),
-            _ => Err(Error::Undefined(name.to_string(), 0)),
-        }
-    }
-}
-
-impl TryFrom<(&str, [Box<Filter>; 1])> for Filter {
-    type Error = Error;
-    fn try_from((name, [arg1]): (&str, [Box<Filter>; 1])) -> Result<Self, Error> {
-        match name {
-            "first" => Ok(Self::Ref(Ref::First(arg1))),
-            "last" => Ok(Self::Ref(Ref::Last(arg1))),
-            "map" => Ok(Self::New(NewFilter::Function(NewFunc::Map(arg1)))),
-            "select" => Ok(Self::Ref(Ref::select(arg1))),
-            "recurse" => Ok(Self::Ref(Ref::Recurse(arg1))),
-            _ => Err(Error::Undefined(name.to_string(), 1)),
-        }
-    }
-}
-
-impl TryFrom<(&str, [Box<Filter>; 2])> for Filter {
-    type Error = Error;
-    fn try_from((name, [arg1, arg2]): (&str, [Box<Filter>; 2])) -> Result<Self, Error> {
-        match name {
-            "limit" => Ok(Self::Ref(Ref::Limit(arg1, arg2))),
-            "nth" => Ok(Self::Ref(Ref::nth(arg1, arg2))),
-            _ => Err(Error::Undefined(name.to_string(), 2)),
-        }
-    }
-}
-
-impl TryFrom<(&str, [Box<Filter>; 3])> for Filter {
-    type Error = Error;
-    fn try_from((name, [arg1, arg2, arg3]): (&str, [Box<Filter>; 3])) -> Result<Self, Error> {
-        match name {
-            "fold" => Ok(Self::Ref(Ref::Fold(arg1, arg2, arg3))),
-            _ => Err(Error::Undefined(name.to_string(), 3)),
-        }
-    }
-}
-
-impl TryFrom<(&str, Vec<Filter>)> for Filter {
-    type Error = Error;
-    fn try_from((name, args): (&str, Vec<Filter>)) -> Result<Self, Error> {
-        let mut args = args.into_iter().map(Box::new);
-        if let Some(arg1) = args.next() {
-            // unary or higher-arity function
-            if let Some(arg2) = args.next() {
-                // binary or higher-arity function
-                if let Some(arg3) = args.next() {
-                    // ternary or higher-arity function
-                    if let Some(_arg4) = args.next() {
-                        // quaternary or higher-arity function
-                        Err(Error::Undefined(name.to_string(), 4 + args.len()))
-                    } else {
-                        // ternary function
-                        (name, [arg1, arg2, arg3]).try_into()
-                    }
-                } else {
-                    // binary function
-                    (name, [arg1, arg2]).try_into()
-                }
-            } else {
-                // unary function
-                (name, [arg1]).try_into()
-            }
-        } else {
-            // nullary function
-            (name, []).try_into()
         }
     }
 }

@@ -1,4 +1,5 @@
-use jaq_core::{Filter, Val};
+use core::convert::TryFrom;
+use jaq_core::{ClosedFilter, Main, Val};
 use serde_json::json;
 use std::rc::Rc;
 
@@ -12,7 +13,9 @@ fn give(x: serde_json::Value, f: &str, y: serde_json::Value) {
 
 fn gives(x: serde_json::Value, f: &str, ys: Vec<serde_json::Value>) {
     let x = to(x);
-    let f = Filter::parse(f).unwrap();
+    let f = Main::parse(f).unwrap();
+    let f = f.open(jaq_core::std()).unwrap();
+    let f = ClosedFilter::try_from(f).unwrap();
     let ys: Vec<_> = ys.into_iter().map(to).collect();
 
     let out: Vec<_> = f.run(x).map(|y| y.unwrap()).collect();

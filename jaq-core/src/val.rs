@@ -18,8 +18,6 @@ pub enum Val {
 
 #[derive(Clone, Debug)]
 pub enum Atom {
-    Null,
-    Bool(bool),
     Num(Num),
     Str(String),
 }
@@ -81,8 +79,6 @@ impl Val {
 impl From<Atom> for Val {
     fn from(a: Atom) -> Self {
         match a {
-            Atom::Null => Self::Null,
-            Atom::Bool(b) => Self::Bool(b),
             Atom::Num(n) => Self::Num(n),
             Atom::Str(s) => Self::Str(s),
         }

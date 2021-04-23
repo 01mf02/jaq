@@ -1,22 +1,24 @@
-use crate::{Error, Filter, RValR, RValRs, Val};
+use crate::{ClosedFilter, Error, Filter, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
-#[derive(Debug, Default)]
-pub struct Path(Vec<PathElem<Filter>>);
+#[derive(Clone, Debug)]
+pub struct Path<F>(Vec<PathElem<F>>);
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum PathElem<I> {
     Index(I),
     /// if both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
 }
 
-impl Path {
-    pub fn new(path: Vec<PathElem<Filter>>) -> Self {
+impl<F> Path<F> {
+    pub fn new(path: Vec<PathElem<F>>) -> Self {
         Self(path)
     }
+}
 
+impl Path<ClosedFilter> {
     pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
         let mut path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
         path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
@@ -40,7 +42,7 @@ impl Path {
     }
 }
 
-impl PathElem<Filter> {
+impl PathElem<ClosedFilter> {
     pub fn run_indices(&self, v: Rc<Val>) -> Result<PathElem<Vec<Rc<Val>>>, Error> {
         use PathElem::*;
         match self {
@@ -145,8 +147,32 @@ impl PathElem<Vec<Rc<Val>>> {
     }
 }
 
-impl From<PathElem<Filter>> for Path {
-    fn from(p: PathElem<Filter>) -> Self {
+impl<N> Path<Filter<N>> {
+    pub fn try_map<F, M, E>(self, m: &F) -> Result<Path<Filter<M>>, E>
+    where
+        F: Fn(N) -> Result<Filter<M>, E>,
+    {
+        let path = self.0.into_iter().map(|p| p.try_map(m));
+        Ok(Path(path.collect::<Result<_, _>>()?))
+    }
+}
+
+impl<N> PathElem<Filter<N>> {
+    fn try_map<F, M, E>(self, m: &F) -> Result<PathElem<Filter<M>>, E>
+    where
+        F: Fn(N) -> Result<Filter<M>, E>,
+    {
+        let m = |f: Filter<N>| f.try_map(m);
+        use PathElem::*;
+        match self {
+            Index(i) => Ok(Index(m(i)?)),
+            Range(from, until) => Ok(Range(from.map(m).transpose()?, until.map(m).transpose()?)),
+        }
+    }
+}
+
+impl<F> From<PathElem<F>> for Path<F> {
+    fn from(p: PathElem<F>) -> Self {
         Path(Vec::from([p]))
     }
 }

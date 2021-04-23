@@ -1,43 +1,35 @@
-use crate::functions::NewFunc;
 use crate::ops::{LogicOp, MathOp, OrdOp};
+pub use crate::preprocess::{ClosedFilter, OpenFilter, PreFilter};
 use crate::val::{Atom, Val};
-use crate::{Error, Map, Num, Path, RValR, RValRs, ValRs};
-use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use core::convert::TryFrom;
+use crate::{Error, Map, Path, RValR, RValRs, ValRs};
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
-#[derive(Debug)]
-pub enum Filter {
-    New(NewFilter),
-    Ref(Ref),
+#[derive(Clone, Debug)]
+pub enum Filter<N> {
+    New(New<Filter<N>>),
+    Ref(Ref<Filter<N>>),
+    Named(N),
 }
 
-#[derive(Debug)]
-pub enum NewFilter {
+#[derive(Clone, Debug)]
+pub enum New<F> {
     Atom(Atom),
-    Array(Box<Filter>),
-    Object(Vec<(Filter, Filter)>),
-    Logic(Box<Filter>, LogicOp, Box<Filter>),
-    Math(Box<Filter>, MathOp, Box<Filter>),
-    Ord(Box<Filter>, OrdOp, Box<Filter>),
-    Function(NewFunc),
+    Array(Box<F>),
+    Object(Vec<(F, F)>),
+    Logic(Box<F>, LogicOp, Box<F>),
+    Math(Box<F>, MathOp, Box<F>),
+    Ord(Box<F>, OrdOp, Box<F>),
 }
 
-#[derive(Debug)]
-pub enum Ref {
-    Pipe(Box<Filter>, Box<Filter>),
-    Comma(Box<Filter>, Box<Filter>),
+#[derive(Clone, Debug)]
+pub enum Ref<F> {
+    Pipe(Box<F>, Box<F>),
+    Comma(Box<F>, Box<F>),
     Empty,
-    Path(Path),
-    Assign(Path, Box<Filter>),
-    Update(Path, Box<Filter>),
-    IfThenElse(Box<Filter>, Box<Filter>, Box<Filter>),
-
-    First(Box<Filter>),
-    Last(Box<Filter>),
-    Limit(Box<Filter>, Box<Filter>),
-    Recurse(Box<Filter>),
-    Fold(Box<Filter>, Box<Filter>, Box<Filter>),
+    Path(Path<F>),
+    Assign(Path<F>, Box<F>),
+    Update(Path<F>, Box<F>),
+    IfThenElse(Box<F>, Box<F>, Box<F>),
 }
 
 impl Val {
@@ -48,7 +40,24 @@ impl Val {
 
 type Product = (RValR, RValR);
 
-impl NewFilter {
+impl ClosedFilter {
+    pub fn run(&self, v: Rc<Val>) -> RValRs {
+        match self {
+            Self::New(n) => Box::new(n.run(v).map(|x| x.map(Rc::new))),
+            Self::Ref(r) => r.run(v),
+            Self::Named(n) => n.run(v),
+        }
+    }
+
+    fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
+        let l = self.run(Rc::clone(&v));
+        let r: Vec<_> = other.run(v).collect();
+        use itertools::Itertools;
+        l.into_iter().cartesian_product(r)
+    }
+}
+
+impl New<ClosedFilter> {
     fn run(&self, v: Rc<Val>) -> ValRs {
         use core::iter::once;
         match self {
@@ -79,29 +88,11 @@ impl NewFilter {
             Self::Ord(l, op, r) => Box::new(
                 Filter::cartesian(l, r, v).map(move |(x, y)| Ok(Val::Bool(op.run(&*x?, &*y?)))),
             ),
-            Self::Function(f) => Box::new(once(f.run(v))),
-        }
-    }
-
-    fn one() -> Self {
-        Self::Atom(Atom::Num(Num::Int(1)))
-    }
-
-    fn succ(f: Box<Filter>) -> Self {
-        Self::Math(f, MathOp::Add, Self::one().into())
-    }
-}
-
-impl Filter {
-    pub fn run(&self, v: Rc<Val>) -> RValRs {
-        match self {
-            Self::New(n) => Box::new(n.run(v).map(|x| x.map(Rc::new))),
-            Self::Ref(r) => r.run(v),
         }
     }
 }
 
-impl Ref {
+impl Ref<ClosedFilter> {
     fn run(&self, v: Rc<Val>) -> RValRs {
         use core::iter::{empty, once};
         match self {
@@ -123,88 +114,74 @@ impl Ref {
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
-
-            Self::First(f) => Box::new(f.run(v).take(1)),
-            Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
-                Ok(Some(y)) => Box::new(once(Ok(y))),
-                Ok(None) => Box::new(empty()),
-                Err(e) => Box::new(once(Err(e))),
-            },
-            Self::Limit(n, f) => {
-                let n = n.run(Rc::clone(&v)).map(|n| usize::try_from(&*n?));
-                Box::new(n.flat_map(move |n| match n {
-                    Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
-                    Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
-                }))
-            }
-            Self::Recurse(f) => Box::new(crate::Recurse::new(f, v)),
-            Self::Fold(xs, init, f) => {
-                let mut xs = xs.run(Rc::clone(&v));
-                let init: Result<Vec<_>, _> = init.run(Rc::clone(&v)).collect();
-                match init.and_then(|init| xs.try_fold(init, |acc, x| f.fold_step(acc, x?))) {
-                    Ok(y) => Box::new(y.into_iter().map(Ok)),
-                    Err(e) => Box::new(once(Err(e))),
-                }
-            }
         }
     }
+}
 
-    pub fn identity() -> Self {
-        Self::Path(Path::default())
-    }
-
-    pub fn update_math(path: Path, op: MathOp, f: Box<Filter>) -> Self {
-        Ref::Update(path, NewFilter::Math(Self::identity().into(), op, f).into())
-    }
-
-    pub fn select(f: Box<Filter>) -> Self {
-        Self::IfThenElse(f, Self::identity().into(), Self::Empty.into())
-    }
-
-    pub fn nth(n: Box<Filter>, f: Box<Filter>) -> Self {
-        Self::Last(Self::Limit(NewFilter::succ(n).into(), f).into())
+impl<N> Ref<Filter<N>> {
+    pub fn update_math(path: Path<Filter<N>>, op: MathOp, f: Filter<N>) -> Self {
+        let id = Filter::Ref(Self::Path(Path::new(Vec::new())));
+        let math = Filter::New(New::Math(Box::new(id), op, Box::new(f)));
+        Self::Update(path, Box::new(math))
     }
 }
 
-impl Filter {
-    fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
-        let l = self.run(Rc::clone(&v));
-        let r: Vec<_> = other.run(v).collect();
-        use itertools::Itertools;
-        l.into_iter().cartesian_product(r)
-    }
-
-    pub fn fold_step(&self, acc: Vec<Rc<Val>>, x: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        acc.into_iter()
-            .map(|acc| {
-                let obj = [("acc".to_string(), acc), ("x".to_string(), Rc::clone(&x))];
-                Val::Obj(Vec::from(obj).into_iter().collect())
-            })
-            .flat_map(|obj| self.run(Rc::new(obj)))
-            .collect()
+impl<N> Filter<N> {
+    pub fn try_map<F, M, E>(self, m: &F) -> Result<Filter<M>, E>
+    where
+        F: Fn(N) -> Result<Filter<M>, E>,
+    {
+        match self {
+            Self::New(n) => Ok(Filter::New(n.try_map(m)?)),
+            Self::Ref(r) => Ok(Filter::Ref(r.try_map(m)?)),
+            Self::Named(n) => m(n),
+        }
     }
 }
 
-impl From<Atom> for Filter {
+impl<N> New<Filter<N>> {
+    fn try_map<F, M, E>(self, m: &F) -> Result<New<Filter<M>>, E>
+    where
+        F: Fn(N) -> Result<Filter<M>, E>,
+    {
+        let m = |f: Filter<N>| f.try_map(m);
+        use New::*;
+        match self {
+            Atom(a) => Ok(Atom(a)),
+            Array(a) => Ok(Array(Box::new(m(*a)?))),
+            Object(o) => Ok(Object(
+                o.into_iter()
+                    .map(|(k, v)| Ok((m(k)?, m(v)?)))
+                    .collect::<Result<_, _>>()?,
+            )),
+            Logic(l, op, r) => Ok(Logic(Box::new(m(*l)?), op, Box::new(m(*r)?))),
+            Math(l, op, r) => Ok(Math(Box::new(m(*l)?), op, Box::new(m(*r)?))),
+            Ord(l, op, r) => Ok(Ord(Box::new(m(*l)?), op, Box::new(m(*r)?))),
+        }
+    }
+}
+
+impl<N> Ref<Filter<N>> {
+    fn try_map<F, M, E>(self, m1: &F) -> Result<Ref<Filter<M>>, E>
+    where
+        F: Fn(N) -> Result<Filter<M>, E>,
+    {
+        let m = |f: Filter<N>| f.try_map(m1).map(Box::new);
+        use Ref::*;
+        match self {
+            Pipe(l, r) => Ok(Pipe(m(*l)?, m(*r)?)),
+            Comma(l, r) => Ok(Comma(m(*l)?, m(*r)?)),
+            Empty => Ok(Empty),
+            Path(p) => Ok(Path(p.try_map(m1)?)),
+            Assign(p, f) => Ok(Assign(p.try_map(m1)?, m(*f)?)),
+            Update(p, f) => Ok(Update(p.try_map(m1)?, m(*f)?)),
+            IfThenElse(cond, truth, falsity) => Ok(IfThenElse(m(*cond)?, m(*truth)?, m(*falsity)?)),
+        }
+    }
+}
+
+impl<F> From<Atom> for Filter<F> {
     fn from(a: Atom) -> Self {
-        Self::New(NewFilter::Atom(a))
-    }
-}
-
-impl From<Path> for Filter {
-    fn from(p: Path) -> Self {
-        Self::Ref(Ref::Path(p))
-    }
-}
-
-impl From<Ref> for Box<Filter> {
-    fn from(r: Ref) -> Self {
-        Box::new(Filter::Ref(r))
-    }
-}
-
-impl From<NewFilter> for Box<Filter> {
-    fn from(n: NewFilter) -> Self {
-        Box::new(Filter::New(n))
+        Self::New(New::Atom(a))
     }
 }

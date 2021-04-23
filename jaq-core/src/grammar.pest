@@ -1,12 +1,14 @@
-main = _{ SOI ~ expr ~ EOI }
+module = _{ SOI ~ defs ~ EOI }
+main   = _{ SOI ~ defs ~ expr ~ EOI }
+
+defs = { def* }
+def = { "def" ~ identifier ~ def_args ~ ":" ~ expr ~ ";" }
+    def_args = { ("(" ~ identifier ~ (";" ~ identifier)* ~ ")")? }
 
 expr = { term ~ (op ~ term)* }
 term = _{ "(" ~ expr ~ ")" | atom | array | object | path | ite | function }
 
-atom = { null | boole | number | string }
-
-null = { "null" }
-boole = { "true" | "false" }
+atom = { number | string }
 
 number = @{ integer ~ ("." ~ ASCII_DIGIT*)? ~ (^"e" ~ integer)? }
     integer = { ("+" | "-")? ~ ASCII_DIGIT+ }
@@ -75,10 +77,11 @@ range = { "[" ~ (from_until | until | from | at)? ~ "]" }
 
 ite = { "if" ~ expr ~ "then" ~ expr ~ "else" ~ expr ~ "end" }
 
-function = { identifier ~ args? }
-args = { "(" ~ expr ~ (";" ~ expr)* ~ ")" }
+function = { identifier ~ call_args? }
+    call_args = { "(" ~ expr ~ (";" ~ expr)* ~ ")" }
 
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
-WHITESPACE = _{ " " | "\t" }
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+COMMENT    = _{ "#" ~ (!NEWLINE ~ ANY)* }
