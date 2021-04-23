@@ -2,10 +2,20 @@ use crate::functions::Builtin;
 use crate::Filter;
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::convert::{TryFrom, TryInto};
+use core::fmt::{self, Display};
 
 pub type PreFilter = Filter<Call>;
 pub type OpenFilter = Filter<Open>;
 pub type ClosedFilter = Filter<Closed>;
+
+#[derive(Debug)]
+pub struct UndefinedError(String, usize);
+
+impl Display for UndefinedError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "{}/{} is not defined", self.0, self.1)
+    }
+}
 
 pub struct Call {
     name: String,
@@ -27,24 +37,25 @@ pub enum Open {
 pub struct Closed(Builtin<Box<ClosedFilter>>);
 
 impl PreFilter {
-    pub fn open<F, E>(self, args: &[String], fns: &F) -> Result<OpenFilter, E>
+    pub fn open<F>(self, args: &[String], fns: &F) -> Result<OpenFilter, UndefinedError>
     where
-        F: Fn(String, usize) -> Result<OpenFilter, E>,
+        F: Fn(&(String, usize)) -> Option<OpenFilter>,
     {
         Ok(self.try_map(&|call| call.open(args, fns))?)
     }
 }
 
 impl Call {
-    fn open<F, E>(self, args: &[String], fns: &F) -> Result<OpenFilter, E>
+    fn open<F>(self, args: &[String], fns: &F) -> Result<OpenFilter, UndefinedError>
     where
-        F: Fn(String, usize) -> Result<OpenFilter, E>,
+        F: Fn(&(String, usize)) -> Option<OpenFilter>,
     {
         let name = self.name;
         match args.iter().position(|arg| *arg == name) {
             Some(pos) if self.args.is_empty() => Ok(Filter::Named(Open::V(pos))),
             _ => {
-                let fun = fns(name, self.args.len())?;
+                let fun = (name, self.args.len());
+                let fun = fns(&fun).ok_or_else(|| UndefinedError(fun.0, fun.1))?;
                 let cargs: Result<Vec<_>, _> =
                     self.args.into_iter().map(|a| a.open(args, fns)).collect();
                 let cargs = cargs?;

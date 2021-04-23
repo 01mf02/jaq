@@ -30,7 +30,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("{}", e.to_string());
         std::process::exit(3);
     });
-    let filter = main.open(jaq_core::std()).unwrap();
+    let filter = main.open(jaq_core::std()).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e.to_string());
+        std::process::exit(3);
+    });
     let filter = ClosedFilter::try_from(filter).unwrap();
     //println!("Filter: {:?}", filter);
 
