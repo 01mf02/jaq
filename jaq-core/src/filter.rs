@@ -49,7 +49,7 @@ impl ClosedFilter {
         }
     }
 
-    fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
+    pub fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Product> + '_ {
         let l = self.run(Rc::clone(&v));
         let r: Vec<_> = other.run(v).collect();
         use itertools::Itertools;

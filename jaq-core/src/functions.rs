@@ -1,4 +1,4 @@
-use crate::{ClosedFilter, Error, Filter, RValRs, Val, ValR};
+use crate::{ClosedFilter, Error, Filter, Num, RValRs, Val, ValR};
 use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 use core::convert::TryFrom;
 
@@ -17,6 +17,7 @@ pub const FUNCTIONS: &[(&str, usize, Builtin<usize>)] = &[
     ("first", 1, Builtin::Ref(Ref::First(0))),
     ("last", 1, Builtin::Ref(Ref::Last(0))),
     ("limit", 2, Builtin::Ref(Ref::Limit(0, 1))),
+    ("range", 2, Builtin::Ref(Ref::Range(0, 1))),
     ("recurse", 1, Builtin::Ref(Ref::Recurse(0))),
     ("fold", 3, Builtin::Ref(Ref::Fold(0, 1, 2))),
 ];
@@ -45,6 +46,7 @@ pub enum Ref<F> {
     First(F),
     Last(F),
     Limit(F, F),
+    Range(F, F),
     Recurse(F),
     Fold(F, F, F),
 }
@@ -92,6 +94,16 @@ impl Ref<Box<ClosedFilter>> {
                 let n = n.run(Rc::clone(&v)).map(|n| usize::try_from(&*n?));
                 Box::new(n.flat_map(move |n| match n {
                     Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
+                    Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                }))
+            }
+            Self::Range(from, until) => {
+                let prod = Filter::cartesian(from, until, v);
+                let ints = prod.map(|(from, until)| Ok((from?.as_isize()?, until?.as_isize()?)));
+                Box::new(ints.flat_map(|from_until| match from_until {
+                    Ok((from, until)) => {
+                        Box::new((from..until).map(|n| Ok(Rc::new(Val::Num(Num::from(n))))))
+                    }
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
@@ -150,6 +162,7 @@ impl<F> Ref<F> {
             First(f) => First(m(f)),
             Last(f) => Last(m(f)),
             Limit(n, f) => Limit(m(n), m(f)),
+            Range(from, until) => Range(m(from), m(until)),
             Recurse(f) => Recurse(m(f)),
             Fold(xs, init, f) => Fold(m(xs), m(init), m(f)),
         }
@@ -169,6 +182,7 @@ impl<N> Ref<Box<Filter<N>>> {
             First(f) => Ok(First(m(*f)?)),
             Last(f) => Ok(Last(m(*f)?)),
             Limit(n, f) => Ok(Limit(m(*n)?, m(*f)?)),
+            Range(from, until) => Ok(Range(m(*from)?, m(*until)?)),
             Recurse(f) => Ok(Recurse(m(*f)?)),
             Fold(xs, init, f) => Ok(Fold(m(*xs)?, m(*init)?, m(*f)?)),
         }

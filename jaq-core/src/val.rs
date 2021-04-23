@@ -47,7 +47,7 @@ impl Val {
 
     pub fn len(&self) -> Result<Num, Error> {
         match self {
-            Self::Null => Ok(0.into()),
+            Self::Null => Ok((0 as usize).into()),
             Self::Bool(_) => Err(Error::Length(self.clone())),
             Self::Num(n) => Ok(*n),
             Self::Str(s) => Ok(s.chars().count().into()),

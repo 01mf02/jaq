@@ -43,6 +43,13 @@ impl From<usize> for Num {
     }
 }
 
+impl From<isize> for Num {
+    fn from(n: isize) -> Num {
+        // FIXME: this may fail!
+        Num::Int(n as i64)
+    }
+}
+
 impl TryFrom<&Num> for usize {
     type Error = ();
     fn try_from(n: &Num) -> Result<usize, Self::Error> {
