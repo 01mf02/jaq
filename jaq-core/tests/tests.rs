@@ -273,7 +273,11 @@ fn limit() {
 
 #[test]
 fn repeat() {
-    give(json!([0, 1]), "[limit(4; repeat(.[]))]", json!([0, 1, 0, 1]));
+    give(
+        json!([0, 1]),
+        "[limit(4; repeat(.[]))]",
+        json!([0, 1, 0, 1]),
+    );
 }
 
 #[test]
@@ -299,4 +303,13 @@ fn eq() {
     // here, we diverge from jq, which outputs true
     give(json!(1), ". == 1.0", json!(false));
     give(json!(1), ". == 2 / 2.0", json!(false));
+}
+
+#[test]
+fn def() {
+    give(
+        json!([1, 2]),
+        "def positive(f): all(f; . > 0); positive(.[])",
+        json!(true),
+    );
 }
