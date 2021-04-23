@@ -272,6 +272,11 @@ fn limit() {
 }
 
 #[test]
+fn repeat() {
+    give(json!([0, 1]), "[limit(4; repeat(.[]))]", json!([0, 1, 0, 1]));
+}
+
+#[test]
 fn ord() {
     give(json!(null), ". < false", json!(true));
     give(json!(false), ". < true", json!(true));
