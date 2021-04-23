@@ -195,12 +195,10 @@ impl TryFrom<Pair<'_, Rule>> for PreFilter {
                 assert!(ite.next().is_none());
                 Ok(Self::Ref(Ref::IfThenElse(cond?, truth?, falsity?)))
             }
-            Rule::function => {
+            Rule::call => {
                 let name = inner.next().unwrap().as_str();
-                let args = match inner.next() {
-                    None => Ok(Vec::new()),
-                    Some(args) => args.into_inner().map(Self::try_from).collect(),
-                };
+                let args = inner.next().unwrap();
+                let args: Result<_, _> = args.into_inner().map(Self::try_from).collect();
                 assert_eq!(inner.next(), None);
                 Ok(Self::Named(Call::new(name.to_owned(), args?)))
             }

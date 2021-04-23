@@ -6,7 +6,7 @@ def = { "def" ~ identifier ~ def_args ~ ":" ~ expr ~ ";" }
     def_args = { ("(" ~ identifier ~ (";" ~ identifier)* ~ ")")? }
 
 expr = { term ~ (op ~ term)* }
-term = _{ "(" ~ expr ~ ")" | atom | array | object | path | ite | function }
+term = _{ "(" ~ expr ~ ")" | atom | array | object | path | ite | call }
 
 atom = { number | string }
 
@@ -77,8 +77,8 @@ range = { "[" ~ (from_until | until | from | at)? ~ "]" }
 
 ite = { "if" ~ expr ~ "then" ~ expr ~ "else" ~ expr ~ "end" }
 
-function = { identifier ~ call_args? }
-    call_args = { "(" ~ expr ~ (";" ~ expr)* ~ ")" }
+call = { identifier ~ call_args }
+    call_args = { ("(" ~ expr ~ (";" ~ expr)* ~ ")")? }
 
 
 identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
