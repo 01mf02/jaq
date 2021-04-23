@@ -18,7 +18,7 @@ pub enum MathOp {
 }
 
 /// An operation that takes two values and returns a boolean value.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum OrdOp {
     /// Less-than (<).
     Lt,
@@ -34,7 +34,7 @@ pub enum OrdOp {
     Ne,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum LogicOp {
     /// Logical conjunction (&&).
     And,
