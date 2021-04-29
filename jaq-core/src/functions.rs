@@ -7,7 +7,6 @@ pub const FUNCTIONS: &[(&str, usize, Builtin<usize>)] = &[
     ("null", 0, Builtin::New(New::Null)),
     ("true", 0, Builtin::New(New::True)),
     ("false", 0, Builtin::New(New::False)),
-    ("add", 0, Builtin::New(New::Add)),
     ("length", 0, Builtin::New(New::Length)),
     ("type", 0, Builtin::New(New::Type)),
     // referencing filters
@@ -30,7 +29,6 @@ pub enum New {
     Null,
     True,
     False,
-    Add,
     Length,
     Type,
 }
@@ -61,10 +59,6 @@ impl New {
             Null => Ok(Val::Null),
             True => Ok(Val::Bool(true)),
             False => Ok(Val::Bool(false)),
-            Add => v
-                .iter()?
-                .map(|x| (*x).clone())
-                .try_fold(Val::Null, |acc, x| acc + x),
             Length => Ok(Val::Num(v.len()?)),
             Type => Ok(Val::Str(v.typ().to_string())),
         }

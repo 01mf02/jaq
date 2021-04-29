@@ -23,6 +23,7 @@ def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 
 # List functions
+def add: fold(.[]; null; .acc + .x);
 def min: fold(.[]; .[0]; if .x < .acc then .x else .acc end);
 def max: fold(.[]; .[0]; if .x > .acc then .x else .acc end);
 def reverse: [.[length - 1 - range(length)]];

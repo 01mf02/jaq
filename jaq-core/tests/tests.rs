@@ -58,6 +58,7 @@ fn logic() {
 #[test]
 fn add() {
     give(json!({"a": 1, "b": 2}), "add", json!(3));
+    give(json!([[0, 1], [2, 3]]), "add", json!([0, 1, 2, 3]));
 }
 
 #[test]
