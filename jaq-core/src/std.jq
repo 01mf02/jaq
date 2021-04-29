@@ -1,4 +1,5 @@
 def empty: [] | .[];
+def not: if . then false else true end;
 
 # Selection
 def select(f): if f then . else empty end;
@@ -14,6 +15,7 @@ def scalars:   select(type | . != "array" and . != "object");
 
 # Generators
 def range(x): range(0; x);
+def repeat(g): [g] | recurse(.) | .[];
 def recurse(f; cond): recurse(f | select(cond));
 
 # Iterators

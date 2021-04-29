@@ -7,12 +7,10 @@ pub const FUNCTIONS: &[(&str, usize, Builtin<usize>)] = &[
     ("null", 0, Builtin::New(New::Null)),
     ("true", 0, Builtin::New(New::True)),
     ("false", 0, Builtin::New(New::False)),
-    ("not", 0, Builtin::New(New::Not)),
     ("add", 0, Builtin::New(New::Add)),
     ("length", 0, Builtin::New(New::Length)),
     ("type", 0, Builtin::New(New::Type)),
     // referencing filters
-    ("repeat", 1, Builtin::Ref(Ref::Repeat(0))),
     ("first", 1, Builtin::Ref(Ref::First(0))),
     ("last", 1, Builtin::Ref(Ref::Last(0))),
     ("limit", 2, Builtin::Ref(Ref::Limit(0, 1))),
@@ -32,7 +30,6 @@ pub enum New {
     Null,
     True,
     False,
-    Not,
     Add,
     Length,
     Type,
@@ -40,7 +37,6 @@ pub enum New {
 
 #[derive(Clone, Debug)]
 pub enum Ref<F> {
-    Repeat(F),
     First(F),
     Last(F),
     Limit(F, F),
@@ -65,7 +61,6 @@ impl New {
             Null => Ok(Val::Null),
             True => Ok(Val::Bool(true)),
             False => Ok(Val::Bool(false)),
-            Not => Ok(Val::Bool(!v.as_bool())),
             Add => v
                 .iter()?
                 .map(|x| (*x).clone())
@@ -80,7 +75,6 @@ impl Ref<Box<ClosedFilter>> {
     fn run(&self, v: Rc<Val>) -> RValRs {
         use core::iter::{empty, once};
         match self {
-            Self::Repeat(f) => Box::new(f.run(v).collect::<Vec<_>>().into_iter().cycle()),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(Some(y)) => Box::new(once(Ok(y))),
@@ -154,7 +148,6 @@ impl<F> Ref<F> {
     fn map<G>(self, m: &impl Fn(F) -> G) -> Ref<G> {
         use Ref::*;
         match self {
-            Repeat(f) => Repeat(m(f)),
             First(f) => First(m(f)),
             Last(f) => Last(m(f)),
             Limit(n, f) => Limit(m(n), m(f)),
@@ -173,7 +166,6 @@ impl<N> Ref<Box<Filter<N>>> {
         let m = |f: Filter<N>| f.try_map(m).map(Box::new);
         use Ref::*;
         match self {
-            Repeat(f) => Ok(Repeat(m(*f)?)),
             First(f) => Ok(First(m(*f)?)),
             Last(f) => Ok(Last(m(*f)?)),
             Limit(n, f) => Ok(Limit(m(*n)?, m(*f)?)),
