@@ -12,7 +12,6 @@ pub const FUNCTIONS: &[(&str, usize, Builtin<usize>)] = &[
     ("length", 0, Builtin::New(New::Length)),
     ("type", 0, Builtin::New(New::Type)),
     // referencing filters
-    ("empty", 0, Builtin::Ref(Ref::Empty)),
     ("repeat", 1, Builtin::Ref(Ref::Repeat(0))),
     ("first", 1, Builtin::Ref(Ref::First(0))),
     ("last", 1, Builtin::Ref(Ref::Last(0))),
@@ -41,7 +40,6 @@ pub enum New {
 
 #[derive(Clone, Debug)]
 pub enum Ref<F> {
-    Empty,
     Repeat(F),
     First(F),
     Last(F),
@@ -82,7 +80,6 @@ impl Ref<Box<ClosedFilter>> {
     fn run(&self, v: Rc<Val>) -> RValRs {
         use core::iter::{empty, once};
         match self {
-            Self::Empty => Box::new(empty()),
             Self::Repeat(f) => Box::new(f.run(v).collect::<Vec<_>>().into_iter().cycle()),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
@@ -157,7 +154,6 @@ impl<F> Ref<F> {
     fn map<G>(self, m: &impl Fn(F) -> G) -> Ref<G> {
         use Ref::*;
         match self {
-            Empty => Empty,
             Repeat(f) => Repeat(m(f)),
             First(f) => First(m(f)),
             Last(f) => Last(m(f)),
@@ -177,7 +173,6 @@ impl<N> Ref<Box<Filter<N>>> {
         let m = |f: Filter<N>| f.try_map(m).map(Box::new);
         use Ref::*;
         match self {
-            Empty => Ok(Empty),
             Repeat(f) => Ok(Repeat(m(*f)?)),
             First(f) => Ok(First(m(*f)?)),
             Last(f) => Ok(Last(m(*f)?)),

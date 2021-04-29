@@ -1,3 +1,5 @@
+def empty: [] | .[];
+
 # Selection
 def select(f): if f then . else empty end;
 def values:    select(. != null);
