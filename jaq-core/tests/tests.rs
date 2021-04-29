@@ -283,6 +283,28 @@ fn range_reverse() {
 }
 
 #[test]
+fn min_max() {
+    give(json!([]), "min", json!(null));
+    give(json!([]), "max", json!(null));
+    give(json!([1, 4, 2]), "min", json!(1));
+    give(json!([1, 4, 2]), "max", json!(4));
+}
+
+#[test]
+fn transpose() {
+    give(
+        json!([[1, 3], [2]]),
+        "transpose",
+        json!([[1, 2], [3, null]]),
+    );
+    give(
+        json!([[1, 3], [2, 4]]),
+        "transpose",
+        json!([[1, 2], [3, 4]]),
+    );
+}
+
+#[test]
 fn repeat() {
     give(
         json!([0, 1]),

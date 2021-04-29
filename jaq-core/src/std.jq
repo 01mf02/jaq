@@ -19,7 +19,10 @@ def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 
 # List functions
+def min: fold(.[]; .[0]; if .x < .acc then .x else .acc end);
+def max: fold(.[]; .[0]; if .x > .acc then .x else .acc end);
 def reverse: [.[length - 1 - range(length)]];
+def transpose: [{ i: range([.[] | length] | max), a: . } | [.a[][.i]]];
 def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
