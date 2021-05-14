@@ -84,18 +84,22 @@ impl PathElem<Vec<Rc<Val>>> {
                 Val::Arr(a) => {
                     let from = get_indices(from, a.len(), 0);
                     let until = get_indices(until, a.len(), a.len());
-                    let until: Vec<_> = until.collect();
-                    use itertools::Itertools;
-                    let from_until = from.into_iter().cartesian_product(until);
-                    Box::new(from_until.map(move |(from, until)| {
-                        let from = from?;
-                        let until = until?;
-                        let take = if until > from { until - from } else { 0 };
-                        let iter = a.iter().cloned().skip(from).take(take);
+                    Box::new(skip_takes(from, until).map(move |skip_take| {
+                        let (skip, take) = skip_take?;
+                        let iter = a.iter().cloned().skip(skip).take(take);
                         Ok(Rc::new(Val::Arr(iter.collect())))
                     }))
                 }
-                Val::Str(_) => todo!(),
+                Val::Str(s) => {
+                    let len = s.chars().count();
+                    let from = get_indices(from, len, 0);
+                    let until = get_indices(until, len, len);
+                    Box::new(skip_takes(from, until).map(move |skip_take| {
+                        let (skip, take) = skip_take?;
+                        let iter = s.chars().skip(skip).take(take);
+                        Ok(Rc::new(Val::Str(iter.collect())))
+                    }))
+                }
                 _ => Box::new(once(Err(Error::Index(current)))),
             },
         }
@@ -133,7 +137,10 @@ impl PathElem<Vec<Rc<Val>>> {
                     })?;
                     Ok(Val::Obj(o))
                 }
-                _ => todo!(),
+                Val::Arr(_a) => {
+                    todo!()
+                }
+                _ => Err(Error::Index(v)),
             },
             Self::Range(None, None) => match v {
                 Val::Arr(a) => Ok(Val::Arr(
@@ -178,12 +185,25 @@ impl<F> From<PathElem<F>> for Path<F> {
 }
 
 type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
+type SkipTakeR = Result<(usize, usize), Error>;
 
 fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<'_> {
     match f {
         Some(f) => Box::new(f.iter().map(move |i| Ok(get_index(i.as_isize()?, len)))),
         None => Box::new(core::iter::once(Ok(default))),
     }
+}
+
+fn skip_takes<'a>(from: Indices<'a>, until: Indices<'a>) -> impl Iterator<Item = SkipTakeR> + 'a {
+    let until: Vec<_> = until.collect();
+    use itertools::Itertools;
+    let from_until = from.into_iter().cartesian_product(until);
+    from_until.map(move |(from, until)| {
+        let from = from?;
+        let until = until?;
+        let take = if until > from { until - from } else { 0 };
+        Ok((from, take))
+    })
 }
 
 fn get_index(i: isize, len: usize) -> usize {

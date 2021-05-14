@@ -172,6 +172,9 @@ fn index() {
     give(json!([0, 1, 2]), ".[ 0]", json!(0));
     give(json!([0, 1, 2]), ".[ 2]", json!(2));
     give(json!([0, 1, 2]), ".[ 3]", json!(null));
+
+    give(json!("Möwe"), ".[1:-1]", json!("öw"));
+    give(json!("नमस्ते"), ".[1:5]", json!("मस्त"));
 }
 
 #[test]
