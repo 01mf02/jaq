@@ -66,9 +66,9 @@ impl<K: Display, V: Display> Display for Map<K, V> {
         "{".fmt(f)?;
         let mut iter = self.0.iter();
         if let Some((k, v)) = iter.next() {
-            write!(f, "{}: {}", k, v)?;
+            write!(f, "{}:{}", k, v)?;
         }
-        iter.try_for_each(|(k, v)| write!(f, ", {}: {}", k, v))?;
+        iter.try_for_each(|(k, v)| write!(f, ",{}:{}", k, v))?;
         "}".fmt(f)
     }
 }
