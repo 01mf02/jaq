@@ -134,8 +134,16 @@ impl fmt::Display for Val {
             Self::Bool(b) => write!(f, "boolean ({})", b),
             Self::Num(n) => write!(f, "number ({})", n),
             Self::Str(s) => write!(f, "string (\"{}\")", s),
+            Self::Arr(a) => {
+                write!(f, "array ([")?;
+                let mut iter = a.iter();
+                if let Some(first) = iter.next() {
+                    first.fmt(f)?
+                };
+                iter.try_for_each(|x| write!(f, ",{}", x))?;
+                write!(f, "])")
+            }
             Self::Obj(o) => write!(f, "object ({})", o),
-            _ => todo!(),
         }
     }
 }
