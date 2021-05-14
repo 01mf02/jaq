@@ -18,6 +18,14 @@ struct Cli {
     /// Read (slurp) all input values into one array
     slurp: bool,
 
+    #[clap(short, long)]
+    /// Write strings without escaping them with quotes
+    raw_output: bool,
+
+    #[clap(short, long)]
+    /// Do not print a newline after each value
+    join_output: bool,
+
     /// Filter to execute
     filter: String,
 }
@@ -71,9 +79,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(5);
             });
             last = Some(output.as_bool());
-            let output = (*output).clone().into();
-            colored_json::write_colored_json(&output, &mut stdout)?;
-            println!();
+            match &*output {
+                Val::Str(s) if cli.raw_output => print!("{}", s),
+                _ => colored_json::write_colored_json(&(*output).clone().into(), &mut stdout)?,
+            };
+            if !cli.join_output {
+                println!()
+            }
         }
     }
     stdout.flush()?;
