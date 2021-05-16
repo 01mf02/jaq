@@ -67,12 +67,11 @@ impl New {
 
 impl Ref<Box<ClosedFilter>> {
     fn run(&self, v: Rc<Val>) -> RValRs {
-        use core::iter::{empty, once};
+        use core::iter::once;
         match self {
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
-                Ok(Some(y)) => Box::new(once(Ok(y))),
-                Ok(None) => Box::new(empty()),
+                Ok(y) => Box::new(y.map(Ok).into_iter()),
                 Err(e) => Box::new(once(Err(e))),
             },
             Self::Limit(n, f) => {
