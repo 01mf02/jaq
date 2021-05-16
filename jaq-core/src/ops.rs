@@ -3,7 +3,7 @@
 use crate::{Error, RValRs, Val, ValR, ValRs};
 use alloc::boxed::Box;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MathOp {
     /// Addition (+).
     Add,
