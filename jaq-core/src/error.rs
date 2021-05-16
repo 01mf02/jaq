@@ -10,8 +10,10 @@ pub enum Error {
     MathOp(Val, Val, MathOp),
     Index(Val),
     IndexWith(Val, Val),
+    IndexOutOfBounds(isize),
     Isize(Val),
     Usize(Val),
+    SliceAssign(Val),
 }
 
 impl fmt::Display for Error {
@@ -24,8 +26,10 @@ impl fmt::Display for Error {
             MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, op.passive()),
             Index(v) => write!(f, "cannot index {}", v),
             IndexWith(v, i) => write!(f, "cannot index {} with {}", v, i),
+            IndexOutOfBounds(i) => write!(f, "index {} is out of bounds", i),
             Isize(v) => write!(f, "cannot use {} as (signed) integer", v),
             Usize(v) => write!(f, "cannot use {} as unsigned integer", v),
+            SliceAssign(v) => write!(f, "cannot assign non-array ({}) to an array slice", v),
         }
     }
 }

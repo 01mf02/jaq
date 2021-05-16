@@ -11,6 +11,10 @@ fn gives<const N: usize>(x: Value, f: &str, ys: [Value; N]) {
     yields(x, f, ys, None)
 }
 
+fn fail(x: Value, f: &str, err: Error) {
+    fails(x, f, [], err)
+}
+
 fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
     yields(x, f, ys, Some(err))
 }
@@ -142,6 +146,12 @@ fn index_update() {
     give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
     give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
     give(json!({"a": 1, "b": 2}), ".a += 1", json!({"a": 2, "b": 2}));
+
+    give(json!([0, 1, 2]), ".[1] |= .+2", json!([0, 3, 2]));
+    give(json!([0, 1, 2]), ".[-1,-1] |= empty", json!([0]));
+    give(json!([0, 1, 2]), ".[ 0, 0] |= empty", json!([2]));
+    fail(json!([0, 1, 2]), ".[ 3] |=  3", Error::IndexOutOfBounds(3));
+    fail(json!([0, 1, 2]), ".[-4] |= -1", Error::IndexOutOfBounds(-4));
 }
 
 #[test]
@@ -158,6 +168,23 @@ fn iter_update() {
 
     give(json!([1]), ".[] |= .+1", json!([2]));
     give(json!([[1]]), ".[][] |= .+1", json!([[2]]));
+
+    give(
+        json!({"a": 1, "b": 2}),
+        ".[] |= (select(.>1) | .+1)",
+        json!({"b": 3}),
+    );
+}
+
+#[test]
+fn range_update() {
+    give(json!([0, 1, 2]), ".[:2] |= map(.+5)", json!([5, 6, 2]));
+    give(json!([0, 1, 2]), ".[-2:-1] |= [5]+.", json!([0, 5, 1, 2]));
+    give(
+        json!([0, 1, 2]),
+        ".[-2:-1,-1] |= [5,6]+.",
+        json!([0, 5, 6, 5, 6, 1, 2]),
+    );
 }
 
 // Test what happens when update filter returns multiple values.

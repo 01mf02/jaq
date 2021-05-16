@@ -62,11 +62,10 @@ impl PathElem<Vec<Rc<Val>>> {
         match self {
             Self::Index(indices) => match current {
                 Val::Arr(a) => Box::new(indices.iter().map(move |i| {
-                    let i = wrap(i.as_isize()?, a.len());
-                    Ok(if i < 0 || i as usize >= a.len() {
-                        Rc::new(Val::Null)
+                    Ok(if let Some(i) = abs_index(i.as_isize()?, a.len()) {
+                        Rc::clone(&a[i])
                     } else {
-                        Rc::clone(&a[i as usize])
+                        Rc::new(Val::Null)
                     })
                 })),
                 Val::Obj(o) => Box::new(indices.iter().map(move |i| match &**i {
@@ -82,20 +81,21 @@ impl PathElem<Vec<Rc<Val>>> {
             },
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
-                    let from = get_indices(from, a.len(), 0);
-                    let until = get_indices(until, a.len(), a.len());
-                    Box::new(skip_takes(from, until).map(move |skip_take| {
-                        let (skip, take) = skip_take?;
+                    let len = a.len();
+                    let from = rel_bounds(from).map(move |i| Ok(abs_bound(i?, len, 0)));
+                    let until = rel_bounds(until).map(move |i| Ok(abs_bound(i?, len, len)));
+                    Box::new(prod(from, until).map(move |(from, until)| {
+                        let (skip, take) = skip_take(from?, until?);
                         let iter = a.iter().cloned().skip(skip).take(take);
                         Ok(Rc::new(Val::Arr(iter.collect())))
                     }))
                 }
                 Val::Str(s) => {
                     let len = s.chars().count();
-                    let from = get_indices(from, len, 0);
-                    let until = get_indices(until, len, len);
-                    Box::new(skip_takes(from, until).map(move |skip_take| {
-                        let (skip, take) = skip_take?;
+                    let from = rel_bounds(from).map(move |i| Ok(abs_bound(i?, len, 0)));
+                    let until = rel_bounds(until).map(move |i| Ok(abs_bound(i?, len, len)));
+                    Box::new(prod(from, until).map(move |(from, until)| {
+                        let (skip, take) = skip_take(from?, until?);
                         let iter = s.chars().skip(skip).take(take);
                         Ok(Rc::new(Val::Str(iter.collect())))
                     }))
@@ -123,6 +123,7 @@ impl PathElem<Vec<Rc<Val>>> {
         F: Fn(Rc<Val>) -> I,
         I: Iterator<Item = RValR>,
     {
+        use core::iter::once;
         match self {
             Self::Index(indices) => match v {
                 Val::Obj(mut o) => {
@@ -137,8 +138,19 @@ impl PathElem<Vec<Rc<Val>>> {
                     })?;
                     Ok(Val::Obj(o))
                 }
-                Val::Arr(_a) => {
-                    todo!()
+                Val::Arr(mut a) => {
+                    indices.iter().try_for_each(|i| {
+                        let i = i.as_isize()?;
+                        let i = abs_index(i, a.len()).ok_or_else(|| Error::IndexOutOfBounds(i))?;
+                        match f(Rc::clone(&a[i])).next().transpose()? {
+                            Some(y) => a[i] = y,
+                            None => {
+                                a.remove(i);
+                            }
+                        };
+                        Ok(())
+                    })?;
+                    Ok(Val::Arr(a))
                 }
                 _ => Err(Error::Index(v)),
             },
@@ -146,10 +158,38 @@ impl PathElem<Vec<Rc<Val>>> {
                 Val::Arr(a) => Ok(Val::Arr(
                     a.into_iter().flat_map(f).collect::<Result<_, _>>()?,
                 )),
-                Val::Obj(_o) => todo!(),
+                Val::Obj(o) => Ok(Val::Obj(
+                    o.into_iter()
+                        .flat_map(|(k, v)| match f(v).next().transpose() {
+                            Ok(y) => Box::new(y.map(|y| Ok((k, y))).into_iter()),
+                            Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                        })
+                        .collect::<Result<_, _>>()?,
+                )),
                 v => Err(Error::Iter(v)),
             },
-            _ => todo!(),
+            Self::Range(from, until) => match v {
+                Val::Arr(mut a) => {
+                    for (from, until) in prod(rel_bounds(from), rel_bounds(until)) {
+                        let len = a.len();
+                        let from = abs_bound(from?, len, 0);
+                        let until = abs_bound(until?, len, len);
+                        let (skip, take) = skip_take(from, until);
+                        let iter = a.iter().cloned().skip(skip).take(take);
+                        let arr = Rc::new(Val::Arr(iter.collect()));
+                        let y = match f(arr).next().transpose()? {
+                            None => Vec::new(),
+                            Some(y) => match &*y {
+                                Val::Arr(y) => y.clone(),
+                                _ => Err(Error::SliceAssign((*y).clone()))?,
+                            },
+                        };
+                        a.splice(skip..skip + take, y);
+                    }
+                    Ok(Val::Arr(a))
+                }
+                _ => Err(Error::Iter(v)),
+            },
         }
     }
 }
@@ -184,31 +224,37 @@ impl<F> From<PathElem<F>> for Path<F> {
     }
 }
 
-type Indices<'a> = Box<dyn Iterator<Item = Result<usize, Error>> + 'a>;
-type SkipTakeR = Result<(usize, usize), Error>;
-
-fn get_indices(f: &Option<Vec<Rc<Val>>>, len: usize, default: usize) -> Indices<'_> {
+type RelBounds<'a> = Box<dyn Iterator<Item = Result<Option<isize>, Error>> + 'a>;
+fn rel_bounds(f: &Option<Vec<Rc<Val>>>) -> RelBounds<'_> {
     match f {
-        Some(f) => Box::new(f.iter().map(move |i| Ok(get_index(i.as_isize()?, len)))),
-        None => Box::new(core::iter::once(Ok(default))),
+        Some(f) => Box::new(f.iter().map(move |i| Ok(Some(i.as_isize()?)))),
+        None => Box::new(core::iter::once(Ok(None))),
     }
 }
 
-fn skip_takes<'a>(from: Indices<'a>, until: Indices<'a>) -> impl Iterator<Item = SkipTakeR> + 'a {
-    let until: Vec<_> = until.collect();
+fn prod<'a, T: 'a + Clone>(
+    l: impl Iterator<Item = T> + 'a,
+    r: impl Iterator<Item = T> + 'a,
+) -> impl Iterator<Item = (T, T)> + 'a {
+    let r: Vec<_> = r.collect();
     use itertools::Itertools;
-    let from_until = from.into_iter().cartesian_product(until);
-    from_until.map(move |(from, until)| {
-        let from = from?;
-        let until = until?;
-        let take = if until > from { until - from } else { 0 };
-        Ok((from, take))
-    })
+    l.into_iter().cartesian_product(r)
 }
 
-fn get_index(i: isize, len: usize) -> usize {
-    // make index 0 if it is smaller than 0
-    wrap(i, len).try_into().unwrap_or(0)
+fn skip_take(from: usize, until: usize) -> (usize, usize) {
+    (from, if until > from { until - from } else { 0 })
+}
+
+/// If a range bound is given, absolutise and clip it between 0 and `len`,
+/// else return `default`.
+fn abs_bound(i: Option<isize>, len: usize, default: usize) -> usize {
+    let abs = |i| core::cmp::min(wrap(i, len).try_into().unwrap_or(0), len);
+    i.map(abs).unwrap_or(default)
+}
+
+/// Absolutise an index and return result if it is inside [0, len).
+fn abs_index(i: isize, len: usize) -> Option<usize> {
+    wrap(i, len).try_into().ok().filter(|i| *i < len)
 }
 
 fn wrap(i: isize, len: usize) -> isize {
