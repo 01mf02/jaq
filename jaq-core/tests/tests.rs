@@ -79,7 +79,14 @@ fn precedence() {
 }
 
 #[test]
-fn path() {
+fn index_access() {
+    give(json!([0, 1, 2]), ".[-4]", json!(null));
+    give(json!([0, 1, 2]), ".[-3]", json!(0));
+    give(json!([0, 1, 2]), ".[-1]", json!(2));
+    give(json!([0, 1, 2]), ".[ 0]", json!(0));
+    give(json!([0, 1, 2]), ".[ 2]", json!(2));
+    give(json!([0, 1, 2]), ".[ 3]", json!(null));
+
     give(json!({"a": 1}), ".a", json!(1));
     give(json!({"a": 1}), ".a?", json!(1));
     give(json!({"a": 1}), ".a ?", json!(1));
@@ -99,7 +106,27 @@ fn path() {
 }
 
 #[test]
-fn assign() {
+fn iter_access() {
+    gives(json!([0, 1, 2]), ".[]", [json!(0), json!(1), json!(2)]);
+    gives(json!({"a": 1, "b": 2}), ".[]", [json!(1), json!(2)]);
+    gives(json!({"b": 2, "a": 1}), ".[]", [json!(2), json!(1)]);
+}
+
+#[test]
+fn range_access() {
+    give(json!("Möwe"), ".[1:-1]", json!("öw"));
+    give(json!("नमस्ते"), ".[1:5]", json!("मस्त"));
+
+    give(json!([0, 1, 2]), ".[-4:4]", json!([0, 1, 2]));
+    give(json!([0, 1, 2]), ".[0:3]", json!([0, 1, 2]));
+    give(json!([0, 1, 2]), ".[1:]", json!([1, 2]));
+    give(json!([0, 1, 2]), ".[:-1]", json!([0, 1]));
+    give(json!([0, 1, 2]), ".[1:0]", json!([]));
+    give(json!([0, 1, 2]), ".[4:5]", json!([]));
+}
+
+#[test]
+fn iter_assign() {
     give(json!([1, 2]), ".[] = .", json!([[1, 2], [1, 2]]));
     give(
         json!({"a": [1,2], "b": 3}),
@@ -109,7 +136,16 @@ fn assign() {
 }
 
 #[test]
-fn update() {
+fn index_update() {
+    give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
+    give(json!({"a": 1}), ".b |= 1", json!({"a": 1, "b": 1}));
+    give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
+    give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
+    give(json!({"a": 1, "b": 2}), ".a += 1", json!({"a": 2, "b": 2}));
+}
+
+#[test]
+fn iter_update() {
     // precedence tests
     give(json!([]), ".[] |= . or true", json!([]));
     gives(json!([]), ".[] |= .,.", [json!([]), json!([])]);
@@ -119,12 +155,6 @@ fn update() {
     give(json!([[1]]), ".[] |= .[] |= .+1", json!([[2]]));
     // ditto
     give(json!([[1]]), ".[] |= .[] += 1", json!([[2]]));
-
-    give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
-    give(json!({"a": 1}), ".b |= 1", json!({"a": 1, "b": 1}));
-    give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
-    give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
-    give(json!({"a": 1, "b": 2}), ".a += 1", json!({"a": 2, "b": 2}));
 
     give(json!([1]), ".[] |= .+1", json!([2]));
     give(json!([[1]]), ".[][] |= .+1", json!([[2]]));
@@ -172,36 +202,6 @@ fn object() {
 }
 
 #[test]
-fn index() {
-    give(json!([0, 1, 2]), ".[-4]", json!(null));
-    give(json!([0, 1, 2]), ".[-3]", json!(0));
-    give(json!([0, 1, 2]), ".[-1]", json!(2));
-    give(json!([0, 1, 2]), ".[ 0]", json!(0));
-    give(json!([0, 1, 2]), ".[ 2]", json!(2));
-    give(json!([0, 1, 2]), ".[ 3]", json!(null));
-
-    give(json!("Möwe"), ".[1:-1]", json!("öw"));
-    give(json!("नमस्ते"), ".[1:5]", json!("मस्त"));
-}
-
-#[test]
-fn iter() {
-    give(json!([0, 1, 2]), "[.[]]", json!([0, 1, 2]));
-    give(json!({"a": 1, "b": 2}), "[.[]]", json!([1, 2]));
-    give(json!({"b": 2, "a": 1}), "[.[]]", json!([2, 1]));
-}
-
-#[test]
-fn range() {
-    give(json!([0, 1, 2]), ".[-4:4]", json!([0, 1, 2]));
-    give(json!([0, 1, 2]), ".[0:3]", json!([0, 1, 2]));
-    give(json!([0, 1, 2]), ".[1:]", json!([1, 2]));
-    give(json!([0, 1, 2]), ".[:-1]", json!([0, 1]));
-    give(json!([0, 1, 2]), ".[1:0]", json!([]));
-    give(json!([0, 1, 2]), ".[4:5]", json!([]));
-}
-
-#[test]
 fn if_then_else() {
     gives(
         json!([-1, 42, -42]),
@@ -213,6 +213,7 @@ fn if_then_else() {
 #[test]
 fn length() {
     give(json!("ƒoo"), "length", json!(3));
+    give(json!("नमस्ते"), "length", json!(6));
     give(json!({"a": 5, "b": 3}), "length", json!(2));
 }
 
@@ -248,11 +249,8 @@ fn recurse() {
 
 #[test]
 fn fib() {
-    give(
-        json!(10),
-        "nth(.; [0,1] | recurse([.[1], add]) | .[0])",
-        json!(55),
-    );
+    let fib = "[0,1] | recurse([.[1], add]) | .[0]";
+    give(json!(10), &format!("nth(.; {})", fib), json!(55));
 }
 
 #[test]
