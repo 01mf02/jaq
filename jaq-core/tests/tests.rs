@@ -1,25 +1,32 @@
 use core::convert::TryFrom;
-use jaq_core::{ClosedFilter, Main, Val};
-use serde_json::json;
+use jaq_core::{ClosedFilter, Error, Main, Val};
+use serde_json::{json, Value};
 use std::rc::Rc;
 
-fn to(v: serde_json::Value) -> Rc<Val> {
-    Rc::new(Val::from(v))
+fn give(x: Value, f: &str, y: Value) {
+    gives(x, f, [y])
 }
 
-fn give(x: serde_json::Value, f: &str, y: serde_json::Value) {
-    gives(x, f, vec![y])
+fn gives<const N: usize>(x: Value, f: &str, ys: [Value; N]) {
+    yields(x, f, ys, None)
 }
 
-fn gives(x: serde_json::Value, f: &str, ys: Vec<serde_json::Value>) {
-    let x = to(x);
+fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
+    yields(x, f, ys, Some(err))
+}
+
+fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
+    let to = |v| Rc::new(Val::from(v));
     let f = Main::parse(f).unwrap();
     let f = f.open(jaq_core::std()).unwrap();
     let f = ClosedFilter::try_from(f).unwrap();
-    let ys: Vec<_> = ys.into_iter().map(to).collect();
 
-    let out: Vec<_> = f.run(x).map(|y| y.unwrap()).collect();
-    assert_eq!(out, ys);
+    // TODO: remove cloned() starting from Rust 1.53
+    let expected = ys.iter().cloned().map(|y| Ok(to(y)));
+    let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
+
+    let out: Vec<_> = f.run(to(x)).collect();
+    assert_eq!(out, expected);
 }
 
 #[test]
@@ -87,7 +94,7 @@ fn path() {
     gives(
         json!({"a": 1, "b": 2}),
         r#".["b", "a"]"#,
-        vec![json!(2), json!(1)],
+        [json!(2), json!(1)],
     );
 }
 
@@ -105,7 +112,7 @@ fn assign() {
 fn update() {
     // precedence tests
     give(json!([]), ".[] |= . or true", json!([]));
-    gives(json!([]), ".[] |= .,.", vec![json!([]), json!([])]);
+    gives(json!([]), ".[] |= .,.", [json!([]), json!([])]);
     give(json!([]), ".[] |= (.,.)", json!([]));
     give(json!([0]), ".[] |= .+1 | .+[2]", json!([1, 2]));
     // this yields a syntax error in jq, but it is consistent to permit this
@@ -134,9 +141,9 @@ fn update_mult() {
     give(json!({"a": 1}), ".a |= (.,.+1)", json!({"a": 1}));
 
     // jq returns null here
-    gives(json!(1), ". |= empty", vec![]);
+    gives(json!(1), ". |= empty", []);
     // jq returns just 1 here
-    gives(json!(1), ". |= (.,.)", vec![json!(1), json!(1)]);
+    gives(json!(1), ". |= (.,.)", [json!(1), json!(1)]);
     // jq returns just [1] here
     give(json!([1]), ".[] |= (., .+1)", json!([1, 2]));
     // jq returns just [1,2] here
@@ -150,7 +157,7 @@ fn object() {
     gives(
         json!(null),
         r#"{("a", "b"): 1}"#,
-        vec![json!({"a": 1}), json!({"b": 1})],
+        [json!({"a": 1}), json!({"b": 1})],
     );
     give(
         json!("c"),
@@ -199,7 +206,7 @@ fn if_then_else() {
     gives(
         json!([-1, 42, -42]),
         r#".[] | if . < 0 then "n" else "p" end"#,
-        vec![json!("n"), json!("p"), json!("n")],
+        [json!("n"), json!("p"), json!("n")],
     )
 }
 
@@ -235,7 +242,7 @@ fn recurse() {
     gives(
         json!(1),
         "recurse(if . < 3 then .+1 else empty end)",
-        vec![json!(1), json!(2), json!(3)],
+        [json!(1), json!(2), json!(3)],
     );
 }
 
@@ -261,8 +268,8 @@ fn fold() {
 
 #[test]
 fn first_last() {
-    gives(json!([]), "first(.[])", vec![]);
-    gives(json!([]), "last(.[])", vec![]);
+    gives(json!([]), "first(.[])", []);
+    gives(json!([]), "last(.[])", []);
     give(json!([1, 2, 3]), "first(.[])", json!(1));
     give(json!([1, 2, 3]), "last(.[])", json!(3));
 }
@@ -270,7 +277,7 @@ fn first_last() {
 #[test]
 fn limit() {
     // a big WTF: jq outputs "1" here! that looks like another bug ...
-    gives(json!(null), "limit(0; 1,2)", vec![]);
+    gives(json!(null), "limit(0; 1,2)", []);
     // jaq does not support negative indices in limit
     give(json!(null), "[limit(1, 0, 3; 0, 1)]", json!([0, 0, 1]));
 }
@@ -335,7 +342,7 @@ fn eq() {
     give(json!(1), ". == -1 * -1", json!(true));
     give(json!(1), ". == 2 / 2", json!(true));
 
-    gives(json!([0, 1]), ".[] == 0", vec![json!(true), json!(false)]);
+    gives(json!([0, 1]), ".[] == 0", [json!(true), json!(false)]);
 
     // here, we diverge from jq, which outputs true
     give(json!(1), ". == 1.0", json!(false));
