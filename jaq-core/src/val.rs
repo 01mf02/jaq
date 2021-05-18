@@ -47,12 +47,23 @@ impl Val {
 
     pub fn len(&self) -> Result<Num, Error> {
         match self {
-            Self::Null => Ok((0 as usize).into()),
+            Self::Null => Ok(0_usize.into()),
             Self::Bool(_) => Err(Error::Length(self.clone())),
             Self::Num(n) => Ok(*n),
             Self::Str(s) => Ok(s.chars().count().into()),
             Self::Arr(a) => Ok(a.len().into()),
             Self::Obj(o) => Ok(o.keys().count().into()),
+        }
+    }
+
+    pub fn is_empty(&self) -> Result<bool, Error> {
+        match self {
+            Self::Null => Ok(true),
+            Self::Bool(_) => Err(Error::Length(self.clone())),
+            Self::Num(n) => Ok(n.is_zero()),
+            Self::Str(s) => Ok(s.is_empty()),
+            Self::Arr(a) => Ok(a.is_empty()),
+            Self::Obj(o) => Ok(o.is_empty()),
         }
     }
 

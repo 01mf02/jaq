@@ -12,6 +12,13 @@ pub enum Typ<I, F> {
 }
 
 impl Num {
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::Int(i) => *i == 0,
+            Self::Flt(f) => *f == 0.0,
+        }
+    }
+
     pub fn to_isize(self) -> Option<isize> {
         match self {
             Typ::Int(i) => i.try_into().ok(),
