@@ -26,12 +26,14 @@ impl<F> Path<F> {
 
 impl Path<ClosedFilter> {
     pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        let mut path = self.0.iter().map(|(p, _e)| p.run_indices(Rc::clone(&v)));
-        path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
+        let mut path = self.0.iter().map(|(p, e)| (p.run_indices(Rc::clone(&v)), e));
+        path.try_fold(Vec::from([Rc::clone(&v)]), |acc, (p, e)| {
             let p = p?;
-            acc.into_iter()
-                .flat_map(|x| p.collect((*x).clone()))
-                .collect()
+            let acc = acc.into_iter().flat_map(|x| p.collect((*x).clone()));
+            match e {
+                OnError::Empty => Ok(acc.filter_map(|x| x.ok()).collect()),
+                OnError::Fail => acc.collect(),
+            }
         })
     }
 
