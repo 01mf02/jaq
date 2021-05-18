@@ -19,18 +19,24 @@ This should allow users proficient in jq to easily use jaq.
 [jql]: https://github.com/yamafaktory/jql
 
 
-# How to install
+# Installation
 
 To use jaq, you need a Rust toolchain.
 See <https://rustup.rs/> for instructions.
 (Note that Rust compilers shipped with Linux distributions
-may be too outdated to compile jaq. I use Rust 1.48.)
+may be too outdated to compile jaq. I use Rust 1.51.)
 
-The following commands will install jaq (on my system to `~/.cargo/bin/jaq`):
+The following command installs the latest stable jaq:
 
-    git clone https://github.com/01mf02/jaq
-    cd jaq
-    cargo install --path .
+    cargo install jaq
+
+And the latest development version:
+
+    cargo install --branch main --git https://github.com/01mf02/jaq
+
+On my system, both commands place the executable at `~/.cargo/bin/jaq`.
+jaq should work on any system supported by Rust.
+If it does not, please file an issue.
 
 
 # Examples
@@ -85,7 +91,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Logical operators (`and`, `or`)
 - [x] Equality and comparison operators (`.a == .b`, `.a < .b`)
 - [x] Arithmetic operations on numbers (`+`, `-`, `*`, `/`, `%`)
-- [ ] Arithmetic operations on non-numbers (e.g. strings, objects)
+- [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
 
 ## Paths
 
@@ -94,7 +100,12 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Iterating over arrays/objects (`.[]`)
 - [ ] Optional indexing/iteration (`.a?`, `.[]?`)
 - [x] Array slices (`.[3:7]`, `.[0:-1]`)
-- [ ] String slices
+- [x] String slices
+
+## Assignment
+
+- [x] Plain assignment (`=`)
+- [x] Update assignment (`|=`)
 
 ## Filter combinators
 
@@ -102,31 +113,33 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Concatenation (`,`)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
 
-## Functions
+## Core filters
 
-- [x] Negation (`not`)
 - [x] Length (`length`)
-- [x] Filtering (`select(. >= 0)`
-- [x] Mapping (`map(.+1)`)
-- [x] Universal/existential (`all`, `any`)
-- [x] Summation (`add`)
-- [x] Recursion (`recurse(.)`)
+- [x] Type (`type`)
+- [x] Stream consumers (`first`, `last`, `range`, `fold`)
+- [x] Stream generators (`range`, `recurse`)
+- [ ] More object functions (`to_entries`, `from_entries`, `with_entries`)
 - [ ] More numeric functions (`sqrt`, `floor`, ...)
 - [ ] More string functions (`explode`, `split`, `join`, ...)
-- [ ] More array functions (`sort`, `min`, `unique`, `reverse`, ...)
-- [ ] More object functions (`to_entries`, `from_entries`, `with_entries`)
+- [ ] More array functions (`sort_by`, `group_by` ...)
 
-## Assignment
+## Standard filters
 
-- [ ] Plain assignment (`=`)
-- [ ] Update assignment (`|=`)
+These filters are defined via more basic filters.
+Their definitions are at [`std.jq`](jaq-core/src/std.jq).
+
+- [x] Negation (`not`)
+- [x] Filtering (`select(. >= 0)`
+- [x] Iterable functions (`add`, `map(.+1)`, `map_values(.+1)`)
+- [x] Array functions (`first`, `last`, `nth(10)`, `reverse`, `min`, `max`)
+- [x] Universal/existential (`all`, `any`)
 
 ## Advanced features
 
 jaq currently does *not* aim to support the advanced features of jq, such as:
 
 - Variables
-- User-defined functions
 - Modules
 - I/O
 - Dates
@@ -137,18 +150,103 @@ jaq currently does *not* aim to support the advanced features of jq, such as:
 - Streaming
 
 
+# Differences between jq and jaq
+
+## Numbers
+
+jq uses 64-bit floating-point numbers (floats) for any number.
+By contrast, jaq interprets
+numbers such as 0   or -42 as 64-bit integers and
+numbers such as 0.0 or 3e8 as 64-bit floats.
+Many operations in jaq, such as array indexing,
+check whether the passed numbers are indeed integer.
+The motivation behind this is to avoid
+rounding errors that may silently lead to wrong results.
+For example:
+
+    $ jq  -n '[0, 1, 2] | .[1.0000000000000001]'
+    1
+    $ jaq -n '[0, 1, 2] | .[1.0000000000000001]'
+    Error: cannot use number (1) as (signed) integer
+    $ jaq -n '[0, 1, 2] | .[1]'
+    1
+
+The rules of jaq are:
+
+* The sum, difference, product, and remainder of two integers is integer.
+* The quotient of two integers is integer if the remainder of the integers is zero.
+* Any other operation between two numbers yields a float.
+
+Examples:
+
+    $ jaq -n '1 + 2'
+    3
+    $ jaq -n '10 / 2'
+    5
+    $ jaq -n '11 / 2'
+    5.5
+    $ jaq -n '1.0 + 2'
+    3.0
+
+## Reduce
+
+jq has special syntax to fold over a sequence.
+For example, to add a sequence of numbers, you may use:
+
+    reduce .[] as $item (0; . + $item)
+
+jaq does not have the `reduce ... as` syntax.
+As substitute, it provides a `fold` filter, in which the above can be written as:
+
+    fold(.[]; 0; .acc + .x)
+
+Note that `fold` is likely less efficient than `reduce ... as`,
+because it constructs a new object `{acc, x}` at every step.
+
+## Assignments
+
+jaq does not allow so-called "complex assignments" of the form `p |= f`,
+where `p` is a filter that is not a path expression.
+
+For example:
+
+    $ jq -n '[0, 1, 2] | (.[] | select(.<2)) |= .+1'
+    [1, 2, 2]
+
+This is not accepted in jaq, because `.[] | select(.<2)` is not a path expression.
+A slightly more verbose version is allowed in jaq:
+
+    $ jaq -n '[0, 1, 2] | .[] |= if .<2 then .+1 else . end'
+    [1, 2, 2]
+
+## Definitions
+
+Like jq, jaq allows for the defininition of filters, such as:
+
+    def map(f): [.[] | f];
+
+However, unlike in jq, such filters in jaq cannot refer to themselves.
+Furthermore, jaq does not support nested filters.
+That is, a filter such as `recurse` cannot be defined in jaq:
+
+    def recurse(f): def r: ., (f | r); r;
+
+Note that while `recurse` cannot be defined manually in jaq,
+jaq provides `recurse` as core filter.
+
+
 # Contributing
 
 Contributions to jaq are welcome.
 In particular, implementing various [functions](#functions) of jq in jaq
 is a relatively low-hanging fruit.
 
-To add a new function (such as `sort`), it suffices to:
+To add a new builtin filter (such as `sort`), it suffices to:
 
-1. Add a new constructor to [the `Function` enum](src/functions.rs).
-2. Provide an implementation in `Function::run`.
-3. Parse the function in [`Function::from`](src/parse.rs).
-4. Add a test with the function name to [`tests.rs`](tests/tests.rs).
+1. Implement the filter in [the `functions` module](src/functions.rs).
+2. Add a test with the function name to [`tests.rs`](tests/tests.rs),
+   and check whether jq yields the same results.
+3. Add derived functions to [the standard library](jaq-core/src/std.jq).
 
 Voilà!
 
