@@ -170,7 +170,7 @@ impl PathElem<Vec<Rc<Val>>> {
                         })
                         .collect::<Result<_, _>>()?,
                 )),
-                v => Err(Error::Iter(v)),
+                _ => Err(Error::Iter(v)),
             },
             Self::Range(from, until) => match v {
                 Val::Arr(mut a) => {
