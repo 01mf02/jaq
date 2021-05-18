@@ -24,6 +24,7 @@ pub enum Builtin<F> {
     Ref(Ref<F>),
 }
 
+/// Filter that returns a single, new value.
 #[derive(Clone, Debug)]
 pub enum New {
     Null,
@@ -33,6 +34,7 @@ pub enum New {
     Type,
 }
 
+/// Filter that returns a stream of value references.
 #[derive(Clone, Debug)]
 pub enum Ref<F> {
     First(F),
