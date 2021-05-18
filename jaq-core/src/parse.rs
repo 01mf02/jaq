@@ -1,6 +1,6 @@
 use crate::filter::{Filter, New, Ref};
 use crate::ops::{LogicOp, MathOp, OrdOp};
-use crate::path::{Path, PathElem};
+use crate::path::{OnError, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
 use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
@@ -202,10 +202,7 @@ impl TryFrom<Pair<'_, Rule>> for PreFilter {
                 assert_eq!(inner.next(), None);
                 Ok(Self::Named(Call::new(name.to_owned(), args?)))
             }
-            Rule::path => {
-                let path: Result<_, _> = inner.flat_map(PathElem::from_path).collect();
-                Ok(Self::Ref(Ref::Path(Path::new(path?))))
-            }
+            Rule::path => Ok(Self::Ref(Ref::Path(Path::try_from(inner)?))),
             _ => unreachable!(),
         }
     }
@@ -223,28 +220,60 @@ impl From<Pair<'_, Rule>> for Atom {
     }
 }
 
-impl PathElem<PreFilter> {
-    fn from_path(pair: Pair<Rule>) -> impl Iterator<Item = Result<Self, Error>> + '_ {
-        use core::iter::{empty, once};
-        let mut iter = pair.into_inner();
-        let index = iter.next().unwrap();
-        let index = match index.as_rule() {
-            Rule::path_index => {
-                let index = Self::from_index(index).0.to_string();
-                Box::new(once(Ok(Self::Index(Atom::Str(index).into()))))
-            }
-            // just a dot
-            _ => Box::new(empty()) as Box<dyn Iterator<Item = _>>,
-        };
-        index.chain(iter.map(PathElem::from_range))
+impl TryFrom<Pairs<'_, Rule>> for Path<PreFilter> {
+    type Error = Error;
+    fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
+        let path: Result<_, _> = pairs.flat_map(Self::from_segment).collect();
+        Ok(Self::new(path?))
     }
+}
 
-    fn from_index(pair: Pair<Rule>) -> (&str, bool) {
+impl From<Pair<'_, Rule>> for OnError {
+    fn from(pair: Pair<Rule>) -> Self {
+        if pair.as_rule() == Rule::on_error {
+            if pair.into_inner().next().is_some() {
+                Self::Empty
+            } else {
+                Self::Fail
+            }
+        } else {
+            unreachable!()
+        }
+    }
+}
+
+impl Path<PreFilter> {
+    fn from_segment(
+        pair: Pair<Rule>,
+    ) -> impl Iterator<Item = Result<(PathElem<PreFilter>, OnError), Error>> + '_ {
         let mut iter = pair.into_inner();
-        let index = iter.next().unwrap().into_inner().next().unwrap().as_str();
-        let question = iter.next().is_some();
-        assert_eq!(iter.next(), None);
-        (index, question)
+
+        let field = PathElem::from_field(iter.next().unwrap());
+        let on_error = OnError::from(iter.next().unwrap());
+        let field = field.map(|f| Ok((f, on_error)));
+
+        let ranges = iter.map(|range| {
+            let mut iter = range.into_inner();
+            let range = PathElem::from_range(iter.next().unwrap())?;
+            let on_error = OnError::from(iter.next().unwrap());
+            assert!(iter.next().is_none());
+            Ok((range, on_error))
+        });
+
+        field.into_iter().chain(ranges)
+    }
+}
+
+impl PathElem<PreFilter> {
+    fn from_field(pair: Pair<Rule>) -> Option<Self> {
+        match pair.as_rule() {
+            Rule::dot_id | Rule::string => {
+                let index = pair.into_inner().next().unwrap().as_str().to_string();
+                Some(Self::Index(Atom::Str(index).into()))
+            }
+            Rule::dot => None,
+            _ => unreachable!(),
+        }
     }
 
     fn from_range(pair: Pair<Rule>) -> Result<Self, Error> {

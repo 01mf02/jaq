@@ -57,17 +57,16 @@ math_op = _{ add | sub | mul | div | rem }
     rem = { "%" }
 
 path = { path_head ~ path_tail* }
-    path_head = { (path_index | dot) ~ path_range* }
-    path_tail = { path_index ~ path_range* }
+    path_head = { (index | dot) ~ on_error ~ path_range* }
+    path_tail = { index         ~ on_error ~ path_range* }
 
-    path_index =  { index ~ question? }
-    path_range = _{ range ~ question? }
+    path_range = { range ~ on_error }
 
     index      = _{ dot_id | dot_str }
     dot_id     = ${ "." ~ identifier }
     dot_str    = _{ "." ~ string }
     dot        =  { "." }
-    question   =  { "?" }
+    on_error   =  { "?"? }
 
 range = { "[" ~ (from_until | until | from | at)? ~ "]" }
     from_until = { expr ~ ":" ~ expr }

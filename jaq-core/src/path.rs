@@ -3,7 +3,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
 #[derive(Clone, Debug)]
-pub struct Path<F>(Vec<PathElem<F>>);
+pub struct Path<F>(pub Vec<(PathElem<F>, OnError)>);
 
 #[derive(Clone, Debug)]
 pub enum PathElem<I> {
@@ -12,15 +12,21 @@ pub enum PathElem<I> {
     Range(Option<I>, Option<I>),
 }
 
+#[derive(Clone, Debug)]
+pub enum OnError {
+    Empty,
+    Fail,
+}
+
 impl<F> Path<F> {
-    pub fn new(path: Vec<PathElem<F>>) -> Self {
+    pub fn new(path: Vec<(PathElem<F>, OnError)>) -> Self {
         Self(path)
     }
 }
 
 impl Path<ClosedFilter> {
     pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        let mut path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
+        let mut path = self.0.iter().map(|(p, _e)| p.run_indices(Rc::clone(&v)));
         path.try_fold(Vec::from([Rc::clone(&v)]), |acc, p| {
             let p = p?;
             acc.into_iter()
@@ -33,7 +39,7 @@ impl Path<ClosedFilter> {
     where
         F: Fn(Rc<Val>) -> RValRs<'f> + Copy,
     {
-        let path = self.0.iter().map(|p| p.run_indices(Rc::clone(&v)));
+        let path = self.0.iter().map(|(p, _e)| p.run_indices(Rc::clone(&v)));
         let path: Result<Vec<_>, _> = path.collect();
         match path {
             Ok(path) => PathElem::run(path.iter(), v, f),
@@ -133,7 +139,7 @@ impl PathElem<Vec<Rc<Val>>> {
                             let none = || f(Rc::new(Val::Null)).next().transpose();
                             o.insert_or_remove(s.clone(), some, none)?;
                         } else {
-                            return Err(Error::IndexWith(Val::Obj(o.clone()), (&**i).clone()));
+                            return Err(Error::IndexWith(Val::Obj(o), (&**i).clone()));
                         }
                     }
                     Ok(Val::Obj(o))
@@ -197,7 +203,7 @@ impl<N> Path<Filter<N>> {
     where
         F: Fn(N) -> Result<Filter<M>, E>,
     {
-        let path = self.0.into_iter().map(|p| p.try_map(m));
+        let path = self.0.into_iter().map(|(p, e)| Ok((p.try_map(m)?, e)));
         Ok(Path(path.collect::<Result<_, _>>()?))
     }
 }
@@ -218,7 +224,7 @@ impl<N> PathElem<Filter<N>> {
 
 impl<F> From<PathElem<F>> for Path<F> {
     fn from(p: PathElem<F>) -> Self {
-        Path(Vec::from([p]))
+        Path(Vec::from([(p, OnError::Fail)]))
     }
 }
 
@@ -272,10 +278,3 @@ fn wrap_test() {
     assert_eq!(wrap(-4, len), 0);
     assert_eq!(wrap(-8, len), -4);
 }
-
-/*
-enum OnError {
-    Empty,
-    Fail,
-}
-*/
