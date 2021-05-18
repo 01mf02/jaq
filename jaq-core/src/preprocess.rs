@@ -41,7 +41,7 @@ impl PreFilter {
     where
         F: Fn(&(String, usize)) -> Option<OpenFilter>,
     {
-        Ok(self.try_map(&|call| call.open(args, fns))?)
+        self.try_map(&|call| call.open(args, fns))
     }
 }
 
@@ -55,7 +55,7 @@ impl Call {
             Some(pos) if self.args.is_empty() => Ok(Filter::Named(Open::V(pos))),
             _ => {
                 let fun = (name, self.args.len());
-                let fun = fns(&fun).ok_or_else(|| UndefinedError(fun.0, fun.1))?;
+                let fun = fns(&fun).ok_or(UndefinedError(fun.0, fun.1))?;
                 let cargs: Result<Vec<_>, _> =
                     self.args.into_iter().map(|a| a.open(args, fns)).collect();
                 let cargs = cargs?;
@@ -78,19 +78,18 @@ impl Open {
 impl TryFrom<OpenFilter> for ClosedFilter {
     type Error = ();
     fn try_from(f: OpenFilter) -> Result<Self, Self::Error> {
-        Ok(f.try_map(&|open| Ok(Filter::Named(open.try_into()?)))?)
+        f.try_map(&|open| Ok(Filter::Named(open.try_into()?)))
     }
 }
 
 impl TryFrom<Open> for Closed {
     type Error = ();
     fn try_from(open: Open) -> Result<Self, Self::Error> {
+        use Filter::Named;
         use Open::*;
         match open {
-            C(builtin) => Ok(Closed(
-                builtin.try_map(&|open| Ok(Filter::Named(open.try_into()?)))?,
-            )),
-            V(v) => Err(()),
+            C(builtin) => Ok(Self(builtin.try_map(&|open| Ok(Named(open.try_into()?)))?)),
+            V(_v) => Err(()),
         }
     }
 }

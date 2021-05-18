@@ -127,29 +127,27 @@ impl PathElem<Vec<Rc<Val>>> {
         match self {
             Self::Index(indices) => match v {
                 Val::Obj(mut o) => {
-                    indices.iter().try_for_each(|i| {
+                    for i in indices.iter() {
                         if let Val::Str(s) = &**i {
                             let some = |v: &Rc<Val>| f(Rc::clone(v)).next().transpose();
                             let none = || f(Rc::new(Val::Null)).next().transpose();
-                            o.insert_or_remove(s.clone(), some, none)
+                            o.insert_or_remove(s.clone(), some, none)?;
                         } else {
-                            Err(Error::IndexWith(Val::Obj(o.clone()), (&**i).clone()))
+                            return Err(Error::IndexWith(Val::Obj(o.clone()), (&**i).clone()));
                         }
-                    })?;
+                    }
                     Ok(Val::Obj(o))
                 }
                 Val::Arr(mut a) => {
-                    indices.iter().try_for_each(|i| {
+                    for i in indices.iter() {
                         let i = i.as_isize()?;
-                        let i = abs_index(i, a.len()).ok_or_else(|| Error::IndexOutOfBounds(i))?;
-                        match f(Rc::clone(&a[i])).next().transpose()? {
-                            Some(y) => a[i] = y,
-                            None => {
-                                a.remove(i);
-                            }
-                        };
-                        Ok(())
-                    })?;
+                        let i = abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i))?;
+                        if let Some(y) = f(Rc::clone(&a[i])).next().transpose()? {
+                            a[i] = y;
+                        } else {
+                            a.remove(i);
+                        }
+                    }
                     Ok(Val::Arr(a))
                 }
                 _ => Err(Error::Index(v)),
@@ -181,7 +179,7 @@ impl PathElem<Vec<Rc<Val>>> {
                             None => Vec::new(),
                             Some(y) => match &*y {
                                 Val::Arr(y) => y.clone(),
-                                _ => Err(Error::SliceAssign((*y).clone()))?,
+                                _ => return Err(Error::SliceAssign((*y).clone())),
                             },
                         };
                         a.splice(skip..skip + take, y);
