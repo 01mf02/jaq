@@ -65,8 +65,10 @@ path = { path_head ~ path_tail* }
     index      = _{ dot_id | dot_str }
     dot_id     = ${ "." ~ identifier }
     dot_str    = _{ "." ~ string }
+    on_error   =  { question? }
+
     dot        =  { "." }
-    on_error   =  { "?"? }
+    question   =  { "?" }
 
 range = { "[" ~ (from_until | until | from | at)? ~ "]" }
     from_until = { expr ~ ":" ~ expr }
