@@ -12,7 +12,7 @@ pub struct Map<K, V>(FxIndexMap<K, V>);
 
 impl<K, V> Map<K, V> {
     pub fn new() -> Self {
-        Self(Default::default())
+        Self::default()
     }
 
     pub fn keys(&self) -> impl Iterator<Item = &K> {
@@ -21,6 +21,10 @@ impl<K, V> Map<K, V> {
 
     pub fn values(&self) -> impl Iterator<Item = &V> {
         self.0.values()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -58,6 +62,12 @@ impl<K: Eq + Hash, V> Map<K, V> {
                 Ok(())
             }
         }
+    }
+}
+
+impl<K, V> Default for Map<K, V> {
+    fn default() -> Self {
+        Self(Default::default())
     }
 }
 
