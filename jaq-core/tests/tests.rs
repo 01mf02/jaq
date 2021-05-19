@@ -201,7 +201,7 @@ fn range_update() {
         json!([0, 5, 6, 5, 6, 1, 2]),
     );
 
-    give(json!([0, 1, 2]), ".[0:2,3.]? |= map(.+1)", json!([1, 2, 2]));
+    give(json!([0, 1, 2]), ".[:2,3.0]? |= map(.+1)", json!([1, 2, 2]));
 }
 
 // Test what happens when update filter returns multiple values.
