@@ -3,7 +3,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::convert::TryInto;
 
 #[derive(Clone, Debug)]
-pub struct Path<F>(pub Vec<(PathElem<F>, OnError)>);
+pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
 
 #[derive(Clone, Debug)]
 pub enum PathElem<I> {
@@ -12,28 +12,43 @@ pub enum PathElem<I> {
     Range(Option<I>, Option<I>),
 }
 
-#[derive(Clone, Debug)]
-pub enum OnError {
-    Empty,
-    Fail,
+#[derive(Copy, Clone, Debug)]
+pub enum Opt {
+    Optional,
+    Essential,
+}
+
+impl Opt {
+    /// If the value is optional, return `x`, else fail with `f(x)`.
+    fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
+        match self {
+            Self::Optional => Ok(x),
+            Self::Essential => Err(f(x)),
+        }
+    }
+
+    fn collect<T, E>(self, iter: impl Iterator<Item = Result<T, E>>) -> Result<Vec<T>, E> {
+        match self {
+            Self::Optional => Ok(iter.filter_map(|x| x.ok()).collect()),
+            Self::Essential => iter.collect(),
+        }
+    }
 }
 
 impl<F> Path<F> {
-    pub fn new(path: Vec<(PathElem<F>, OnError)>) -> Self {
+    pub fn new(path: Vec<(PathElem<F>, Opt)>) -> Self {
         Self(path)
     }
 }
 
+type PathOptR = Result<(PathElem<Vec<Rc<Val>>>, Opt), Error>;
+
 impl Path<ClosedFilter> {
     pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        let mut path = self.0.iter().map(|(p, e)| (p.run_indices(Rc::clone(&v)), e));
-        path.try_fold(Vec::from([Rc::clone(&v)]), |acc, (p, e)| {
-            let p = p?;
-            let acc = acc.into_iter().flat_map(|x| p.collect((*x).clone()));
-            match e {
-                OnError::Empty => Ok(acc.filter_map(|x| x.ok()).collect()),
-                OnError::Fail => acc.collect(),
-            }
+        let init = Vec::from([Rc::clone(&v)]);
+        self.run_indices(&v).try_fold(init, |acc, p_opt| {
+            let (p, opt) = p_opt?;
+            opt.collect(acc.into_iter().flat_map(|x| p.collect((*x).clone())))
         })
     }
 
@@ -41,12 +56,15 @@ impl Path<ClosedFilter> {
     where
         F: Fn(Rc<Val>) -> RValRs<'f> + Copy,
     {
-        let path = self.0.iter().map(|(p, _e)| p.run_indices(Rc::clone(&v)));
-        let path: Result<Vec<_>, _> = path.collect();
-        match path {
+        match self.run_indices(&v).collect::<Result<Vec<_>, _>>() {
             Ok(path) => PathElem::run(path.iter(), v, f),
             Err(e) => Box::new(core::iter::once(Err(e))),
         }
+    }
+
+    fn run_indices<'a>(&'a self, v: &'a Rc<Val>) -> impl Iterator<Item = PathOptR> + 'a {
+        let path = self.0.iter();
+        path.map(move |(p, opt)| Ok((p.run_indices(Rc::clone(&v))?, *opt)))
     }
 }
 
@@ -115,41 +133,48 @@ impl PathElem<Vec<Rc<Val>>> {
 
     pub fn run<'a, 'f, P, F>(mut path: P, v: Rc<Val>, f: F) -> RValRs<'f>
     where
-        P: Iterator<Item = &'a Self> + Clone,
+        P: Iterator<Item = &'a (Self, Opt)> + Clone,
         F: Fn(Rc<Val>) -> RValRs<'f> + Copy,
     {
-        if let Some(p) = path.next() {
+        if let Some((p, opt)) = path.next() {
             let f = |v| Self::run(path.clone(), v, f);
-            Box::new(core::iter::once(p.map((*v).clone(), f).map(Rc::new)))
+            Box::new(core::iter::once(p.map((*v).clone(), *opt, f).map(Rc::new)))
         } else {
             f(v)
         }
     }
 
-    pub fn map<F, I>(&self, v: Val, f: F) -> Result<Val, Error>
+    pub fn map<F, I>(&self, v: Val, opt: Opt, f: F) -> Result<Val, Error>
     where
         F: Fn(Rc<Val>) -> I,
         I: Iterator<Item = RValR>,
     {
         use core::iter::once;
+        use Opt::{Essential, Optional};
         match self {
             Self::Index(indices) => match v {
                 Val::Obj(mut o) => {
+                    let some = |v: &Rc<Val>| f(Rc::clone(v)).next().transpose();
+                    let none = || f(Rc::new(Val::Null)).next().transpose();
+
                     for i in indices.iter() {
-                        if let Val::Str(s) = &**i {
-                            let some = |v: &Rc<Val>| f(Rc::clone(v)).next().transpose();
-                            let none = || f(Rc::new(Val::Null)).next().transpose();
-                            o.insert_or_remove(s.clone(), some, none)?;
-                        } else {
-                            return Err(Error::IndexWith(Val::Obj(o), (&**i).clone()));
+                        match (&**i, opt) {
+                            (Val::Str(s), _) => o.insert_or_remove(s.clone(), some, none)?,
+                            (i, Essential) => return Err(Error::IndexWith(Val::Obj(o), i.clone())),
+                            (_, Optional) => continue,
                         }
                     }
                     Ok(Val::Obj(o))
                 }
                 Val::Arr(mut a) => {
                     for i in indices.iter() {
-                        let i = i.as_isize()?;
-                        let i = abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i))?;
+                        let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
+                        let i = match (i.as_isize().and_then(abs_or), opt) {
+                            (Ok(i), _) => i,
+                            (Err(e), Essential) => return Err(e),
+                            (Err(_), Optional) => continue,
+                        };
+
                         if let Some(y) = f(Rc::clone(&a[i])).next().transpose()? {
                             a[i] = y;
                         } else {
@@ -158,7 +183,7 @@ impl PathElem<Vec<Rc<Val>>> {
                     }
                     Ok(Val::Arr(a))
                 }
-                _ => Err(Error::Index(v)),
+                _ => opt.fail(v, Error::Index),
             },
             Self::Range(None, None) => match v {
                 Val::Arr(a) => Ok(Val::Arr(
@@ -172,14 +197,21 @@ impl PathElem<Vec<Rc<Val>>> {
                         })
                         .collect::<Result<_, _>>()?,
                 )),
-                _ => Err(Error::Iter(v)),
+                _ => opt.fail(v, Error::Iter),
             },
             Self::Range(from, until) => match v {
                 Val::Arr(mut a) => {
                     for (from, until) in prod(rel_bounds(from), rel_bounds(until)) {
+                        let (from, until) = match (from.and_then(|from| Ok((from, until?))), opt) {
+                            (Ok(from_until), _) => from_until,
+                            (Err(e), Essential) => return Err(e),
+                            (Err(_), Optional) => continue,
+                        };
+
                         let len = a.len();
-                        let from = abs_bound(from?, len, 0);
-                        let until = abs_bound(until?, len, len);
+                        let from = abs_bound(from, len, 0);
+                        let until = abs_bound(until, len, len);
+
                         let (skip, take) = skip_take(from, until);
                         let iter = a.iter().cloned().skip(skip).take(take);
                         let arr = Rc::new(Val::Arr(iter.collect()));
@@ -194,7 +226,7 @@ impl PathElem<Vec<Rc<Val>>> {
                     }
                     Ok(Val::Arr(a))
                 }
-                _ => Err(Error::Iter(v)),
+                _ => opt.fail(v, Error::Iter),
             },
         }
     }
@@ -205,7 +237,7 @@ impl<N> Path<Filter<N>> {
     where
         F: Fn(N) -> Result<Filter<M>, E>,
     {
-        let path = self.0.into_iter().map(|(p, e)| Ok((p.try_map(m)?, e)));
+        let path = self.0.into_iter().map(|(p, opt)| Ok((p.try_map(m)?, opt)));
         Ok(Path(path.collect::<Result<_, _>>()?))
     }
 }
@@ -226,7 +258,7 @@ impl<N> PathElem<Filter<N>> {
 
 impl<F> From<PathElem<F>> for Path<F> {
     fn from(p: PathElem<F>) -> Self {
-        Path(Vec::from([(p, OnError::Fail)]))
+        Path(Vec::from([(p, Opt::Essential)]))
     }
 }
 

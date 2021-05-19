@@ -98,7 +98,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Identity (`.`)
 - [x] Indexing of arrays/objects (`.[0]`, `.a`, `.["a"]`)
 - [x] Iterating over arrays/objects (`.[]`)
-- [ ] Optional indexing/iteration (`.a?`, `.[]?`)
+- [x] Optional indexing/iteration (`.a?`, `.[]?`)
 - [x] Array slices (`.[3:7]`, `.[0:-1]`)
 - [x] String slices
 

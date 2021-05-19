@@ -1,6 +1,6 @@
 use crate::filter::{Filter, New, Ref};
 use crate::ops::{LogicOp, MathOp, OrdOp};
-use crate::path::{OnError, Path, PathElem};
+use crate::path::{Opt, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
 use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
@@ -228,13 +228,13 @@ impl TryFrom<Pairs<'_, Rule>> for Path<PreFilter> {
     }
 }
 
-impl From<Pair<'_, Rule>> for OnError {
+impl From<Pair<'_, Rule>> for Opt {
     fn from(pair: Pair<Rule>) -> Self {
         if pair.as_rule() == Rule::optional {
             if pair.into_inner().next().is_some() {
-                Self::Empty
+                Self::Optional
             } else {
-                Self::Fail
+                Self::Essential
             }
         } else {
             unreachable!()
@@ -245,19 +245,19 @@ impl From<Pair<'_, Rule>> for OnError {
 impl Path<PreFilter> {
     fn from_segment(
         pair: Pair<Rule>,
-    ) -> impl Iterator<Item = Result<(PathElem<PreFilter>, OnError), Error>> + '_ {
+    ) -> impl Iterator<Item = Result<(PathElem<PreFilter>, Opt), Error>> + '_ {
         let mut iter = pair.into_inner();
 
         let index = PathElem::from_index(iter.next().unwrap());
-        let optional = OnError::from(iter.next().unwrap());
-        let index = index.map(|index| Ok((index, optional)));
+        let opt = Opt::from(iter.next().unwrap());
+        let index = index.map(|index| Ok((index, opt)));
 
         let ranges = iter.map(|range| {
             let mut iter = range.into_inner();
             let range = PathElem::from_range(iter.next().unwrap())?;
-            let optional = OnError::from(iter.next().unwrap());
+            let opt = Opt::from(iter.next().unwrap());
             assert!(iter.next().is_none());
-            Ok((range, optional))
+            Ok((range, opt))
         });
 
         index.into_iter().chain(ranges)
