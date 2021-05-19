@@ -63,7 +63,7 @@ Construct an array from an object in two ways and show that they are equal:
     $ echo '{"a": 1, "b": 2}' | jaq '[.a, .b] == [.[]]'
     true
 
-Apply a function to all elements of an array and filter the results:
+Apply a filter to all elements of an array and filter the results:
 
     $ echo '[0, 1, 2, 3]' | jaq 'map(.*2) | [.[] | select(. < 5)]'
     [0, 2, 4]
@@ -119,10 +119,10 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Type (`type`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
-- [ ] More object functions (`to_entries`, `from_entries`, `with_entries`)
-- [ ] More numeric functions (`sqrt`, `floor`, ...)
-- [ ] More string functions (`explode`, `split`, `join`, ...)
-- [ ] More array functions (`sort_by`, `group_by` ...)
+- [ ] More object filters (`to_entries`, `from_entries`, `with_entries`)
+- [ ] More numeric filters (`sqrt`, `floor`, ...)
+- [ ] More string filters (`explode`, `split`, `join`, ...)
+- [ ] More array filters (`sort_by`, `group_by` ...)
 
 ## Standard filters
 
@@ -131,8 +131,8 @@ Their definitions are at [`std.jq`](jaq-core/src/std.jq).
 
 - [x] Negation (`not`)
 - [x] Filtering (`select(. >= 0)`
-- [x] Iterable functions (`add`, `map(.+1)`, `map_values(.+1)`)
-- [x] Array functions (`first`, `last`, `nth(10)`, `reverse`, `min`, `max`)
+- [x] Iterable filters (`add`, `map(.+1)`, `map_values(.+1)`)
+- [x] Array filters (`first`, `last`, `nth(10)`, `reverse`, `min`, `max`)
 - [x] Universal/existential (`all`, `any`)
 
 ## Advanced features
@@ -238,15 +238,15 @@ jaq provides `recurse` as core filter.
 # Contributing
 
 Contributions to jaq are welcome.
-In particular, implementing various [functions](#functions) of jq in jaq
+In particular, implementing various filters of jq in jaq
 is a relatively low-hanging fruit.
 
 To add a new builtin filter (such as `sort`), it suffices to:
 
 1. Implement the filter in [the `functions` module](src/functions.rs).
-2. Add a test with the function name to [`tests.rs`](tests/tests.rs),
+2. Add a test with the filter name to [`tests.rs`](tests/tests.rs),
    and check whether jq yields the same results.
-3. Add derived functions to [the standard library](jaq-core/src/std.jq).
+3. Add derived filters to [the standard library](jaq-core/src/std.jq).
 
 Voilà!
 
