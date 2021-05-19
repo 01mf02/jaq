@@ -57,15 +57,15 @@ math_op = _{ add | sub | mul | div | rem }
     rem = { "%" }
 
 path = { path_head ~ path_tail* }
-    path_head = { (index | dot) ~ on_error ~ path_range* }
-    path_tail = { index         ~ on_error ~ path_range* }
+    path_head = { (index | dot) ~ optional ~ path_range* }
+    path_tail = { index         ~ optional ~ path_range* }
 
-    path_range = { range ~ on_error }
+    path_range = { range ~ optional }
 
     index      = _{ dot_id | dot_str }
     dot_id     = ${ "." ~ identifier }
     dot_str    = _{ "." ~ string }
-    on_error   =  { question? }
+    optional   =  { question? }
 
     dot        =  { "." }
     question   =  { "?" }

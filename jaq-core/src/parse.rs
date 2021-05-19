@@ -230,7 +230,7 @@ impl TryFrom<Pairs<'_, Rule>> for Path<PreFilter> {
 
 impl From<Pair<'_, Rule>> for OnError {
     fn from(pair: Pair<Rule>) -> Self {
-        if pair.as_rule() == Rule::on_error {
+        if pair.as_rule() == Rule::optional {
             if pair.into_inner().next().is_some() {
                 Self::Empty
             } else {
@@ -248,24 +248,24 @@ impl Path<PreFilter> {
     ) -> impl Iterator<Item = Result<(PathElem<PreFilter>, OnError), Error>> + '_ {
         let mut iter = pair.into_inner();
 
-        let field = PathElem::from_field(iter.next().unwrap());
-        let on_error = OnError::from(iter.next().unwrap());
-        let field = field.map(|f| Ok((f, on_error)));
+        let index = PathElem::from_index(iter.next().unwrap());
+        let optional = OnError::from(iter.next().unwrap());
+        let index = index.map(|index| Ok((index, optional)));
 
         let ranges = iter.map(|range| {
             let mut iter = range.into_inner();
             let range = PathElem::from_range(iter.next().unwrap())?;
-            let on_error = OnError::from(iter.next().unwrap());
+            let optional = OnError::from(iter.next().unwrap());
             assert!(iter.next().is_none());
-            Ok((range, on_error))
+            Ok((range, optional))
         });
 
-        field.into_iter().chain(ranges)
+        index.into_iter().chain(ranges)
     }
 }
 
 impl PathElem<PreFilter> {
-    fn from_field(pair: Pair<Rule>) -> Option<Self> {
+    fn from_index(pair: Pair<Rule>) -> Option<Self> {
         match pair.as_rule() {
             Rule::dot_id | Rule::string => {
                 let index = pair.into_inner().next().unwrap().as_str().to_string();
