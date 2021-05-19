@@ -16,6 +16,7 @@ def scalars:   select(type | . != "array" and . != "object");
 # Generators
 def range(x): range(0; x);
 def repeat(g): [g] | recurse(.) | .[];
+def recurse: recurse(.[]?);
 def recurse(f; cond): recurse(f | select(cond));
 
 # Iterators

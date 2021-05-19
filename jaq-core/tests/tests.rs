@@ -284,11 +284,14 @@ fn select() {
 
 #[test]
 fn recurse() {
-    gives(
-        json!(1),
-        "recurse(if . < 3 then .+1 else empty end)",
-        [json!(1), json!(2), json!(3)],
-    );
+    let x = json!({"a":0,"b":[1]});
+    gives(x.clone(), "recurse", [x, json!(0), json!([1]), json!(1)]);
+
+    let y = [json!(1), json!(2), json!(3)];
+    gives(json!(1), "recurse(if . < 3 then .+1 else empty end)", y);
+
+    let y = [json!(2), json!(4), json!(16)];
+    gives(json!(2), "recurse(. * .; . < 20)", y);
 }
 
 #[test]
