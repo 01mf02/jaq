@@ -75,8 +75,8 @@ Read (slurp) input values into an array and get the average of its elements:
 
 Repeatedly apply a filter to itself and output the intermediate results:
 
-    $ echo '1' | jaq '[recurse(if . < 3 then .+1 else empty end)]'
-    [1, 2, 3]
+    $ echo '0' | jaq '[recurse(.+1; . < 3)]'
+    [0, 1, 2]
 
 
 # Features
