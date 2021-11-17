@@ -64,7 +64,7 @@ impl Path<ClosedFilter> {
 
     fn run_indices<'a>(&'a self, v: &'a Rc<Val>) -> impl Iterator<Item = PathOptR> + 'a {
         let path = self.0.iter();
-        path.map(move |(p, opt)| Ok((p.run_indices(Rc::clone(&v))?, *opt)))
+        path.map(move |(p, opt)| Ok((p.run_indices(Rc::clone(v))?, *opt)))
     }
 }
 

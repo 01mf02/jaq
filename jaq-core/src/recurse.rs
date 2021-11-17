@@ -27,7 +27,7 @@ impl<F: core::ops::Deref<Target = ClosedFilter>> Iterator for Recurse<&F> {
         match self.output.pop_front() {
             Some(o) => {
                 if let Ok(ref o) = o {
-                    self.input.push_back(Rc::clone(&o));
+                    self.input.push_back(Rc::clone(o));
                 };
                 Some(o)
             }

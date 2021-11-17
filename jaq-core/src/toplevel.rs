@@ -41,6 +41,6 @@ impl Main {
             let open = def.term.open(&def.args, &|fun| fns.get(fun).cloned());
             fns.insert((def.name, def.args.len()), open.unwrap());
         }
-        filter.open(&[], &|fun| fns.get(&fun).cloned())
+        filter.open(&[], &|fun| fns.get(fun).cloned())
     }
 }
