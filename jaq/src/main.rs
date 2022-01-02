@@ -1,10 +1,10 @@
-use clap::Clap;
+use clap::Parser;
 use jaq_core::{ClosedFilter, Main, Val};
 use std::convert::TryFrom;
 use std::io::Write;
 use std::rc::Rc;
 
-#[derive(Clap)]
+#[derive(Parser)]
 struct Cli {
     /// Use null as single input value
     #[clap(short)]

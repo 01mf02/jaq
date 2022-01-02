@@ -12,7 +12,6 @@ categories = ["command-line-utilities", "compilers", "parser-implementations"]
 
 [dependencies]
 jaq-core = { version = "0.1", path = "../jaq-core" }
-clap = { version = "<3.0.0-beta.4" }
-clap_derive = { version = "<3.0.0-beta.4" }
+clap = { version = "3.0", features = ["derive"] }
 colored_json = "2.1.0"
 serde_json = { version = "1.0", features = [ "preserve_order" ] }
