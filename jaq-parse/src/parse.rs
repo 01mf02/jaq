@@ -146,13 +146,13 @@ fn parse_expr2<'a>(
     .labelled("value");
 
     let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident.clone()),
+        Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     })
     .labelled("identifier");
 
     let key = filter_map(|span, tok| match tok {
-        Token::Ident(s) | Token::Str(s) => Ok(s.clone()),
+        Token::Ident(s) | Token::Str(s) => Ok(s),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     })
     .labelled("object key");
@@ -202,13 +202,13 @@ fn parse_expr2<'a>(
             Some(e2) => PathElem::Range(Some(e1), e2),
         });
         let starts_with_colon = colon
-            .ignore_then(expr.clone())
+            .ignore_then(expr)
             .map(|e2| PathElem::Range(None, Some(e2)));
 
         starts_with_expr
             .or(starts_with_colon)
             .or_not()
-            .map(|o| o.unwrap_or_else(|| PathElem::Range(None, None)))
+            .map(|o| o.unwrap_or(PathElem::Range(None, None)))
     };
 
     let path = {
@@ -218,7 +218,7 @@ fn parse_expr2<'a>(
         });
 
         let dot_id = filter_map(|span, tok| match tok {
-            Token::DotId(ident) => Ok((Expr::Value(Value::Str(ident.clone())), span)),
+            Token::DotId(ident) => Ok((Expr::Value(Value::Str(ident)), span)),
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
         });
         let dot = just(Token::Dot).then(opt.clone());
@@ -336,7 +336,7 @@ fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Cl
 
 fn parse_def() -> impl Parser<Token, (Spanned<String>, Func), Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident.clone()),
+        Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
@@ -346,7 +346,7 @@ fn parse_def() -> impl Parser<Token, (Spanned<String>, Func), Error = Simple<Tok
                 .map_with_span(|name, span| (name, span))
                 .labelled("function name"),
         )
-        .then(args(ident.clone()).labelled("function args"))
+        .then(args(ident).labelled("function args"))
         .then_ignore(just(Token::Ctrl(':')))
         .then(parse_expr().then_ignore(just(Token::Ctrl(';'))))
         .map(|((name, args), body)| (name, Func { args, body }))
@@ -361,7 +361,7 @@ pub fn parse_defs() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<
             for ((name, name_span), f) in fs {
                 if funcs.insert(name.clone(), f).is_some() {
                     return Err(Simple::custom(
-                        name_span.clone(),
+                        name_span,
                         format!("Function '{}' already exists", name),
                     ));
                 }

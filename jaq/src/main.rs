@@ -39,11 +39,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let main = Main::parse(&cli.filter).unwrap_or_else(|e| {
         eprintln!("Failed to parse filter:");
-        eprintln!("{}", e.to_string());
+        eprintln!("{}", e);
         std::process::exit(3);
     });
     let filter = main.open(jaq_core::std()).unwrap_or_else(|e| {
-        eprintln!("Error: {}", e.to_string());
+        eprintln!("Error: {}", e);
         std::process::exit(3);
     });
     let filter = ClosedFilter::try_from(filter).unwrap();
@@ -73,13 +73,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut last = None;
     for item in iter {
         let input = item.unwrap_or_else(|e| {
-            eprintln!("Failed to parse JSON: {}", e.to_string());
+            eprintln!("Failed to parse JSON: {}", e);
             std::process::exit(4);
         });
         //println!("Got {:?}", input);
         for output in filter.run(input) {
             let output = output.unwrap_or_else(|e| {
-                eprintln!("Error: {}", e.to_string());
+                eprintln!("Error: {}", e);
                 std::process::exit(5);
             });
             last = Some(output.as_bool());
