@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt};
 enum Value {
     Null,
     Bool(bool),
-    Num(f64),
+    Num(String),
     Str(String),
 }
 
@@ -107,6 +107,7 @@ enum Expr {
     Error,
     Value(Value),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
+    Neg(Box<Spanned<Self>>),
     Object(Vec<KeyVal>),
     Call(String, Vec<Spanned<Self>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
@@ -181,7 +182,7 @@ fn parse_expr2<'a>(
     let val = filter_map(|span, tok| match tok {
         Token::Null => Ok(Expr::Value(Value::Null)),
         Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-        Token::Num(n) => Ok(Expr::Value(Value::Num(n.parse().unwrap()))),
+        Token::Num(n) => Ok(Expr::Value(Value::Num(n))),
         Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     })
@@ -314,6 +315,15 @@ fn parse_expr2<'a>(
     // Sum ops (add and subtract) have equal precedence
     let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
 
+    let neg = just(Token::Op("-".to_string()))
+        .map_with_span(|_, span| span)
+        .repeated()
+        .then(add_sub)
+        .foldr(|a, b| {
+            let span = a.start..b.1.end;
+            (Expr::Neg(Box::new(b)), span)
+        });
+
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
 
     let lt_gt = choice((
@@ -322,7 +332,7 @@ fn parse_expr2<'a>(
         ord(OrdOp::Le),
         ord(OrdOp::Ge),
     ));
-    let lt_gt = bin(add_sub, lt_gt);
+    let lt_gt = bin(neg, lt_gt);
     // Comparison ops (equal, not-equal) have equal precedence
     let eq_ne = bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)));
 
