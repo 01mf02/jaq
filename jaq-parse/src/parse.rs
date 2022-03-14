@@ -22,16 +22,33 @@ impl fmt::Display for Value {
 }
 
 #[derive(Clone, Debug)]
-enum BinaryOp {
-    Pipe,
-    Comma,
-    Or,
-    And,
+enum MathOp {
     Add,
     Sub,
     Mul,
     Div,
     Rem,
+}
+
+impl fmt::Display for MathOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Add => "+".fmt(f),
+            Self::Sub => "-".fmt(f),
+            Self::Mul => "*".fmt(f),
+            Self::Div => "/".fmt(f),
+            Self::Rem => "%".fmt(f),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum BinaryOp {
+    Pipe,
+    Comma,
+    Or,
+    And,
+    Math(MathOp),
     Eq,
     NotEq,
 }
@@ -219,17 +236,13 @@ fn parse_expr2<'a>(
             |span| (Expr::Error, span),
         ));
 
-    let rem = bin(atom, just(Token::Op("%".to_string())).to(BinaryOp::Rem));
+    let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
 
+    let rem = bin(atom, math(MathOp::Rem));
     // Product ops (multiply and divide) have equal precedence
-    let mul = just(Token::Op("*".to_string())).to(BinaryOp::Mul);
-    let div = just(Token::Op("/".to_string())).to(BinaryOp::Div);
-    let mul_div = bin(rem, mul.or(div));
-
+    let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
     // Sum ops (add and subtract) have equal precedence
-    let add = just(Token::Op("+".to_string())).to(BinaryOp::Add);
-    let sub = just(Token::Op("-".to_string())).to(BinaryOp::Sub);
-    let add_sub = bin(mul_div, add.or(sub));
+    let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
 
     // Comparison ops (equal, not-equal) have equal precedence
     let eq = just(Token::Op("==".to_string())).to(BinaryOp::Eq);
