@@ -43,6 +43,29 @@ impl fmt::Display for MathOp {
 }
 
 #[derive(Clone, Debug)]
+enum OrdOp {
+    Lt,
+    Gt,
+    Le,
+    Ge,
+    Eq,
+    Ne,
+}
+
+impl fmt::Display for OrdOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Lt => "<".fmt(f),
+            Self::Gt => ">".fmt(f),
+            Self::Le => "<=".fmt(f),
+            Self::Ge => ">=".fmt(f),
+            Self::Eq => "==".fmt(f),
+            Self::Ne => "!=".fmt(f),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 enum AssignOp {
     Assign,
     Update,
@@ -67,8 +90,7 @@ enum BinaryOp {
     And,
     Math(MathOp),
     Assign(AssignOp),
-    Eq,
-    NotEq,
+    Ord(OrdOp),
 }
 
 pub type Spanned<T> = (T, Span);
@@ -274,12 +296,19 @@ fn parse_expr2<'a>(
     // Sum ops (add and subtract) have equal precedence
     let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
 
-    // Comparison ops (equal, not-equal) have equal precedence
-    let eq = just(Token::Op("==".to_string())).to(BinaryOp::Eq);
-    let nq = just(Token::Op("!=".to_string())).to(BinaryOp::NotEq);
-    let eq_neq = bin(add_sub, eq.or(nq));
+    let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
 
-    let and = bin(eq_neq, just(Token::And).to(BinaryOp::And));
+    let lt_gt = choice((
+        ord(OrdOp::Lt),
+        ord(OrdOp::Gt),
+        ord(OrdOp::Le),
+        ord(OrdOp::Ge),
+    ));
+    let lt_gt = bin(add_sub, lt_gt);
+    // Comparison ops (equal, not-equal) have equal precedence
+    let eq_ne = bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)));
+
+    let and = bin(eq_ne, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));
 
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
