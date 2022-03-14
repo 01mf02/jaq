@@ -95,13 +95,19 @@ enum BinaryOp {
 
 pub type Spanned<T> = (T, Span);
 
+#[derive(Debug)]
+enum KeyVal {
+    Expr(Spanned<Expr>, Spanned<Expr>),
+    Str(String, Option<Spanned<Expr>>),
+}
+
 // An expression node in the AST. Children are spanned so we can generate useful runtime errors.
 #[derive(Debug)]
 enum Expr {
     Error,
     Value(Value),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
-    Object(Vec<(Spanned<Self>, Spanned<Self>)>),
+    Object(Vec<KeyVal>),
     Call(String, Vec<Spanned<Self>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Path(Path<Spanned<Expr>>),
@@ -187,6 +193,12 @@ fn parse_expr2<'a>(
     })
     .labelled("identifier");
 
+    let key = filter_map(|span, tok| match tok {
+        Token::Ident(s) | Token::Str(s) => Ok(s.clone()),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    })
+    .labelled("object key");
+
     let if_ = just(Token::If).ignore_then(expr.clone());
     let then = just(Token::Then).ignore_then(expr.clone());
     let else_ = just(Token::Else).ignore_then(expr.clone());
@@ -203,10 +215,16 @@ fn parse_expr2<'a>(
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
-    let object = parens
+    let is_val = just(Token::Ctrl(':')).ignore_then(expr_sans_comma);
+    let key_str = key
+        .then(is_val.clone().or_not())
+        .map(|(key, val)| KeyVal::Str(key, val));
+    let key_expr = parens
         .clone()
-        .then_ignore(just(Token::Ctrl(':')))
-        .then(expr_sans_comma)
+        .then(is_val)
+        .map(|(key, val)| KeyVal::Expr(key, val));
+    let object = key_str
+        .or(key_expr)
         .separated_by(just(Token::Ctrl(',')))
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
