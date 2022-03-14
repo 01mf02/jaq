@@ -109,6 +109,7 @@ enum Expr {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
     Neg(Box<Spanned<Self>>),
     Object(Vec<KeyVal>),
+    Array(Box<Spanned<Self>>),
     Call(String, Vec<Spanned<Self>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Path(Path<Spanned<Expr>>),
@@ -216,6 +217,11 @@ fn parse_expr2<'a>(
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
+    let array = expr
+        .clone()
+        .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
+        .map_with_span(|arr, span| (Expr::Array(Box::new(arr)), span));
+
     let is_val = just(Token::Ctrl(':')).ignore_then(expr_sans_comma);
     let key_str = key
         .then(is_val.clone().or_not())
@@ -284,6 +290,7 @@ fn parse_expr2<'a>(
         .or(object)
         .or(ite)
         .or(parens)
+        .or(array)
         .or(path)
         .boxed()
         // Attempt to recover anything that looks like a parenthesised expression but contains errors
@@ -307,22 +314,23 @@ fn parse_expr2<'a>(
             |span| (Expr::Error, span),
         ));
 
-    let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
-
-    let rem = bin(atom, math(MathOp::Rem));
-    // Product ops (multiply and divide) have equal precedence
-    let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
-    // Sum ops (add and subtract) have equal precedence
-    let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
-
     let neg = just(Token::Op("-".to_string()))
         .map_with_span(|_, span| span)
         .repeated()
-        .then(add_sub)
+        .then(atom)
         .foldr(|a, b| {
             let span = a.start..b.1.end;
             (Expr::Neg(Box::new(b)), span)
         });
+
+
+    let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
+
+    let rem = bin(neg, math(MathOp::Rem));
+    // Product ops (multiply and divide) have equal precedence
+    let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
+    // Sum ops (add and subtract) have equal precedence
+    let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
 
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
 
@@ -332,7 +340,7 @@ fn parse_expr2<'a>(
         ord(OrdOp::Le),
         ord(OrdOp::Ge),
     ));
-    let lt_gt = bin(neg, lt_gt);
+    let lt_gt = bin(add_sub, lt_gt);
     // Comparison ops (equal, not-equal) have equal precedence
     let eq_ne = bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)));
 
