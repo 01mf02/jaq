@@ -1,4 +1,4 @@
-use crate::{Span, Token};
+use crate::{MathOp, OrdOp, Span, Token};
 use chumsky::prelude::*;
 use std::{collections::HashMap, fmt};
 
@@ -17,50 +17,6 @@ impl fmt::Display for Value {
             Self::Bool(x) => x.fmt(f),
             Self::Num(x) => x.fmt(f),
             Self::Str(x) => x.fmt(f),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-enum MathOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
-}
-
-impl fmt::Display for MathOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Add => "+".fmt(f),
-            Self::Sub => "-".fmt(f),
-            Self::Mul => "*".fmt(f),
-            Self::Div => "/".fmt(f),
-            Self::Rem => "%".fmt(f),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-enum OrdOp {
-    Lt,
-    Gt,
-    Le,
-    Ge,
-    Eq,
-    Ne,
-}
-
-impl fmt::Display for OrdOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Lt => "<".fmt(f),
-            Self::Gt => ">".fmt(f),
-            Self::Le => "<=".fmt(f),
-            Self::Ge => ">=".fmt(f),
-            Self::Eq => "==".fmt(f),
-            Self::Ne => "!=".fmt(f),
         }
     }
 }
@@ -322,7 +278,6 @@ fn parse_expr2<'a>(
             let span = a.start..b.1.end;
             (Expr::Neg(Box::new(b)), span)
         });
-
 
     let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
 

@@ -2,37 +2,7 @@
 
 use crate::{Error, RValRs, Val, ValR, ValRs};
 use alloc::boxed::Box;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MathOp {
-    /// Addition (+).
-    Add,
-    /// Subtraction (-).
-    Sub,
-    /// Multiplication (*).
-    Mul,
-    /// Division (/).
-    Div,
-    /// Remainder (%).
-    Rem,
-}
-
-/// An operation that takes two values and returns a boolean value.
-#[derive(Clone, Debug)]
-pub enum OrdOp {
-    /// Less-than (<).
-    Lt,
-    /// Less-than or equal (<=).
-    Le,
-    /// Greater-than (>).
-    Gt,
-    /// Greater-than or equal (>=).
-    Ge,
-    /// Equals (=).
-    Eq,
-    /// Not equals (!=).
-    Ne,
-}
+pub use jaq_parse::{MathOp, OrdOp};
 
 #[derive(Clone, Debug)]
 pub enum LogicOp {
@@ -104,43 +74,6 @@ impl core::ops::Rem for Val {
         match (self, rhs) {
             (Num(l), Num(r)) => Ok(Num(l % r)),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Rem)),
-        }
-    }
-}
-
-impl MathOp {
-    pub fn run(&self, l: Val, r: Val) -> ValR {
-        use MathOp::*;
-        match self {
-            Add => l + r,
-            Sub => l - r,
-            Mul => l * r,
-            Div => l / r,
-            Rem => l % r,
-        }
-    }
-
-    pub fn passive(&self) -> &str {
-        match self {
-            MathOp::Add => "added",
-            MathOp::Sub => "subtracted",
-            MathOp::Mul => "multiplied",
-            MathOp::Div => "divided",
-            MathOp::Rem => "divided (remainder)",
-        }
-    }
-}
-
-impl OrdOp {
-    pub fn run(&self, l: &Val, r: &Val) -> bool {
-        use OrdOp::*;
-        match self {
-            Gt => l > r,
-            Ge => l >= r,
-            Lt => l < r,
-            Le => l <= r,
-            Eq => l == r,
-            Ne => l != r,
         }
     }
 }

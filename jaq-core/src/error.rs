@@ -23,7 +23,7 @@ impl fmt::Display for Error {
             ObjKey(v) => write!(f, "cannot use {} as object key", v),
             Length(v) => write!(f, "{} has no length", v),
             Iter(v) => write!(f, "cannot iterate over {}", v),
-            MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, op.passive()),
+            MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, passive(op)),
             Index(v) => write!(f, "cannot index {}", v),
             IndexWith(v, i) => write!(f, "cannot index {} with {}", v, i),
             IndexOutOfBounds(i) => write!(f, "index {} is out of bounds", i),
@@ -31,6 +31,16 @@ impl fmt::Display for Error {
             Usize(v) => write!(f, "cannot use {} as unsigned integer", v),
             SliceAssign(v) => write!(f, "cannot assign non-array ({}) to an array slice", v),
         }
+    }
+}
+
+fn passive(op: &MathOp) -> &str {
+    match op {
+        MathOp::Add => "added",
+        MathOp::Sub => "subtracted",
+        MathOp::Mul => "multiplied",
+        MathOp::Div => "divided",
+        MathOp::Rem => "divided (remainder)",
     }
 }
 
