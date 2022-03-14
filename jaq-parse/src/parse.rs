@@ -43,12 +43,30 @@ impl fmt::Display for MathOp {
 }
 
 #[derive(Clone, Debug)]
+enum AssignOp {
+    Assign,
+    Update,
+    UpdateWith(MathOp),
+}
+
+impl fmt::Display for AssignOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Assign => "=".fmt(f),
+            Self::Update => "|=".fmt(f),
+            Self::UpdateWith(op) => write!(f, "{op}="),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 enum BinaryOp {
     Pipe,
     Comma,
     Or,
     And,
     Math(MathOp),
+    Assign(AssignOp),
     Eq,
     NotEq,
 }
@@ -97,6 +115,18 @@ where
 {
     let args = prev.clone().then(op.then(prev).repeated());
     args.foldl(|a, (op, b)| {
+        let span = a.1.start..b.1.end;
+        (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+    })
+}
+
+fn binr<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
+where
+    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
+    O: Parser<Token, BinaryOp, Error = Simple<Token>> + Clone,
+{
+    let args = prev.clone().then(op).repeated().then(prev);
+    args.foldr(|(a, op), b| {
         let span = a.1.start..b.1.end;
         (Expr::Binary(Box::new(a), op, Box::new(b)), span)
     })
@@ -252,10 +282,23 @@ fn parse_expr2<'a>(
     let and = bin(eq_neq, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));
 
+    let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
+    let update_with = |op: MathOp| assign(AssignOp::UpdateWith(op));
+    let assign = choice((
+        assign(AssignOp::Assign),
+        assign(AssignOp::Update),
+        update_with(MathOp::Add),
+        update_with(MathOp::Sub),
+        update_with(MathOp::Mul),
+        update_with(MathOp::Div),
+        update_with(MathOp::Rem),
+    ));
+    let assign = binr(or, assign);
+
     let comma = if with_comma {
-        bin(or, just(Token::Ctrl(',')).to(BinaryOp::Comma)).boxed()
+        bin(assign, just(Token::Ctrl(',')).to(BinaryOp::Comma)).boxed()
     } else {
-        or.boxed()
+        assign.boxed()
     };
 
     let pipe = bin(comma, just(Token::Op("|".to_string())).to(BinaryOp::Pipe));
