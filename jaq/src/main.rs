@@ -1,8 +1,12 @@
 use clap::Parser;
 use jaq_core::{ClosedFilter, Main, Val};
+use mimalloc::MiMalloc;
 use std::convert::TryFrom;
 use std::io::Write;
 use std::rc::Rc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(Parser)]
 struct Cli {
