@@ -1,6 +1,5 @@
 use crate::{ClosedFilter, Error, Filter, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use core::convert::TryInto;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
@@ -88,7 +87,7 @@ impl PathElem<Vec<Rc<Val>>> {
         match self {
             Self::Index(indices) => match current {
                 Val::Arr(a) => Box::new(indices.iter().map(move |i| {
-                    Ok(if let Some(i) = abs_index(i.as_isize()?, a.len()) {
+                    Ok(if let Some(i) = abs_index(i.as_posneg()?, a.len()) {
                         Rc::clone(&a[i])
                     } else {
                         Rc::new(Val::Null)
@@ -169,7 +168,7 @@ impl PathElem<Vec<Rc<Val>>> {
                 Val::Arr(mut a) => {
                     for i in indices.iter() {
                         let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
-                        let i = match (i.as_isize().and_then(abs_or), opt) {
+                        let i = match (i.as_posneg().and_then(abs_or), opt) {
                             (Ok(i), _) => i,
                             (Err(e), Essential) => return Err(e),
                             (Err(_), Optional) => continue,
@@ -262,10 +261,10 @@ impl<F> From<PathElem<F>> for Path<F> {
     }
 }
 
-type RelBounds<'a> = Box<dyn Iterator<Item = Result<Option<isize>, Error>> + 'a>;
+type RelBounds<'a> = Box<dyn Iterator<Item = Result<Option<(usize, bool)>, Error>> + 'a>;
 fn rel_bounds(f: &Option<Vec<Rc<Val>>>) -> RelBounds<'_> {
     match f {
-        Some(f) => Box::new(f.iter().map(move |i| Ok(Some(i.as_isize()?)))),
+        Some(f) => Box::new(f.iter().map(move |i| Ok(Some(i.as_posneg()?)))),
         None => Box::new(core::iter::once(Ok(None))),
     }
 }
@@ -285,30 +284,32 @@ fn skip_take(from: usize, until: usize) -> (usize, usize) {
 
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
 /// else return `default`.
-fn abs_bound(i: Option<isize>, len: usize, default: usize) -> usize {
-    let abs = |i| core::cmp::min(wrap(i, len).try_into().unwrap_or(0), len);
+fn abs_bound(i: Option<(usize, bool)>, len: usize, default: usize) -> usize {
+    let abs = |i| core::cmp::min(wrap(i, len).unwrap_or(0), len);
     i.map(abs).unwrap_or(default)
 }
 
 /// Absolutise an index and return result if it is inside [0, len).
-fn abs_index(i: isize, len: usize) -> Option<usize> {
-    wrap(i, len).try_into().ok().filter(|i| *i < len)
+fn abs_index((i, pos): (usize, bool), len: usize) -> Option<usize> {
+    wrap((i, pos), len).filter(|i| *i < len)
 }
 
-fn wrap(i: isize, len: usize) -> isize {
-    if i < 0 {
-        len as isize + i
+fn wrap((i, pos): (usize, bool), len: usize) -> Option<usize> {
+    if pos {
+        Some(i)
+    } else if len < i {
+        None
     } else {
-        i
+        Some(len - i)
     }
 }
 
 #[test]
 fn wrap_test() {
     let len = 4;
-    assert_eq!(wrap(0, len), 0);
-    assert_eq!(wrap(8, len), 8);
-    assert_eq!(wrap(-1, len), 3);
-    assert_eq!(wrap(-4, len), 0);
-    assert_eq!(wrap(-8, len), -4);
+    assert_eq!(wrap((0, true), len), Some(0));
+    assert_eq!(wrap((8, true), len), Some(8));
+    assert_eq!(wrap((1, false), len), Some(3));
+    assert_eq!(wrap((4, false), len), Some(0));
+    assert_eq!(wrap((8, false), len), None);
 }

@@ -80,8 +80,10 @@ fn index_update() {
     give(json!([0, 1, 2]), ".[1] |= .+2", json!([0, 3, 2]));
     give(json!([0, 1, 2]), ".[-1,-1] |= empty", json!([0]));
     give(json!([0, 1, 2]), ".[ 0, 0] |= empty", json!([2]));
-    fail(json!([0, 1, 2]), ".[ 3] |=  3", Error::IndexOutOfBounds(3));
-    fail(json!([0, 1, 2]), ".[-4] |= -1", Error::IndexOutOfBounds(-4));
+
+    use Error::IndexOutOfBounds as Oob;
+    fail(json!([0, 1, 2]), ".[ 3] |=  3", Oob((3, true)));
+    fail(json!([0, 1, 2]), ".[-4] |= -1", Oob((4, false)));
 
     give(json!({"a": 1}), r#".[0, "a"]? |= .+1"#, json!({"a": 2}));
     give(json!([0, 1, 2]), r#".["a", 0]? |= .+1"#, json!([1, 1, 2]));

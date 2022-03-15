@@ -1,4 +1,4 @@
-use crate::{ClosedFilter, Error, Filter, Num, RValRs, Val, ValR};
+use crate::{ClosedFilter, Error, Filter, RValRs, Val, ValR};
 use alloc::{boxed::Box, rc::Rc, string::ToString, vec::Vec};
 use core::convert::TryFrom;
 
@@ -61,7 +61,7 @@ impl New {
             Null => Ok(Val::Null),
             True => Ok(Val::Bool(true)),
             False => Ok(Val::Bool(false)),
-            Length => Ok(Val::Num(v.len()?)),
+            Length => v.len(),
             Type => Ok(Val::Str(v.typ().to_string())),
         }
     }
@@ -85,11 +85,9 @@ impl Ref<Box<ClosedFilter>> {
             }
             Self::Range(from, until) => {
                 let prod = Filter::cartesian(from, until, v);
-                let ints = prod.map(|(from, until)| Ok((from?.as_isize()?, until?.as_isize()?)));
-                Box::new(ints.flat_map(|from_until| match from_until {
-                    Ok((from, until)) => {
-                        Box::new((from..until).map(|n| Ok(Rc::new(Val::Num(Num::from(n))))))
-                    }
+                let ranges = prod.map(|(from, until)| from?.range(&*until?));
+                Box::new(ranges.flat_map(|range| match range {
+                    Ok(range) => Box::new(range.map(Rc::new).map(Ok)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }

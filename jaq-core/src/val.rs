@@ -1,16 +1,19 @@
 //! JSON values with reference-counted sharing.
 
-use crate::{Error, Map, Num, RVals};
+use crate::{Error, Map, RVals};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use core::cmp::Ordering;
 use core::convert::{TryFrom, TryInto};
 use core::fmt;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug)]
 pub enum Val {
     Null,
     Bool(bool),
-    Num(Num),
+    Pos(usize),
+    Neg(usize),
+    Float(f64),
     Str(String),
     Arr(Vec<Rc<Val>>),
     Obj(Map<String, Rc<Val>>),
@@ -18,7 +21,9 @@ pub enum Val {
 
 #[derive(Clone, Debug)]
 pub enum Atom {
-    Num(Num),
+    Pos(usize),
+    Neg(usize),
+    Float(f64),
     Str(String),
 }
 
@@ -27,9 +32,10 @@ impl Val {
         !matches!(self, Val::Null | Val::Bool(false))
     }
 
-    pub fn as_isize(&self) -> Result<isize, Error> {
+    pub fn as_posneg(&self) -> Result<(usize, bool), Error> {
         match self {
-            Self::Num(n) => n.to_isize().ok_or_else(|| Error::Isize(self.clone())),
+            Self::Pos(p) => Ok((*p, true)),
+            Self::Neg(n) => Ok((*n, false)),
             _ => Err(Error::Isize(self.clone())),
         }
     }
@@ -45,14 +51,29 @@ impl Val {
         self.as_str().map(|s| s.to_string())
     }
 
-    pub fn len(&self) -> Result<Num, Error> {
+    pub fn len(&self) -> Result<Self, Error> {
         match self {
-            Self::Null => Ok(0_usize.into()),
+            Self::Null => Ok(Self::Pos(0)),
             Self::Bool(_) => Err(Error::Length(self.clone())),
-            Self::Num(n) => Ok(*n),
-            Self::Str(s) => Ok(s.chars().count().into()),
-            Self::Arr(a) => Ok(a.len().into()),
-            Self::Obj(o) => Ok(o.keys().count().into()),
+            Self::Pos(l) | Self::Neg(l) => Ok(Self::Pos(*l)),
+            Self::Float(f) => Ok(Self::Float(f.abs())),
+            Self::Str(s) => Ok(Self::Pos(s.chars().count())),
+            Self::Arr(a) => Ok(Self::Pos(a.len())),
+            Self::Obj(o) => Ok(Self::Pos(o.keys().count())),
+        }
+    }
+
+    pub fn range(&self, other: &Self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
+        match (self, other) {
+            (Self::Pos(x), Self::Pos(y)) => Ok(Box::new((*x..*y).map(Self::Pos))),
+            (Self::Neg(x), Self::Neg(y)) => Ok(Box::new((*y + 1..*x + 1).rev().map(Self::Neg))),
+            (Self::Neg(_), Self::Pos(_)) => {
+                let neg = self.range(&Self::Neg(0));
+                let pos = Self::Pos(0).range(other);
+                Ok(Box::new(neg?.chain(pos?)))
+            }
+            (Self::Pos(_), Self::Neg(_)) => Ok(Box::new(core::iter::empty())),
+            _ => todo!(),
         }
     }
 
@@ -60,7 +81,8 @@ impl Val {
         match self {
             Self::Null => Ok(true),
             Self::Bool(_) => Err(Error::Length(self.clone())),
-            Self::Num(n) => Ok(n.is_zero()),
+            Self::Pos(x) | Self::Neg(x) => Ok(*x == 0),
+            Self::Float(f) => Ok(*f == 0.),
             Self::Str(s) => Ok(s.is_empty()),
             Self::Arr(a) => Ok(a.is_empty()),
             Self::Obj(o) => Ok(o.is_empty()),
@@ -79,7 +101,7 @@ impl Val {
         match self {
             Self::Null => "null",
             Self::Bool(_) => "boolean",
-            Self::Num(_) => "number",
+            Self::Pos(_) | Self::Neg(_) | Self::Float(_) => "number",
             Self::Str(_) => "string",
             Self::Arr(_) => "array",
             Self::Obj(_) => "object",
@@ -90,7 +112,9 @@ impl Val {
 impl From<Atom> for Val {
     fn from(a: Atom) -> Self {
         match a {
-            Atom::Num(n) => Self::Num(n),
+            Atom::Pos(p) => Self::Pos(p),
+            Atom::Neg(n) => Self::Neg(n),
+            Atom::Float(f) => Self::Float(f),
             Atom::Str(s) => Self::Str(s),
         }
     }
@@ -100,7 +124,7 @@ impl TryFrom<&Val> for usize {
     type Error = Error;
     fn try_from(v: &Val) -> Result<usize, Error> {
         match v {
-            Val::Num(n) => n.try_into().map_err(|_| Error::Usize(v.clone())),
+            Val::Pos(n) => Ok(*n),
             _ => Err(Error::Usize(v.clone())),
         }
     }
@@ -112,7 +136,16 @@ impl From<serde_json::Value> for Val {
         match v {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
-            Number(n) => Self::Num(Num::try_from(n).unwrap()),
+            Number(n) => match n.as_u64() {
+                Some(p) => Self::Pos(p.try_into().unwrap()),
+                None => match n.as_i64() {
+                    Some(n) => Self::Neg((-n).try_into().unwrap()),
+                    None => match n.as_f64() {
+                        Some(f) => Self::Float(f),
+                        _ => todo!(),
+                    },
+                },
+            },
             String(s) => Self::Str(s),
             Array(a) => Self::Arr(a.into_iter().map(|x| Rc::new(x.into())).collect()),
             Object(o) => Self::Obj(o.into_iter().map(|(k, v)| (k, Rc::new(v.into()))).collect()),
@@ -126,7 +159,9 @@ impl From<Val> for serde_json::Value {
         match v {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
-            Val::Num(n) => Number(serde_json::Number::try_from(n).unwrap()),
+            Val::Pos(p) => Number(p.into()),
+            Val::Neg(n) => Number(serde_json::Number::from(-isize::try_from(n).unwrap())),
+            Val::Float(f) => Number(serde_json::Number::from_f64(f).unwrap()),
             Val::Str(s) => String(s),
             Val::Arr(a) => Array(a.into_iter().map(|x| (*x).clone().into()).collect()),
             Val::Obj(o) => Object(
@@ -138,12 +173,66 @@ impl From<Val> for serde_json::Value {
     }
 }
 
+impl PartialEq for Val {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::Bool(x), Self::Bool(y)) => x == y,
+            (Self::Pos(x), Self::Pos(y)) | (Self::Neg(x), Self::Neg(y)) => x == y,
+            (Self::Pos(p), Self::Neg(n)) | (Self::Neg(n), Self::Pos(p)) => *p == 0 && *n == 0,
+            // this behaviour is more like jq:
+            /*
+            (Self::Pos(p), Self::Float(f)) | (Self::Float(f), Self::Pos(p)) => *p as f64 == *f,
+            (Self::Neg(n), Self::Float(f)) | (Self::Float(f), Self::Neg(n)) => -(*n as f64) == *f,
+            */
+            (Self::Float(x), Self::Float(y)) => x == y,
+            (Self::Str(x), Self::Str(y)) => x == y,
+            (Self::Arr(x), Self::Arr(y)) => x == y,
+            (Self::Obj(x), Self::Obj(y)) => x == y,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for Val {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        use Ordering::*;
+        match (self, other) {
+            (Self::Null, Self::Null) => Some(Equal),
+            (Self::Null, _) => Some(Less),
+            (_, Self::Null) => Some(Greater),
+            (Self::Bool(x), Self::Bool(y)) => x.partial_cmp(y),
+            (Self::Bool(_), _) => Some(Less),
+            (_, Self::Bool(_)) => Some(Greater),
+            (Self::Pos(x), Self::Pos(y)) => x.partial_cmp(y),
+            (Self::Neg(x), Self::Neg(y)) => x.partial_cmp(y).map(Ordering::reverse),
+            (Self::Pos(_), Self::Neg(_)) => Some(Greater),
+            (Self::Neg(_), Self::Pos(_)) => Some(Less),
+            (Self::Pos(p), Self::Float(f)) => (*p as f64).partial_cmp(f),
+            (Self::Neg(n), Self::Float(f)) => (-(*n as f64)).partial_cmp(f),
+            (Self::Float(f), Self::Pos(p)) => f.partial_cmp(&(*p as f64)),
+            (Self::Float(f), Self::Neg(n)) => f.partial_cmp(&-(*n as f64)),
+            (Self::Pos(_) | Self::Neg(_) | Self::Float(_), _) => Some(Less),
+            (_, Self::Pos(_) | Self::Neg(_) | Self::Float(_)) => Some(Greater),
+            (Self::Str(x), Self::Str(y)) => x.partial_cmp(y),
+            (Self::Str(_), _) => Some(Less),
+            (_, Self::Str(_)) => Some(Greater),
+            (Self::Arr(x), Self::Arr(y)) => x.partial_cmp(y),
+            (Self::Arr(_), _) => Some(Less),
+            (_, Self::Arr(_)) => Some(Greater),
+            (Self::Obj(x), Self::Obj(y)) => x.partial_cmp(y),
+        }
+    }
+}
+
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "boolean ({})", b),
-            Self::Num(n) => write!(f, "number ({})", n),
+            Self::Pos(p) => write!(f, "number ({})", p),
+            Self::Neg(n) => write!(f, "number (-{})", n),
+            Self::Float(x) => write!(f, "number ({})", x),
             Self::Str(s) => write!(f, "string (\"{}\")", s),
             Self::Arr(a) => {
                 write!(f, "array ([")?;

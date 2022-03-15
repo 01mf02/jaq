@@ -5,7 +5,6 @@ use crate::preprocess::{Call, PreFilter};
 use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
 use alloc::{boxed::Box, string::ToString, vec::Vec};
-use core::convert::{TryFrom, TryInto};
 use core::fmt::{self, Display};
 use pest::iterators::{Pair, Pairs};
 use pest::prec_climber::PrecClimber;
@@ -210,9 +209,17 @@ impl TryFrom<Pair<'_, Rule>> for PreFilter {
 
 impl From<Pair<'_, Rule>> for Atom {
     fn from(pair: Pair<Rule>) -> Self {
-        use serde_json::Number;
         match pair.as_rule() {
-            Rule::number => Self::Num(pair.as_str().parse::<Number>().unwrap().try_into().unwrap()),
+            Rule::number => {
+                let s = pair.as_str();
+                match s.parse::<usize>() {
+                    Ok(p) => Self::Pos(p),
+                    _ => match s.parse::<isize>() {
+                        Ok(n) => Self::Neg(-n as usize),
+                        _ => Self::Float(s.parse::<f64>().unwrap()),
+                    },
+                }
+            }
             Rule::string => Self::Str(pair.into_inner().next().unwrap().as_str().to_string()),
             Rule::identifier => Self::Str(pair.as_str().to_string()),
             _ => unreachable!(),

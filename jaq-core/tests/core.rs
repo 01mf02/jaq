@@ -40,6 +40,10 @@ fn length() {
     give(json!("ƒoo"), "length", json!(3));
     give(json!("नमस्ते"), "length", json!(6));
     give(json!({"a": 5, "b": 3}), "length", json!(2));
+    give(json!(2), "length", json!(2));
+    give(json!(-2), "length", json!(2));
+    give(json!(2.5), "length", json!(2.5));
+    give(json!(-2.5), "length", json!(2.5));
 }
 
 #[test]

@@ -14,7 +14,6 @@ pub mod error;
 pub mod filter;
 pub mod functions;
 pub mod map;
-pub mod num;
 pub mod ops;
 #[cfg(feature = "parse")]
 pub mod parse;
@@ -27,7 +26,6 @@ pub mod val;
 pub use error::Error;
 pub use filter::Filter;
 pub use map::Map;
-pub use num::Num;
 pub use path::Path;
 pub use preprocess::{ClosedFilter, OpenFilter, PreFilter};
 pub use recurse::Recurse;
