@@ -2,7 +2,7 @@
 name = "jaq-core"
 version = "0.1.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 readme = "../README.md"
 description = "Parser and interpreter for the jq language"
