@@ -83,13 +83,13 @@ impl<K: Display, V: Display> Display for Map<K, V> {
     }
 }
 
-impl<K: Eq + Ord, V: PartialEq> PartialEq for Map<K, V> {
+impl<K: Hash + Eq, V: PartialEq> PartialEq for Map<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        self.sorted_by_key() == other.sorted_by_key()
+        self.0 == other.0
     }
 }
 
-impl<K: Ord, V: PartialOrd> PartialOrd for Map<K, V> {
+impl<K: Hash + Eq + Ord, V: PartialOrd> PartialOrd for Map<K, V> {
     fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
         let l = self.sorted_by_key();
         let r = other.sorted_by_key();
