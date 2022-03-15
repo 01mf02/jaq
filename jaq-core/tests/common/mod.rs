@@ -25,8 +25,7 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let f = f.open(jaq_core::std()).unwrap();
     let f = ClosedFilter::try_from(f).unwrap();
 
-    // TODO: remove cloned() starting from Rust 1.53
-    let expected = ys.iter().cloned().map(|y| Ok(to(y)));
+    let expected = ys.into_iter().map(|y| Ok(to(y)));
     let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
 
     let out: Vec<_> = f.run(to(x)).collect();
