@@ -92,6 +92,8 @@ fn eq() {
     // here, we diverge from jq, which outputs true
     give(json!(1), ". == 1.0", json!(false));
     give(json!(1), ". == 2 / 2.0", json!(false));
+
+    give(json!({"a": 1, "b": 2}), ". == {b: 2, a: 1}", json!(true));
 }
 
 #[test]
