@@ -55,7 +55,11 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .collect();
 
     // A parser for operators
-    let op = one_of("|=!<>+-*/%").repeated().at_least(1).collect();
+    let op = one_of("|=!<>+-*/%")
+        .repeated()
+        .exactly(1)
+        .chain::<char, _, _>(just('=').repeated().at_most(1))
+        .collect();
 
     let dot = just('.');
     let dot_id = just('.').ignore_then(text::ident().or(str_));
