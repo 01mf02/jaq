@@ -128,13 +128,11 @@ where
         .map(Option::unwrap_or_default)
 }
 
-type ExprParser<'a> = BoxedParser<'a, Token, Spanned<Expr>, Simple<Token>>;
-
 fn parse_expr2<'a>(
     expr_with_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
     expr_sans_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
     with_comma: bool,
-) -> ExprParser<'a> {
+) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a {
     let expr = expr_with_comma;
     let val = filter_map(|span, tok| match tok {
         Token::Null => Ok(Expr::Value(Value::Null)),
@@ -286,6 +284,7 @@ fn parse_expr2<'a>(
     let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
     // Sum ops (add and subtract) have equal precedence
     let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
+    let add_sub = add_sub.boxed();
 
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
 
@@ -298,6 +297,7 @@ fn parse_expr2<'a>(
     let lt_gt = bin(add_sub, lt_gt);
     // Comparison ops (equal, not-equal) have equal precedence
     let eq_ne = bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)));
+    let eq_ne = eq_ne.boxed();
 
     let and = bin(eq_ne, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));
@@ -321,9 +321,7 @@ fn parse_expr2<'a>(
         assign.boxed()
     };
 
-    let pipe = bin(comma, just(Token::Op("|".to_string())).to(BinaryOp::Pipe));
-
-    pipe.boxed()
+    bin(comma, just(Token::Op("|".to_string())).to(BinaryOp::Pipe))
 }
 
 fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
