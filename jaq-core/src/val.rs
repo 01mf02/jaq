@@ -1,11 +1,13 @@
 //! JSON values with reference-counted sharing.
 
-use crate::{Error, Map, RVals};
+use crate::{Error, RVals};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::convert::{TryFrom, TryInto};
 use core::fmt;
+use fxhash::FxBuildHasher;
+use indexmap::IndexMap;
 
 #[derive(Clone, Debug)]
 pub enum Val {
@@ -16,7 +18,8 @@ pub enum Val {
     Float(f64),
     Str(String),
     Arr(Vec<Rc<Val>>),
-    Obj(Map<String, Rc<Val>>),
+    /// A map that preserves the order of its elements.
+    Obj(IndexMap<String, Rc<Val>, FxBuildHasher>),
 }
 
 #[derive(Clone, Debug)]
@@ -220,7 +223,21 @@ impl PartialOrd for Val {
             (Self::Arr(x), Self::Arr(y)) => x.partial_cmp(y),
             (Self::Arr(_), _) => Some(Less),
             (_, Self::Arr(_)) => Some(Greater),
-            (Self::Obj(x), Self::Obj(y)) => x.partial_cmp(y),
+            (Self::Obj(x), Self::Obj(y)) => {
+                let mut l: Vec<_> = x.iter().collect();
+                let mut r: Vec<_> = y.iter().collect();
+                l.sort_by_key(|(k, _v)| *k);
+                r.sort_by_key(|(k, _v)| *k);
+                // TODO: make this nicer
+                let kl = l.iter().map(|(k, _v)| k);
+                let kr = r.iter().map(|(k, _v)| k);
+                let vl = l.iter().map(|(_k, v)| v);
+                let vr = r.iter().map(|(_k, v)| v);
+                match kl.cmp(kr) {
+                    Ordering::Equal => vl.partial_cmp(vr),
+                    ord => Some(ord),
+                }
+            }
         }
     }
 }
@@ -243,7 +260,15 @@ impl fmt::Display for Val {
                 iter.try_for_each(|x| write!(f, ",{}", x))?;
                 write!(f, "])")
             }
-            Self::Obj(o) => write!(f, "object ({})", o),
+            Self::Obj(o) => {
+                write!(f, "object ({{")?;
+                let mut iter = o.iter();
+                if let Some((k, v)) = iter.next() {
+                    write!(f, "{}:{}", k, v)?;
+                }
+                iter.try_for_each(|(k, v)| write!(f, ",{}:{}", k, v))?;
+                write!(f, "}})")
+            }
         }
     }
 }

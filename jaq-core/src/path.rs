@@ -153,14 +153,24 @@ impl PathElem<Vec<Rc<Val>>> {
         match self {
             Self::Index(indices) => match v {
                 Val::Obj(mut o) => {
-                    let some = |v: &Rc<Val>| f(Rc::clone(v)).next().transpose();
-                    let none = || f(Rc::new(Val::Null)).next().transpose();
-
                     for i in indices.iter() {
+                        use indexmap::map::Entry::*;
                         match (&**i, opt) {
-                            (Val::Str(s), _) => o.insert_or_remove(s.clone(), some, none)?,
+                            (Val::Str(s), _) => match o.entry(s.clone()) {
+                                Occupied(mut e) => {
+                                    match f(Rc::clone(e.get())).next().transpose()? {
+                                        Some(y) => e.insert(y),
+                                        None => e.remove(),
+                                    };
+                                }
+                                Vacant(e) => {
+                                    if let Some(y) = f(Rc::new(Val::Null)).next().transpose()? {
+                                        e.insert(y);
+                                    }
+                                }
+                            },
                             (i, Essential) => return Err(Error::IndexWith(Val::Obj(o), i.clone())),
-                            (_, Optional) => continue,
+                            (_, Optional) => (),
                         }
                     }
                     Ok(Val::Obj(o))

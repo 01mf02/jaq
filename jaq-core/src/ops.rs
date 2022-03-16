@@ -33,7 +33,10 @@ impl core::ops::Add for Val {
                 l.extend(r);
                 Ok(Arr(l))
             }
-            (Obj(l), Obj(r)) => Ok(Obj(l + r)),
+            (Obj(mut l), Obj(r)) => {
+                l.extend(r);
+                Ok(Obj(l))
+            }
             (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
         }
     }
