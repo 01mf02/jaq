@@ -1,7 +1,7 @@
 use crate::ops::{LogicOp, MathOp, OrdOp};
 pub use crate::preprocess::{ClosedFilter, OpenFilter, PreFilter};
 use crate::val::{Atom, Val};
-use crate::{Error, Map, Path, RValR, RValRs, ValRs};
+use crate::{Error, Path, RValR, RValRs, ValRs};
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 
 #[derive(Clone, Debug)]
@@ -63,7 +63,7 @@ impl New<ClosedFilter> {
         match self {
             Self::Atom(a) => Box::new(once(Ok(Val::from(a.clone())))),
             Self::Array(f) => Box::new(once(f.run(v).collect::<Result<_, _>>().map(Val::Arr))),
-            Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Map::new())))),
+            Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Default::default())))),
             Self::Object(o) => {
                 let iter = o
                     .iter()
