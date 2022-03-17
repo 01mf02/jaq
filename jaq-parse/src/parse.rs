@@ -2,27 +2,8 @@ use crate::{MathOp, OrdOp, Span, Token};
 use chumsky::prelude::*;
 use std::{collections::HashMap, fmt};
 
-#[derive(Clone, Debug, PartialEq)]
-enum Value {
-    Null,
-    Bool(bool),
-    Num(String),
-    Str(String),
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Null => "null".fmt(f),
-            Self::Bool(x) => x.fmt(f),
-            Self::Num(x) => x.fmt(f),
-            Self::Str(x) => x.fmt(f),
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
-enum AssignOp {
+pub enum AssignOp {
     Assign,
     Update,
     UpdateWith(MathOp),
@@ -39,7 +20,7 @@ impl fmt::Display for AssignOp {
 }
 
 #[derive(Clone, Debug)]
-enum BinaryOp {
+pub enum BinaryOp {
     Pipe,
     Comma,
     Or,
@@ -52,21 +33,21 @@ enum BinaryOp {
 pub type Spanned<T> = (T, Span);
 
 #[derive(Debug)]
-enum KeyVal {
+pub enum KeyVal {
     Expr(Spanned<Expr>, Spanned<Expr>),
     Str(String, Option<Spanned<Expr>>),
 }
 
 // An expression node in the AST. Children are spanned so we can generate useful runtime errors.
 #[derive(Debug)]
-enum Expr {
-    Error,
-    Value(Value),
+pub enum Expr {
+    Num(String),
+    Str(String),
+    Call(String, Vec<Spanned<Self>>),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
     Neg(Box<Spanned<Self>>),
     Object(Vec<KeyVal>),
-    Array(Box<Spanned<Self>>),
-    Call(String, Vec<Spanned<Self>>),
+    Array(Option<Box<Spanned<Self>>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Path(Path<Spanned<Expr>>),
 }
@@ -135,10 +116,8 @@ fn parse_expr2<'a>(
 ) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a {
     let expr = expr_with_comma;
     let val = filter_map(|span, tok| match tok {
-        Token::Null => Ok(Expr::Value(Value::Null)),
-        Token::Bool(x) => Ok(Expr::Value(Value::Bool(x))),
-        Token::Num(n) => Ok(Expr::Value(Value::Num(n))),
-        Token::Str(s) => Ok(Expr::Value(Value::Str(s))),
+        Token::Num(n) => Ok(Expr::Num(n)),
+        Token::Str(s) => Ok(Expr::Str(s)),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     })
     .labelled("value");
@@ -155,13 +134,11 @@ fn parse_expr2<'a>(
     })
     .labelled("object key");
 
-    let if_ = just(Token::If).ignore_then(expr.clone());
-    let then = just(Token::Then).ignore_then(expr.clone());
-    let else_ = just(Token::Else).ignore_then(expr.clone());
+    let if_ = just(Token::If).ignore_then(expr.clone().map(Box::new));
+    let then = just(Token::Then).ignore_then(expr.clone().map(Box::new));
+    let else_ = just(Token::Else).ignore_then(expr.clone().map(Box::new));
     let ite = if_.then(then).then(else_).then_ignore(just(Token::End));
-    let ite = ite.map_with_span(|((cond, a), b), span| {
-        (Expr::If(Box::new(cond), Box::new(a), Box::new(b)), span)
-    });
+    let ite = ite.map_with_span(|((if_, then), else_), span| (Expr::If(if_, then, else_), span));
 
     let call = ident.then(args(expr.clone()));
     let call = call.map_with_span(|(f, args), span| (Expr::Call(f, args), span));
@@ -173,8 +150,9 @@ fn parse_expr2<'a>(
 
     let array = expr
         .clone()
+        .or_not()
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-        .map_with_span(|arr, span| (Expr::Array(Box::new(arr)), span));
+        .map_with_span(|arr, span| (Expr::Array(arr.map(Box::new)), span));
 
     let is_val = just(Token::Ctrl(':')).ignore_then(expr_sans_comma);
     let key_str = key
@@ -216,7 +194,7 @@ fn parse_expr2<'a>(
         });
 
         let dot_id = filter_map(|span, tok| match tok {
-            Token::DotId(ident) => Ok((Expr::Value(Value::Str(ident)), span)),
+            Token::DotId(ident) => Ok((Expr::Str(ident), span)),
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
         });
         let dot = just(Token::Dot).then(opt.clone());
@@ -246,27 +224,7 @@ fn parse_expr2<'a>(
         .or(parens)
         .or(array)
         .or(path)
-        .boxed()
-        // Attempt to recover anything that looks like a parenthesised expression but contains errors
-        .recover_with(nested_delimiters(
-            Token::Ctrl('('),
-            Token::Ctrl(')'),
-            [
-                (Token::Ctrl('['), Token::Ctrl(']')),
-                (Token::Ctrl('{'), Token::Ctrl('}')),
-            ],
-            |span| (Expr::Error, span),
-        ))
-        // Attempt to recover anything that looks like a list but contains errors
-        .recover_with(nested_delimiters(
-            Token::Ctrl('['),
-            Token::Ctrl(']'),
-            [
-                (Token::Ctrl('('), Token::Ctrl(')')),
-                (Token::Ctrl('{'), Token::Ctrl('}')),
-            ],
-            |span| (Expr::Error, span),
-        ));
+        .boxed();
 
     let neg = just(Token::Op("-".to_string()))
         .map_with_span(|_, span| span)

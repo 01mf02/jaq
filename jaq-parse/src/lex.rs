@@ -4,8 +4,6 @@ use core::fmt;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Token {
-    Null,
-    Bool(bool),
     Num(String),
     Str(String),
     Op(String),
@@ -25,8 +23,6 @@ pub enum Token {
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Null => "null".fmt(f),
-            Self::Bool(x) => x.fmt(f),
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Ctrl(c) => c.fmt(f),
             Self::Dot => ".".fmt(f),
@@ -55,11 +51,7 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .collect();
 
     // A parser for operators
-    let op = one_of("|=!<>+-*/%")
-        .repeated()
-        .exactly(1)
-        .chain::<char, _, _>(just('=').repeated().at_most(1))
-        .collect();
+    let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
 
     let dot = just('.');
     let dot_id = just('.').ignore_then(text::ident().or(str_));
@@ -76,9 +68,6 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         "end" => Token::End,
         "or" => Token::Or,
         "and" => Token::And,
-        "true" => Token::Bool(true),
-        "false" => Token::Bool(false),
-        "null" => Token::Null,
         _ => Token::Ident(ident),
     });
 
