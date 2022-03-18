@@ -1,6 +1,6 @@
 use crate::{MathOp, OrdOp, Span, Token};
 use chumsky::prelude::*;
-use std::{collections::HashMap, fmt};
+use core::fmt;
 
 #[derive(Clone, Debug)]
 pub enum AssignOp {
@@ -53,11 +53,7 @@ pub enum Expr {
 }
 
 // A function node in the AST.
-#[derive(Debug)]
-pub struct Func {
-    args: Vec<String>,
-    body: Spanned<Expr>,
-}
+pub type Func = (Vec<String>, Spanned<Expr>);
 
 #[derive(Clone, Debug)]
 pub enum PathComponent<I> {
@@ -286,44 +282,32 @@ fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Cl
     with_comma
 }
 
-fn parse_def() -> impl Parser<Token, (Spanned<String>, Func), Error = Simple<Token>> + Clone {
+type Def = (Spanned<String>, Func);
+type Main = (Vec<Def>, Spanned<Expr>);
+
+fn parse_def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
+    let name = ident
+        .map_with_span(|name, span| (name, span))
+        .labelled("filter name");
 
     just(Token::Def)
-        .ignore_then(
-            ident
-                .map_with_span(|name, span| (name, span))
-                .labelled("function name"),
-        )
-        .then(args(ident).labelled("function args"))
+        .ignore_then(name)
+        .then(args(ident).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
-        .then(parse_expr().then_ignore(just(Token::Ctrl(';'))))
-        .map(|((name, args), body)| (name, Func { args, body }))
-        .labelled("function")
+        .then(parse_expr())
+        .then_ignore(just(Token::Ctrl(';')))
+        .map(|((name, args), body)| (name, (args, body)))
+        .labelled("definition")
 }
 
-pub fn parse_defs() -> impl Parser<Token, HashMap<String, Func>, Error = Simple<Token>> + Clone {
-    parse_def()
-        .repeated()
-        .try_map(|fs, _| {
-            let mut funcs = HashMap::new();
-            for ((name, name_span), f) in fs {
-                if funcs.insert(name.clone(), f).is_some() {
-                    return Err(Simple::custom(
-                        name_span,
-                        format!("Function '{}' already exists", name),
-                    ));
-                }
-            }
-            Ok(funcs)
-        })
-        .then_ignore(end())
+pub fn parse_defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
+    parse_def().repeated().collect()
 }
 
-struct Error {
-    span: Span,
-    msg: String,
+pub fn parse_main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
+    parse_defs().then(parse_expr())
 }
