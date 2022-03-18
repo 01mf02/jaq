@@ -49,7 +49,7 @@ pub enum Expr {
     Object(Vec<KeyVal>),
     Array(Option<Box<Spanned<Self>>>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
-    Path(Path<Spanned<Expr>>),
+    Path(Vec<(PathComponent<Spanned<Self>>, Opt)>),
 }
 
 // A function node in the AST.
@@ -60,10 +60,7 @@ pub struct Func {
 }
 
 #[derive(Clone, Debug)]
-pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
-
-#[derive(Clone, Debug)]
-pub enum PathElem<I> {
+pub enum PathComponent<I> {
     Index(I),
     /// if both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
@@ -174,17 +171,17 @@ fn parse_expr2<'a>(
         let colon = just(Token::Ctrl(':'));
         let e2 = colon.clone().ignore_then(expr.clone().or_not());
         let starts_with_expr = expr.clone().then(e2.or_not()).map(|(e1, e2)| match e2 {
-            None => PathElem::Index(e1),
-            Some(e2) => PathElem::Range(Some(e1), e2),
+            None => PathComponent::Index(e1),
+            Some(e2) => PathComponent::Range(Some(e1), e2),
         });
         let starts_with_colon = colon
             .ignore_then(expr)
-            .map(|e2| PathElem::Range(None, Some(e2)));
+            .map(|e2| PathComponent::Range(None, Some(e2)));
 
         starts_with_expr
             .or(starts_with_colon)
             .or_not()
-            .map(|o| o.unwrap_or(PathElem::Range(None, None)))
+            .map(|o| o.unwrap_or(PathComponent::Range(None, None)))
     };
 
     let path = {
@@ -198,7 +195,7 @@ fn parse_expr2<'a>(
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
         });
         let dot = just(Token::Dot).then(opt.clone());
-        let dot_id = dot_id.map(PathElem::Index).then(opt.clone());
+        let dot_id = dot_id.map(PathComponent::Index).then(opt.clone());
 
         let ranges = range
             .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
@@ -206,12 +203,11 @@ fn parse_expr2<'a>(
             .repeated();
 
         let head = dot.ignore_then(ranges.clone());
-        let tail = dot_id.repeated().exactly(1).chain(ranges);
+        let tail = dot_id.chain(ranges);
 
         head.or(tail.clone())
             .chain(tail.repeated().flatten())
             .collect()
-            .map(Path)
     };
     let path = path.map_with_span(|path, span| (Expr::Path(path), span));
 
