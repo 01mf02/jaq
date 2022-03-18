@@ -104,6 +104,19 @@ impl core::ops::Rem for Val {
     }
 }
 
+impl core::ops::Neg for Val {
+    type Output = ValR;
+    fn neg(self) -> Self::Output {
+        use Val::*;
+        match self {
+            Pos(x) => Ok(Neg(x)),
+            Neg(x) => Ok(Pos(x)),
+            Float(x) => Ok(Float(-x)),
+            x => Err(Error::Neg(x)),
+        }
+    }
+}
+
 impl LogicOp {
     pub fn run<'a>(&self, l: bool, r: impl FnOnce() -> RValRs<'a>) -> ValRs<'a> {
         use core::iter::once;

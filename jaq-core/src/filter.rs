@@ -14,6 +14,7 @@ pub enum Filter<N> {
 #[derive(Clone, Debug)]
 pub enum New<F> {
     Atom(Atom),
+    Neg(Box<F>),
     Array(Box<F>),
     Object(Vec<(F, F)>),
     Logic(Box<F>, LogicOp, Box<F>),
@@ -62,6 +63,7 @@ impl New<ClosedFilter> {
         use core::iter::once;
         match self {
             Self::Atom(a) => Box::new(once(Ok(Val::from(a.clone())))),
+            Self::Neg(f) => Box::new(f.run(v).map(|v| -((*v?).clone()))),
             Self::Array(f) => Box::new(once(f.run(v).collect::<Result<_, _>>().map(Val::Arr))),
             Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Default::default())))),
             Self::Object(o) => {
@@ -148,6 +150,7 @@ impl<N> New<Filter<N>> {
         use New::*;
         match self {
             Atom(a) => Ok(Atom(a)),
+            Neg(f) => Ok(Neg(Box::new(m(*f)?))),
             Array(a) => Ok(Array(Box::new(m(*a)?))),
             Object(o) => Ok(Object(
                 o.into_iter()
