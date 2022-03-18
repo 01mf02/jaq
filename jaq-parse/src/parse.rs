@@ -290,12 +290,10 @@ fn parse_def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
-    let name = ident
-        .map_with_span(|name, span| (name, span))
-        .labelled("filter name");
+    let name = ident.map_with_span(|name, span| (name, span));
 
     just(Token::Def)
-        .ignore_then(name)
+        .ignore_then(name.labelled("filter name"))
         .then(args(ident).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
         .then(parse_expr())
