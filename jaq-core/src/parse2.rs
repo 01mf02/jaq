@@ -1,7 +1,9 @@
 use crate::filter::{New, Ref};
+use crate::ops::LogicOp;
+use crate::path::{Opt, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
 use crate::val::Atom;
-use jaq_parse::parse::{Expr, KeyVal, Spanned};
+use jaq_parse::parse::{BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 
 #[derive(Debug)]
 pub enum Error {}
@@ -50,7 +52,33 @@ impl TryFrom<Expr> for PreFilter {
                 });
                 Ok(Self::New(New::Object(kvs.collect::<Result<_, _>>()?)))
             }
-            _ => todo!(),
+            Expr::Binary(l, op, r) => {
+                let l = Box::new(Self::try_from(*l)?);
+                let r = Box::new(Self::try_from(*r)?);
+                match op {
+                    BinaryOp::Pipe => Ok(Self::Ref(Ref::Pipe(l, r))),
+                    BinaryOp::Comma => Ok(Self::Ref(Ref::Comma(l, r))),
+                    BinaryOp::Or => Ok(Self::New(New::Logic(l, LogicOp::Or, r))),
+                    BinaryOp::And => Ok(Self::New(New::Logic(l, LogicOp::And, r))),
+                    BinaryOp::Ord(op) => Ok(Self::New(New::Ord(l, op, r))),
+                    BinaryOp::Math(op) => Ok(Self::New(New::Math(l, op, r))),
+                    BinaryOp::Assign(_op) => todo!(),
+                }
+            }
+            Expr::Neg(e) => Ok(Self::New(New::Neg(Box::new(Self::try_from(*e)?)))),
+            Expr::Path(path) => {
+                let path = path.into_iter().map(|(p, opt)| match p {
+                    PathComponent::Index(i) => {
+                        Ok((PathElem::Index(Self::try_from(i)?), Opt::from(opt)))
+                    }
+                    PathComponent::Range(from, to) => {
+                        let from = from.map(Self::try_from).transpose()?;
+                        let to = to.map(Self::try_from).transpose()?;
+                        Ok((PathElem::Range(from, to), Opt::from(opt)))
+                    }
+                });
+                Ok(Self::Ref(Ref::Path(Path(path.collect::<Result<_, _>>()?))))
+            }
         }
     }
 }
@@ -59,5 +87,16 @@ impl TryFrom<Spanned<Expr>> for PreFilter {
     type Error = Error;
     fn try_from(expr: Spanned<Expr>) -> Result<Self, Error> {
         Self::try_from(expr.0)
+    }
+}
+
+// TODO: remove this once the old parser is removed?
+impl From<jaq_parse::parse::Opt> for Opt {
+    fn from(opt: jaq_parse::parse::Opt) -> Self {
+        use jaq_parse::parse::Opt::*;
+        match opt {
+            Optional => Self::Optional,
+            Essential => Self::Essential,
+        }
     }
 }
