@@ -14,7 +14,7 @@ fn main() {
         let (ast, parse_errs) =
             parse::parse_defs().parse_recovery(Stream::from_iter(len..len + 1, tokens.into_iter()));
 
-        println!("{:#?}", ast);
+        //println!("{:#?}", ast);
         /*
         if let Some(funcs) = ast.filter(|_| errs.len() + parse_errs.len() == 0) {
             if let Some(main) = funcs.get("main") {
