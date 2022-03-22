@@ -61,7 +61,7 @@ impl TryFrom<Expr> for PreFilter {
             }
             Expr::Str(s) => Ok(Self::New(New::Atom(Atom::Str(s)))),
             Expr::Call(f, args) => {
-                let args: Result<_, _> = args.into_iter().map(|a| Self::try_from(a)).collect();
+                let args: Result<_, _> = args.into_iter().map(Self::try_from).collect();
                 Ok(Self::Named(Call::new(f, args?)))
             }
             Expr::If(if_, then, else_) => {
