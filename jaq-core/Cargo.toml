@@ -11,12 +11,17 @@ keywords = ["json", "query", "jq"]
 categories = ["compilers", "parser-implementations"]
 
 [features]
-default = ["std", "parse"]
+default = ["std", "parse", "bincode"]
 std = []
 parse = ["pest", "pest_derive"]
 
+[build-dependencies]
+jaq-parse = { version = "0.1", path = "../jaq-parse" }
+bincode = { version = "1.3.3", optional = true }
+
 [dependencies]
 jaq-parse = { version = "0.1", path = "../jaq-parse" }
+bincode = { version = "1.3.3", optional = true }
 fxhash = "0.2.1"
 indexmap = "1.6.0"
 itertools = "0.9"
