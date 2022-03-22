@@ -1,6 +1,8 @@
 use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
+use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum MathOp {
     Add,
@@ -42,6 +44,7 @@ impl fmt::Display for MathOp {
 }
 
 /// An operation that takes two values and returns a boolean value.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum OrdOp {
     /// Less-than (<).

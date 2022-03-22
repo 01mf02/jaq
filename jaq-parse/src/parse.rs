@@ -1,7 +1,9 @@
 use crate::{MathOp, OrdOp, Span, Token};
 use chumsky::prelude::*;
 use core::fmt;
+use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum AssignOp {
     Assign,
@@ -19,6 +21,7 @@ impl fmt::Display for AssignOp {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum BinaryOp {
     Pipe,
@@ -32,6 +35,7 @@ pub enum BinaryOp {
 
 pub type Spanned<T> = (T, Span);
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum KeyVal {
     Expr(Spanned<Expr>, Spanned<Expr>),
@@ -39,6 +43,7 @@ pub enum KeyVal {
 }
 
 // An expression node in the AST. Children are spanned so we can generate useful runtime errors.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum Expr {
     Num(String),
@@ -53,6 +58,7 @@ pub enum Expr {
 }
 
 // A function node in the AST.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def<F> {
     pub name: String,
@@ -60,6 +66,7 @@ pub struct Def<F> {
     pub body: F,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum PathComponent<I> {
     Index(I),
@@ -67,6 +74,7 @@ pub enum PathComponent<I> {
     Range(Option<I>, Option<I>),
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
 pub enum Opt {
     Optional,
@@ -289,6 +297,7 @@ fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Cl
 
 pub type Defs = Vec<Def<Spanned<Expr>>>;
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Main<F> {
     pub defs: Vec<Def<F>>,
     pub body: F,
