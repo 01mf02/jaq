@@ -2,11 +2,50 @@ use crate::filter::{New, Ref};
 use crate::ops::LogicOp;
 use crate::path::{Opt, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
+use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
-use jaq_parse::parse::{BinaryOp, Expr, KeyVal, PathComponent, Spanned};
+use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 
 #[derive(Debug)]
 pub enum Error {}
+
+impl Main {
+    pub fn parse2(s: &str) -> Result<Self, Error> {
+        let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_main()).unwrap();
+        Self::try_from(parsed)
+    }
+}
+
+impl Module {
+    pub fn parse2(s: &str) -> Result<Self, Error> {
+        let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_defs()).unwrap();
+        Definitions::try_from(parsed).map(Self::new)
+    }
+}
+
+impl TryFrom<jaq_parse::parse::Defs> for Definitions {
+    type Error = Error;
+    fn try_from(defs: jaq_parse::parse::Defs) -> Result<Self, Error> {
+        let defs = defs.into_iter().map(|def| {
+            Ok::<_, Error>(Definition {
+                name: def.name,
+                args: def.args,
+                term: PreFilter::try_from(def.body).unwrap(),
+            })
+        });
+        Ok(Definitions::new(defs.collect::<Result<_, Error>>()?))
+    }
+}
+
+impl TryFrom<jaq_parse::parse::Main<Spanned<Expr>>> for Main {
+    type Error = Error;
+    fn try_from(main: jaq_parse::parse::Main<Spanned<Expr>>) -> Result<Self, Error> {
+        Ok(Main {
+            defs: Definitions::try_from(main.defs)?,
+            term: PreFilter::try_from(main.body)?,
+        })
+    }
+}
 
 impl TryFrom<Expr> for PreFilter {
     type Error = Error;
@@ -62,7 +101,17 @@ impl TryFrom<Expr> for PreFilter {
                     BinaryOp::And => Ok(Self::New(New::Logic(l, LogicOp::And, r))),
                     BinaryOp::Ord(op) => Ok(Self::New(New::Ord(l, op, r))),
                     BinaryOp::Math(op) => Ok(Self::New(New::Math(l, op, r))),
-                    BinaryOp::Assign(_op) => todo!(),
+                    BinaryOp::Assign(op) => {
+                        let path = match *l {
+                            Self::Ref(Ref::Path(path)) => path,
+                            _ => todo!(),
+                        };
+                        Ok(match op {
+                            AssignOp::Assign => Self::Ref(Ref::Assign(path, r)),
+                            AssignOp::Update => Self::Ref(Ref::Update(path, r)),
+                            AssignOp::UpdateWith(op) => Self::Ref(Ref::update_math(path, op, *r)),
+                        })
+                    }
                 }
             }
             Expr::Neg(e) => Ok(Self::New(New::Neg(Box::new(Self::try_from(*e)?)))),

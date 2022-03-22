@@ -54,10 +54,10 @@ pub enum Expr {
 
 // A function node in the AST.
 #[derive(Debug)]
-pub struct Def {
-    pub name: Spanned<String>,
+pub struct Def<F> {
+    pub name: String,
     pub args: Vec<String>,
-    pub body: Spanned<Expr>,
+    pub body: F,
 }
 
 #[derive(Clone, Debug)]
@@ -287,17 +287,21 @@ fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Cl
     with_comma
 }
 
-type Main = (Vec<Def>, Spanned<Expr>);
+pub type Defs = Vec<Def<Spanned<Expr>>>;
 
-fn parse_def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
+pub struct Main<F> {
+    pub defs: Vec<Def<F>>,
+    pub body: F,
+}
+
+fn parse_def() -> impl Parser<Token, Def<Spanned<Expr>>, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
-    let name = ident.map_with_span(|name, span| (name, span));
 
     just(Token::Def)
-        .ignore_then(name.labelled("filter name"))
+        .ignore_then(ident.labelled("filter name"))
         .then(args(ident).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
         .then(parse_expr())
@@ -306,10 +310,12 @@ fn parse_def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
         .labelled("definition")
 }
 
-pub fn parse_defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
+pub fn parse_defs() -> impl Parser<Token, Defs, Error = Simple<Token>> + Clone {
     parse_def().repeated().collect()
 }
 
-pub fn parse_main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
-    parse_defs().then(parse_expr())
+pub fn parse_main() -> impl Parser<Token, Main<Spanned<Expr>>, Error = Simple<Token>> + Clone {
+    parse_defs()
+        .then(parse_expr())
+        .map(|(defs, body)| Main { defs, body })
 }
