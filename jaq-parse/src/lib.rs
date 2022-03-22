@@ -9,7 +9,7 @@ pub type Span = std::ops::Range<usize>;
 
 use chumsky::prelude::*;
 
-fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Simple<String>>>
+pub fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Simple<String>>>
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
