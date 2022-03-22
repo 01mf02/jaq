@@ -53,7 +53,12 @@ pub enum Expr {
 }
 
 // A function node in the AST.
-pub type Func = (Vec<String>, Spanned<Expr>);
+#[derive(Debug)]
+pub struct Def {
+    pub name: Spanned<String>,
+    pub args: Vec<String>,
+    pub body: Spanned<Expr>,
+}
 
 #[derive(Clone, Debug)]
 pub enum PathComponent<I> {
@@ -282,7 +287,6 @@ fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Cl
     with_comma
 }
 
-type Def = (Spanned<String>, Func);
 type Main = (Vec<Def>, Spanned<Expr>);
 
 fn parse_def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
@@ -298,7 +302,7 @@ fn parse_def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
         .then_ignore(just(Token::Ctrl(':')))
         .then(parse_expr())
         .then_ignore(just(Token::Ctrl(';')))
-        .map(|((name, args), body)| (name, (args, body)))
+        .map(|((name, args), body)| Def { name, args, body })
         .labelled("definition")
 }
 
