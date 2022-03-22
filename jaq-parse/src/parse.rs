@@ -107,12 +107,12 @@ where
         .map(Option::unwrap_or_default)
 }
 
-fn parse_expr2<'a>(
-    expr_with_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
-    expr_sans_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
-    with_comma: bool,
+// 'Atoms' are expressions that contain no ambiguity
+fn parse_atom<'a>(
+    with_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
+    sans_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
 ) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a {
-    let expr = expr_with_comma;
+    let expr = with_comma;
     let val = filter_map(|span, tok| match tok {
         Token::Num(n) => Ok(Expr::Num(n)),
         Token::Str(s) => Ok(Expr::Str(s)),
@@ -152,7 +152,7 @@ fn parse_expr2<'a>(
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
         .map_with_span(|arr, span| (Expr::Array(arr.map(Box::new)), span));
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(expr_sans_comma);
+    let is_val = just(Token::Ctrl(':')).ignore_then(sans_comma);
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
@@ -212,17 +212,18 @@ fn parse_expr2<'a>(
     };
     let path = path.map_with_span(|path, span| (Expr::Path(path), span));
 
-    // 'Atoms' are expressions that contain no ambiguity
-    let atom = val
-        .map_with_span(|expr, span| (expr, span))
+    val.map_with_span(|expr, span| (expr, span))
         .or(call)
         .or(object)
         .or(ite)
         .or(parens)
         .or(array)
         .or(path)
-        .boxed();
+}
 
+fn parse_ops<'a>(
+    atom: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
+) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a {
     let neg = just(Token::Op("-".to_string()))
         .map_with_span(|_, span| span)
         .repeated()
@@ -268,22 +269,21 @@ fn parse_expr2<'a>(
         update_with(MathOp::Div),
         update_with(MathOp::Rem),
     ));
-    let assign = binr(or, assign);
-
-    let comma = if with_comma {
-        bin(assign, just(Token::Ctrl(',')).to(BinaryOp::Comma)).boxed()
-    } else {
-        assign.boxed()
-    };
-
-    bin(comma, just(Token::Op("|".to_string())).to(BinaryOp::Pipe))
+    binr(or, assign)
 }
 
 fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
-    with_comma.define(parse_expr2(with_comma.clone(), sans_comma.clone(), true));
-    sans_comma.define(parse_expr2(with_comma.clone(), sans_comma.clone(), false));
+    let atom = parse_atom(with_comma.clone(), sans_comma.clone()).boxed();
+    let ops = parse_ops(atom).boxed();
+
+    let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
+    let pipe = just(Token::Op("|".to_string())).to(BinaryOp::Pipe);
+
+    sans_comma.define(bin(ops.clone(), pipe.clone()));
+    with_comma.define(bin(bin(ops, comma), pipe));
+
     with_comma
 }
 
