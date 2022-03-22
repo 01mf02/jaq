@@ -192,10 +192,10 @@ fn parse_expr2<'a>(
         });
 
         let dot_id = filter_map(|span, tok| match tok {
-            Token::DotId(ident) => Ok((Expr::Str(ident), span)),
+            Token::Dot(Some(ident)) => Ok((Expr::Str(ident), span)),
             _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
         });
-        let dot = just(Token::Dot).then(opt.clone());
+        let dot = just(Token::Dot(None)).then(opt.clone());
         let dot_id = dot_id.map(PathComponent::Index).then(opt.clone());
 
         let ranges = range

@@ -9,8 +9,7 @@ pub enum Token {
     Op(String),
     Ident(String),
     Ctrl(char),
-    Dot,
-    DotId(String),
+    Dot(Option<String>),
     Def,
     If,
     Then,
@@ -25,8 +24,8 @@ impl fmt::Display for Token {
         match self {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Ctrl(c) => c.fmt(f),
-            Self::Dot => ".".fmt(f),
-            Self::DotId(s) => write!(f, r#".{}"#, s),
+            Self::Dot(None) => ".".fmt(f),
+            Self::Dot(Some(s)) => write!(f, r#".{}"#, s),
             Self::Def => "def".fmt(f),
             Self::If => "if".fmt(f),
             Self::Then => "then".fmt(f),
@@ -53,8 +52,7 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
 
-    let dot = just('.');
-    let dot_id = just('.').ignore_then(text::ident().or(str_));
+    let dot = just('.').ignore_then(text::ident().or(str_).or_not());
 
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("{}()[]:;,?");
@@ -73,12 +71,11 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
 
     // A single token can be one of the above
     let token = ident
+        .or(ctrl.map(Token::Ctrl))
+        .or(op.map(Token::Op))
+        .or(dot.map(Token::Dot))
         .or(num.map(Token::Num))
         .or(str_.map(Token::Str))
-        .or(op.map(Token::Op))
-        .or(ctrl.map(Token::Ctrl))
-        .or(dot_id.map(Token::DotId))
-        .or(dot.to(Token::Dot))
         .recover_with(skip_then_retry_until([]));
 
     let comment = just("#").then(take_until(just('\n'))).padded();
