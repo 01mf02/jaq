@@ -11,9 +11,8 @@ keywords = ["json", "query", "jq"]
 categories = ["compilers", "parser-implementations"]
 
 [features]
-default = ["std", "parse", "bincode"]
+default = ["std", "bincode"]
 std = []
-parse = ["pest", "pest_derive"]
 
 [build-dependencies]
 jaq-parse = { version = "0.1", path = "../jaq-parse" }
@@ -26,6 +25,4 @@ fxhash = "0.2.1"
 indexmap = "1.6.0"
 itertools = "0.9"
 lazy_static = "1.4"
-pest = { version = "2.1", optional = true }
-pest_derive = { version = "2.1", optional = true }
 serde_json = { version = "1.0", features = [ "preserve_order" ] }

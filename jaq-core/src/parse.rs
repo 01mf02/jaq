@@ -1,22 +1,16 @@
-use crate::filter::{Filter, New, Ref};
-use crate::ops::{LogicOp, MathOp, OrdOp};
+use crate::filter::{New, Ref};
+use crate::ops::LogicOp;
 use crate::path::{Opt, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
 use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
-use alloc::{boxed::Box, string::ToString, vec::Vec};
+use alloc::boxed::Box;
+use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 use core::fmt::{self, Display};
-use pest::iterators::{Pair, Pairs};
-use pest::prec_climber::PrecClimber;
-use pest::Parser;
-
-#[derive(Parser)]
-#[grammar = "grammar.pest"]
-pub struct FilterParser;
 
 #[derive(Debug)]
 pub enum Error {
-    Pest(pest::error::Error<Rule>),
+    Num(alloc::string::String),
     PathAssign,
 }
 
@@ -24,328 +18,152 @@ impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         use Error::*;
         match self {
-            Pest(e) => e.fmt(f),
+            Num(s) => write!(f, "could not interpret {} as number", s),
             PathAssign => write!(f, "path expected before assignment operator"),
         }
     }
 }
 
+
 impl Main {
     pub fn parse(s: &str) -> Result<Self, Error> {
-        Self::try_from(FilterParser::parse(Rule::main, s).map_err(Error::Pest)?)
+        let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_main()).unwrap();
+        Self::try_from(parsed)
     }
 }
 
 impl Module {
     pub fn parse(s: &str) -> Result<Self, Error> {
-        Self::try_from(FilterParser::parse(Rule::module, s).map_err(Error::Pest)?)
+        let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_defs()).unwrap();
+        Definitions::try_from(parsed).map(Self::new)
     }
 }
 
-lazy_static::lazy_static! {
-    static ref PREC_CLIMBER: PrecClimber<Rule> = {
-        use Rule::*;
-        use pest::prec_climber::{Operator, Assoc::*};
-
-        PrecClimber::new(Vec::from([
-            Operator::new(pipe, Left),
-            Operator::new(comma, Left),
-            Operator::new(assign_op, Right),
-            Operator::new(or, Left),
-            Operator::new(and, Left),
-            Operator::new(eq, Left) | Operator::new(ne, Left),
-            Operator::new(gt, Left) | Operator::new(ge, Left) | Operator::new(lt, Left) | Operator::new(le, Left),
-            Operator::new(add, Left) | Operator::new(sub, Left),
-            Operator::new(mul, Left) | Operator::new(div, Left),
-            Operator::new(rem, Left)
-        ]))
-    };
-}
-
-impl TryFrom<Pairs<'_, Rule>> for Definition {
+impl TryFrom<jaq_parse::parse::Defs> for Definitions {
     type Error = Error;
-    fn try_from(mut pairs: Pairs<Rule>) -> Result<Self, Error> {
-        let name = pairs.next().unwrap().as_str().to_string();
-        let args = pairs.next().unwrap();
-        let args = args.into_inner().map(|a| a.as_str().to_string()).collect();
-        let term = PreFilter::try_from(pairs.next().unwrap())?;
-        Ok(Self { name, args, term })
+    fn try_from(defs: jaq_parse::parse::Defs) -> Result<Self, Error> {
+        let defs = defs.into_iter().map(|def| {
+            Ok::<_, Error>(Definition {
+                name: def.name,
+                args: def.args,
+                term: PreFilter::try_from(def.body)?,
+            })
+        });
+        Ok(Definitions::new(defs.collect::<Result<_, Error>>()?))
     }
 }
 
-impl TryFrom<Pairs<'_, Rule>> for Definitions {
+impl TryFrom<jaq_parse::parse::Main<Spanned<Expr>>> for Main {
     type Error = Error;
-    fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
-        let defs = pairs.map(|pair| Definition::try_from(pair.into_inner()));
-        Ok(Definitions::new(defs.collect::<Result<_, _>>()?))
+    fn try_from(main: jaq_parse::parse::Main<Spanned<Expr>>) -> Result<Self, Error> {
+        Ok(Main {
+            defs: Definitions::try_from(main.defs)?,
+            term: PreFilter::try_from(main.body)?,
+        })
     }
 }
 
-impl TryFrom<Pairs<'_, Rule>> for Main {
+impl TryFrom<Expr> for PreFilter {
     type Error = Error;
-    fn try_from(mut pairs: Pairs<Rule>) -> Result<Self, Error> {
-        let defs = Definitions::try_from(pairs.next().unwrap().into_inner())?;
-        let term = PreFilter::try_from(pairs.next().unwrap())?;
-        Ok(Main { defs, term })
-    }
-}
-
-impl TryFrom<Pairs<'_, Rule>> for Module {
-    type Error = Error;
-    fn try_from(mut pairs: Pairs<Rule>) -> Result<Self, Error> {
-        let defs = Definitions::try_from(pairs.next().unwrap().into_inner());
-        Ok(Self::new(defs?))
-    }
-}
-
-impl TryFrom<Pairs<'_, Rule>> for PreFilter {
-    type Error = Error;
-    fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
-        PREC_CLIMBER.climb(
-            pairs,
-            Self::try_from,
-            |lhs: Result<Self, _>, op: Pair<Rule>, rhs: Result<Self, _>| {
-                let lhs = Box::new(lhs?);
-                let rhs = Box::new(rhs?);
-                match op.as_rule() {
-                    Rule::assign_op => {
-                        let path = match *lhs {
-                            Filter::Ref(Ref::Path(p)) => p,
-                            _ => return Err(Error::PathAssign),
-                        };
-                        let op = op.into_inner().next().unwrap();
-                        Ok(Self::Ref(match op.as_rule() {
-                            Rule::assign => Ref::Assign(path, rhs),
-                            Rule::update => Ref::Update(path, rhs),
-                            Rule::update_with => {
-                                let math = op.into_inner().next().unwrap();
-                                let math = MathOp::try_from(math.as_rule()).unwrap();
-                                Ref::update_math(path, math, *rhs)
-                            }
-                            _ => unreachable!(),
-                        }))
-                    }
-                    Rule::pipe => Ok(Self::Ref(Ref::Pipe(lhs, rhs))),
-                    Rule::comma => Ok(Self::Ref(Ref::Comma(lhs, rhs))),
-                    rule => {
-                        if let Ok(op) = LogicOp::try_from(rule) {
-                            Ok(Self::New(New::Logic(lhs, op, rhs)))
-                        } else if let Ok(op) = OrdOp::try_from(rule) {
-                            Ok(Self::New(New::Ord(lhs, op, rhs)))
-                        } else if let Ok(op) = MathOp::try_from(rule) {
-                            Ok(Self::New(New::Math(lhs, op, rhs)))
-                        } else {
-                            unreachable!()
-                        }
-                    }
-                }
-            },
-        )
-    }
-}
-
-impl TryFrom<Pair<'_, Rule>> for PreFilter {
-    type Error = Error;
-    fn try_from(pair: Pair<Rule>) -> Result<Self, Error> {
-        let rule = pair.as_rule();
-        let mut inner = pair.into_inner();
-        match rule {
-            Rule::expr => Self::try_from(inner),
-            Rule::atom => Ok(Atom::from(inner.next().unwrap()).into()),
-            Rule::array => {
-                let contents = if inner.peek().is_none() {
-                    Self::Ref(Ref::Empty)
+    fn try_from(expr: Expr) -> Result<Self, Error> {
+        match expr {
+            Expr::Num(n) => {
+                let atom = if n.contains('.') {
+                    Atom::Float(n.parse::<f64>().map_err(|_| Error::Num(n))?)
                 } else {
-                    Self::try_from(inner)?
+                    Atom::Pos(n.parse::<usize>().map_err(|_| Error::Num(n))?)
+                };
+                Ok(Self::New(New::Atom(atom)))
+            }
+            Expr::Str(s) => Ok(Self::New(New::Atom(Atom::Str(s)))),
+            Expr::Call(f, args) => {
+                let args: Result<_, _> = args.into_iter().map(Self::try_from).collect();
+                Ok(Self::Named(Call::new(f, args?)))
+            }
+            Expr::If(if_, then, else_) => {
+                let if_ = Box::new(Self::try_from(*if_)?);
+                let then = Box::new(Self::try_from(*then)?);
+                let else_ = Box::new(Self::try_from(*else_)?);
+                Ok(Self::Ref(Ref::IfThenElse(if_, then, else_)))
+            }
+            Expr::Array(e) => {
+                let contents = match e {
+                    None => Self::Ref(Ref::Empty),
+                    Some(e) => Self::try_from(*e)?,
                 };
                 Ok(Self::New(New::Array(Box::new(contents))))
             }
-            Rule::object => {
-                let kvs = inner.map(|kv| {
-                    let mut iter = kv.into_inner();
-                    let key = iter.next().unwrap();
-                    match key.as_rule() {
-                        Rule::identifier | Rule::string => {
-                            let key = Atom::from(key);
-                            let value = match iter.next() {
-                                Some(value) => Self::try_from(value)?,
-                                None => Self::Ref(Ref::Path(Path::from(PathElem::Index(
-                                    key.clone().into(),
-                                )))),
-                            };
-                            assert!(iter.next().is_none());
-                            Ok((key.into(), value))
-                        }
-                        Rule::expr => {
-                            let value = iter.next().unwrap();
-                            assert!(iter.next().is_none());
-                            Ok((Self::try_from(key)?, Self::try_from(value)?))
-                        }
-                        _ => unreachable!(),
+            Expr::Object(kvs) => {
+                let kvs = kvs.into_iter().map(|kv| match kv {
+                    KeyVal::Expr(k, v) => Ok((Self::try_from(k)?, Self::try_from(v)?)),
+                    KeyVal::Str(k, v) => {
+                        let v = match v {
+                            None => Self::Ref(Ref::Path(Path::from(PathElem::Index(Self::New(
+                                New::Atom(Atom::Str(k.clone())),
+                            ))))),
+                            Some(v) => Self::try_from(v)?,
+                        };
+                        let k = Self::New(New::Atom(Atom::Str(k)));
+                        Ok((k, v))
                     }
                 });
                 Ok(Self::New(New::Object(kvs.collect::<Result<_, _>>()?)))
             }
-            Rule::ite => {
-                let mut ite = inner.map(|p| Self::try_from(p).map(Box::new));
-                let cond = ite.next().unwrap();
-                let truth = ite.next().unwrap();
-                let falsity = ite.next().unwrap();
-                assert!(ite.next().is_none());
-                Ok(Self::Ref(Ref::IfThenElse(cond?, truth?, falsity?)))
-            }
-            Rule::call => {
-                let name = inner.next().unwrap().as_str();
-                let args = inner.next().unwrap();
-                let args: Result<_, _> = args.into_inner().map(Self::try_from).collect();
-                assert_eq!(inner.next(), None);
-                Ok(Self::Named(Call::new(name.to_owned(), args?)))
-            }
-            Rule::path => Ok(Self::Ref(Ref::Path(Path::try_from(inner)?))),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl From<Pair<'_, Rule>> for Atom {
-    fn from(pair: Pair<Rule>) -> Self {
-        match pair.as_rule() {
-            Rule::number => {
-                let s = pair.as_str();
-                match s.parse::<usize>() {
-                    Ok(p) => Self::Pos(p),
-                    _ => match s.parse::<isize>() {
-                        Ok(n) => Self::Neg(-n as usize),
-                        _ => Self::Float(s.parse::<f64>().unwrap()),
-                    },
+            Expr::Binary(l, op, r) => {
+                let l = Box::new(Self::try_from(*l)?);
+                let r = Box::new(Self::try_from(*r)?);
+                match op {
+                    BinaryOp::Pipe => Ok(Self::Ref(Ref::Pipe(l, r))),
+                    BinaryOp::Comma => Ok(Self::Ref(Ref::Comma(l, r))),
+                    BinaryOp::Or => Ok(Self::New(New::Logic(l, LogicOp::Or, r))),
+                    BinaryOp::And => Ok(Self::New(New::Logic(l, LogicOp::And, r))),
+                    BinaryOp::Ord(op) => Ok(Self::New(New::Ord(l, op, r))),
+                    BinaryOp::Math(op) => Ok(Self::New(New::Math(l, op, r))),
+                    BinaryOp::Assign(op) => {
+                        let path = match *l {
+                            Self::Ref(Ref::Path(path)) => path,
+                            _ => return Err(Error::PathAssign),
+                        };
+                        Ok(match op {
+                            AssignOp::Assign => Self::Ref(Ref::Assign(path, r)),
+                            AssignOp::Update => Self::Ref(Ref::Update(path, r)),
+                            AssignOp::UpdateWith(op) => Self::Ref(Ref::update_math(path, op, *r)),
+                        })
+                    }
                 }
             }
-            Rule::string => Self::Str(pair.into_inner().next().unwrap().as_str().to_string()),
-            Rule::identifier => Self::Str(pair.as_str().to_string()),
-            _ => unreachable!(),
+            Expr::Neg(e) => Ok(Self::New(New::Neg(Box::new(Self::try_from(*e)?)))),
+            Expr::Path(path) => {
+                let path = path.into_iter().map(|(p, opt)| match p {
+                    PathComponent::Index(i) => {
+                        Ok((PathElem::Index(Self::try_from(i)?), Opt::from(opt)))
+                    }
+                    PathComponent::Range(from, to) => {
+                        let from = from.map(Self::try_from).transpose()?;
+                        let to = to.map(Self::try_from).transpose()?;
+                        Ok((PathElem::Range(from, to), Opt::from(opt)))
+                    }
+                });
+                Ok(Self::Ref(Ref::Path(Path(path.collect::<Result<_, _>>()?))))
+            }
         }
     }
 }
 
-impl TryFrom<Pairs<'_, Rule>> for Path<PreFilter> {
+impl TryFrom<Spanned<Expr>> for PreFilter {
     type Error = Error;
-    fn try_from(pairs: Pairs<Rule>) -> Result<Self, Error> {
-        let path: Result<_, _> = pairs.flat_map(Self::from_segment).collect();
-        Ok(Self::new(path?))
+    fn try_from(expr: Spanned<Expr>) -> Result<Self, Error> {
+        Self::try_from(expr.0)
     }
 }
 
-impl From<Pair<'_, Rule>> for Opt {
-    fn from(pair: Pair<Rule>) -> Self {
-        if pair.as_rule() == Rule::optional {
-            if pair.into_inner().next().is_some() {
-                Self::Optional
-            } else {
-                Self::Essential
-            }
-        } else {
-            unreachable!()
-        }
-    }
-}
-
-impl Path<PreFilter> {
-    fn from_segment(
-        pair: Pair<Rule>,
-    ) -> impl Iterator<Item = Result<(PathElem<PreFilter>, Opt), Error>> + '_ {
-        let mut iter = pair.into_inner();
-
-        let index = PathElem::from_index(iter.next().unwrap());
-        let opt = Opt::from(iter.next().unwrap());
-        let index = index.map(|index| Ok((index, opt)));
-
-        let ranges = iter.map(|range| {
-            let mut iter = range.into_inner();
-            let range = PathElem::from_range(iter.next().unwrap())?;
-            let opt = Opt::from(iter.next().unwrap());
-            assert!(iter.next().is_none());
-            Ok((range, opt))
-        });
-
-        index.into_iter().chain(ranges)
-    }
-}
-
-impl PathElem<PreFilter> {
-    fn from_index(pair: Pair<Rule>) -> Option<Self> {
-        match pair.as_rule() {
-            Rule::dot_id | Rule::string => {
-                let index = pair.into_inner().next().unwrap().as_str().to_string();
-                Some(Self::Index(Atom::Str(index).into()))
-            }
-            Rule::dot => None,
-            _ => unreachable!(),
-        }
-    }
-
-    fn from_range(pair: Pair<Rule>) -> Result<Self, Error> {
-        //println!("range: {:?}", pair.as_rule());
-        match pair.into_inner().next() {
-            None => Ok(Self::Range(None, None)),
-            Some(range) => match range.as_rule() {
-                Rule::at => Ok(Self::Index(Filter::try_from(range.into_inner())?)),
-                Rule::from => Ok(Self::Range(
-                    Some(Filter::try_from(range.into_inner())?),
-                    None,
-                )),
-                Rule::until => Ok(Self::Range(
-                    None,
-                    Some(Filter::try_from(range.into_inner())?),
-                )),
-                Rule::from_until => {
-                    let mut iter = range.into_inner().map(Filter::try_from);
-                    let from = iter.next().unwrap();
-                    let until = iter.next().unwrap();
-                    assert!(iter.next().is_none());
-                    Ok(Self::Range(Some(from?), Some(until?)))
-                }
-                _ => unreachable!(),
-            },
-        }
-    }
-}
-
-impl TryFrom<Rule> for LogicOp {
-    type Error = ();
-    fn try_from(rule: Rule) -> Result<Self, Self::Error> {
-        match rule {
-            Rule::or => Ok(LogicOp::Or),
-            Rule::and => Ok(LogicOp::And),
-            _ => Err(()),
-        }
-    }
-}
-
-impl TryFrom<Rule> for OrdOp {
-    type Error = ();
-    fn try_from(rule: Rule) -> Result<Self, Self::Error> {
-        match rule {
-            Rule::eq => Ok(OrdOp::Eq),
-            Rule::ne => Ok(OrdOp::Ne),
-            Rule::gt => Ok(OrdOp::Gt),
-            Rule::ge => Ok(OrdOp::Ge),
-            Rule::lt => Ok(OrdOp::Lt),
-            Rule::le => Ok(OrdOp::Le),
-            _ => Err(()),
-        }
-    }
-}
-
-impl TryFrom<Rule> for MathOp {
-    type Error = ();
-    fn try_from(rule: Rule) -> Result<Self, Self::Error> {
-        match rule {
-            Rule::add => Ok(MathOp::Add),
-            Rule::sub => Ok(MathOp::Sub),
-            Rule::mul => Ok(MathOp::Mul),
-            Rule::div => Ok(MathOp::Div),
-            Rule::rem => Ok(MathOp::Rem),
-            _ => Err(()),
+// TODO: remove this once the old parser is removed?
+impl From<jaq_parse::parse::Opt> for Opt {
+    fn from(opt: jaq_parse::parse::Opt) -> Self {
+        use jaq_parse::parse::Opt::*;
+        match opt {
+            Optional => Self::Optional,
+            Essential => Self::Essential,
         }
     }
 }
