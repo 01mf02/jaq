@@ -1,8 +1,8 @@
 #![no_std]
 
+extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
-extern crate alloc;
 
 pub mod error;
 pub mod filter;
@@ -20,7 +20,7 @@ pub use filter::Filter;
 pub use path::Path;
 pub use preprocess::{ClosedFilter, OpenFilter, PreFilter};
 pub use recurse::Recurse;
-pub use toplevel::{Definition, Definitions, Main, Module};
+pub use toplevel::{Definition, Definitions, Main};
 pub use val::Val;
 
 use alloc::{boxed::Box, rc::Rc};
@@ -42,6 +42,7 @@ pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;
 
 #[cfg(feature = "bincode")]
 fn parse_std() -> jaq_parse::parse::Defs {
+    // use preparsed standard library
     let std = include_bytes!(concat!(env!("OUT_DIR"), "/std.bin"));
     bincode::deserialize(std).unwrap()
 }
@@ -52,6 +53,6 @@ fn parse_std() -> jaq_parse::parse::Defs {
     jaq_parse::parse(std, jaq_parse::parse::parse_defs()).unwrap()
 }
 
-pub fn std() -> Module {
-    Module::new(Definitions::try_from(parse_std()).unwrap())
+pub fn std() -> Definitions {
+    Definitions::try_from(parse_std()).unwrap()
 }

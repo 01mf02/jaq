@@ -6,8 +6,9 @@ use serde_json::json;
 #[test]
 fn add() {
     give(json!(1), ". + 2", json!(3));
-    give(json!(1.0), ". + 2.0", json!(3.0));
+    give(json!(1.0), ". + 2.", json!(3.0));
     give(json!(1), "2.0 + .", json!(3.0));
+    give(json!(null), "1.e1 + 2.1e2", json!(220.0));
 
     give(json!("Hello "), ". + \"world\"", json!("Hello world"));
     give(json!([1, 2]), ". + [3, 4]", json!([1, 2, 3, 4]));

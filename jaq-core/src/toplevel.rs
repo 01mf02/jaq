@@ -11,16 +11,8 @@ pub struct Definition {
 
 pub struct Definitions(Vec<Definition>);
 
-pub struct Module(Definitions);
-
 impl Definitions {
     pub fn new(defs: Vec<Definition>) -> Self {
-        Self(defs)
-    }
-}
-
-impl Module {
-    pub fn new(defs: Definitions) -> Self {
         Self(defs)
     }
 }
@@ -31,13 +23,13 @@ pub struct Main {
 }
 
 impl Main {
-    pub fn open(self, module: Module) -> Result<OpenFilter, UndefinedError> {
+    pub fn open(self, module: Definitions) -> Result<OpenFilter, UndefinedError> {
         let filter = self.term;
         let mut fns: BTreeMap<(String, usize), _> = FUNCTIONS
             .iter()
             .map(|(name, args, f)| ((name.to_string(), *args), f.clone().into()))
             .collect();
-        for def in module.0 .0.into_iter().chain(self.defs.0.into_iter()) {
+        for def in module.0.into_iter().chain(self.defs.0.into_iter()) {
             let open = def.term.open(&def.args, &|fun| fns.get(fun).cloned());
             fns.insert((def.name, def.args.len()), open.unwrap());
         }

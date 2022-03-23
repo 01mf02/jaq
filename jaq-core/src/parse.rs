@@ -2,11 +2,11 @@ use crate::filter::{New, Ref};
 use crate::ops::LogicOp;
 use crate::path::{Opt, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
-use crate::toplevel::{Definition, Definitions, Main, Module};
+use crate::toplevel::{Definition, Definitions, Main};
 use crate::val::Atom;
 use alloc::boxed::Box;
-use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 use core::fmt::{self, Display};
+use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 
 #[derive(Debug)]
 pub enum Error {
@@ -24,7 +24,6 @@ impl Display for Error {
     }
 }
 
-
 impl Main {
     pub fn parse(s: &str) -> Result<Self, Error> {
         let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_main()).unwrap();
@@ -32,10 +31,10 @@ impl Main {
     }
 }
 
-impl Module {
+impl Definitions {
     pub fn parse(s: &str) -> Result<Self, Error> {
         let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_defs()).unwrap();
-        Definitions::try_from(parsed).map(Self::new)
+        Self::try_from(parsed)
     }
 }
 

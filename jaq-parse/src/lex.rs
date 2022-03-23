@@ -37,22 +37,30 @@ impl fmt::Display for Token {
     }
 }
 
-pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
-    // A parser for numbers
-    let num = text::int(10)
-        .chain::<char, _, _>(just('.').chain(text::digits(10)).or_not().flatten())
-        .collect();
+// A parser for numbers
+fn num() -> impl Parser<char, String, Error = Simple<char>> {
+    let comma = just('.').chain(text::digits(10).or_not().map(|d| d.unwrap_or_default()));
+    let exp = one_of("eE").chain(text::digits(10));
+    text::int(10)
+        .chain::<char, _, _>(comma.or_not().flatten())
+        .chain::<char, _, _>(exp.or_not().flatten())
+        .collect()
+}
 
-    // A parser for strings
-    let str_ = just('"')
+// A parser for strings
+fn str_() -> impl Parser<char, String, Error = Simple<char>> {
+    just('"')
         .ignore_then(filter(|c| *c != '"').repeated())
         .then_ignore(just('"'))
-        .collect();
+        .collect()
+}
 
+pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
 
-    let dot = just('.').ignore_then(text::ident().or(text::whitespace().ignore_then(str_)).or_not());
+    let dot_id = text::ident().or(text::whitespace().ignore_then(str_()));
+    let dot = just('.').ignore_then(dot_id.or_not());
 
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("{}()[]:;,?");
@@ -74,8 +82,8 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
         .or(dot.map(Token::Dot))
-        .or(num.map(Token::Num))
-        .or(str_.map(Token::Str))
+        .or(num().map(Token::Num))
+        .or(str_().map(Token::Str))
         .recover_with(skip_then_retry_until([]));
 
     let comment = just("#").then(take_until(just('\n'))).padded();
