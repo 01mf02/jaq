@@ -25,6 +25,7 @@ impl core::ops::Add for Val {
             (Pos(l), Neg(s)) | (Neg(s), Pos(l)) => Ok(Pos(l - s)),
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f + p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(f - n as f64)),
+            (Float(x), Float(y)) => Ok(Float(x + y)),
             (Str(mut l), Str(r)) => {
                 l.push_str(&r);
                 Ok(Str(l))
@@ -55,6 +56,7 @@ impl core::ops::Sub for Val {
             (Neg(n), Float(f)) => Ok(Float(-(n as f64) - f)),
             (Float(f), Pos(p)) => Ok(Float(f - p as f64)),
             (Float(f), Neg(n)) => Ok(Float(f + n as f64)),
+            (Float(x), Float(y)) => Ok(Float(x - y)),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Sub)),
         }
     }
@@ -69,6 +71,7 @@ impl core::ops::Mul for Val {
             (Pos(x), Neg(y)) | (Neg(x), Pos(y)) => Ok(Neg(x * y)),
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f * p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(-f * n as f64)),
+            (Float(x), Float(y)) => Ok(Float(x * y)),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Mul)),
         }
     }
@@ -87,6 +90,7 @@ impl core::ops::Div for Val {
             (Neg(n), Float(f)) => Ok(Float(n as f64 / -f)),
             (Float(f), Pos(p)) => Ok(Float(f / p as f64)),
             (Float(f), Neg(n)) => Ok(Float(-f / n as f64)),
+            (Float(x), Float(y)) => Ok(Float(x / y)),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Div)),
         }
     }
