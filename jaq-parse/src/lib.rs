@@ -1,3 +1,5 @@
+#[cfg(feature = "ariadne")]
+pub mod ariadne;
 mod lex;
 mod ops;
 pub mod parse;

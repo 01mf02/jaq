@@ -7,6 +7,7 @@ use crate::val::Atom;
 use alloc::boxed::Box;
 use core::fmt::{self, Display};
 use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
+pub use jaq_parse::{ariadne, parse};
 
 #[derive(Debug)]
 pub enum Error {

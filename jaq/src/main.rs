@@ -37,9 +37,13 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let main = Main::parse(&cli.filter).unwrap_or_else(|e| {
-        eprintln!("Failed to parse filter:");
-        eprintln!("{}", e);
+    let main = jaq_core::parse::parse(&cli.filter, jaq_core::parse::parse::parse_main());
+    let main = main.unwrap_or_else(|errors| {
+        for err in errors {
+            jaq_core::parse::ariadne::report(err)
+                .eprint(jaq_core::parse::ariadne::Source::from(&cli.filter))
+                .unwrap();
+        }
         std::process::exit(3);
     });
     let filter = main.open(jaq_core::std()).unwrap_or_else(|e| {
