@@ -81,28 +81,20 @@ pub enum Opt {
     Essential,
 }
 
-fn bin<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
-where
-    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
-    O: Parser<Token, BinaryOp, Error = Simple<Token>> + Clone,
-{
-    let args = prev.clone().then(op.then(prev).repeated());
-    args.foldl(|a, (op, b)| {
+impl Expr {
+    fn binary_with_span(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
         (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-    })
+    }
 }
 
-fn binr<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
+fn bin<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
 where
-    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
-    O: Parser<Token, BinaryOp, Error = Simple<Token>> + Clone,
+    P: Parser<Token, Spanned<Expr>> + Clone,
+    O: Parser<Token, BinaryOp, Error = P::Error> + Clone,
 {
-    let args = prev.clone().then(op).repeated().then(prev);
-    args.foldr(|(a, op), b| {
-        let span = a.1.start..b.1.end;
-        (Expr::Binary(Box::new(a), op, Box::new(b)), span)
-    })
+    let args = prev.clone().then(op.then(prev).repeated());
+    args.foldl(|a, (op, b)| Expr::binary_with_span(a, op, b))
 }
 
 fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
@@ -277,7 +269,9 @@ fn parse_ops<'a>(
         update_with(MathOp::Div),
         update_with(MathOp::Rem),
     ));
-    binr(or, assign)
+
+    let args = or.clone().then(assign).repeated().then(or);
+    args.foldr(|(a, op), b| Expr::binary_with_span(a, op, b))
 }
 
 fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
