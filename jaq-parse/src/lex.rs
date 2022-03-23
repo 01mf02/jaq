@@ -52,7 +52,7 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
 
-    let dot = just('.').ignore_then(text::ident().or(str_).or_not());
+    let dot = just('.').ignore_then(text::ident().or(text::whitespace().ignore_then(str_)).or_not());
 
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("{}()[]:;,?");
