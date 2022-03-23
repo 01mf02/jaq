@@ -6,9 +6,24 @@ use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
 use alloc::boxed::Box;
 use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
+use core::fmt::{self, Display};
 
 #[derive(Debug)]
-pub enum Error {}
+pub enum Error {
+    Num(String),
+    PathAssign,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use Error::*;
+        match self {
+            Num(s) => write!(f, "could not interpret {} as number", s),
+            PathAssign => write!(f, "path expected before assignment operator"),
+        }
+    }
+}
+
 
 impl Main {
     pub fn parse2(s: &str) -> Result<Self, Error> {
@@ -31,7 +46,7 @@ impl TryFrom<jaq_parse::parse::Defs> for Definitions {
             Ok::<_, Error>(Definition {
                 name: def.name,
                 args: def.args,
-                term: PreFilter::try_from(def.body).unwrap(),
+                term: PreFilter::try_from(def.body)?,
             })
         });
         Ok(Definitions::new(defs.collect::<Result<_, Error>>()?))
@@ -54,9 +69,9 @@ impl TryFrom<Expr> for PreFilter {
         match expr {
             Expr::Num(n) => {
                 let atom = if n.contains('.') {
-                    Atom::Float(n.parse::<f64>().unwrap())
+                    Atom::Float(n.parse::<f64>().map_err(|_| Error::Num(n))?)
                 } else {
-                    Atom::Pos(n.parse::<usize>().unwrap())
+                    Atom::Pos(n.parse::<usize>().map_err(|_| Error::Num(n))?)
                 };
                 Ok(Self::New(New::Atom(atom)))
             }
@@ -107,7 +122,7 @@ impl TryFrom<Expr> for PreFilter {
                     BinaryOp::Assign(op) => {
                         let path = match *l {
                             Self::Ref(Ref::Path(path)) => path,
-                            _ => todo!(),
+                            _ => return Err(Error::PathAssign),
                         };
                         Ok(match op {
                             AssignOp::Assign => Self::Ref(Ref::Assign(path, r)),
