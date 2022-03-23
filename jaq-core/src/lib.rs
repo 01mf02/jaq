@@ -1,3 +1,4 @@
+// TODO: make this unconditionally no_std
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
@@ -16,12 +17,12 @@ pub mod functions;
 pub mod ops;
 #[cfg(feature = "parse")]
 pub mod parse;
+pub mod parse2;
 pub mod path;
 pub mod preprocess;
 pub mod recurse;
 pub mod toplevel;
 pub mod val;
-pub mod parse2;
 
 pub use error::Error;
 pub use filter::Filter;
@@ -57,7 +58,7 @@ fn parse_std() -> jaq_parse::parse::Defs {
 #[cfg(not(feature = "bincode"))]
 fn parse_std() -> jaq_parse::parse::Defs {
     let std = include_str!("std.jq");
-    jaq_parse::parse(std, jaq_parse::parse::parse_defs())
+    jaq_parse::parse(std, jaq_parse::parse::parse_defs()).unwrap()
 }
 
 pub fn std() -> Module {

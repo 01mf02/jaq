@@ -4,6 +4,7 @@ use crate::path::{Opt, Path, PathElem};
 use crate::preprocess::{Call, PreFilter};
 use crate::toplevel::{Definition, Definitions, Main, Module};
 use crate::val::Atom;
+use alloc::boxed::Box;
 use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 
 #[derive(Debug)]
