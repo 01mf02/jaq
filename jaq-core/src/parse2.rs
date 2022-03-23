@@ -83,7 +83,9 @@ impl TryFrom<Expr> for PreFilter {
                     KeyVal::Expr(k, v) => Ok((Self::try_from(k)?, Self::try_from(v)?)),
                     KeyVal::Str(k, v) => {
                         let v = match v {
-                            None => Self::New(New::Atom(Atom::Str(k.clone()))),
+                            None => Self::Ref(Ref::Path(Path::from(PathElem::Index(Self::New(
+                                New::Atom(Atom::Str(k.clone())),
+                            ))))),
                             Some(v) => Self::try_from(v)?,
                         };
                         let k = Self::New(New::Atom(Atom::Str(k)));
