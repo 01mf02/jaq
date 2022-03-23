@@ -4,8 +4,11 @@ use common::{give, gives};
 use serde_json::json;
 
 #[test]
-fn math() {
+fn add() {
     give(json!(1), ". + 2", json!(3));
+    give(json!(1.0), ". + 2.0", json!(3.0));
+    give(json!(1), "2.0 + .", json!(3.0));
+
     give(json!("Hello "), ". + \"world\"", json!("Hello world"));
     give(json!([1, 2]), ". + [3, 4]", json!([1, 2, 3, 4]));
     give(
@@ -16,6 +19,13 @@ fn math() {
 
     give(json!({}), ". + {}", json!({}));
     give(json!({"a": 1}), ". + {}", json!({"a": 1}));
+}
+
+#[test]
+fn sub() {
+    give(json!(1), ". - -2", json!(3));
+    give(json!(1.0), ". - 0.1", json!(0.9));
+    give(json!(1.0), ". - 1", json!(0.0));
 }
 
 #[test]
