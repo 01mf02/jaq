@@ -102,11 +102,10 @@ where
 }
 
 // 'Atoms' are expressions that contain no ambiguity
-fn parse_atom<'a>(
-    with_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
-    sans_comma: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
-) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a {
-    let expr = with_comma;
+fn parse_atom<P>(expr: P, sans: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
+{
     let val = filter_map(|span, tok| match tok {
         Token::Num(n) => Ok(Expr::Num(n)),
         Token::Str(s) => Ok(Expr::Str(s)),
@@ -146,7 +145,7 @@ fn parse_atom<'a>(
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
         .map_with_span(|arr, span| (Expr::Array(arr.map(Box::new)), span));
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(sans_comma);
+    let is_val = just(Token::Ctrl(':')).ignore_then(sans);
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
