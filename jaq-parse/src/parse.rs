@@ -233,13 +233,14 @@ fn parse_atom<'a>(
         .recover_with(strategy(braces.clone(), [parens.clone(), bracks.clone()]))
 }
 
-fn parse_ops<'a>(
-    atom: impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a,
-) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone + 'a {
+fn parse_math<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
+where
+    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
+{
     let neg = just(Token::Op("-".to_string()))
         .map_with_span(|_, span| span)
         .repeated()
-        .then(atom)
+        .then(prev)
         .foldr(|a, b| {
             let span = a.start..b.1.end;
             (Expr::Neg(Box::new(b)), span)
@@ -252,8 +253,13 @@ fn parse_ops<'a>(
     let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
     // Sum ops (add and subtract) have equal precedence
     let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
-    let add_sub = add_sub.boxed();
+    add_sub
+}
 
+fn parse_ord<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Expr>> + Clone,
+{
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
 
     let lt_gt = choice((
@@ -262,15 +268,18 @@ fn parse_ops<'a>(
         ord(OrdOp::Le),
         ord(OrdOp::Ge),
     ));
-    let lt_gt = bin(add_sub, lt_gt);
+    let lt_gt = bin(prev, lt_gt);
     // Comparison ops (equal, not-equal) have equal precedence
     let eq_ne = bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)));
-    let eq_ne = eq_ne.boxed();
+    eq_ne
+}
 
-    let and = bin(eq_ne, just(Token::And).to(BinaryOp::And));
-    let or = bin(and, just(Token::Or).to(BinaryOp::Or));
-
+fn parse_assign<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Expr>> + Clone,
+{
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
+
     let update_with = |op: MathOp| assign(AssignOp::UpdateWith(op));
     let assign = choice((
         assign(AssignOp::Assign),
@@ -282,21 +291,26 @@ fn parse_ops<'a>(
         update_with(MathOp::Rem),
     ));
 
-    let args = or.clone().then(assign).repeated().then(or);
+    let args = prev.clone().then(assign).repeated().then(prev);
     args.foldr(|(a, op), b| Expr::binary_with_span(a, op, b))
 }
 
 fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
+
     let atom = parse_atom(with_comma.clone(), sans_comma.clone()).boxed();
-    let ops = parse_ops(atom).boxed();
+    let math = parse_math(atom).boxed();
+    let ord = parse_ord(math).boxed();
+    let and = bin(ord, just(Token::And).to(BinaryOp::And));
+    let or = bin(and, just(Token::Or).to(BinaryOp::Or));
+    let assign = parse_assign(or).boxed();
 
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
     let pipe = just(Token::Op("|".to_string())).to(BinaryOp::Pipe);
 
-    sans_comma.define(bin(ops.clone(), pipe.clone()));
-    with_comma.define(bin(bin(ops, comma), pipe));
+    sans_comma.define(bin(assign.clone(), pipe.clone()));
+    with_comma.define(bin(bin(assign, comma), pipe));
 
     with_comma
 }
