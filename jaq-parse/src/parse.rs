@@ -142,7 +142,7 @@ fn parse_atom<'a>(
     let call = call.map_with_span(|(f, args), span| (Expr::Call(f, args), span));
 
     // Atoms can also just be normal expressions, but surrounded with parentheses
-    let parens = expr
+    let parenthesised = expr
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
@@ -156,7 +156,7 @@ fn parse_atom<'a>(
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
-    let key_expr = parens
+    let key_expr = parenthesised
         .clone()
         .then(is_val)
         .map(|(key, val)| KeyVal::Expr(key, val));
@@ -212,13 +212,25 @@ fn parse_atom<'a>(
     };
     let path = path.map_with_span(|path, span| (Expr::Path(path), span));
 
+    let parens = (Token::Ctrl('('), Token::Ctrl(')'));
+    let bracks = (Token::Ctrl('['), Token::Ctrl(']'));
+    let braces = (Token::Ctrl('{'), Token::Ctrl('}'));
+    let strategy = |delims: (Token, Token), others| {
+        nested_delimiters(delims.0, delims.1, others, |span| {
+            (Expr::Path(Vec::new()), span)
+        })
+    };
+
     val.map_with_span(|expr, span| (expr, span))
         .or(call)
         .or(object)
         .or(ite)
-        .or(parens)
+        .or(parenthesised)
         .or(array)
         .or(path)
+        .recover_with(strategy(parens.clone(), [bracks.clone(), braces.clone()]))
+        .recover_with(strategy(bracks.clone(), [braces.clone(), parens.clone()]))
+        .recover_with(strategy(braces.clone(), [parens.clone(), bracks.clone()]))
 }
 
 fn parse_ops<'a>(
