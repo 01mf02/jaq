@@ -31,7 +31,7 @@ impl Main {
             .collect();
         for def in module.0.into_iter().chain(self.defs.0.into_iter()) {
             let open = def.term.open(&def.args, &|fun| fns.get(fun).cloned());
-            fns.insert((def.name, def.args.len()), open.unwrap());
+            fns.insert((def.name, def.args.len()), open?);
         }
         filter.open(&[], &|fun| fns.get(fun).cloned())
     }
