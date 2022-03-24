@@ -102,7 +102,7 @@ where
 }
 
 // 'Atoms' are expressions that contain no ambiguity
-fn parse_atom<P>(expr: P, sans: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+fn atom<P>(expr: P, sans_comma: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
 where
     P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
 {
@@ -145,7 +145,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
         .map_with_span(|arr, span| (Expr::Array(arr.map(Box::new)), span));
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(sans);
+    let is_val = just(Token::Ctrl(':')).ignore_then(sans_comma);
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
@@ -224,7 +224,7 @@ where
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
 }
 
-fn parse_math<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
+fn math<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
 where
     P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
 {
@@ -247,7 +247,7 @@ where
     add_sub
 }
 
-fn parse_ord<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+fn ord<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
 where
     P: Parser<Token, Spanned<Expr>> + Clone,
 {
@@ -265,7 +265,7 @@ where
     eq_ne
 }
 
-fn parse_assign<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+fn assign<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
 where
     P: Parser<Token, Spanned<Expr>> + Clone,
 {
@@ -286,16 +286,16 @@ where
     args.foldr(|(a, op), b| Expr::binary_with_span(a, op, b))
 }
 
-fn parse_expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+pub fn expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
 
-    let atom = parse_atom(with_comma.clone(), sans_comma.clone()).boxed();
-    let math = parse_math(atom).boxed();
-    let ord = parse_ord(math).boxed();
+    let atom = atom(with_comma.clone(), sans_comma.clone()).boxed();
+    let math = math(atom).boxed();
+    let ord = ord(math).boxed();
     let and = bin(ord, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));
-    let assign = parse_assign(or).boxed();
+    let assign = assign(or).boxed();
 
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
     let pipe = just(Token::Op("|".to_string())).to(BinaryOp::Pipe);
@@ -314,7 +314,7 @@ pub struct Main<F> {
     pub body: F,
 }
 
-fn parse_def() -> impl Parser<Token, Def<Spanned<Expr>>, Error = Simple<Token>> + Clone {
+pub fn def() -> impl Parser<Token, Def<Spanned<Expr>>, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -324,18 +324,16 @@ fn parse_def() -> impl Parser<Token, Def<Spanned<Expr>>, Error = Simple<Token>> 
         .ignore_then(ident.labelled("filter name"))
         .then(args(ident).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
-        .then(parse_expr())
+        .then(expr())
         .then_ignore(just(Token::Ctrl(';')))
         .map(|((name, args), body)| Def { name, args, body })
         .labelled("definition")
 }
 
-pub fn parse_defs() -> impl Parser<Token, Defs, Error = Simple<Token>> + Clone {
-    parse_def().repeated().collect()
+pub fn defs() -> impl Parser<Token, Defs, Error = Simple<Token>> + Clone {
+    def().repeated().collect()
 }
 
-pub fn parse_main() -> impl Parser<Token, Main<Spanned<Expr>>, Error = Simple<Token>> + Clone {
-    parse_defs()
-        .then(parse_expr())
-        .map(|(defs, body)| Main { defs, body })
+pub fn main() -> impl Parser<Token, Main<Spanned<Expr>>, Error = Simple<Token>> + Clone {
+    defs().then(expr()).map(|(defs, body)| Main { defs, body })
 }

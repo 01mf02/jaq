@@ -7,7 +7,7 @@ use crate::val::Atom;
 use alloc::boxed::Box;
 use core::fmt::{self, Display};
 use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
-pub use jaq_parse::{ariadne, parse};
+pub use jaq_parse::{ariadne, main, parse};
 
 #[derive(Debug)]
 pub enum Error {
@@ -27,14 +27,14 @@ impl Display for Error {
 
 impl Main {
     pub fn parse(s: &str) -> Result<Self, Error> {
-        let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_main()).unwrap();
+        let parsed = jaq_parse::parse(s, jaq_parse::main()).unwrap();
         Self::try_from(parsed)
     }
 }
 
 impl Definitions {
     pub fn parse(s: &str) -> Result<Self, Error> {
-        let parsed = jaq_parse::parse(s, jaq_parse::parse::parse_defs()).unwrap();
+        let parsed = jaq_parse::parse(s, jaq_parse::defs()).unwrap();
         Self::try_from(parsed)
     }
 }
