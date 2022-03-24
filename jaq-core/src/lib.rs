@@ -50,7 +50,7 @@ fn parse_std() -> jaq_parse::parse::Defs {
 #[cfg(not(feature = "bincode"))]
 fn parse_std() -> jaq_parse::parse::Defs {
     let std = include_str!("std.jq");
-    jaq_parse::parse(std, jaq_parse::parse::parse_defs()).unwrap()
+    jaq_parse::parse(std, jaq_parse::defs()).unwrap()
 }
 
 pub fn std() -> Definitions {
