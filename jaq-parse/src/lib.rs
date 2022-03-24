@@ -15,12 +15,12 @@ pub fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Simple<String>>>
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
-    let (tokens, lex_errs) = lex().parse_recovery(src);
+    let (tokens, lex_errs) = lex().then_ignore(end()).parse_recovery(src);
 
     let (out, parse_errs) = if let Some(tokens) = tokens {
         let len = src.chars().count();
         let stream = chumsky::Stream::from_iter(len..len + 1, tokens.into_iter());
-        parser.parse_recovery(stream)
+        parser.then_ignore(end()).parse_recovery(stream)
     } else {
         (None, Vec::new())
     };
