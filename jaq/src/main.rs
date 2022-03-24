@@ -46,6 +46,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         std::process::exit(3);
     });
+    let main = Main::try_from(main).unwrap();
+
     let filter = main.open(jaq_core::std()).unwrap_or_else(|e| {
         eprintln!("Error: {}", e);
         std::process::exit(3);
