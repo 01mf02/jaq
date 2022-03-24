@@ -206,11 +206,9 @@ fn parse_atom<'a>(
     };
     let path = path.map_with_span(|path, span| (Expr::Path(path), span));
 
-    let parens = (Token::Ctrl('('), Token::Ctrl(')'));
-    let bracks = (Token::Ctrl('['), Token::Ctrl(']'));
-    let braces = (Token::Ctrl('{'), Token::Ctrl('}'));
-    let strategy = |delims: (Token, Token), others| {
-        nested_delimiters(delims.0, delims.1, others, |span| {
+    let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
+    let strategy = |open, close, others| {
+        nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
             (Expr::Path(Vec::new()), span)
         })
     };
@@ -222,9 +220,9 @@ fn parse_atom<'a>(
         .or(parenthesised)
         .or(array)
         .or(path)
-        .recover_with(strategy(parens.clone(), [bracks.clone(), braces.clone()]))
-        .recover_with(strategy(bracks.clone(), [braces.clone(), parens.clone()]))
-        .recover_with(strategy(braces.clone(), [parens.clone(), bracks.clone()]))
+        .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
+        .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
+        .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
 }
 
 fn parse_math<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
