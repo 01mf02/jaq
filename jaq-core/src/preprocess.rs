@@ -34,6 +34,7 @@ pub enum Open {
     V(usize),
 }
 
+#[derive(Debug)]
 pub struct Closed(Builtin<Box<ClosedFilter>>);
 
 impl PreFilter {
