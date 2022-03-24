@@ -2,10 +2,12 @@
 pub mod ariadne;
 mod lex;
 mod ops;
+mod opt;
 pub mod parse;
 
 pub use lex::{lex, Token};
 pub use ops::{MathOp, OrdOp};
+pub use opt::Opt;
 
 pub type Span = std::ops::Range<usize>;
 

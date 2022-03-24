@@ -1,5 +1,6 @@
 use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

@@ -1,6 +1,7 @@
-use crate::{MathOp, OrdOp, Span, Token};
+use crate::{MathOp, Opt, OrdOp, Span, Token};
 use chumsky::prelude::*;
 use core::fmt;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -72,13 +73,6 @@ pub enum PathComponent<I> {
     Index(I),
     /// if both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
-}
-
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Copy, Clone, Debug)]
-pub enum Opt {
-    Optional,
-    Essential,
 }
 
 impl Expr {

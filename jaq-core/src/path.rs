@@ -1,5 +1,6 @@
 use crate::{ClosedFilter, Error, Filter, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use jaq_parse::Opt;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
@@ -9,29 +10,6 @@ pub enum PathElem<I> {
     Index(I),
     /// if both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum Opt {
-    Optional,
-    Essential,
-}
-
-impl Opt {
-    /// If the value is optional, return `x`, else fail with `f(x)`.
-    fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
-        match self {
-            Self::Optional => Ok(x),
-            Self::Essential => Err(f(x)),
-        }
-    }
-
-    fn collect<T, E>(self, iter: impl Iterator<Item = Result<T, E>>) -> Result<Vec<T>, E> {
-        match self {
-            Self::Optional => Ok(iter.filter_map(|x| x.ok()).collect()),
-            Self::Essential => iter.collect(),
-        }
-    }
 }
 
 impl<F> Path<F> {
