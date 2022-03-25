@@ -2,7 +2,7 @@ use crate::ops::MathOp;
 use crate::Val;
 use core::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     ObjKey(Val),
     Length(Val),
