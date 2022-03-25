@@ -80,18 +80,6 @@ impl Val {
         }
     }
 
-    pub fn is_empty(&self) -> Result<bool, Error> {
-        match self {
-            Self::Null => Ok(true),
-            Self::Bool(_) => Err(Error::Length(self.clone())),
-            Self::Pos(x) | Self::Neg(x) => Ok(*x == 0),
-            Self::Float(f) => Ok(*f == 0.),
-            Self::Str(s) => Ok(s.is_empty()),
-            Self::Arr(a) => Ok(a.is_empty()),
-            Self::Obj(o) => Ok(o.is_empty()),
-        }
-    }
-
     pub fn iter(&self) -> Result<RVals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
