@@ -34,7 +34,8 @@ pub enum Ref<F> {
 }
 
 impl Val {
-    fn as_obj_key(&self) -> Result<String, Error> {
+    // TODO: make this private again after transition to new filter type
+    pub fn as_obj_key(&self) -> Result<String, Error> {
         self.as_string().ok_or_else(|| Error::ObjKey(self.clone()))
     }
 }

@@ -15,6 +15,9 @@ pub mod recurse;
 pub mod toplevel;
 pub mod val;
 
+mod filter2;
+mod unparse;
+
 pub use error::Error;
 pub use filter::Filter;
 pub use path::Path;
