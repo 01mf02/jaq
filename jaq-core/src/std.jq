@@ -1,5 +1,10 @@
-def empty: [] | .[];
+# Booleans
+def true:  0 == 0;
+def false: 0 != 0;
 def not: if . then false else true end;
+
+def null:  [] | .[0];
+def empty: [] | .[ ];
 
 # Selection
 def select(f): if f then . else empty end;
