@@ -7,6 +7,7 @@ use jaq_parse::parse::{Expr, Spanned};
 pub enum Filter {
     Pos(usize),
     Float(f64),
+    Str(String),
     Array(Box<Self>),
     Object(Vec<(Self, Self)>),
 
@@ -15,9 +16,15 @@ pub enum Filter {
     Comma(Box<Self>, Box<Self>),
     IfThenElse(Box<Self>, Box<Self>, Box<Self>),
 
+    Path(Path<Self>),
+    Assign(Path<Self>, Box<Self>),
+    Update(Path<Self>, Box<Self>),
+
     Logic(Box<Self>, LogicOp, Box<Self>),
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
+
+    Empty,
 
     Var(usize),
 }
@@ -83,10 +90,16 @@ impl Filter {
         l.into_iter().cartesian_product(r)
     }
 
-    fn subst(self, args: &[Self]) -> Self {
+    pub fn update_math(path: Path<Self>, op: MathOp, f: Self) -> Self {
+        let id = Self::Path(Path::new(Vec::new()));
+        let math = Self::Math(Box::new(id), op, Box::new(f));
+        Self::Update(path, Box::new(math))
+    }
+
+    pub fn subst(self, args: &[Self]) -> Self {
         let sub = |f: Box<Self>| Box::new(f.subst(args));
         match self {
-            Self::Pos(_) | Self::Float(_) => self,
+            Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
             Self::Array(f) => Self::Array(sub(f)),
             Self::Object(kvs) => Self::Object(
                 kvs.into_iter()
@@ -97,9 +110,13 @@ impl Filter {
             Self::Pipe(l, r) => Self::Pipe(sub(l), sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::IfThenElse(if_, then, else_) => Self::IfThenElse(sub(if_), sub(then), sub(else_)),
+            Self::Path(path) => Self::Path(path.map(|f| f.subst(args))),
+            Self::Assign(path, f) => Self::Assign(path.map(|f| f.subst(args)), sub(f)),
+            Self::Update(path, f) => Self::Update(path.map(|f| f.subst(args)), sub(f)),
             Self::Logic(l, op, r) => Self::Logic(sub(l), op, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
+            Self::Empty => self,
             Self::Var(v) => args[v].clone(),
         }
     }

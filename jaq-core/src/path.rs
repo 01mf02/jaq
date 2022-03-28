@@ -219,6 +219,23 @@ impl PathElem<Vec<Rc<Val>>> {
     }
 }
 
+impl<F> Path<F> {
+    pub fn map<F2>(self, f: impl Fn(F) -> F2) -> Path<F2> {
+        let path = self.0.into_iter().map(|(p, opt)| (p.map2(&f), opt));
+        Path(path.collect())
+    }
+}
+
+impl<F> PathElem<F> {
+    pub fn map2<F2>(self, f: impl Fn(F) -> F2) -> PathElem<F2> {
+        use PathElem::*;
+        match self {
+            Index(i) => Index(f(i)),
+            Range(from, until) => Range(from.map(&f), until.map(&f)),
+        }
+    }
+}
+
 impl<N> Path<Filter<N>> {
     pub fn try_map<F, M, E>(self, m: &F) -> Result<Path<Filter<M>>, E>
     where
