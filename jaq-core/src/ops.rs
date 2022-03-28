@@ -1,7 +1,7 @@
 //! Logical and mathematical operations on values.
 
 use crate::{Error, RValRs, Val, ValR, ValRs};
-use alloc::boxed::Box;
+use alloc::{boxed::Box, rc::Rc};
 pub use jaq_parse::{MathOp, OrdOp};
 
 #[derive(Clone, Debug)]
@@ -127,6 +127,14 @@ impl LogicOp {
         match (l, self) {
             (false, LogicOp::And) | (true, LogicOp::Or) => Box::new(once(Ok(Val::Bool(l)))),
             _ => Box::new(r().map(|r| Ok(Val::Bool(r?.as_bool())))),
+        }
+    }
+
+    pub fn run2<'a>(&self, l: bool, r: impl FnOnce() -> RValRs<'a>) -> RValRs<'a> {
+        use core::iter::once;
+        match (l, self) {
+            (false, Self::And) | (true, Self::Or) => Box::new(once(Ok(Rc::new(Val::Bool(l))))),
+            _ => Box::new(r().map(|r| Ok(Rc::new(Val::Bool(r?.as_bool()))))),
         }
     }
 }

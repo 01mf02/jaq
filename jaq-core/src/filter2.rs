@@ -38,6 +38,7 @@ impl Filter {
         match self {
             Self::Pos(n) => Box::new(once(Ok(Rc::new(Val::Pos(*n))))),
             Self::Float(x) => Box::new(once(Ok(Rc::new(Val::Float(*x))))),
+            Self::Str(s) => Box::new(once(Ok(Rc::new(Val::Str(s.clone()))))),
             Self::Array(f) => Box::new(once(
                 f.run(v)
                     .collect::<Result<_, _>>()
@@ -71,6 +72,13 @@ impl Filter {
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
+            Self::Path(path) => todo!(),
+            Self::Assign(path, f) => todo!(),
+            Self::Update(path, f) => todo!(),
+            Self::Logic(l, op, r) => Box::new(l.run(Rc::clone(&v)).flat_map(move |l| match l {
+                Ok(l) => op.run2(l.as_bool(), || r.run(Rc::clone(&v))),
+                Err(e) => Box::new(once(Err(e))),
+            })),
             Self::Math(l, op, r) => Box::new(
                 Self::cartesian(l, r, v)
                     .map(|(x, y)| op.run((*x?).clone(), (*y?).clone()).map(Rc::new)),
@@ -78,8 +86,8 @@ impl Filter {
             Self::Ord(l, op, r) => Box::new(
                 Self::cartesian(l, r, v).map(|(x, y)| Ok(Rc::new(Val::Bool(op.run(&*x?, &*y?))))),
             ),
+            Self::Empty => Box::new(core::iter::empty()),
             Self::Var(_) => todo!(),
-            _ => todo!(),
         }
     }
 
