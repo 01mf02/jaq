@@ -49,13 +49,13 @@ pub enum KeyVal {
 pub enum Expr {
     Num(String),
     Str(String),
-    Call(String, Vec<Spanned<Self>>),
-    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
-    Neg(Box<Spanned<Self>>),
-    Object(Vec<KeyVal>),
     Array(Option<Box<Spanned<Self>>>),
-    If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Object(Vec<KeyVal>),
     Path(Vec<(PathComponent<Spanned<Self>>, Opt)>),
+    If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    Call(String, Vec<Spanned<Self>>),
+    Neg(Box<Spanned<Self>>),
+    Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }
 
 // A function node in the AST.
@@ -125,15 +125,6 @@ where
     })
     .labelled("object key");
 
-    let if_ = just(Token::If).ignore_then(expr.clone().map(Box::new));
-    let then = just(Token::Then).ignore_then(expr.clone().map(Box::new));
-    let else_ = just(Token::Else).ignore_then(expr.clone().map(Box::new));
-    let ite = if_.then(then).then(else_).then_ignore(just(Token::End));
-    let ite = ite.map_with_span(|((if_, then), else_), span| (Expr::If(if_, then, else_), span));
-
-    let call = ident.then(args(expr.clone()));
-    let call = call.map_with_span(|(f, args), span| (Expr::Call(f, args), span));
-
     // Atoms can also just be normal expressions, but surrounded with parentheses
     let parenthesised = expr
         .clone()
@@ -169,7 +160,7 @@ where
             Some(e2) => PathComponent::Range(Some(e1), e2),
         });
         let starts_with_colon = colon
-            .ignore_then(expr)
+            .ignore_then(expr.clone())
             .map(|e2| PathComponent::Range(None, Some(e2)));
 
         starts_with_expr
@@ -205,6 +196,15 @@ where
     };
     let path = path.map_with_span(|path, span| (Expr::Path(path), span));
 
+    let if_ = just(Token::If).ignore_then(expr.clone().map(Box::new));
+    let then = just(Token::Then).ignore_then(expr.clone().map(Box::new));
+    let else_ = just(Token::Else).ignore_then(expr.clone().map(Box::new));
+    let ite = if_.then(then).then(else_).then_ignore(just(Token::End));
+    let ite = ite.map_with_span(|((if_, then), else_), span| (Expr::If(if_, then, else_), span));
+
+    let call = ident.then(args(expr));
+    let call = call.map_with_span(|(f, args), span| (Expr::Call(f, args), span));
+
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
         nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
@@ -213,12 +213,12 @@ where
     };
 
     val.map_with_span(|expr, span| (expr, span))
-        .or(call)
-        .or(object)
-        .or(ite)
         .or(parenthesised)
         .or(array)
+        .or(object)
         .or(path)
+        .or(ite)
+        .or(call)
         .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
         .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
