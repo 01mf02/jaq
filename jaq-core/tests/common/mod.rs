@@ -1,5 +1,4 @@
-use core::convert::TryFrom;
-use jaq_core::{ClosedFilter, Error, Main, Val};
+use jaq_core::{parse, Definitions, Error, Val};
 use serde_json::Value;
 use std::rc::Rc;
 
@@ -20,10 +19,14 @@ pub fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
 }
 
 pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
+    let mut defs = Definitions::builtins();
+    let mut errs = Vec::new();
+    defs.add(jaq_core::std(), &mut errs);
+    let f = parse::parse(&f, parse::main()).unwrap();
+    let f = defs.finish(f, &mut errs);
+    assert_eq!(errs, Vec::new());
+
     let to = |v| Rc::new(Val::from(v));
-    let f = Main::parse(f).unwrap();
-    let f = f.open(jaq_core::std()).unwrap();
-    let f = ClosedFilter::try_from(f).unwrap();
 
     let expected = ys.into_iter().map(|y| Ok(to(y)));
     let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
