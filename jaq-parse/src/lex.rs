@@ -55,7 +55,7 @@ fn str_() -> impl Parser<char, String, Error = Simple<char>> {
         .collect()
 }
 
-pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
+fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
 
@@ -78,17 +78,19 @@ pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     });
 
     // A single token can be one of the above
-    let token = ident
+    ident
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
         .or(dot.map(Token::Dot))
         .or(num().map(Token::Num))
         .or(str_().map(Token::Str))
-        .recover_with(skip_then_retry_until([]));
+        .recover_with(skip_then_retry_until([]))
+}
 
+pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
     let comment = just("#").then(take_until(just('\n'))).padded();
 
-    token
+    token()
         .padded_by(comment.repeated())
         .map_with_span(|tok, span| (tok, span))
         .padded()
