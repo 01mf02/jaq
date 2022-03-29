@@ -62,10 +62,10 @@ pub enum Expr {
 // A function node in the AST.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
-pub struct Def<F> {
+pub struct Def {
     pub name: String,
     pub args: Vec<String>,
-    pub body: F,
+    pub body: Spanned<Expr>,
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -305,15 +305,13 @@ pub fn expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clon
     with_comma
 }
 
-pub type Defs = Vec<Def<Spanned<Expr>>>;
-
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Main<F> {
-    pub defs: Vec<Def<F>>,
-    pub body: F,
+pub struct Main {
+    pub defs: Vec<Def>,
+    pub body: Spanned<Expr>,
 }
 
-pub fn def() -> impl Parser<Token, Def<Spanned<Expr>>, Error = Simple<Token>> + Clone {
+pub fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -329,10 +327,10 @@ pub fn def() -> impl Parser<Token, Def<Spanned<Expr>>, Error = Simple<Token>> + 
         .labelled("definition")
 }
 
-pub fn defs() -> impl Parser<Token, Defs, Error = Simple<Token>> + Clone {
+pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
     def().repeated().collect()
 }
 
-pub fn main() -> impl Parser<Token, Main<Spanned<Expr>>, Error = Simple<Token>> + Clone {
+pub fn main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
     defs().then(expr()).map(|(defs, body)| Main { defs, body })
 }
