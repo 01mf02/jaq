@@ -12,6 +12,12 @@ fn add() {
 }
 
 #[test]
+fn entries() {
+    let entries = json!([{"key": "a", "value": 1}, {"key": "b", "value": 2}]);
+    give(entries, "from_entries", json!({"a": 1, "b": 2}));
+}
+
+#[test]
 fn map() {
     give(json!([1, 2]), "map(.+1)", json!([2, 3]));
 }
