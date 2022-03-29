@@ -25,6 +25,9 @@ pub enum Filter {
 
     Length,
     Type,
+    Floor,
+    Round,
+    Ceil,
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
@@ -57,6 +60,9 @@ impl Filter {
         Vec::from([
             make_builtin!("length", 0, Self::Length),
             make_builtin!("type", 0, Self::Type),
+            make_builtin!("floor", 0, Self::Floor),
+            make_builtin!("round", 0, Self::Round),
+            make_builtin!("ceil", 0, Self::Ceil),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
@@ -126,6 +132,9 @@ impl Filter {
             ),
             Self::Length => Box::new(once(v.len().map(Rc::new))),
             Self::Type => Box::new(once(Ok(Rc::new(Val::Str(v.typ().to_string()))))),
+            Self::Floor => Box::new(once(v.round(|f| f.floor()).map(Rc::new))),
+            Self::Round => Box::new(once(v.round(|f| f.round()).map(Rc::new))),
+            Self::Ceil => Box::new(once(v.round(|f| f.ceil()).map(Rc::new))),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
@@ -201,6 +210,7 @@ impl Filter {
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
             Self::Length | Self::Type => self,
+            Self::Floor | Self::Round | Self::Ceil => self,
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),

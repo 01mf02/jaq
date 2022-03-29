@@ -117,6 +117,7 @@ Contributions to extend jaq are highly welcome, see below.
 
 - [x] Length (`length`)
 - [x] Type (`type`)
+- [x] Rounding (`floor`, `round`, `ceil`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
 - [ ] More object filters (`to_entries`, `from_entries`, `with_entries`)

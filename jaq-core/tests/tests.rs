@@ -1,6 +1,7 @@
 pub mod common;
 
-use common::{give, gives};
+use common::{fail, give, gives};
+use jaq_core::{Error, Val};
 use serde_json::json;
 
 #[test]
@@ -107,6 +108,25 @@ fn eq() {
     give(json!(1), ". == 2 / 2.0", json!(false));
 
     give(json!({"a": 1, "b": 2}), ". == {b: 2, a: 1}", json!(true));
+}
+
+#[test]
+fn round() {
+    give(json!(1), "round", json!(1));
+    give(json!(1.0), "round", json!(1));
+    give(json!(-1.0), "round", json!(-1));
+    give(json!(-1), "round", json!(-1));
+
+    give(json!(-1.5), "round", json!(-2));
+    give(json!(-1.5), "floor", json!(-2));
+    give(json!(-1.5), "ceil", json!(-1));
+
+    give(json!(-1.4), "round", json!(-1));
+    give(json!(-1.4), "floor", json!(-2));
+    give(json!(-1.4), "ceil", json!(-1));
+
+    fail(json!([]), "round", Error::Round(Val::from(json!([]))));
+    fail(json!({}), "round", Error::Round(Val::from(json!({}))));
 }
 
 #[test]

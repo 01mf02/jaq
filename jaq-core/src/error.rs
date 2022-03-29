@@ -8,6 +8,7 @@ use core::fmt;
 pub enum Error {
     ObjKey(Val),
     Length(Val),
+    Round(Val),
     Iter(Val),
     Neg(Val),
     MathOp(Val, Val, MathOp),
@@ -25,6 +26,7 @@ impl fmt::Display for Error {
         match self {
             ObjKey(v) => write!(f, "cannot use {} as object key", v),
             Length(v) => write!(f, "{} has no length", v),
+            Round(v) => write!(f, "cannot round {}", v),
             Iter(v) => write!(f, "cannot iterate over {}", v),
             Neg(v) => write!(f, "{} cannot be negated", v),
             MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, passive(op)),

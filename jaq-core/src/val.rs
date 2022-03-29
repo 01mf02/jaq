@@ -67,6 +67,32 @@ impl Val {
         }
     }
 
+    pub fn typ(&self) -> &str {
+        match self {
+            Self::Null => "null",
+            Self::Bool(_) => "boolean",
+            Self::Pos(_) | Self::Neg(_) | Self::Float(_) => "number",
+            Self::Str(_) => "string",
+            Self::Arr(_) => "array",
+            Self::Obj(_) => "object",
+        }
+    }
+
+    pub fn round(&self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
+        match self {
+            Self::Pos(_) | Self::Neg(_) => Ok(self.clone()),
+            Self::Float(x) => {
+                let rounded = f(*x);
+                if rounded < 0.0 {
+                    Ok(Self::Neg(-rounded as usize))
+                } else {
+                    Ok(Self::Pos(rounded as usize))
+                }
+            }
+            _ => Err(Error::Round(self.clone())),
+        }
+    }
+
     pub fn range(&self, other: &Self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match (self, other) {
             (Self::Pos(x), Self::Pos(y)) => Ok(Box::new((*x..*y).map(Self::Pos))),
@@ -86,17 +112,6 @@ impl Val {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
             Self::Obj(o) => Ok(Box::new(o.values().cloned())),
             _ => Err(Error::Iter(self.clone())),
-        }
-    }
-
-    pub fn typ(&self) -> &str {
-        match self {
-            Self::Null => "null",
-            Self::Bool(_) => "boolean",
-            Self::Pos(_) | Self::Neg(_) | Self::Float(_) => "number",
-            Self::Str(_) => "string",
-            Self::Arr(_) => "array",
-            Self::Obj(_) => "object",
         }
     }
 }
