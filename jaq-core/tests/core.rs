@@ -2,7 +2,8 @@
 
 pub mod common;
 
-use common::{give, gives};
+use jaq_core::{Error, Val};
+use common::{give, gives, fail};
 use serde_json::json;
 
 #[test]
@@ -28,6 +29,15 @@ fn first_last() {
 fn fold() {
     // the corresponding jq command is: 'reduce range(1000) as $x (0; . + $x)'
     give(json!(0), "fold(0; range(1000); .[0] + .[1])", json!(499500));
+}
+
+#[test]
+fn keys() {
+    give(json!([0, null, "a"]), "[keys]", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "[keys]", json!(["a", "b"]));
+
+    fail(json!(0), "keys", Error::Keys(Val::Pos(0)));
+    fail(json!(null), "keys", Error::Keys(Val::Null));
 }
 
 #[test]

@@ -25,6 +25,7 @@ pub enum Filter {
 
     Length,
     Type,
+    Keys,
     Floor,
     Round,
     Ceil,
@@ -60,6 +61,7 @@ impl Filter {
         Vec::from([
             make_builtin!("length", 0, Self::Length),
             make_builtin!("type", 0, Self::Type),
+            make_builtin!("keys", 0, Self::Keys),
             make_builtin!("floor", 0, Self::Floor),
             make_builtin!("round", 0, Self::Round),
             make_builtin!("ceil", 0, Self::Ceil),
@@ -132,6 +134,10 @@ impl Filter {
             ),
             Self::Length => Box::new(once(v.len().map(Rc::new))),
             Self::Type => Box::new(once(Ok(Rc::new(Val::Str(v.typ().to_string()))))),
+            Self::Keys => match v.keys() {
+                Ok(keys) => Box::new(keys.collect::<Vec<_>>().into_iter().map(Ok)),
+                Err(e) => Box::new(once(Err(e))),
+            }
             Self::Floor => Box::new(once(v.round(|f| f.floor()).map(Rc::new))),
             Self::Round => Box::new(once(v.round(|f| f.round()).map(Rc::new))),
             Self::Ceil => Box::new(once(v.round(|f| f.ceil()).map(Rc::new))),
@@ -209,7 +215,7 @@ impl Filter {
             Self::Logic(l, op, r) => Self::Logic(sub(l), op, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Length | Self::Type => self,
+            Self::Length | Self::Type | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
