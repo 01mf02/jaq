@@ -170,11 +170,7 @@ impl PartialOrd for Val {
         use Ordering::*;
         match (self, other) {
             (Self::Null, Self::Null) => Some(Equal),
-            (Self::Null, _) => Some(Less),
-            (_, Self::Null) => Some(Greater),
             (Self::Bool(x), Self::Bool(y)) => x.partial_cmp(y),
-            (Self::Bool(_), _) => Some(Less),
-            (_, Self::Bool(_)) => Some(Greater),
             (Self::Pos(x), Self::Pos(y)) => x.partial_cmp(y),
             (Self::Neg(x), Self::Neg(y)) => x.partial_cmp(y).map(Ordering::reverse),
             (Self::Pos(_), Self::Neg(_)) => Some(Greater),
@@ -183,14 +179,9 @@ impl PartialOrd for Val {
             (Self::Neg(n), Self::Float(f)) => (-(*n as f64)).partial_cmp(f),
             (Self::Float(f), Self::Pos(p)) => f.partial_cmp(&(*p as f64)),
             (Self::Float(f), Self::Neg(n)) => f.partial_cmp(&-(*n as f64)),
-            (Self::Pos(_) | Self::Neg(_) | Self::Float(_), _) => Some(Less),
-            (_, Self::Pos(_) | Self::Neg(_) | Self::Float(_)) => Some(Greater),
+            (Self::Float(x), Self::Float(y)) => x.partial_cmp(y),
             (Self::Str(x), Self::Str(y)) => x.partial_cmp(y),
-            (Self::Str(_), _) => Some(Less),
-            (_, Self::Str(_)) => Some(Greater),
             (Self::Arr(x), Self::Arr(y)) => x.partial_cmp(y),
-            (Self::Arr(_), _) => Some(Less),
-            (_, Self::Arr(_)) => Some(Greater),
             (Self::Obj(x), Self::Obj(y)) => {
                 let mut l: Vec<_> = x.iter().collect();
                 let mut r: Vec<_> = y.iter().collect();
@@ -206,6 +197,21 @@ impl PartialOrd for Val {
                     ord => Some(ord),
                 }
             }
+
+            // nulls are smaller than anything else
+            (Self::Null, _) => Some(Less),
+            (_, Self::Null) => Some(Greater),
+            // bools are smaller than anything else, except for nulls
+            (Self::Bool(_), _) => Some(Less),
+            (_, Self::Bool(_)) => Some(Greater),
+            // numbers are smaller than anything else, except for nulls and bools
+            (Self::Pos(_) | Self::Neg(_) | Self::Float(_), _) => Some(Less),
+            (_, Self::Pos(_) | Self::Neg(_) | Self::Float(_)) => Some(Greater),
+            // etc.
+            (Self::Str(_), _) => Some(Less),
+            (_, Self::Str(_)) => Some(Greater),
+            (Self::Arr(_), _) => Some(Less),
+            (_, Self::Arr(_)) => Some(Greater),
         }
     }
 }
