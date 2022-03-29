@@ -137,7 +137,7 @@ impl Filter {
             Self::Keys => match v.keys() {
                 Ok(keys) => Box::new(keys.collect::<Vec<_>>().into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
-            }
+            },
             Self::Floor => Box::new(once(v.round(|f| f.floor()).map(Rc::new))),
             Self::Round => Box::new(once(v.round(|f| f.round()).map(Rc::new))),
             Self::Ceil => Box::new(once(v.round(|f| f.ceil()).map(Rc::new))),
