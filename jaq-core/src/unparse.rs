@@ -18,13 +18,11 @@ where
                     errs.push(todo!());
                     Filter::Float(0.)
                 }
+            } else if let Ok(f) = n.parse::<usize>() {
+                Filter::Pos(f)
             } else {
-                if let Ok(f) = n.parse::<usize>() {
-                    Filter::Pos(f)
-                } else {
-                    errs.push(todo!());
-                    Filter::Pos(0)
-                }
+                errs.push(todo!());
+                Filter::Pos(0)
             }
         }
         Expr::Str(s) => Filter::Str(s),

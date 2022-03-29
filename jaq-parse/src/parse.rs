@@ -243,8 +243,7 @@ where
     // Product ops (multiply and divide) have equal precedence
     let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
     // Sum ops (add and subtract) have equal precedence
-    let add_sub = bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)));
-    add_sub
+    bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)))
 }
 
 fn ord<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
@@ -261,8 +260,7 @@ where
     ));
     let lt_gt = bin(prev, lt_gt);
     // Comparison ops (equal, not-equal) have equal precedence
-    let eq_ne = bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)));
-    eq_ne
+    bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)))
 }
 
 fn assign<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
