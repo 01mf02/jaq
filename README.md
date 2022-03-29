@@ -198,10 +198,16 @@ For example, to add a sequence of numbers, you may use:
 jaq does not have the `reduce ... as` syntax.
 As substitute, it provides a `fold` filter, in which the above can be written as:
 
-    fold(.[]; 0; .acc + .x)
+    fold(0; .[]; .[0] + .[1])
+
+Here,
+   `0` is the initial value,
+ `.[]` is the list of values to fold over,
+`.[0]` is the accumulator (which is initially the initial value), and
+`.[1]` is the current value.
 
 Note that `fold` is likely less efficient than `reduce ... as`,
-because it constructs a new object `{acc, x}` at every step.
+because it constructs a new array `[acc, x]` at every step.
 
 ## Assignments
 

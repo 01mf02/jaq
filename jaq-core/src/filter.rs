@@ -147,9 +147,9 @@ impl Filter {
                 }))
             }
             Self::Recurse(f) => Box::new(crate::Recurse::new(f, v)),
-            Self::Fold(xs, init, f) => {
-                let mut xs = xs.run(Rc::clone(&v));
+            Self::Fold(init, xs, f) => {
                 let init: Result<Vec<_>, _> = init.run(Rc::clone(&v)).collect();
+                let mut xs = xs.run(Rc::clone(&v));
                 match init.and_then(|init| xs.try_fold(init, |acc, x| f.fold_step(acc, x?))) {
                     Ok(y) => Box::new(y.into_iter().map(Ok)),
                     Err(e) => Box::new(once(Err(e))),
@@ -169,10 +169,7 @@ impl Filter {
 
     fn fold_step(&self, acc: Vec<Rc<Val>>, x: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
         acc.into_iter()
-            .map(|acc| {
-                let obj = [("acc".to_string(), acc), ("x".to_string(), Rc::clone(&x))];
-                Val::Obj(Vec::from(obj).into_iter().collect())
-            })
+            .map(|acc| Val::Arr(Vec::from([acc, Rc::clone(&x)]).into_iter().collect()))
             .flat_map(|obj| self.run(Rc::new(obj)))
             .collect()
     }

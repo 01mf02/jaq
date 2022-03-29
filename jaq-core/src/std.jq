@@ -29,9 +29,9 @@ def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 
 # Arrays
-def add: fold(.[]; null; .acc + .x);
-def min: fold(.[]; .[0]; if .x < .acc then .x else .acc end);
-def max: fold(.[]; .[0]; if .x > .acc then .x else .acc end);
+def add: fold(null; .[]; .[0] + .[1]);
+def min: fold(.[0]; .[]; if .[1] < .[0] then .[1] else .[0] end);
+def max: fold(.[0]; .[]; if .[1] > .[0] then .[1] else .[0] end);
 def reverse: [.[length - 1 - range(length)]];
 def transpose: [{ i: range([.[] | length] | max), a: . } | [.a[][.i]]];
 def first:  .[ 0];

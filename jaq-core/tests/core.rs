@@ -26,13 +26,8 @@ fn first_last() {
 
 #[test]
 fn fold() {
-    // the corresponding jq command is:
-    //     reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)
-    give(
-        json!(0),
-        "fold(recurse(if . == 1000 then empty else .+1 end); 0; .acc + .x)",
-        json!(500500),
-    );
+    // the corresponding jq command is: 'reduce range(1000) as $x (0; . + $x)'
+    give(json!(0), "fold(0; range(1000); .[0] + .[1])", json!(499500));
 }
 
 #[test]
