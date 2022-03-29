@@ -13,8 +13,17 @@ fn add() {
 
 #[test]
 fn entries() {
+    let obj = json!({"a": 1, "b": 2});
     let entries = json!([{"key": "a", "value": 1}, {"key": "b", "value": 2}]);
-    give(entries, "from_entries", json!({"a": 1, "b": 2}));
+    let objk = json!({"ak": 1, "bk": 2});
+
+    give(obj.clone(), "to_entries", entries.clone());
+    give(entries, "from_entries", obj.clone());
+    give(obj, r#"with_entries(.key += "k")"#, objk);
+
+    let arr = json!([null, 0]);
+    let entries = json!([{"key": 0, "value": null}, {"key": 1, "value": 0}]);
+    give(arr, "to_entries", entries);
 }
 
 #[test]

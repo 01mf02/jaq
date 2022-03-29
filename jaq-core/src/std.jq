@@ -40,8 +40,10 @@ def nth(n): .[ n];
 
 def nth(n; g): last(limit(n + 1; g));
 
-# Arrays <-> Objects
-def from_entries: map({(.key): .value}) | add;
+# Objects <-> Arrays
+def   to_entries: [{ key: keys, v: . } | { key, value: .v[.key] }];
+def from_entries: map({ (.key): .value }) | add;
+def with_entries(f): to_entries | map(f) | from_entries;
 
 # Predicates
 def isempty(g): first((g | false), true);
