@@ -107,6 +107,14 @@ impl Val {
         }
     }
 
+    pub fn keys(&self) -> Result<RVals, Error> {
+        match self {
+            Self::Arr(a) => Ok(Box::new((0..a.len()).map(|i| Rc::new(Val::Pos(i))))),
+            Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Rc::new(Val::Str(k.clone()))))),
+            _ => Err(Error::Keys(self.clone())),
+        }
+    }
+
     pub fn iter(&self) -> Result<RVals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
