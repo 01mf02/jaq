@@ -7,7 +7,7 @@ pub enum Filter {
     Pos(usize),
     Float(f64),
     Str(String),
-    Array(Box<Self>),
+    Array(Option<Box<Self>>),
     Object(Vec<(Self, Self)>),
 
     Neg(Box<Self>),
@@ -23,7 +23,6 @@ pub enum Filter {
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
-    Empty,
     Length,
     Type,
     First(Box<Self>),
@@ -74,7 +73,8 @@ impl Filter {
             Self::Pos(n) => Box::new(once(Ok(Rc::new(Val::Pos(*n))))),
             Self::Float(x) => Box::new(once(Ok(Rc::new(Val::Float(*x))))),
             Self::Str(s) => Box::new(once(Ok(Rc::new(Val::Str(s.clone()))))),
-            Self::Array(f) => Box::new(once(
+            Self::Array(None) => Box::new(once(Ok(Rc::new(Val::Arr(Vec::new()))))),
+            Self::Array(Some(f)) => Box::new(once(
                 f.run(v)
                     .collect::<Result<_, _>>()
                     .map(|v| Rc::new(Val::Arr(v))),
@@ -124,7 +124,6 @@ impl Filter {
             Self::Ord(l, op, r) => Box::new(
                 Self::cartesian(l, r, v).map(|(x, y)| Ok(Rc::new(Val::Bool(op.run(&*x?, &*y?))))),
             ),
-            Self::Empty => Box::new(core::iter::empty()),
             Self::Length => Box::new(once(v.len().map(Rc::new))),
             Self::Type => Box::new(once(Ok(Rc::new(Val::Str(v.typ().to_string()))))),
             Self::First(f) => Box::new(f.run(v).take(1)),
@@ -188,7 +187,7 @@ impl Filter {
         let sub = |f: Box<Self>| Box::new(f.subst(args));
         match self {
             Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
-            Self::Array(f) => Self::Array(sub(f)),
+            Self::Array(f) => Self::Array(f.map(sub)),
             Self::Object(kvs) => Self::Object(
                 kvs.into_iter()
                     .map(|(k, v)| (k.subst(args), v.subst(args)))
@@ -204,7 +203,7 @@ impl Filter {
             Self::Logic(l, op, r) => Self::Logic(sub(l), op, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Empty | Self::Length | Self::Type => self,
+            Self::Length | Self::Type => self,
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),

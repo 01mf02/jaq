@@ -16,20 +16,19 @@ where
                     Filter::Float(f)
                 } else {
                     errs.push(todo!());
-                    Filter::Empty
+                    Filter::Float(0.)
                 }
             } else {
                 if let Ok(f) = n.parse::<usize>() {
                     Filter::Pos(f)
                 } else {
                     errs.push(todo!());
-                    Filter::Empty
+                    Filter::Pos(0)
                 }
             }
         }
         Expr::Str(s) => Filter::Str(s),
-        Expr::Array(Some(a)) => Filter::Array(get(*a, errs)),
-        Expr::Array(None) => Filter::Array(Box::new(Filter::Empty)),
+        Expr::Array(a) => Filter::Array(a.map(|a| get(*a, errs))),
         Expr::Object(o) => {
             let kvs = o.into_iter().map(|kv| match kv {
                 KeyVal::Expr(k, v) => (*get(k, errs), *get(v, errs)),
@@ -49,7 +48,7 @@ where
             _ => {
                 let fun = fns(&(name, args.len())).unwrap_or_else(|| {
                     errs.push(todo!());
-                    Filter::Empty
+                    Filter::Path(Path(Vec::new()))
                 });
                 let args = args.into_iter().map(|arg| *get(arg, errs));
                 fun.subst(&args.collect::<Vec<_>>())
