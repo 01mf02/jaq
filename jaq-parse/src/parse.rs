@@ -1,4 +1,5 @@
 use crate::{MathOp, Opt, OrdOp, Span, Token};
+use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
 #[cfg(feature = "serde")]

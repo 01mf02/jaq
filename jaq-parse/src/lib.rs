@@ -1,3 +1,7 @@
+#![no_std]
+
+extern crate alloc;
+
 #[cfg(feature = "ariadne")]
 pub mod ariadne;
 mod lex;
@@ -10,8 +14,9 @@ pub use ops::{MathOp, OrdOp};
 pub use opt::Opt;
 pub use parse::{defs, main};
 
-pub type Span = std::ops::Range<usize>;
+pub type Span = core::ops::Range<usize>;
 
+use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 
 pub fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Simple<String>>>

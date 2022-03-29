@@ -1,3 +1,4 @@
+use alloc::{format, string::String, string::ToString, vec::Vec};
 pub use ariadne::Source;
 use ariadne::{Color, Fmt, Label, Report, ReportKind};
 use chumsky::error::Simple;

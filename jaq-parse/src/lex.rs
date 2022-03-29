@@ -1,4 +1,5 @@
 use crate::Span;
+use alloc::{string::String, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
 
