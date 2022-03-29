@@ -2,8 +2,6 @@
 
 extern crate alloc;
 
-#[cfg(feature = "ariadne")]
-pub mod ariadne;
 mod lex;
 mod ops;
 mod opt;

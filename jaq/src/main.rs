@@ -39,8 +39,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let main = jaq_core::parse::parse(&cli.filter, jaq_core::parse::main());
     let main = main.unwrap_or_else(|errors| {
         for err in errors {
-            jaq_core::parse::ariadne::report(err)
-                .eprint(jaq_core::parse::ariadne::Source::from(&cli.filter))
+            jaq::report(err)
+                .eprint(ariadne::Source::from(&cli.filter))
                 .unwrap();
         }
         std::process::exit(3);

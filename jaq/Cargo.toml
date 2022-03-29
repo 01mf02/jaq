@@ -12,6 +12,8 @@ categories = ["command-line-utilities", "compilers", "parser-implementations"]
 
 [dependencies]
 jaq-core = { version = "0.1", path = "../jaq-core" }
+ariadne = "0.1.5"
+chumsky = "0.8.0"
 clap = { version = "3.0", features = ["derive"] }
 colored_json = "2.1.0"
 mimalloc = { version = "0.1.28", default-features = false }
