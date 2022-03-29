@@ -4,26 +4,23 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-pub mod error;
-pub mod filter;
-pub mod functions;
-pub mod ops;
-pub mod parse;
-pub mod path;
-pub mod preprocess;
-pub mod recurse;
-pub mod toplevel;
-pub mod val;
-
-mod filter2;
+mod error;
+mod filter;
+mod ops;
+mod path;
+mod recurse;
+mod toplevel;
 mod unparse;
+mod val;
+
+pub use jaq_parse as parse;
 
 pub use error::Error;
 pub use filter::Filter;
-pub use path::Path;
-pub use preprocess::{ClosedFilter, OpenFilter, PreFilter};
-pub use recurse::Recurse;
-pub use toplevel::{Definition, Definitions, Main};
+use path::Path;
+use recurse::Recurse;
+pub use toplevel::Definitions;
+use unparse::unparse;
 pub use val::Val;
 
 use alloc::{boxed::Box, rc::Rc};
@@ -37,25 +34,18 @@ pub type RValR = Result<Rc<Val>, Error>;
 /// A stream of reference-counted values.
 pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
 
-/// A stream of value results.
-pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
-
 /// A stream of reference-counted value results.
 pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;
 
 #[cfg(feature = "bincode")]
-fn parse_std() -> jaq_parse::parse::Defs {
+pub fn std() -> jaq_parse::parse::Defs {
     // use preparsed standard library
     let std = include_bytes!(concat!(env!("OUT_DIR"), "/std.bin"));
     bincode::deserialize(std).unwrap()
 }
 
 #[cfg(not(feature = "bincode"))]
-fn parse_std() -> jaq_parse::parse::Defs {
+pub fn std() -> jaq_parse::parse::Defs {
     let std = include_str!("std.jq");
     jaq_parse::parse(std, jaq_parse::defs()).unwrap()
-}
-
-pub fn std() -> Definitions {
-    Definitions::try_from(parse_std()).unwrap()
 }

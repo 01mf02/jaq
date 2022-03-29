@@ -1,7 +1,6 @@
 use clap::Parser;
-use jaq_core::{ClosedFilter, Main, Val};
+use jaq_core::{Definitions, Val};
 use mimalloc::MiMalloc;
-use std::convert::TryFrom;
 use std::io::Write;
 use std::rc::Rc;
 
@@ -46,13 +45,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         std::process::exit(3);
     });
-    let main = Main::try_from(main).unwrap();
 
-    let filter = main.open(jaq_core::std()).unwrap_or_else(|e| {
-        eprintln!("Error: {}", e);
+    let mut errs = Vec::new();
+    let mut defs = Definitions::builtins();
+    defs.add(jaq_core::std(), &mut errs);
+    let filter = defs.finish(main, &mut errs);
+    if !errs.is_empty() {
+        for e in errs {
+            eprintln!("Error: {}", e);
+        }
         std::process::exit(3);
-    });
-    let filter = ClosedFilter::try_from(filter).unwrap();
+    }
     //println!("Filter: {:?}", filter);
 
     use std::iter::once;

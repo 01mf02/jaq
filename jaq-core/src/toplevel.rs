@@ -1,38 +1,27 @@
-use crate::functions::FUNCTIONS;
-use crate::preprocess::{OpenFilter, PreFilter, UndefinedError};
-use alloc::string::{String, ToString};
-use alloc::{collections::BTreeMap, vec::Vec};
+use crate::{unparse, Error, Filter};
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use jaq_parse::parse::{Defs, Expr, Main, Spanned};
 
-pub struct Definition {
-    pub name: String,
-    pub args: Vec<String>,
-    pub term: PreFilter,
-}
-
-pub struct Definitions(Vec<Definition>);
+pub struct Definitions(BTreeMap<(String, usize), Filter>);
 
 impl Definitions {
-    pub fn new(defs: Vec<Definition>) -> Self {
-        Self(defs)
+    pub fn builtins() -> Self {
+        Self(Filter::builtins().into_iter().collect())
     }
-}
 
-pub struct Main {
-    pub defs: Definitions,
-    pub term: PreFilter,
-}
-
-impl Main {
-    pub fn open(self, module: Definitions) -> Result<OpenFilter, UndefinedError> {
-        let filter = self.term;
-        let mut fns: BTreeMap<(String, usize), _> = FUNCTIONS
-            .iter()
-            .map(|(name, args, f)| ((name.to_string(), *args), f.clone().into()))
-            .collect();
-        for def in module.0.into_iter().chain(self.defs.0.into_iter()) {
-            let open = def.term.open(&def.args, &|fun| fns.get(fun).cloned());
-            fns.insert((def.name, def.args.len()), open?);
+    pub fn add(&mut self, defs: Defs, errs: &mut Vec<Error>) {
+        for def in defs {
+            let f = unparse(&self.get(), &def.args, def.body, errs);
+            self.0.insert((def.name, def.args.len()), f);
         }
-        filter.open(&[], &|fun| fns.get(fun).cloned())
+    }
+
+    pub fn finish(mut self, main: Main<Spanned<Expr>>, errs: &mut Vec<Error>) -> Filter {
+        self.add(main.defs, errs);
+        unparse(&self.get(), &[], main.body, errs)
+    }
+
+    fn get(&self) -> impl Fn(&(String, usize)) -> Option<Filter> + '_ {
+        |fun| self.0.get(fun).cloned()
     }
 }

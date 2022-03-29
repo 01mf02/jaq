@@ -1,4 +1,4 @@
-use crate::{ClosedFilter, Error, Filter, RValR, RValRs, Val};
+use crate::{Error, Filter, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use jaq_parse::Opt;
 
@@ -20,15 +20,7 @@ impl<F> Path<F> {
 
 type PathOptR = Result<(PathElem<Vec<Rc<Val>>>, Opt), Error>;
 
-impl Path<ClosedFilter> {
-    pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
-        let init = Vec::from([Rc::clone(&v)]);
-        self.run_indices(&v).try_fold(init, |acc, p_opt| {
-            let (p, opt) = p_opt?;
-            opt.collect(acc.into_iter().flat_map(|x| p.collect((*x).clone())))
-        })
-    }
-
+impl Path<Filter> {
     pub fn run<'f, F>(&self, v: Rc<Val>, f: F) -> RValRs<'f>
     where
         F: Fn(Rc<Val>) -> RValRs<'f> + Copy,
@@ -43,9 +35,17 @@ impl Path<ClosedFilter> {
         let path = self.0.iter();
         path.map(move |(p, opt)| Ok((p.run_indices(Rc::clone(v))?, *opt)))
     }
+
+    pub fn collect(&self, v: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
+        let init = Vec::from([Rc::clone(&v)]);
+        self.run_indices(&v).try_fold(init, |acc, p_opt| {
+            let (p, opt) = p_opt?;
+            opt.collect(acc.into_iter().flat_map(|x| p.collect((*x).clone())))
+        })
+    }
 }
 
-impl PathElem<ClosedFilter> {
+impl PathElem<Filter> {
     pub fn run_indices(&self, v: Rc<Val>) -> Result<PathElem<Vec<Rc<Val>>>, Error> {
         use PathElem::*;
         match self {
@@ -232,30 +232,6 @@ impl<F> PathElem<F> {
         match self {
             Index(i) => Index(f(i)),
             Range(from, until) => Range(from.map(&f), until.map(&f)),
-        }
-    }
-}
-
-impl<N> Path<Filter<N>> {
-    pub fn try_map<F, M, E>(self, m: &F) -> Result<Path<Filter<M>>, E>
-    where
-        F: Fn(N) -> Result<Filter<M>, E>,
-    {
-        let path = self.0.into_iter().map(|(p, opt)| Ok((p.try_map(m)?, opt)));
-        Ok(Path(path.collect::<Result<_, _>>()?))
-    }
-}
-
-impl<N> PathElem<Filter<N>> {
-    fn try_map<F, M, E>(self, m: &F) -> Result<PathElem<Filter<M>>, E>
-    where
-        F: Fn(N) -> Result<Filter<M>, E>,
-    {
-        let m = |f: Filter<N>| f.try_map(m);
-        use PathElem::*;
-        match self {
-            Index(i) => Ok(Index(m(i)?)),
-            Range(from, until) => Ok(Range(from.map(m).transpose()?, until.map(m).transpose()?)),
         }
     }
 }

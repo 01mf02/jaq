@@ -54,6 +54,10 @@ impl Val {
         self.as_str().map(|s| s.to_string())
     }
 
+    pub fn as_obj_key(&self) -> Result<String, Error> {
+        self.as_string().ok_or_else(|| Error::ObjKey(self.clone()))
+    }
+
     pub fn len(&self) -> Result<Self, Error> {
         match self {
             Self::Null => Ok(Self::Pos(0)),

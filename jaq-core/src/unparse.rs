@@ -1,15 +1,14 @@
-use crate::filter2::Filter;
-use crate::ops::{LogicOp, MathOp, OrdOp};
+use crate::ops::LogicOp;
 use crate::path::PathElem;
-use crate::{Error, Path, RValR, RValRs, Val, ValRs};
-use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use crate::{Error, Filter, Path};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
 
-fn unparse<F>(fns: F, vars: &[String], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
+pub fn unparse<F>(fns: &F, vars: &[String], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
 where
     F: Fn(&(String, usize)) -> Option<Filter>,
 {
-    let get = |f, errs: &mut _| Box::new(unparse(&fns, vars, f, errs));
+    let get = |f, errs: &mut _| Box::new(unparse(fns, vars, f, errs));
     match body.0 {
         Expr::Num(n) => {
             if n.contains(['.', 'e', 'E']) {
