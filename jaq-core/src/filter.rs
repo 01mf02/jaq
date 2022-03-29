@@ -133,7 +133,7 @@ impl Filter {
                 Err(e) => Box::new(once(Err(e))),
             },
             Self::Limit(n, f) => {
-                let n = n.run(Rc::clone(&v)).map(|n| usize::try_from(&*n?));
+                let n = n.run(Rc::clone(&v)).map(|n| n?.as_usize());
                 Box::new(n.flat_map(move |n| match n {
                     Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,

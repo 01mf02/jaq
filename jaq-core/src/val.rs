@@ -12,27 +12,32 @@ use indexmap::IndexMap;
 #[derive(Clone, Debug)]
 pub enum Val {
     Null,
+    /// Boolean
     Bool(bool),
+    /// Positive integer
     Pos(usize),
+    /// Negative integer
     Neg(usize),
+    /// Floating-point value
     Float(f64),
+    /// String
     Str(String),
+    /// Array
     Arr(Vec<Rc<Val>>),
-    /// A map that preserves the order of its elements.
+    /// Order-preserving map
     Obj(IndexMap<String, Rc<Val>, FxBuildHasher>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Atom {
-    Pos(usize),
-    Neg(usize),
-    Float(f64),
-    Str(String),
 }
 
 impl Val {
     pub fn as_bool(&self) -> bool {
         !matches!(self, Val::Null | Val::Bool(false))
+    }
+
+    pub fn as_usize(&self) -> Result<usize, Error> {
+        match self {
+            Self::Pos(p) => Ok(*p),
+            _ => Err(Error::Usize(self.clone())),
+        }
     }
 
     pub fn as_posneg(&self) -> Result<(usize, bool), Error> {
@@ -43,19 +48,11 @@ impl Val {
         }
     }
 
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            Self::Str(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    pub fn as_string(&self) -> Option<String> {
-        self.as_str().map(|s| s.to_string())
-    }
-
     pub fn as_obj_key(&self) -> Result<String, Error> {
-        self.as_string().ok_or_else(|| Error::ObjKey(self.clone()))
+        match self {
+            Self::Str(s) => Ok(s.to_string()),
+            _ => Err(Error::ObjKey(self.clone())),
+        }
     }
 
     pub fn len(&self) -> Result<Self, Error> {
@@ -100,27 +97,6 @@ impl Val {
             Self::Str(_) => "string",
             Self::Arr(_) => "array",
             Self::Obj(_) => "object",
-        }
-    }
-}
-
-impl From<Atom> for Val {
-    fn from(a: Atom) -> Self {
-        match a {
-            Atom::Pos(p) => Self::Pos(p),
-            Atom::Neg(n) => Self::Neg(n),
-            Atom::Float(f) => Self::Float(f),
-            Atom::Str(s) => Self::Str(s),
-        }
-    }
-}
-
-impl TryFrom<&Val> for usize {
-    type Error = Error;
-    fn try_from(v: &Val) -> Result<usize, Error> {
-        match v {
-            Val::Pos(n) => Ok(*n),
-            _ => Err(Error::Usize(v.clone())),
         }
     }
 }
