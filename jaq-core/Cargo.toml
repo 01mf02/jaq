@@ -5,10 +5,10 @@ authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
 readme = "../README.md"
-description = "Parser and interpreter for the jq language"
+description = "Interpreter for the jaq language"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
-categories = ["compilers", "parser-implementations"]
+categories = ["compilers"]
 
 [features]
 default = ["std"]
@@ -21,4 +21,4 @@ fxhash = "0.2.1"
 indexmap = "1.6.0"
 itertools = "0.9"
 lazy_static = "1.4"
-serde_json = { version = "1.0", features = [ "preserve_order" ] }
+serde_json = "1.0"

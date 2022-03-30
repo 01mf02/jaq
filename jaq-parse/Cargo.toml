@@ -1,9 +1,14 @@
 [package]
 name = "jaq-parse"
 version = "0.1.0"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+readme = "../README.md"
+description = "Parser for the jaq language"
+repository = "https://github.com/01mf02/jaq"
+keywords = ["json", "query", "jq"]
+categories = ["parser-implementations"]
 
 [features]
 default = ["serde"]
