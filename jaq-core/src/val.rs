@@ -284,11 +284,8 @@ impl PartialEq for Val {
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Pos(x), Self::Pos(y)) | (Self::Neg(x), Self::Neg(y)) => x == y,
             (Self::Pos(p), Self::Neg(n)) | (Self::Neg(n), Self::Pos(p)) => *p == 0 && *n == 0,
-            // this behaviour is more like jq:
-            /*
             (Self::Pos(p), Self::Float(f)) | (Self::Float(f), Self::Pos(p)) => *p as f64 == *f,
             (Self::Neg(n), Self::Float(f)) | (Self::Float(f), Self::Neg(n)) => -(*n as f64) == *f,
-            */
             (Self::Float(x), Self::Float(y)) => x == y,
             (Self::Str(x), Self::Str(y)) => x == y,
             (Self::Arr(x), Self::Arr(y)) => x == y,
@@ -306,8 +303,8 @@ impl PartialOrd for Val {
             (Self::Bool(x), Self::Bool(y)) => x.partial_cmp(y),
             (Self::Pos(x), Self::Pos(y)) => x.partial_cmp(y),
             (Self::Neg(x), Self::Neg(y)) => x.partial_cmp(y).map(Ordering::reverse),
-            (Self::Pos(_), Self::Neg(_)) => Some(Greater),
-            (Self::Neg(_), Self::Pos(_)) => Some(Less),
+            (Self::Pos(x), Self::Neg(y)) => Some(if *x == 0 && *y == 0 { Equal } else { Greater }),
+            (Self::Neg(x), Self::Pos(y)) => Some(if *x == 0 && *y == 0 { Equal } else { Less }),
             (Self::Pos(p), Self::Float(f)) => (*p as f64).partial_cmp(f),
             (Self::Neg(n), Self::Float(f)) => (-(*n as f64)).partial_cmp(f),
             (Self::Float(f), Self::Pos(p)) => f.partial_cmp(&(*p as f64)),
