@@ -315,7 +315,7 @@ impl Ord for Val {
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Pos(x), Self::Pos(y)) => x.cmp(y),
             (Self::Neg(x), Self::Neg(y)) => x.cmp(y).reverse(),
-            (Self::Pos(x), Self::Neg(y)) | (Self::Neg(x), Self::Pos(y)) if *x + *y == 0 => Equal,
+            (Self::Pos(p), Self::Neg(n)) | (Self::Neg(n), Self::Pos(p)) if *p + *n == 0 => Equal,
             (Self::Pos(_), Self::Neg(_)) => Greater,
             (Self::Neg(_), Self::Pos(_)) => Less,
             (Self::Pos(p), Self::Float(f)) => float_cmp(&(*p as f64), f),
