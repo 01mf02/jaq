@@ -6,7 +6,6 @@ extern crate std;
 
 mod error;
 mod filter;
-mod ops;
 mod path;
 mod recurse;
 mod toplevel;

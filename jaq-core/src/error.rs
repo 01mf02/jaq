@@ -1,8 +1,8 @@
 //! Errors that can occur during filter execution.
 
-use crate::ops::MathOp;
 use crate::Val;
 use core::fmt;
+use jaq_parse::MathOp;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {

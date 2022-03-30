@@ -1,4 +1,3 @@
-use crate::ops::LogicOp;
 use crate::path::PathElem;
 use crate::{Error, Filter, Path};
 use alloc::{boxed::Box, string::String, vec::Vec};
@@ -55,12 +54,8 @@ where
         Expr::Neg(f) => Filter::Neg(get(*f, errs)),
         Expr::Binary(l, BinaryOp::Pipe, r) => Filter::Pipe(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
-        Expr::Binary(l, BinaryOp::Or, r) => {
-            Filter::Logic(get(*l, errs), LogicOp::Or, get(*r, errs))
-        }
-        Expr::Binary(l, BinaryOp::And, r) => {
-            Filter::Logic(get(*l, errs), LogicOp::And, get(*r, errs))
-        }
+        Expr::Binary(l, BinaryOp::Or, r) => Filter::Logic(get(*l, errs), true, get(*r, errs)),
+        Expr::Binary(l, BinaryOp::And, r) => Filter::Logic(get(*l, errs), false, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Math(op), r) => Filter::Math(get(*l, errs), op, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Ord(op), r) => Filter::Ord(get(*l, errs), op, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Assign(op), r) => {

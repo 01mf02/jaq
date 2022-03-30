@@ -1,6 +1,6 @@
-use crate::ops::{LogicOp, MathOp, OrdOp};
 use crate::{Error, Path, RValR, RValRs, Val};
 use alloc::{boxed::Box, rc::Rc, string::String, string::ToString, vec::Vec};
+use jaq_parse::{MathOp, OrdOp};
 
 #[derive(Clone, Debug)]
 pub enum Filter {
@@ -19,7 +19,7 @@ pub enum Filter {
     Assign(Path<Self>, Box<Self>),
     Update(Path<Self>, Box<Self>),
 
-    Logic(Box<Self>, LogicOp, Box<Self>),
+    Logic(Box<Self>, bool, Box<Self>),
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
@@ -121,9 +121,15 @@ impl Filter {
             },
             Self::Assign(path, f) => path.run(Rc::clone(&v), |_| f.run(Rc::clone(&v))),
             Self::Update(path, f) => path.run(v, |v| f.run(v)),
-            Self::Logic(l, op, r) => Box::new(l.run(Rc::clone(&v)).flat_map(move |l| match l {
-                Ok(l) => op.run(l.as_bool(), || r.run(Rc::clone(&v))),
-                Err(e) => Box::new(once(Err(e))),
+            Self::Logic(l, stop, r) => Box::new(l.run(Rc::clone(&v)).flat_map(move |l| {
+                match l {
+                    Ok(l) if l.as_bool() == *stop => Box::new(once(Ok(Rc::new(Val::Bool(*stop))))),
+                    Ok(_) => Box::new(
+                        r.run(Rc::clone(&v))
+                            .map(|r| Ok(Rc::new(Val::Bool(r?.as_bool())))),
+                    ) as Box<dyn Iterator<Item = _>>,
+                    Err(e) => Box::new(once(Err(e))),
+                }
             })),
             Self::Math(l, op, r) => Box::new(
                 Self::cartesian(l, r, v)
@@ -212,7 +218,7 @@ impl Filter {
             Self::Path(path) => Self::Path(path.map(|f| f.subst(args))),
             Self::Assign(path, f) => Self::Assign(path.map(|f| f.subst(args)), sub(f)),
             Self::Update(path, f) => Self::Update(path.map(|f| f.subst(args)), sub(f)),
-            Self::Logic(l, op, r) => Self::Logic(sub(l), op, sub(r)),
+            Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
             Self::Length | Self::Type | Self::Keys => self,
