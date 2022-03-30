@@ -6,6 +6,14 @@ def true:  0 == 0;
 def false: 0 != 0;
 def not: if . then false else true end;
 
+# Numbers
+def nan:      0. / 0.;
+def infinite: 1. / 0.;
+def isnan:      . == nan;
+def isinfinite: . == infinite or -. == infinite;
+def isfinite: isinfinite | not;
+def isnormal: isnan or isinfinite | not;
+
 # Selection
 def select(f): if f then . else empty end;
 def values:    select(. != null);
