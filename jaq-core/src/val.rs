@@ -284,9 +284,13 @@ impl PartialEq for Val {
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Pos(x), Self::Pos(y)) | (Self::Neg(x), Self::Neg(y)) => x == y,
             (Self::Pos(p), Self::Neg(n)) | (Self::Neg(n), Self::Pos(p)) => *p == 0 && *n == 0,
-            (Self::Pos(p), Self::Float(f)) | (Self::Float(f), Self::Pos(p)) => *p as f64 == *f,
-            (Self::Neg(n), Self::Float(f)) | (Self::Float(f), Self::Neg(n)) => -(*n as f64) == *f,
-            (Self::Float(x), Self::Float(y)) => x == y,
+            (Self::Pos(p), Self::Float(f)) | (Self::Float(f), Self::Pos(p)) => {
+                float_eq(&(*p as f64), f)
+            }
+            (Self::Neg(n), Self::Float(f)) | (Self::Float(f), Self::Neg(n)) => {
+                float_eq(&-(*n as f64), f)
+            }
+            (Self::Float(x), Self::Float(y)) => float_eq(x, y),
             (Self::Str(x), Self::Str(y)) => x == y,
             (Self::Arr(x), Self::Arr(y)) => x == y,
             (Self::Obj(x), Self::Obj(y)) => x == y,
@@ -295,23 +299,32 @@ impl PartialEq for Val {
     }
 }
 
+impl Eq for Val {}
+
 impl PartialOrd for Val {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Val {
+    fn cmp(&self, other: &Self) -> Ordering {
         use Ordering::*;
         match (self, other) {
-            (Self::Null, Self::Null) => Some(Equal),
-            (Self::Bool(x), Self::Bool(y)) => x.partial_cmp(y),
-            (Self::Pos(x), Self::Pos(y)) => x.partial_cmp(y),
-            (Self::Neg(x), Self::Neg(y)) => x.partial_cmp(y).map(Ordering::reverse),
-            (Self::Pos(x), Self::Neg(y)) => Some(if *x == 0 && *y == 0 { Equal } else { Greater }),
-            (Self::Neg(x), Self::Pos(y)) => Some(if *x == 0 && *y == 0 { Equal } else { Less }),
-            (Self::Pos(p), Self::Float(f)) => (*p as f64).partial_cmp(f),
-            (Self::Neg(n), Self::Float(f)) => (-(*n as f64)).partial_cmp(f),
-            (Self::Float(f), Self::Pos(p)) => f.partial_cmp(&(*p as f64)),
-            (Self::Float(f), Self::Neg(n)) => f.partial_cmp(&-(*n as f64)),
-            (Self::Float(x), Self::Float(y)) => x.partial_cmp(y),
-            (Self::Str(x), Self::Str(y)) => x.partial_cmp(y),
-            (Self::Arr(x), Self::Arr(y)) => x.partial_cmp(y),
+            (Self::Null, Self::Null) => Equal,
+            (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
+            (Self::Pos(x), Self::Pos(y)) => x.cmp(y),
+            (Self::Neg(x), Self::Neg(y)) => x.cmp(y).reverse(),
+            (Self::Pos(x), Self::Neg(y)) | (Self::Neg(x), Self::Pos(y)) if *x + *y == 0 => Equal,
+            (Self::Pos(_), Self::Neg(_)) => Greater,
+            (Self::Neg(_), Self::Pos(_)) => Less,
+            (Self::Pos(p), Self::Float(f)) => float_cmp(&(*p as f64), f),
+            (Self::Neg(n), Self::Float(f)) => float_cmp(&-(*n as f64), f),
+            (Self::Float(f), Self::Pos(p)) => float_cmp(f, &(*p as f64)),
+            (Self::Float(f), Self::Neg(n)) => float_cmp(f, &-(*n as f64)),
+            (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
+            (Self::Str(x), Self::Str(y)) => x.cmp(y),
+            (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => {
                 let mut l: Vec<_> = x.iter().collect();
                 let mut r: Vec<_> = y.iter().collect();
@@ -322,28 +335,40 @@ impl PartialOrd for Val {
                 let kr = r.iter().map(|(k, _v)| k);
                 let vl = l.iter().map(|(_k, v)| v);
                 let vr = r.iter().map(|(_k, v)| v);
-                match kl.cmp(kr) {
-                    Ordering::Equal => vl.partial_cmp(vr),
-                    ord => Some(ord),
-                }
+                kl.cmp(kr).then_with(|| vl.cmp(vr))
             }
 
             // nulls are smaller than anything else
-            (Self::Null, _) => Some(Less),
-            (_, Self::Null) => Some(Greater),
+            (Self::Null, _) => Less,
+            (_, Self::Null) => Greater,
             // bools are smaller than anything else, except for nulls
-            (Self::Bool(_), _) => Some(Less),
-            (_, Self::Bool(_)) => Some(Greater),
+            (Self::Bool(_), _) => Less,
+            (_, Self::Bool(_)) => Greater,
             // numbers are smaller than anything else, except for nulls and bools
-            (Self::Pos(_) | Self::Neg(_) | Self::Float(_), _) => Some(Less),
-            (_, Self::Pos(_) | Self::Neg(_) | Self::Float(_)) => Some(Greater),
+            (Self::Pos(_) | Self::Neg(_) | Self::Float(_), _) => Less,
+            (_, Self::Pos(_) | Self::Neg(_) | Self::Float(_)) => Greater,
             // etc.
-            (Self::Str(_), _) => Some(Less),
-            (_, Self::Str(_)) => Some(Greater),
-            (Self::Arr(_), _) => Some(Less),
-            (_, Self::Arr(_)) => Some(Greater),
+            (Self::Str(_), _) => Less,
+            (_, Self::Str(_)) => Greater,
+            (Self::Arr(_), _) => Less,
+            (_, Self::Arr(_)) => Greater,
         }
     }
+}
+
+fn float_eq(left: &f64, right: &f64) -> bool {
+    float_cmp(left, right) == Ordering::Equal
+}
+
+// taken from the currently nightly-only function `f64::total_cmp`
+fn float_cmp(left: &f64, right: &f64) -> Ordering {
+    let mut left = left.to_bits() as i64;
+    let mut right = right.to_bits() as i64;
+
+    left ^= (((left >> 63) as u64) >> 1) as i64;
+    right ^= (((right >> 63) as u64) >> 1) as i64;
+
+    left.cmp(&right)
 }
 
 impl fmt::Display for Val {
