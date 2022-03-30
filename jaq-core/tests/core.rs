@@ -7,17 +7,6 @@ use jaq_core::{Error, Val};
 use serde_json::json;
 
 #[test]
-fn any() {
-    give(json!({"a": false, "b": true}), "any", json!(true));
-}
-
-#[test]
-fn all() {
-    give(json!({"a": false, "b": true}), "all", json!(false));
-    give(json!({"a": 1, "b": 2}), "all", json!(true))
-}
-
-#[test]
 fn first_last() {
     gives(json!([]), "first(.[])", []);
     gives(json!([]), "last(.[])", []);
@@ -27,8 +16,10 @@ fn first_last() {
 
 #[test]
 fn fold() {
-    // the corresponding jq command is: 'reduce range(1000) as $x (0; . + $x)'
-    give(json!(0), "fold(0; range(1000); .[0] + .[1])", json!(499500));
+    // the corresponding jq command is:
+    //     reduce recurse(if . == 1000 then [] | .[] else .+1 end) as $x (0; . + $x)
+    let f = "fold(0; recurse(if . == 1000 then [] | .[] else .+1 end); .[0] + .[1])";
+    give(json!(0), f, json!(500500));
 }
 
 #[test]
@@ -61,15 +52,8 @@ fn limit() {
 
 #[test]
 fn recurse() {
-    let x = json!({"a":0,"b":[1]});
-    gives(x.clone(), "recurse", [x, json!(0), json!([1]), json!(1)]);
-
     let y = [json!(1), json!(2), json!(3)];
-    gives(json!(1), "recurse(.+1; . < 4)", y.clone());
-    gives(json!(1), "recurse(if . < 3 then .+1 else empty end)", y);
-
-    let y = [json!(2), json!(4), json!(16)];
-    gives(json!(2), "recurse(. * .; . < 20)", y);
+    gives(json!(1), "recurse(if . < 3 then .+1 else [] | .[] end)", y);
 }
 
 #[test]

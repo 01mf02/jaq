@@ -24,8 +24,8 @@ fn index_access() {
     give(json!({"_a": 1}), "._a", json!(1));
     give(json!({"_0": 1}), "._0", json!(1));
 
-    give(json!({"a": 1}), r#".[0, "a", true]?"#, json!(1));
-    give(json!([0, 1, 2]), r#".["a", 0, true]?"#, json!(0));
+    give(json!({"a": 1}), r#".[0, "a", 0 == 0]?"#, json!(1));
+    give(json!([0, 1, 2]), r#".["a", 0, 0 == 0]?"#, json!(0));
     give(json!([0, 1, 2]), r#".[3]?"#, json!(null));
     gives(json!("asdf"), ".[0]?", []);
 
@@ -74,12 +74,12 @@ fn index_update() {
     give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
     give(json!({"a": 1}), ".b |= 1", json!({"a": 1, "b": 1}));
     give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
-    give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
+    give(json!({"a": 1, "b": 2}), ".b |= ([] | .[])", json!({"a": 1}));
     give(json!({"a": 1, "b": 2}), ".a += 1", json!({"a": 2, "b": 2}));
 
     give(json!([0, 1, 2]), ".[1] |= .+2", json!([0, 3, 2]));
-    give(json!([0, 1, 2]), ".[-1,-1] |= empty", json!([0]));
-    give(json!([0, 1, 2]), ".[ 0, 0] |= empty", json!([2]));
+    give(json!([0, 1, 2]), ".[-1,-1] |= ([] | .[])", json!([0]));
+    give(json!([0, 1, 2]), ".[ 0, 0] |= ([] | .[])", json!([2]));
 
     use Error::IndexOutOfBounds as Oob;
     fail(json!([0, 1, 2]), ".[ 3] |=  3", Oob((3, true)));
@@ -94,7 +94,7 @@ fn index_update() {
 #[test]
 fn iter_update() {
     // precedence tests
-    give(json!([]), ".[] |= . or true", json!([]));
+    give(json!([]), ".[] |= . or 0", json!([]));
     gives(json!([]), ".[] |= .,.", [json!([]), json!([])]);
     give(json!([]), ".[] |= (.,.)", json!([]));
     give(json!([0]), ".[] |= .+1 | .+[2]", json!([1, 2]));
@@ -108,7 +108,7 @@ fn iter_update() {
 
     give(
         json!({"a": 1, "b": 2}),
-        ".[] |= (select(.>1) | .+1)",
+        ".[] |= ((if .>1 then . else [] | .[] end) | .+1)",
         json!({"b": 3}),
     );
 
@@ -117,7 +117,7 @@ fn iter_update() {
 
 #[test]
 fn range_update() {
-    give(json!([0, 1, 2]), ".[:2] |= map(.+5)", json!([5, 6, 2]));
+    give(json!([0, 1, 2]), ".[:2] |= [.[] | .+5]", json!([5, 6, 2]));
     give(json!([0, 1, 2]), ".[-2:-1] |= [5]+.", json!([0, 5, 1, 2]));
     give(
         json!([0, 1, 2]),
@@ -125,7 +125,11 @@ fn range_update() {
         json!([0, 5, 6, 5, 6, 1, 2]),
     );
 
-    give(json!([0, 1, 2]), ".[:2,3.0]? |= map(.+1)", json!([1, 2, 2]));
+    give(
+        json!([0, 1, 2]),
+        ".[:2,3.0]? |= [.[] | .+1]",
+        json!([1, 2, 2]),
+    );
 }
 
 // Test what happens when update filter returns multiple values.
@@ -139,7 +143,7 @@ fn update_mult() {
     give(json!({"a": 1}), ".a |= (.,.+1)", json!({"a": 1}));
 
     // jq returns null here
-    gives(json!(1), ". |= empty", []);
+    gives(json!(1), ". |= ([] | .[])", []);
     // jq returns just 1 here
     gives(json!(1), ". |= (.,.)", [json!(1), json!(1)]);
     // jq returns just [1] here
@@ -147,5 +151,5 @@ fn update_mult() {
     // jq returns just [1,2] here
     give(json!([1, 3]), ".[] |= (., .+1)", json!([1, 2, 3, 4]));
     // here comes a huge WTF: jq returns [2,4] here -- looks like a bug?
-    give(json!([1, 2, 3, 4, 5]), ".[] |= empty", json!([]));
+    give(json!([1, 2, 3, 4, 5]), ".[] |= ([] | .[])", json!([]));
 }

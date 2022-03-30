@@ -2,13 +2,24 @@
 
 pub mod common;
 
-use common::give;
+use common::{give, gives};
 use serde_json::json;
 
 #[test]
 fn add() {
     give(json!({"a": 1, "b": 2}), "add", json!(3));
     give(json!([[0, 1], [2, 3]]), "add", json!([0, 1, 2, 3]));
+}
+
+#[test]
+fn all() {
+    give(json!({"a": false, "b": true}), "all", json!(false));
+    give(json!({"a": 1, "b": 2}), "all", json!(true))
+}
+
+#[test]
+fn any() {
+    give(json!({"a": false, "b": true}), "any", json!(true));
 }
 
 #[test]
@@ -47,6 +58,18 @@ fn range_reverse() {
     give(json!(null), "[range(-1, 1; 0, 2)]", y);
 
     give(json!(3), "[range(.)] | reverse", json!([2, 1, 0]));
+}
+
+#[test]
+fn recurse() {
+    let x = json!({"a":0,"b":[1]});
+    gives(x.clone(), "recurse", [x, json!(0), json!([1]), json!(1)]);
+
+    let y = [json!(1), json!(2), json!(3)];
+    gives(json!(1), "recurse(.+1; . < 4)", y);
+
+    let y = [json!(2), json!(4), json!(16)];
+    gives(json!(2), "recurse(. * .; . < 20)", y);
 }
 
 #[test]
