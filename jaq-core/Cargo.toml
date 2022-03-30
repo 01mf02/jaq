@@ -11,12 +11,8 @@ keywords = ["json", "query", "jq"]
 categories = ["compilers", "parser-implementations"]
 
 [features]
-default = ["std", "bincode"]
+default = ["std"]
 std = []
-
-[build-dependencies]
-jaq-parse = { version = "0.1", path = "../jaq-parse" }
-bincode = { version = "1.3.3", optional = true }
 
 [dependencies]
 jaq-parse = { version = "0.1", path = "../jaq-parse" }

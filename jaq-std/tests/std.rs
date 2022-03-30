@@ -14,7 +14,10 @@ fn add() {
 #[test]
 fn all() {
     give(json!({"a": false, "b": true}), "all", json!(false));
-    give(json!({"a": 1, "b": 2}), "all", json!(true))
+    give(json!({"a": 1, "b": 2}), "all", json!(true));
+
+    let f = "def positive(f): all(f; . > 0); positive(.[])";
+    give(json!([1, 2]), f, json!(true));
 }
 
 #[test]
@@ -48,6 +51,12 @@ fn min_max() {
     give(json!([]), "max", json!(null));
     give(json!([1, 4, 2]), "min", json!(1));
     give(json!([1, 4, 2]), "max", json!(4));
+}
+
+#[test]
+fn nth() {
+    let fib = "[0,1] | recurse([.[1], add]) | .[0]";
+    give(json!(10), &format!("nth(.; {})", fib), json!(55));
 }
 
 #[test]

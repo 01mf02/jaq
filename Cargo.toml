@@ -2,6 +2,7 @@
 members = [
     "jaq-parse",
     "jaq-core",
+    "jaq-std",
     "jaq",
 ]
 

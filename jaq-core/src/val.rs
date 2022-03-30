@@ -1,6 +1,6 @@
 //! JSON values with reference-counted sharing.
 
-use crate::{Error, RVals, ValR};
+use crate::Error;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
@@ -28,6 +28,18 @@ pub enum Val {
     /// Order-preserving map
     Obj(IndexMap<String, Rc<Val>, FxBuildHasher>),
 }
+
+/// A value result.
+pub type ValR = Result<Val, Error>;
+
+/// A reference-counted value result.
+pub type RValR = Result<Rc<Val>, Error>;
+
+/// A stream of reference-counted values.
+pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
+
+/// A stream of reference-counted value results.
+pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;
 
 impl Val {
     pub fn as_bool(&self) -> bool {

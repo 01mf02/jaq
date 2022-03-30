@@ -40,8 +40,8 @@ fn logic() {
 #[test]
 fn precedence() {
     // conjunction binds stronger than disjunction
-    give(json!(true), "false and . or .", json!(true));
-    give(json!(true), "false and (. or .)", json!(false));
+    give(json!(true), "(0 != 0) and . or .", json!(true));
+    give(json!(true), "(0 != 0) and (. or .)", json!(false));
 
     give(json!(null), "1 + 2 * 3", json!(7));
     give(json!(null), "2 * 3 + 1", json!(7));
@@ -76,15 +76,9 @@ fn if_then_else() {
 }
 
 #[test]
-fn fib() {
-    let fib = "[0,1] | recurse([.[1], add]) | .[0]";
-    give(json!(10), &format!("nth(.; {})", fib), json!(55));
-}
-
-#[test]
 fn ord() {
-    give(json!(null), ". < false", json!(true));
-    give(json!(false), ". < true", json!(true));
+    give(json!(null), ". < (0 != 0)", json!(true));
+    give(json!(false), ". < (0 == 0)", json!(true));
     give(json!(1), ". > 0.0", json!(true));
     give(json!(1), ". < 1.5", json!(true));
     give(json!(1.1), ". < 1.5", json!(true));
@@ -131,13 +125,4 @@ fn round() {
 
     fail(json!([]), "round", Error::Round(Val::from(json!([]))));
     fail(json!({}), "round", Error::Round(Val::from(json!({}))));
-}
-
-#[test]
-fn def() {
-    give(
-        json!([1, 2]),
-        "def positive(f): all(f; . > 0); positive(.[])",
-        json!(true),
-    );
 }
