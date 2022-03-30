@@ -103,6 +103,8 @@ fn eq() {
 
     give(json!(0), ". == -.", json!(true));
     give(json!(0), "-. == .", json!(true));
+    give(json!(0.0), ". == -.", json!(true));
+    give(json!(0.0), "-. == .", json!(true));
 
     gives(json!([0, 1]), ".[] == 0", [json!(true), json!(false)]);
 

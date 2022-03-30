@@ -360,8 +360,12 @@ fn float_eq(left: &f64, right: &f64) -> bool {
     float_cmp(left, right) == Ordering::Equal
 }
 
-// taken from the currently nightly-only function `f64::total_cmp`
+// adapted from the currently nightly-only function `f64::total_cmp`
 fn float_cmp(left: &f64, right: &f64) -> Ordering {
+    if *left == 0. && *right == 0. {
+        return Ordering::Equal;
+    }
+
     let mut left = left.to_bits() as i64;
     let mut right = right.to_bits() as i64;
 
