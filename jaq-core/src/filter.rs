@@ -42,7 +42,7 @@ pub enum Filter {
 type Prod = (RValR, RValR);
 
 impl Filter {
-    pub fn builtins() -> Vec<((String, usize), Self)> {
+    pub fn core() -> Vec<((String, usize), Self)> {
         let var = |v| Box::new(Self::Var(v));
         macro_rules! make_builtin {
             ($name: expr, 0, $cons: expr) => {

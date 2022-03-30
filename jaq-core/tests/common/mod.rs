@@ -19,7 +19,7 @@ pub fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
 }
 
 pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
-    let mut defs = Definitions::builtins();
+    let mut defs = Definitions::core();
     let mut errs = Vec::new();
     defs.add(jaq_core::std(), &mut errs);
     let f = parse::parse(&f, parse::main()).unwrap();

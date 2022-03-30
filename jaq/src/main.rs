@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let mut errs = Vec::new();
-    let mut defs = Definitions::builtins();
+    let mut defs = Definitions::core();
     defs.add(jaq_core::std(), &mut errs);
     let filter = defs.finish(main, &mut errs);
     if !errs.is_empty() {

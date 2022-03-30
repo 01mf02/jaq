@@ -5,8 +5,8 @@ use jaq_parse::parse::{Def, Main};
 pub struct Definitions(BTreeMap<(String, usize), Filter>);
 
 impl Definitions {
-    pub fn builtins() -> Self {
-        Self(Filter::builtins().into_iter().collect())
+    pub fn core() -> Self {
+        Self(Filter::core().into_iter().collect())
     }
 
     pub fn add(&mut self, defs: Vec<Def>, errs: &mut Vec<Error>) {
