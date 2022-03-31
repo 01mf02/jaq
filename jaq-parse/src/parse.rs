@@ -72,14 +72,6 @@ pub struct Def {
     pub body: Spanned<Expr>,
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug)]
-pub enum PathComponent<I> {
-    Index(I),
-    /// if both are `None`, return iterator over whole array/object
-    Range(Option<I>, Option<I>),
-}
-
 impl Expr {
     fn binary_with_span(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
