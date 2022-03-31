@@ -3,12 +3,13 @@
 extern crate alloc;
 
 mod ops;
-pub mod parse;
+pub mod filter;
 pub mod path;
 mod token;
+mod toplevel;
 
 pub use ops::{MathOp, OrdOp};
-pub use parse::{defs, main};
+pub use toplevel::{Def, Main, defs, main};
 pub use path::Path;
 pub use token::Token;
 

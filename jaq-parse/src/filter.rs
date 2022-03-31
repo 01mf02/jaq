@@ -63,15 +63,6 @@ impl From<String> for Expr {
     }
 }
 
-// A function node in the AST.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
-pub struct Def {
-    pub name: String,
-    pub args: Vec<String>,
-    pub body: Spanned<Expr>,
-}
-
 impl Expr {
     fn binary_with_span(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
@@ -88,7 +79,7 @@ where
     args.foldl(|a, (op, b)| Expr::binary_with_span(a, op, b))
 }
 
-fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
+pub(crate) fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
 where
     P: Parser<Token, T> + Clone,
 {
@@ -240,7 +231,7 @@ where
     args.foldr(|(a, op), b| Expr::binary_with_span(a, op, b))
 }
 
-pub fn expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+pub(crate) fn expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
 
@@ -258,34 +249,4 @@ pub fn expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clon
     with_comma.define(bin(bin(assign, comma), pipe));
 
     with_comma
-}
-
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Main {
-    pub defs: Vec<Def>,
-    pub body: Spanned<Expr>,
-}
-
-pub fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-
-    just(Token::Def)
-        .ignore_then(ident.labelled("filter name"))
-        .then(args(ident).labelled("filter args"))
-        .then_ignore(just(Token::Ctrl(':')))
-        .then(expr())
-        .then_ignore(just(Token::Ctrl(';')))
-        .map(|((name, args), body)| Def { name, args, body })
-        .labelled("definition")
-}
-
-pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
-    def().repeated().collect()
-}
-
-pub fn main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
-    defs().then(expr()).map(|(defs, body)| Main { defs, body })
 }
