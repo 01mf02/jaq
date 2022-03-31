@@ -1,5 +1,5 @@
+use crate::filter::{args, expr, Expr};
 use crate::{Spanned, Token};
-use crate::filter::{Expr, expr, args};
 use alloc::{string::String, vec::Vec};
 use chumsky::prelude::*;
 #[cfg(feature = "serde")]

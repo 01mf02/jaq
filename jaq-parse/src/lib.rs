@@ -2,16 +2,16 @@
 
 extern crate alloc;
 
-mod ops;
 pub mod filter;
+mod ops;
 pub mod path;
 mod token;
 mod toplevel;
 
 pub use ops::{MathOp, OrdOp};
-pub use toplevel::{Def, Main, defs, main};
 pub use path::Path;
 pub use token::Token;
+pub use toplevel::{defs, main, Def, Main};
 
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
