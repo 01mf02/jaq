@@ -20,7 +20,7 @@ pub fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
 pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
     let defs = Definitions::core();
     let mut errs = Vec::new();
-    let f = parse::parse(&f, parse::main()).unwrap();
+    let f = parse::parse(&f, parse::main()).0.unwrap();
     let f = defs.finish(f, &mut errs);
     assert_eq!(errs, Vec::new());
 

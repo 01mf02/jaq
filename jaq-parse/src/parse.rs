@@ -1,4 +1,4 @@
-use crate::{MathOp, Opt, OrdOp, Spanned, Token};
+use crate::{MathOp, OrdOp, Path, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
@@ -50,11 +50,17 @@ pub enum Expr {
     Str(String),
     Array(Option<Box<Spanned<Self>>>),
     Object(Vec<KeyVal>),
-    Path(Vec<(PathComponent<Spanned<Self>>, Opt)>),
+    Path(Path<Self>),
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
     Call(String, Vec<Spanned<Self>>),
     Neg(Box<Spanned<Self>>),
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
+}
+
+impl From<String> for Expr {
+    fn from(s: String) -> Self {
+        Self::Str(s)
+    }
 }
 
 // A function node in the AST.
@@ -151,48 +157,7 @@ where
 
     let object = object.map_with_span(|obj, span| (Expr::Object(obj), span));
 
-    let range = {
-        let colon = just(Token::Ctrl(':'));
-        let e2 = colon.clone().ignore_then(expr.clone().or_not());
-        let starts_with_expr = expr.clone().then(e2.or_not()).map(|(e1, e2)| match e2 {
-            None => PathComponent::Index(e1),
-            Some(e2) => PathComponent::Range(Some(e1), e2),
-        });
-        let starts_with_colon = colon
-            .ignore_then(expr.clone())
-            .map(|e2| PathComponent::Range(None, Some(e2)));
-
-        starts_with_expr
-            .or(starts_with_colon)
-            .or_not()
-            .map(|o| o.unwrap_or(PathComponent::Range(None, None)))
-    };
-
-    let path = {
-        let opt = just(Token::Ctrl('?')).or_not().map(|q| match q {
-            Some(_) => Opt::Optional,
-            None => Opt::Essential,
-        });
-
-        let dot_id = filter_map(|span, tok| match tok {
-            Token::Dot(Some(ident)) => Ok((Expr::Str(ident), span)),
-            _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-        });
-        let dot = just(Token::Dot(None)).then(opt.clone());
-        let dot_id = dot_id.map(PathComponent::Index).then(opt.clone());
-
-        let ranges = range
-            .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-            .then(opt)
-            .repeated();
-
-        let head = dot.ignore_then(ranges.clone());
-        let tail = dot_id.chain(ranges);
-
-        head.or(tail.clone())
-            .chain(tail.repeated().flatten())
-            .collect()
-    };
+    let path = crate::path::path(expr.clone());
     let path = path.map_with_span(|path, span| (Expr::Path(path), span));
 
     let if_ = just(Token::If).ignore_then(expr.clone().map(Box::new));

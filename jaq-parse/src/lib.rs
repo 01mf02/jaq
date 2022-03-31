@@ -2,15 +2,15 @@
 
 extern crate alloc;
 
-mod lex;
 mod ops;
-mod opt;
 pub mod parse;
+pub mod path;
+mod token;
 
-pub use lex::Token;
 pub use ops::{MathOp, OrdOp};
-pub use opt::Opt;
 pub use parse::{defs, main};
+pub use path::Path;
+pub use token::Token;
 
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
@@ -23,7 +23,7 @@ pub type Error = Simple<String>;
 fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     let comment = just("#").then(take_until(just('\n'))).padded();
 
-    lex::token()
+    token::token()
         .padded_by(comment.repeated())
         .map_with_span(|tok, span| (tok, span))
         .padded()

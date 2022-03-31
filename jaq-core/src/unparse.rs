@@ -1,7 +1,7 @@
 use crate::path::PathElem;
 use crate::{Filter, Path};
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent};
+use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal};
 use jaq_parse::{Error, Spanned};
 
 pub fn unparse<F>(fns: &F, vars: &[String], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
@@ -81,9 +81,10 @@ where
             Filter::IfThenElse(get(*if_, errs), get(*then, errs), get(*else_, errs))
         }
         Expr::Path(path) => {
+            use jaq_parse::path::Part;
             let path = path.into_iter().map(|(p, opt)| match p {
-                PathComponent::Index(i) => (PathElem::Index(*get(i, errs)), opt),
-                PathComponent::Range(lower, upper) => {
+                Part::Index(i) => (PathElem::Index(*get(i, errs)), opt),
+                Part::Range(lower, upper) => {
                     let lower = lower.map(|f| *get(f, errs));
                     let upper = upper.map(|f| *get(f, errs));
                     (PathElem::Range(lower, upper), opt)

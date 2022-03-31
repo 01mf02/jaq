@@ -1,6 +1,6 @@
 use crate::{Error, Filter, Val, ValR, ValRs};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use jaq_parse::Opt;
+use jaq_parse::path::Opt;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
