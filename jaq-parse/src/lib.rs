@@ -7,17 +7,30 @@ mod ops;
 mod opt;
 pub mod parse;
 
-pub use lex::{lex, Token};
+pub use lex::Token;
 pub use ops::{MathOp, OrdOp};
 pub use opt::Opt;
 pub use parse::{defs, main};
 
-pub type Span = core::ops::Range<usize>;
-
-use alloc::{string::String, string::ToString, vec::Vec};
+use alloc::{string::ToString, string::String, vec::Vec};
 use chumsky::prelude::*;
 
-pub fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Simple<String>>>
+type Span = core::ops::Range<usize>;
+pub type Spanned<T> = (T, Span);
+
+pub type Error = Simple<String>;
+
+fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
+    let comment = just("#").then(take_until(just('\n'))).padded();
+
+    lex::token()
+        .padded_by(comment.repeated())
+        .map_with_span(|tok, span| (tok, span))
+        .padded()
+        .repeated()
+}
+
+pub fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Error>>
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {

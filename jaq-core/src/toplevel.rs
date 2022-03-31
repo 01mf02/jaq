@@ -1,6 +1,7 @@
-use crate::{unparse, Error, Filter};
+use crate::{unparse, Filter};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use jaq_parse::parse::{Def, Main};
+use jaq_parse::Error;
 
 pub struct Definitions(BTreeMap<(String, usize), Filter>);
 

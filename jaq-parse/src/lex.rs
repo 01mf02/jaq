@@ -1,5 +1,4 @@
-use crate::Span;
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use chumsky::prelude::*;
 use core::fmt;
 
@@ -56,7 +55,7 @@ fn str_() -> impl Parser<char, String, Error = Simple<char>> {
         .collect()
 }
 
-fn token() -> impl Parser<char, Token, Error = Simple<char>> {
+pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
 
@@ -86,14 +85,4 @@ fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         .or(num().map(Token::Num))
         .or(str_().map(Token::Str))
         .recover_with(skip_then_retry_until([]))
-}
-
-pub fn lex() -> impl Parser<char, Vec<(Token, Span)>, Error = Simple<char>> {
-    let comment = just("#").then(take_until(just('\n'))).padded();
-
-    token()
-        .padded_by(comment.repeated())
-        .map_with_span(|tok, span| (tok, span))
-        .padded()
-        .repeated()
 }

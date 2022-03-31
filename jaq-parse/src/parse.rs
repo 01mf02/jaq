@@ -1,4 +1,4 @@
-use crate::{MathOp, Opt, OrdOp, Span, Token};
+use crate::{MathOp, Opt, OrdOp, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
@@ -34,8 +34,6 @@ pub enum BinaryOp {
     Assign(AssignOp),
     Ord(OrdOp),
 }
-
-pub type Spanned<T> = (T, Span);
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]

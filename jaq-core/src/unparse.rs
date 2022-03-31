@@ -1,7 +1,8 @@
 use crate::path::PathElem;
-use crate::{Error, Filter, Path};
+use crate::{Filter, Path};
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent, Spanned};
+use jaq_parse::parse::{AssignOp, BinaryOp, Expr, KeyVal, PathComponent};
+use jaq_parse::{Error, Spanned};
 
 pub fn unparse<F>(fns: &F, vars: &[String], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
 where
