@@ -1,4 +1,4 @@
-use crate::{Error, Path, RValR, RValRs, Val};
+use crate::{Error, Path, Val, ValR, ValRs};
 use alloc::{boxed::Box, rc::Rc, string::String, string::ToString, vec::Vec};
 use jaq_parse::{MathOp, OrdOp};
 
@@ -39,8 +39,6 @@ pub enum Filter {
     Var(usize),
 }
 
-type Prod = (RValR, RValR);
-
 impl Filter {
     pub fn core() -> Vec<((String, usize), Self)> {
         let var = |v| Box::new(Self::Var(v));
@@ -74,44 +72,41 @@ impl Filter {
         ])
     }
 
-    pub fn run(&self, v: Rc<Val>) -> RValRs {
+    pub fn run(&self, v: Val) -> ValRs {
         use core::iter::once;
         use core::ops::Neg;
+        use itertools::Itertools;
         match self {
-            Self::Pos(n) => Box::new(once(Ok(Rc::new(Val::Pos(*n))))),
-            Self::Float(x) => Box::new(once(Ok(Rc::new(Val::Float(*x))))),
-            Self::Str(s) => Box::new(once(Ok(Rc::new(Val::Str(s.clone()))))),
-            Self::Array(None) => Box::new(once(Ok(Rc::new(Val::Arr(Vec::new()))))),
+            Self::Pos(n) => Box::new(once(Ok(Val::Pos(*n)))),
+            Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
+            Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::new(s.clone()))))),
+            Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
             Self::Array(Some(f)) => Box::new(once(
                 f.run(v)
                     .collect::<Result<_, _>>()
-                    .map(|v| Rc::new(Val::Arr(v))),
+                    .map(|v| Val::Arr(Rc::new(v))),
             )),
-            Self::Object(o) if o.is_empty() => {
-                Box::new(once(Ok(Rc::new(Val::Obj(Default::default())))))
-            }
-            Self::Object(o) => {
-                let iter = o
-                    .iter()
-                    .map(|(kf, vf)| Self::cartesian(kf, vf, Rc::clone(&v)).collect::<Vec<_>>());
-                use itertools::Itertools;
-                let iter = iter.multi_cartesian_product();
-                Box::new(iter.map(|kvs| {
-                    kvs.into_iter()
-                        .map(|(k, v)| Ok((k?.as_obj_key()?, v?)))
-                        .collect::<Result<_, _>>()
-                        .map(|kvs| Rc::new(Val::Obj(kvs)))
-                }))
-            }
-            Self::Neg(f) => Box::new(f.run(v).map(|v| (*v?).clone().neg().map(Rc::new))),
+            Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Default::default())))),
+            Self::Object(o) => Box::new(
+                o.iter()
+                    .map(|(kf, vf)| Self::cartesian(kf, vf, v.clone()).collect::<Vec<_>>())
+                    .multi_cartesian_product()
+                    .map(|kvs| {
+                        kvs.into_iter()
+                            .map(|(k, v)| Ok((k?.as_obj_key()?, v?)))
+                            .collect::<Result<_, _>>()
+                            .map(|kvs| Val::Obj(Rc::new(kvs)))
+                    }),
+            ),
+            Self::Neg(f) => Box::new(f.run(v).map(|v| v?.clone().neg())),
             Self::Pipe(l, r) => Box::new(l.run(v).flat_map(|y| match y {
                 Ok(y) => r.run(y),
                 Err(e) => Box::new(once(Err(e))),
             })),
-            Self::Comma(l, r) => Box::new(l.run(Rc::clone(&v)).chain(r.run(v))),
+            Self::Comma(l, r) => Box::new(l.run(v.clone()).chain(r.run(v))),
             Self::IfThenElse(if_, then, else_) => {
-                Box::new(if_.run(Rc::clone(&v)).flat_map(move |y| match y {
-                    Ok(y) => (if y.as_bool() { then } else { else_ }).run(Rc::clone(&v)),
+                Box::new(if_.run(v.clone()).flat_map(move |y| match y {
+                    Ok(y) => (if y.as_bool() { then } else { else_ }).run(v.clone()),
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
@@ -119,59 +114,51 @@ impl Filter {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
             },
-            Self::Assign(path, f) => path.run(Rc::clone(&v), |_| f.run(Rc::clone(&v))),
+            Self::Assign(path, f) => path.run(v.clone(), |_| f.run(v.clone())),
             Self::Update(path, f) => path.run(v, |v| f.run(v)),
-            Self::Logic(l, stop, r) => Box::new(l.run(Rc::clone(&v)).flat_map(move |l| {
-                match l {
-                    Ok(l) if l.as_bool() == *stop => Box::new(once(Ok(Rc::new(Val::Bool(*stop))))),
-                    Ok(_) => Box::new(
-                        r.run(Rc::clone(&v))
-                            .map(|r| Ok(Rc::new(Val::Bool(r?.as_bool())))),
-                    ) as Box<dyn Iterator<Item = _>>,
-                    Err(e) => Box::new(once(Err(e))),
-                }
+            Self::Logic(l, stop, r) => Box::new(l.run(v.clone()).flat_map(move |l| match l {
+                Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                Ok(l) if l.as_bool() == *stop => Box::new(once(Ok(Val::Bool(*stop)))),
+                Ok(_) => Box::new(r.run(v.clone()).map(|r| Ok(Val::Bool(r?.as_bool())))),
             })),
-            Self::Math(l, op, r) => Box::new(
-                Self::cartesian(l, r, v)
-                    .map(|(x, y)| op.run((*x?).clone(), (*y?).clone()).map(Rc::new)),
-            ),
-            Self::Ord(l, op, r) => Box::new(
-                Self::cartesian(l, r, v).map(|(x, y)| Ok(Rc::new(Val::Bool(op.run(&*x?, &*y?))))),
-            ),
-            Self::Length => Box::new(once(v.len().map(Rc::new))),
-            Self::Type => Box::new(once(Ok(Rc::new(Val::Str(v.typ().to_string()))))),
+            Self::Math(l, op, r) => Box::new(Self::cartesian(l, r, v).map(|(x, y)| op.run(x?, y?))),
+            Self::Ord(l, op, r) => {
+                Box::new(Self::cartesian(l, r, v).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
+            }
+            Self::Length => Box::new(once(v.len())),
+            Self::Type => Box::new(once(Ok(Val::Str(Rc::new(v.typ().to_string()))))),
             Self::Keys => match v.keys() {
                 Ok(keys) => Box::new(keys.collect::<Vec<_>>().into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
             },
-            Self::Floor => Box::new(once(v.round(|f| f.floor()).map(Rc::new))),
-            Self::Round => Box::new(once(v.round(|f| f.round()).map(Rc::new))),
-            Self::Ceil => Box::new(once(v.round(|f| f.ceil()).map(Rc::new))),
+            Self::Floor => Box::new(once(v.round(|f| f.floor()))),
+            Self::Round => Box::new(once(v.round(|f| f.round()))),
+            Self::Ceil => Box::new(once(v.round(|f| f.ceil()))),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
                 Err(e) => Box::new(once(Err(e))),
             },
             Self::Limit(n, f) => {
-                let n = n.run(Rc::clone(&v)).map(|n| n?.as_usize());
+                let n = n.run(v.clone()).map(|n| n?.as_usize());
                 Box::new(n.flat_map(move |n| match n {
-                    Ok(n) => Box::new(f.run(Rc::clone(&v)).take(n as usize)),
+                    Ok(n) => Box::new(f.run(v.clone()).take(n as usize)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
             Self::Range(from, until) => {
                 let prod = Filter::cartesian(from, until, v);
-                let ranges = prod.map(|(from, until)| from?.range(&*until?));
+                let ranges = prod.map(|(from, until)| from?.range(&until?));
                 Box::new(ranges.flat_map(|range| match range {
-                    Ok(range) => Box::new(range.map(Rc::new).map(Ok)),
+                    Ok(range) => Box::new(range.map(Ok)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
             Self::Recurse(f) => Box::new(crate::Recurse::new(f, v)),
             Self::Fold(init, xs, f) => {
-                let init: Result<Vec<_>, _> = init.run(Rc::clone(&v)).collect();
-                let mut xs = xs.run(Rc::clone(&v));
-                match init.and_then(|init| xs.try_fold(init, |acc, x| f.fold_step(acc, x?))) {
+                let init: Result<Vec<_>, _> = init.run(v.clone()).collect();
+                let mut xs = xs.run(v.clone());
+                match init.and_then(|init| xs.try_fold(init, |acc, x| f.fold_step(acc, &x?))) {
                     Ok(y) => Box::new(y.into_iter().map(Ok)),
                     Err(e) => Box::new(once(Err(e))),
                 }
@@ -181,17 +168,17 @@ impl Filter {
         }
     }
 
-    pub fn cartesian(&self, other: &Self, v: Rc<Val>) -> impl Iterator<Item = Prod> + '_ {
-        let l = self.run(Rc::clone(&v));
+    pub fn cartesian(&self, other: &Self, v: Val) -> impl Iterator<Item = (ValR, ValR)> + '_ {
+        let l = self.run(v.clone());
         let r: Vec<_> = other.run(v).collect();
         use itertools::Itertools;
         l.into_iter().cartesian_product(r)
     }
 
-    fn fold_step(&self, acc: Vec<Rc<Val>>, x: Rc<Val>) -> Result<Vec<Rc<Val>>, Error> {
+    fn fold_step(&self, acc: Vec<Val>, x: &Val) -> Result<Vec<Val>, Error> {
         acc.into_iter()
-            .map(|acc| Val::Arr(Vec::from([acc, Rc::clone(&x)]).into_iter().collect()))
-            .flat_map(|obj| self.run(Rc::new(obj)))
+            .map(|acc| Val::Arr(Rc::new(Vec::from([acc, x.clone()]).into_iter().collect())))
+            .flat_map(|obj| self.run(obj))
             .collect()
     }
 

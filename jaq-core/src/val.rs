@@ -22,24 +22,21 @@ pub enum Val {
     /// Floating-point value
     Float(f64),
     /// String
-    Str(String),
+    Str(Rc<String>),
     /// Array
-    Arr(Vec<Rc<Val>>),
+    Arr(Rc<Vec<Val>>),
     /// Order-preserving map
-    Obj(IndexMap<String, Rc<Val>, FxBuildHasher>),
+    Obj(Rc<IndexMap<String, Val, FxBuildHasher>>),
 }
 
 /// A value result.
 pub type ValR = Result<Val, Error>;
 
-/// A reference-counted value result.
-pub type RValR = Result<Rc<Val>, Error>;
+/// A stream of values.
+pub type Vals<'a> = Box<dyn Iterator<Item = Val> + 'a>;
 
-/// A stream of reference-counted values.
-pub type RVals<'a> = Box<dyn Iterator<Item = Rc<Val>> + 'a>;
-
-/// A stream of reference-counted value results.
-pub type RValRs<'a> = Box<dyn Iterator<Item = RValR> + 'a>;
+/// A stream of value results.
+pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
 impl Val {
     pub fn as_bool(&self) -> bool {
@@ -120,15 +117,15 @@ impl Val {
         }
     }
 
-    pub fn keys(&self) -> Result<RVals, Error> {
+    pub fn keys(&self) -> Result<Vals, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new((0..a.len()).map(|i| Rc::new(Val::Pos(i))))),
-            Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Rc::new(Val::Str(k.clone()))))),
+            Self::Arr(a) => Ok(Box::new((0..a.len()).map(|i| Val::Pos(i)))),
+            Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::new(k.clone()))))),
             _ => Err(Error::Keys(self.clone())),
         }
     }
 
-    pub fn iter(&self) -> Result<RVals, Error> {
+    pub fn iter(&self) -> Result<Vals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
             Self::Obj(o) => Ok(Box::new(o.values().cloned())),
@@ -153,9 +150,9 @@ impl From<serde_json::Value> for Val {
                     },
                 },
             },
-            String(s) => Self::Str(s),
-            Array(a) => Self::Arr(a.into_iter().map(|x| Rc::new(x.into())).collect()),
-            Object(o) => Self::Obj(o.into_iter().map(|(k, v)| (k, Rc::new(v.into()))).collect()),
+            String(s) => Self::Str(Rc::new(s)),
+            Array(a) => Self::Arr(Rc::new(a.into_iter().map(|x| x.into()).collect())),
+            Object(o) => Self::Obj(Rc::new(o.into_iter().map(|(k, v)| (k, v.into())).collect())),
         }
     }
 }
@@ -169,11 +166,11 @@ impl From<Val> for serde_json::Value {
             Val::Pos(p) => Number(p.into()),
             Val::Neg(n) => Number(serde_json::Number::from(-isize::try_from(n).unwrap())),
             Val::Float(f) => Number(serde_json::Number::from_f64(f).unwrap()),
-            Val::Str(s) => String(s),
-            Val::Arr(a) => Array(a.into_iter().map(|x| (*x).clone().into()).collect()),
+            Val::Str(s) => String((*s).clone()),
+            Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             Val::Obj(o) => Object(
-                o.into_iter()
-                    .map(|(k, v)| (k, (*v).clone().into()))
+                o.iter()
+                    .map(|(k, v)| (k.clone(), v.clone().into()))
                     .collect(),
             ),
         }
@@ -194,18 +191,14 @@ impl core::ops::Add for Val {
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f + p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(f - n as f64)),
             (Float(x), Float(y)) => Ok(Float(x + y)),
-            (Str(mut l), Str(r)) => {
-                l.push_str(&r);
-                Ok(Str(l))
-            }
-            (Arr(mut l), Arr(r)) => {
-                l.extend(r);
-                Ok(Arr(l))
-            }
-            (Obj(mut l), Obj(r)) => {
-                l.extend(r);
-                Ok(Obj(l))
-            }
+            (Str(l), Str(r)) => Ok(Str(Rc::new((*l).clone() + &r))),
+            (Arr(l), Arr(r)) => Ok(Arr(Rc::new(l.iter().chain(r.iter()).cloned().collect()))),
+            (Obj(l), Obj(r)) => Ok(Obj(Rc::new(
+                l.iter()
+                    .chain(r.iter())
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ))),
             (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
         }
     }

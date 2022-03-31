@@ -20,4 +20,4 @@ use path::Path;
 use recurse::Recurse;
 pub use toplevel::Definitions;
 use unparse::unparse;
-pub use val::{RValR, RValRs, RVals, Val, ValR};
+pub use val::{Val, ValR, ValRs, Vals};

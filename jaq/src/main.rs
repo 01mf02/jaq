@@ -61,17 +61,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use std::iter::once;
     let stdin = std::io::stdin();
     let iter = if cli.null {
-        Box::new(once(Ok(Rc::new(Val::Null)))) as Box<dyn Iterator<Item = _>>
+        Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
     } else {
         let stdin = stdin.lock();
         let deserializer = serde_json::Deserializer::from_reader(stdin);
         let iter = deserializer.into_iter::<serde_json::Value>();
-        Box::new(iter.map(|r| r.map(|x| Rc::new(Val::from(x)))))
+        Box::new(iter.map(|r| r.map(|x| Val::from(x))))
     };
 
     let iter = if cli.slurp {
         let slurped: Result<Vec<_>, _> = iter.collect();
-        Box::new(once(slurped.map(|v| Rc::new(Val::Arr(v)))))
+        Box::new(once(slurped.map(|v| Val::Arr(Rc::new(v)))))
     } else {
         Box::new(iter) as Box<dyn Iterator<Item = _>>
     };
@@ -92,9 +92,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(5);
             });
             last = Some(output.as_bool());
-            match &*output {
+            match output {
                 Val::Str(s) if cli.raw_output => print!("{}", s),
-                _ => colored_json::write_colored_json(&(*output).clone().into(), &mut stdout)?,
+                _ => colored_json::write_colored_json(&output.into(), &mut stdout)?,
             };
             if !cli.join_output {
                 println!()
