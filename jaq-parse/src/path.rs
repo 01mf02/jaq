@@ -49,7 +49,7 @@ where
     });
 
     let dot_id = filter_map(|span, tok| match tok {
-        Token::Dot(Some(ident)) => Ok((ident.into(), span)),
+        Token::Dot(Some(ident)) => Ok((T::from(ident), span)),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
     let dot = just(Token::Dot(None)).then(opt.clone());
