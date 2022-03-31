@@ -15,13 +15,15 @@ where
                 if let Ok(f) = n.parse::<f64>() {
                     Filter::Float(f)
                 } else {
-                    errs.push(todo!());
+                    let err = "cannot interpret as floating-point number";
+                    errs.push(Error::custom(body.1, err));
                     Filter::Float(0.)
                 }
             } else if let Ok(f) = n.parse::<usize>() {
                 Filter::Pos(f)
             } else {
-                errs.push(todo!());
+                let err = "cannot interpret as machine-size integer";
+                errs.push(Error::custom(body.1, err));
                 Filter::Pos(0)
             }
         }
@@ -45,7 +47,7 @@ where
             Some(pos) if args.is_empty() => Filter::Var(pos),
             _ => {
                 let fun = fns(&(name, args.len())).unwrap_or_else(|| {
-                    errs.push(todo!());
+                    errs.push(Error::custom(body.1, "could not find function"));
                     Filter::Path(Path(Vec::new()))
                 });
                 let args = args.into_iter().map(|arg| *get(arg, errs));
@@ -60,10 +62,14 @@ where
         Expr::Binary(l, BinaryOp::Math(op), r) => Filter::Math(get(*l, errs), op, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Ord(op), r) => Filter::Ord(get(*l, errs), op, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Assign(op), r) => {
+            let l_span = l.1.clone();
             let (l, r) = (get(*l, errs), get(*r, errs));
-            let l = match *l {
-                Filter::Path(path) => path,
-                _ => todo!(),
+            let l = if let Filter::Path(path) = *l {
+                path
+            } else {
+                let err = "left-hand side of assignment must be a path";
+                errs.push(Error::custom(l_span, err));
+                Path(Vec::new())
             };
             match op {
                 AssignOp::Assign => Filter::Assign(l, r),

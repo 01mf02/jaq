@@ -12,7 +12,7 @@ pub use ops::{MathOp, OrdOp};
 pub use opt::Opt;
 pub use parse::{defs, main};
 
-use alloc::{string::ToString, string::String, vec::Vec};
+use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 
 type Span = core::ops::Range<usize>;
@@ -30,7 +30,7 @@ fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .repeated()
 }
 
-pub fn parse<T, P>(src: &str, parser: P) -> Result<T, Vec<Error>>
+pub fn parse<T, P>(src: &str, parser: P) -> (Option<T>, Vec<Error>)
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
@@ -51,9 +51,5 @@ where
     let parse_errs = parse_errs.into_iter().map(|e| e.map(|tok| tok.to_string()));
     let errs: Vec<_> = lex_errs.chain(parse_errs).collect();
 
-    if errs.is_empty() {
-        Ok(parsed.unwrap())
-    } else {
-        Err(errs)
-    }
+    (parsed, errs)
 }

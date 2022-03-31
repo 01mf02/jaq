@@ -36,26 +36,24 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    let main = jaq_core::parse::parse(&cli.filter, jaq_core::parse::main());
-    let main = main.unwrap_or_else(|errors| {
-        for err in errors {
+    let mut errs = Vec::new();
+    let mut defs = Definitions::core();
+    defs.add(jaq_std::std(), &mut errs);
+    assert!(errs.is_empty());
+
+    let (main, mut errs) = jaq_core::parse::parse(&cli.filter, jaq_core::parse::main());
+
+    let filter = main.map(|main| defs.finish(main, &mut errs));
+    let filter = if errs.is_empty() {
+        filter.unwrap()
+    } else {
+        for err in errs {
             jaq::report(err)
                 .eprint(ariadne::Source::from(&cli.filter))
                 .unwrap();
         }
         std::process::exit(3);
-    });
-
-    let mut errs = Vec::new();
-    let mut defs = Definitions::core();
-    defs.add(jaq_std::std(), &mut errs);
-    let filter = defs.finish(main, &mut errs);
-    if !errs.is_empty() {
-        for e in errs {
-            eprintln!("Error: {}", e);
-        }
-        std::process::exit(3);
-    }
+    };
     //println!("Filter: {:?}", filter);
 
     use std::iter::once;
