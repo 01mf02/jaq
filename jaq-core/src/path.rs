@@ -40,7 +40,7 @@ impl Path<Filter> {
         let init = Vec::from([v.clone()]);
         self.run_indices(&v).try_fold(init, |acc, p_opt| {
             let (p, opt) = p_opt?;
-            opt.collect(acc.into_iter().flat_map(|x| p.collect(x.clone())))
+            opt.collect(acc.into_iter().flat_map(|x| p.collect(x)))
         })
     }
 }
@@ -206,7 +206,7 @@ impl PathElem<Vec<Val>> {
                         let y = match f(arr).next().transpose()? {
                             None => Vec::new(),
                             Some(Val::Arr(y)) => (*y).clone(),
-                            Some(y) => return Err(Error::SliceAssign(y.clone())),
+                            Some(y) => return Err(Error::SliceAssign(y)),
                         };
                         a.splice(skip..skip + take, y);
                     }

@@ -34,7 +34,7 @@ where
             Some(e2) => Part::Range(Some(e1), e2),
         });
         let starts_with_colon = colon
-            .ignore_then(expr.clone())
+            .ignore_then(expr)
             .map(|e2| Part::Range(None, Some(e2)));
 
         starts_with_expr

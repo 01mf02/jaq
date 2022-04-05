@@ -119,7 +119,7 @@ impl Val {
 
     pub fn keys(&self) -> Result<Vals, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new((0..a.len()).map(|i| Val::Pos(i)))),
+            Self::Arr(a) => Ok(Box::new((0..a.len()).map(Val::Pos))),
             Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::new(k.clone()))))),
             _ => Err(Error::Keys(self.clone())),
         }

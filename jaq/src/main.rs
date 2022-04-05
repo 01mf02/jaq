@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let stdin = stdin.lock();
         let deserializer = serde_json::Deserializer::from_reader(stdin);
         let iter = deserializer.into_iter::<serde_json::Value>();
-        Box::new(iter.map(|r| r.map(|x| Val::from(x))))
+        Box::new(iter.map(|r| r.map(Val::from)))
     };
 
     let iter = if cli.slurp {
