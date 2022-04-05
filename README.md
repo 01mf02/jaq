@@ -115,25 +115,33 @@ Contributions to extend jaq are highly welcome, see below.
 
 ## Core filters
 
+- [x] Errors (`error`)
 - [x] Length (`length`)
 - [x] Type (`type`)
 - [x] Rounding (`floor`, `round`, `ceil`)
+- [x] String <-> JSON (`fromjson`, `tojson`)
+- [x] String splitting (`split("foo")`)
+- [x] Sorting (`sort`, `sort_by(-.)`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
-- [ ] More object filters (`to_entries`, `from_entries`, `with_entries`)
-- [ ] More numeric filters (`sqrt`, `floor`, ...)
-- [ ] More string filters (`explode`, `split`, `join`, ...)
-- [ ] More array filters (`sort_by`, `group_by` ...)
+- [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
+- [ ] More string filters (`explode`, `startswith`, `ltrimstr`, ...)
+- [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
 
 ## Standard filters
 
 These filters are defined via more basic filters.
-Their definitions are at [`std.jq`](jaq-core/src/std.jq).
+Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 
-- [x] Negation (`not`)
-- [x] Filtering (`select(. >= 0)`
-- [x] Iterable filters (`add`, `map(.+1)`, `map_values(.+1)`)
-- [x] Array filters (`first`, `last`, `nth(10)`, `reverse`, `min`, `max`)
+- [x] Undefined/Empty (`null`, `empty`)
+- [x] Booleans (`true`, `false`, `not`)
+- [x] Filtering (`select(. >= 0)`)
+- [x] Selection (`values`, `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`, `iterables`, `scalars`)
+- [x] Conversion (`tostring`, `tonumber`)
+- [x] Special numbers (`nan`, `infinite`, `isnan`, `isinfinite`, `isfinite`, `isnormal`)
+- [x] Iterable filters (`map(.+1)`, `map_values(.+1)`, `add`, `join("a")`, `min`, `max`)
+- [x] Array filters (`first`, `last`, `nth(10)`, `reverse`)
+- [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
 
 ## Advanced features
@@ -248,12 +256,12 @@ Contributions to jaq are welcome.
 In particular, implementing various filters of jq in jaq
 is a relatively low-hanging fruit.
 
-To add a new builtin filter (such as `sort`), it suffices to:
+To add a new core filter (such as `sort`), it suffices to:
 
-1. Implement the filter in [the `functions` module](src/functions.rs).
-2. Add a test with the filter name to [`tests.rs`](tests/tests.rs),
+1. Implement the filter in [the `filter` module](jaq-core/src/filter.rs).
+2. Add a test with the filter name to [`tests.rs`](jaq-core/tests/tests.rs),
    and check whether jq yields the same results.
-3. Add derived filters to [the standard library](jaq-core/src/std.jq).
+3. Add derived filters to [the standard library](jaq-std/src/std.jq).
 
 Voilà!
 
