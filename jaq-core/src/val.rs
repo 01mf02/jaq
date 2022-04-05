@@ -191,14 +191,18 @@ impl core::ops::Add for Val {
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f + p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(f - n as f64)),
             (Float(x), Float(y)) => Ok(Float(x + y)),
-            (Str(l), Str(r)) => Ok(Str(Rc::new((*l).clone() + &r))),
-            (Arr(l), Arr(r)) => Ok(Arr(Rc::new(l.iter().chain(r.iter()).cloned().collect()))),
-            (Obj(l), Obj(r)) => Ok(Obj(Rc::new(
-                l.iter()
-                    .chain(r.iter())
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect(),
-            ))),
+            (Str(mut l), Str(r)) => {
+                Rc::make_mut(&mut l).push_str(&r);
+                Ok(Str(l))
+            }
+            (Arr(mut l), Arr(r)) => {
+                Rc::make_mut(&mut l).extend(r.iter().cloned());
+                Ok(Arr(l))
+            }
+            (Obj(mut l), Obj(r)) => {
+                Rc::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
+                Ok(Obj(l))
+            }
             (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
         }
     }
