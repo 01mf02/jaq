@@ -117,6 +117,15 @@ impl Val {
         }
     }
 
+    pub fn has(&self, key: &Self) -> Result<bool, Error> {
+        match (self, key) {
+            (Self::Null, _) => Ok(false),
+            (Self::Arr(a), Self::Pos(i)) => Ok(*i < a.len()),
+            (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
+            _ => Err(Error::Has(self.clone(), key.clone())),
+        }
+    }
+
     pub fn keys(&self) -> Result<Vals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new((0..a.len()).map(Val::Pos))),
@@ -417,9 +426,9 @@ impl fmt::Display for Val {
                 write!(f, "{{")?;
                 let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
-                    write!(f, "{}:{}", k, v)?;
+                    write!(f, "\"{}\":{}", k, v)?;
                 }
-                iter.try_for_each(|(k, v)| write!(f, ",{}:{}", k, v))?;
+                iter.try_for_each(|(k, v)| write!(f, ",\"{}\":{}", k, v))?;
                 write!(f, "}}")
             }
         }
