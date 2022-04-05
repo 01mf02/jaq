@@ -259,7 +259,7 @@ is a relatively low-hanging fruit.
 To add a new core filter (such as `sort`), it suffices to:
 
 1. Implement the filter in [the `filter` module](jaq-core/src/filter.rs).
-2. Add a test with the filter name to [`tests.rs`](jaq-core/tests/tests.rs),
+2. Add a test with the filter name to [`tests.rs`](jaq-core/tests/named.rs),
    and check whether jq yields the same results.
 3. Add derived filters to [the standard library](jaq-std/src/std.jq).
 
