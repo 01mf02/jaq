@@ -1,6 +1,8 @@
 def null:  [] | .[0];
 def empty: [] | .[ ];
 
+def error(f): f | error;
+
 # Booleans
 def true:  0 == 0;
 def false: 0 != 0;

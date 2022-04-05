@@ -1,9 +1,9 @@
 //! Errors that can occur during filter execution.
 
 use crate::Val;
+use alloc::string::String;
 use core::fmt;
 use jaq_parse::MathOp;
-use alloc::string::String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {

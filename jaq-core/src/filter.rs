@@ -23,6 +23,7 @@ pub enum Filter {
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
+    Error,
     Length,
     Type,
     Keys,
@@ -33,7 +34,6 @@ pub enum Filter {
     ToJson,
     Sort,
     SortBy(Box<Self>),
-    Error(Box<Self>),
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
@@ -62,6 +62,7 @@ impl Filter {
             };
         }
         Vec::from([
+            make_builtin!("error", 0, Self::Error),
             make_builtin!("length", 0, Self::Length),
             make_builtin!("type", 0, Self::Type),
             make_builtin!("keys", 0, Self::Keys),
@@ -72,7 +73,6 @@ impl Filter {
             make_builtin!("tojson", 0, Self::ToJson),
             make_builtin!("sort", 0, Self::Sort),
             make_builtin!("sort_by", 1, Self::SortBy),
-            make_builtin!("error", 1, Self::Error),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
@@ -134,6 +134,10 @@ impl Filter {
             Self::Ord(l, op, r) => {
                 Box::new(Self::cartesian(l, r, v).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
+            Self::Error => Box::new(once(Err(Error::Custom(match v {
+                Val::Str(s) => (*s).clone(),
+                _ => v.to_string(),
+            })))),
             Self::Length => Box::new(once(v.len())),
             Self::Type => Box::new(once(Ok(Val::Str(Rc::new(v.typ().to_string()))))),
             Self::Keys => match v.keys() {
@@ -180,11 +184,6 @@ impl Filter {
                 }
                 _ => Box::new(once(Err(Error::Sort(v)))),
             },
-            Self::Error(f) => Box::new(f.run(v).map(|y| match y {
-                Ok(Val::Str(s)) => Err(Error::Custom((*s).clone())),
-                Ok(v) => Err(Error::Custom(v.to_string())),
-                Err(e) => Err(e),
-            })),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
@@ -259,12 +258,11 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Length | Self::Type | Self::Keys => self,
+            Self::Error | Self::Length | Self::Type | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::FromJson | Self::ToJson => self,
             Self::Sort => self,
             Self::SortBy(f) => Self::SortBy(sub(f)),
-            Self::Error(f) => Self::Error(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),
