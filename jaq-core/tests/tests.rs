@@ -1,3 +1,5 @@
+//! Tests for unnamed core filters.
+
 pub mod common;
 
 use common::{fail, give, gives};
@@ -106,23 +108,4 @@ fn eq() {
     give(json!(1), ". == 2 / 2.0", json!(true));
 
     give(json!({"a": 1, "b": 2}), ". == {b: 2, a: 1}", json!(true));
-}
-
-#[test]
-fn round() {
-    give(json!(1), "round", json!(1));
-    give(json!(1.0), "round", json!(1));
-    give(json!(-1.0), "round", json!(-1));
-    give(json!(-1), "round", json!(-1));
-
-    give(json!(-1.5), "round", json!(-2));
-    give(json!(-1.5), "floor", json!(-2));
-    give(json!(-1.5), "ceil", json!(-1));
-
-    give(json!(-1.4), "round", json!(-1));
-    give(json!(-1.4), "floor", json!(-2));
-    give(json!(-1.4), "ceil", json!(-1));
-
-    fail(json!([]), "round", Error::Round(Val::from(json!([]))));
-    fail(json!({}), "round", Error::Round(Val::from(json!({}))));
 }

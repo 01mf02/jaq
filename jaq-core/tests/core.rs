@@ -1,4 +1,4 @@
-//! Tests for core filters, sorted by name.
+//! Tests for named core filters, sorted by name.
 
 pub mod common;
 
@@ -54,6 +54,25 @@ fn limit() {
 fn recurse() {
     let y = [json!(1), json!(2), json!(3)];
     gives(json!(1), "recurse(if . < 3 then .+1 else [] | .[] end)", y);
+}
+
+#[test]
+fn round() {
+    give(json!(1), "round", json!(1));
+    give(json!(1.0), "round", json!(1));
+    give(json!(-1.0), "round", json!(-1));
+    give(json!(-1), "round", json!(-1));
+
+    give(json!(-1.5), "round", json!(-2));
+    give(json!(-1.5), "floor", json!(-2));
+    give(json!(-1.5), "ceil", json!(-1));
+
+    give(json!(-1.4), "round", json!(-1));
+    give(json!(-1.4), "floor", json!(-2));
+    give(json!(-1.4), "ceil", json!(-1));
+
+    fail(json!([]), "round", Error::Round(Val::from(json!([]))));
+    fail(json!({}), "round", Error::Round(Val::from(json!({}))));
 }
 
 #[test]
