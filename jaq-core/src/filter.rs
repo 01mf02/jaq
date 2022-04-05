@@ -31,9 +31,9 @@ pub enum Filter {
     Ceil,
     FromJson,
     ToJson,
-    ToString,
     Sort,
     SortBy(Box<Self>),
+    Error(Box<Self>),
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
@@ -70,9 +70,9 @@ impl Filter {
             make_builtin!("ceil", 0, Self::Ceil),
             make_builtin!("fromjson", 0, Self::FromJson),
             make_builtin!("tojson", 0, Self::ToJson),
-            make_builtin!("tostring", 0, Self::ToString),
             make_builtin!("sort", 0, Self::Sort),
             make_builtin!("sort_by", 1, Self::SortBy),
+            make_builtin!("error", 1, Self::Error),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
@@ -151,10 +151,6 @@ impl Filter {
                 _ => Box::new(once(Err(Error::FromJson(v, None)))),
             },
             Self::ToJson => Box::new(once(Ok(Val::Str(Rc::new(v.to_string()))))),
-            Self::ToString => match v {
-                Val::Str(_) => Box::new(once(Ok(v))),
-                _ => Self::ToJson.run(v),
-            },
             Self::Sort => match v {
                 Val::Arr(mut a) => {
                     Rc::make_mut(&mut a).sort();
@@ -184,6 +180,11 @@ impl Filter {
                 }
                 _ => Box::new(once(Err(Error::Sort(v)))),
             },
+            Self::Error(f) => Box::new(f.run(v).map(|y| match y {
+                Ok(Val::Str(s)) => Err(Error::Custom((*s).clone())),
+                Ok(v) => Err(Error::Custom(v.to_string())),
+                Err(e) => Err(e),
+            })),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
@@ -260,9 +261,10 @@ impl Filter {
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
             Self::Length | Self::Type | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
-            Self::FromJson | Self::ToJson | Self::ToString => self,
+            Self::FromJson | Self::ToJson => self,
             Self::Sort => self,
             Self::SortBy(f) => Self::SortBy(sub(f)),
+            Self::Error(f) => Self::Error(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),

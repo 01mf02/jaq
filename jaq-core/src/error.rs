@@ -7,6 +7,7 @@ use alloc::string::String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
+    Custom(String),
     ObjKey(Val),
     Length(Val),
     Round(Val),
@@ -29,6 +30,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         use Error::*;
         match self {
+            Custom(s) => s.fmt(f),
             ObjKey(v) => write!(f, "cannot use {} as object key", v),
             Length(v) => write!(f, "{} has no length", v),
             Round(v) => write!(f, "cannot round {}", v),
