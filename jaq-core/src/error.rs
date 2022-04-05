@@ -3,12 +3,14 @@
 use crate::Val;
 use core::fmt;
 use jaq_parse::MathOp;
+use alloc::string::String;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     ObjKey(Val),
     Length(Val),
     Round(Val),
+    FromJson(Val, Option<String>),
     ToNumber(Val),
     Sort(Val),
     Keys(Val),
@@ -31,6 +33,8 @@ impl fmt::Display for Error {
             Length(v) => write!(f, "{} has no length", v),
             Round(v) => write!(f, "cannot round {}", v),
             Sort(v) => write!(f, "cannot sort {}, as it is not an array", v),
+            FromJson(v, None) => write!(f, "cannot parse {} as JSON", v),
+            FromJson(v, Some(reason)) => write!(f, "cannot parse {} as JSON: {}", v, reason),
             ToNumber(v) => write!(f, "cannot parse {} as number", v),
             Keys(v) => write!(f, "{} has no keys", v),
             Iter(v) => write!(f, "cannot iterate over {}", v),

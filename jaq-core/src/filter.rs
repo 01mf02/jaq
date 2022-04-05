@@ -29,6 +29,7 @@ pub enum Filter {
     Floor,
     Round,
     Ceil,
+    FromJson,
     ToJson,
     ToString,
     Sort,
@@ -67,6 +68,7 @@ impl Filter {
             make_builtin!("floor", 0, Self::Floor),
             make_builtin!("round", 0, Self::Round),
             make_builtin!("ceil", 0, Self::Ceil),
+            make_builtin!("fromjson", 0, Self::FromJson),
             make_builtin!("tojson", 0, Self::ToJson),
             make_builtin!("tostring", 0, Self::ToString),
             make_builtin!("sort", 0, Self::Sort),
@@ -141,6 +143,13 @@ impl Filter {
             Self::Floor => Box::new(once(v.round(|f| f.floor()))),
             Self::Round => Box::new(once(v.round(|f| f.round()))),
             Self::Ceil => Box::new(once(v.round(|f| f.ceil()))),
+            Self::FromJson => match v {
+                Val::Str(ref s) => match serde_json::from_str::<serde_json::Value>(s) {
+                    Ok(json) => Box::new(once(Ok(Val::from(json)))),
+                    Err(e) => Box::new(once(Err(Error::FromJson(v, Some(e.to_string()))))),
+                },
+                _ => Box::new(once(Err(Error::FromJson(v, None)))),
+            },
             Self::ToJson => Box::new(once(Ok(Val::Str(Rc::new(v.to_string()))))),
             Self::ToString => match v {
                 Val::Str(_) => Box::new(once(Ok(v))),
@@ -251,7 +260,7 @@ impl Filter {
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
             Self::Length | Self::Type | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
-            Self::ToJson | Self::ToString => self,
+            Self::FromJson | Self::ToJson | Self::ToString => self,
             Self::Sort => self,
             Self::SortBy(f) => Self::SortBy(sub(f)),
             Self::First(f) => Self::First(sub(f)),
