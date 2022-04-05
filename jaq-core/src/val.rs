@@ -388,28 +388,28 @@ impl fmt::Display for Val {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::Null => write!(f, "null"),
-            Self::Bool(b) => write!(f, "boolean ({})", b),
-            Self::Pos(p) => write!(f, "number ({})", p),
-            Self::Neg(n) => write!(f, "number (-{})", n),
-            Self::Float(x) => write!(f, "number ({})", x),
-            Self::Str(s) => write!(f, "string (\"{}\")", s),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Pos(p) => write!(f, "{}", p),
+            Self::Neg(n) => write!(f, "-{}", n),
+            Self::Float(x) => write!(f, "{}", x),
+            Self::Str(s) => write!(f, "\"{}\"", s),
             Self::Arr(a) => {
-                write!(f, "array ([")?;
+                write!(f, "[")?;
                 let mut iter = a.iter();
                 if let Some(first) = iter.next() {
                     first.fmt(f)?
                 };
                 iter.try_for_each(|x| write!(f, ",{}", x))?;
-                write!(f, "])")
+                write!(f, "]")
             }
             Self::Obj(o) => {
-                write!(f, "object ({{")?;
+                write!(f, "{{")?;
                 let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
                     write!(f, "{}:{}", k, v)?;
                 }
                 iter.try_for_each(|(k, v)| write!(f, ",{}:{}", k, v))?;
-                write!(f, "}})")
+                write!(f, "}}")
             }
         }
     }
