@@ -29,7 +29,7 @@ def iterables: select(type | . == "array" or  . == "object");
 def scalars:   select(type | . != "array" and . != "object");
 
 # Conversion
-def tostring: if type == "string" then . else tojson end;
+def tostring: if type == "string" then . else   tojson end;
 def tonumber: if type == "number" then . else fromjson end;
 
 # Generators
