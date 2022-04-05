@@ -141,12 +141,12 @@ impl From<serde_json::Value> for Val {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
             Number(n) => match n.as_u64() {
-                Some(p) => Self::Pos(p.try_into().unwrap()),
+                Some(p) => p.try_into().map_or(Self::Null, Self::Pos),
                 None => match n.as_i64() {
-                    Some(n) => Self::Neg((-n).try_into().unwrap()),
+                    Some(n) => (-n).try_into().map_or(Self::Null, Self::Neg),
                     None => match n.as_f64() {
                         Some(f) => Self::Float(f),
-                        _ => todo!(),
+                        None => Self::Null,
                     },
                 },
             },
@@ -164,8 +164,8 @@ impl From<Val> for serde_json::Value {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
             Val::Pos(p) => Number(p.into()),
-            Val::Neg(n) => Number(serde_json::Number::from(-isize::try_from(n).unwrap())),
-            Val::Float(f) => Number(serde_json::Number::from_f64(f).unwrap()),
+            Val::Neg(n) => isize::try_from(n).map_or(Null, |n| Number((-n).into())),
+            Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
             Val::Str(s) => String((*s).clone()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             Val::Obj(o) => Object(
