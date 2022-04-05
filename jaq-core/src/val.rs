@@ -132,6 +132,17 @@ impl Val {
             _ => Err(Error::Iter(self.clone())),
         }
     }
+
+    pub fn contains(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Str(l), Self::Str(r)) => l.contains(&**r),
+            (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
+            (Self::Obj(l), Self::Obj(r)) => r
+                .iter()
+                .all(|(k, r)| l.get(k).map(|l| l.contains(r)).unwrap_or(false)),
+            _ => self == other,
+        }
+    }
 }
 
 impl From<serde_json::Value> for Val {

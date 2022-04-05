@@ -37,6 +37,7 @@ pub enum Filter {
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
+    Contains(Box<Self>),
     Limit(Box<Self>, Box<Self>),
     Range(Box<Self>, Box<Self>),
     Fold(Box<Self>, Box<Self>, Box<Self>),
@@ -76,6 +77,7 @@ impl Filter {
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
+            make_builtin!("contains", 1, Self::Contains),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
             make_builtin!("fold", 3, Self::Fold),
@@ -205,6 +207,10 @@ impl Filter {
                 }))
             }
             Self::Recurse(f) => Box::new(crate::Recurse::new(f, v)),
+            Self::Contains(f) => Box::new(
+                f.run(v.clone())
+                    .map(move |y| y.map(|y| Val::Bool(v.contains(&y)))),
+            ),
             Self::Fold(init, xs, f) => {
                 let init: Result<Vec<_>, _> = init.run(v.clone()).collect();
                 let mut xs = xs.run(v.clone());
@@ -266,6 +272,7 @@ impl Filter {
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),
+            Self::Contains(f) => Self::Contains(sub(f)),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
             Self::Fold(xs, init, f) => Self::Fold(sub(xs), sub(init), sub(f)),
