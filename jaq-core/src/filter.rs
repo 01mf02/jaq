@@ -35,6 +35,7 @@ pub enum Filter {
     Sort,
     SortBy(Box<Self>),
     Has(Box<Self>),
+    Split(Box<Self>),
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
@@ -76,6 +77,7 @@ impl Filter {
             make_builtin!("sort", 0, Self::Sort),
             make_builtin!("sort_by", 1, Self::SortBy),
             make_builtin!("has", 1, Self::Has),
+            make_builtin!("split", 1, Self::Split),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
@@ -189,6 +191,16 @@ impl Filter {
                 _ => Box::new(once(Err(Error::Sort(v)))),
             },
             Self::Has(f) => Box::new(f.run(v.clone()).map(move |k| Ok(Val::Bool(v.has(&k?)?)))),
+            Self::Split(f) => Box::new(f.run(v.clone()).map(move |sep| {
+                match (&v, sep?) {
+                    (Val::Str(s), Val::Str(sep)) => Ok(Val::Arr(Rc::new(
+                        s.split(&*sep)
+                            .map(|s| Val::Str(Rc::new(s.to_string())))
+                            .collect(),
+                    ))),
+                    _ => Err(Error::Split),
+                }
+            })),
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
@@ -273,6 +285,7 @@ impl Filter {
             Self::Sort => self,
             Self::SortBy(f) => Self::SortBy(sub(f)),
             Self::Has(f) => Self::Has(sub(f)),
+            Self::Split(f) => Self::Split(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),

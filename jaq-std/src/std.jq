@@ -54,6 +54,9 @@ def nth(n): .[ n];
 
 def nth(n; g): last(limit(n + 1; g));
 
+# Strings
+def join(x): fold(null; .[]; if .[0] == null then .[1] else .[0] + x + .[1] end);
+
 # Objects <-> Arrays
 def   to_entries: [{ key: keys, v: . } | { key, value: .v[.key] }];
 def from_entries: map({ (.key): .value }) | add;
