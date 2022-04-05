@@ -30,6 +30,7 @@ pub enum Filter {
     Round,
     Ceil,
     Sort,
+    SortBy(Box<Self>),
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
@@ -65,6 +66,7 @@ impl Filter {
             make_builtin!("round", 0, Self::Round),
             make_builtin!("ceil", 0, Self::Ceil),
             make_builtin!("sort", 0, Self::Sort),
+            make_builtin!("sort_by", 1, Self::SortBy),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
@@ -140,6 +142,28 @@ impl Filter {
                 Val::Arr(mut a) => {
                     Rc::make_mut(&mut a).sort();
                     Box::new(once(Ok(Val::Arr(a))))
+                }
+                _ => Box::new(once(Err(Error::Sort(v)))),
+            },
+            Self::SortBy(f) => match v {
+                Val::Arr(mut a) => {
+                    let mut err = None;
+                    Rc::make_mut(&mut a).sort_by_cached_key(|x| {
+                        if err.is_some() {
+                            return Vec::new();
+                        };
+                        match f.run(x.clone()).collect() {
+                            Ok(y) => y,
+                            Err(e) => {
+                                err = Some(e);
+                                Vec::new()
+                            }
+                        }
+                    });
+                    match err {
+                        Some(e) => Box::new(once(Err(e))),
+                        None => Box::new(once(Ok(Val::Arr(a)))),
+                    }
                 }
                 _ => Box::new(once(Err(Error::Sort(v)))),
             },
@@ -220,6 +244,7 @@ impl Filter {
             Self::Length | Self::Type | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::Sort => self,
+            Self::SortBy(f) => Self::SortBy(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),
