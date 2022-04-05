@@ -29,6 +29,7 @@ pub enum Filter {
     Floor,
     Round,
     Ceil,
+    Sort,
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>),
@@ -63,6 +64,7 @@ impl Filter {
             make_builtin!("floor", 0, Self::Floor),
             make_builtin!("round", 0, Self::Round),
             make_builtin!("ceil", 0, Self::Ceil),
+            make_builtin!("sort", 0, Self::Sort),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
@@ -134,6 +136,13 @@ impl Filter {
             Self::Floor => Box::new(once(v.round(|f| f.floor()))),
             Self::Round => Box::new(once(v.round(|f| f.round()))),
             Self::Ceil => Box::new(once(v.round(|f| f.ceil()))),
+            Self::Sort => match v {
+                Val::Arr(mut a) => {
+                    Rc::make_mut(&mut a).sort();
+                    Box::new(once(Ok(Val::Arr(a))))
+                }
+                _ => Box::new(once(Err(Error::Sort(v)))),
+            },
             Self::First(f) => Box::new(f.run(v).take(1)),
             Self::Last(f) => match f.run(v).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
@@ -210,6 +219,7 @@ impl Filter {
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
             Self::Length | Self::Type | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
+            Self::Sort => self,
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),
