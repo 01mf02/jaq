@@ -30,10 +30,7 @@ def scalars:   select(type | . != "array" and . != "object");
 
 # Conversion
 def tostring: if type == "string" then . else tojson end;
-def tonumber:
-  if type == "number" then . else fromjson |
-  if type == "number" then . else error(tojson + " cannot be parsed as number") end
-  end;
+def tonumber: if type == "number" then . else fromjson end;
 
 # Generators
 def range(x): range(0; x);
