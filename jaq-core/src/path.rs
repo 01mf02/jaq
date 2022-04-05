@@ -119,7 +119,7 @@ impl PathElem<Vec<Val>> {
         }
     }
 
-    pub fn map<F, I>(&self, v: Val, opt: Opt, f: F) -> Result<Val, Error>
+    pub fn map<F, I>(&self, mut v: Val, opt: Opt, f: F) -> Result<Val, Error>
     where
         F: Fn(Val) -> I,
         I: Iterator<Item = ValR>,
@@ -128,8 +128,8 @@ impl PathElem<Vec<Val>> {
         use Opt::{Essential, Optional};
         match self {
             Self::Index(indices) => match v {
-                Val::Obj(o) => {
-                    let mut o = (*o).clone();
+                Val::Obj(ref mut o) => {
+                    let o = Rc::make_mut(o);
                     for i in indices.iter() {
                         use indexmap::map::Entry::*;
                         match (i, opt) {
@@ -147,15 +147,15 @@ impl PathElem<Vec<Val>> {
                                 }
                             },
                             (i, Essential) => {
-                                return Err(Error::IndexWith(Val::Obj(Rc::new(o)), i.clone()))
+                                return Err(Error::IndexWith(v, i.clone()))
                             }
                             (_, Optional) => (),
                         }
                     }
-                    Ok(Val::Obj(Rc::new(o)))
+                    Ok(v)
                 }
-                Val::Arr(a) => {
-                    let mut a = (*a).clone();
+                Val::Arr(ref mut a) => {
+                    let a = Rc::make_mut(a);
                     for i in indices.iter() {
                         let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
                         let i = match (i.as_posneg().and_then(abs_or), opt) {
@@ -170,7 +170,7 @@ impl PathElem<Vec<Val>> {
                             a.remove(i);
                         }
                     }
-                    Ok(Val::Arr(Rc::new(a)))
+                    Ok(v)
                 }
                 _ => opt.fail(v, Error::Index),
             },
@@ -189,8 +189,8 @@ impl PathElem<Vec<Val>> {
                 _ => opt.fail(v, Error::Iter),
             },
             Self::Range(from, until) => match v {
-                Val::Arr(a) => {
-                    let mut a = (*a).clone();
+                Val::Arr(ref mut a) => {
+                    let a = Rc::make_mut(a);
                     for (from, until) in prod(rel_bounds(from), rel_bounds(until)) {
                         let (from, until) = match (from.and_then(|from| Ok((from, until?))), opt) {
                             (Ok(from_until), _) => from_until,
@@ -212,7 +212,7 @@ impl PathElem<Vec<Val>> {
                         };
                         a.splice(skip..skip + take, y);
                     }
-                    Ok(Val::Arr(Rc::new(a)))
+                    Ok(v)
                 }
                 _ => opt.fail(v, Error::Iter),
             },
