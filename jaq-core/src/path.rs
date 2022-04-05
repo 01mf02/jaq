@@ -146,9 +146,7 @@ impl PathElem<Vec<Val>> {
                                     }
                                 }
                             },
-                            (i, Essential) => {
-                                return Err(Error::IndexWith(v, i.clone()))
-                            }
+                            (i, Essential) => return Err(Error::IndexWith(v, i.clone())),
                             (_, Optional) => (),
                         }
                     }
