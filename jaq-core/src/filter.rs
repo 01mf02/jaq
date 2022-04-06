@@ -235,7 +235,7 @@ impl Filter {
                 }
             }
 
-            Self::Var(_) => todo!(),
+            Self::Var(_) => panic!("BUG: unsubstituted variable encountered"),
         }
     }
 

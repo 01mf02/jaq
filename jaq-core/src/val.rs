@@ -46,6 +46,7 @@ impl Val {
     pub fn as_usize(&self) -> Result<usize, Error> {
         match self {
             Self::Pos(p) => Ok(*p),
+            Self::Neg(0) => Ok(0),
             _ => Err(Error::Usize(self.clone())),
         }
     }
@@ -113,7 +114,7 @@ impl Val {
                 Ok(Box::new(neg?.chain(pos?)))
             }
             (Self::Pos(_), Self::Neg(_)) => Ok(Box::new(core::iter::empty())),
-            _ => todo!(),
+            _ => Err(Error::Range),
         }
     }
 
