@@ -1,9 +1,8 @@
-//! Errors that can occur during filter execution.
-
 use crate::Val;
 use alloc::string::String;
 use core::fmt;
 
+/// Errors that can occur during filter execution.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     Custom(String),

@@ -3,6 +3,7 @@ use crate::{Error, Path};
 use alloc::{boxed::Box, rc::Rc, string::String, string::ToString, vec::Vec};
 use jaq_parse::{MathOp, OrdOp};
 
+/// Function from a value to a stream of value results.
 #[derive(Clone, Debug)]
 pub enum Filter {
     Pos(usize),
