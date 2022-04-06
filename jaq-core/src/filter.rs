@@ -240,7 +240,7 @@ impl Filter {
         }
     }
 
-    pub fn cartesian(&self, other: &Self, v: Val) -> impl Iterator<Item = (ValR, ValR)> + '_ {
+    fn cartesian(&self, other: &Self, v: Val) -> impl Iterator<Item = (ValR, ValR)> + '_ {
         let l = self.run(v.clone());
         let r: Vec<_> = other.run(v).collect();
         use itertools::Itertools;
@@ -254,13 +254,13 @@ impl Filter {
             .collect()
     }
 
-    pub fn update_math(path: Path<Self>, op: MathOp, f: Self) -> Self {
+    pub(crate) fn update_math(path: Path<Self>, op: MathOp, f: Self) -> Self {
         let id = Self::Path(Path::new(Vec::new()));
         let math = Self::Math(Box::new(id), op, Box::new(f));
         Self::Update(path, Box::new(math))
     }
 
-    pub fn subst(self, args: &[Self]) -> Self {
+    pub(crate) fn subst(self, args: &[Self]) -> Self {
         let sub = |f: Box<Self>| Box::new(f.subst(args));
         match self {
             Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
