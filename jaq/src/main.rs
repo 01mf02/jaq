@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         filter.unwrap()
     } else {
         for err in errs {
-            jaq::report(err)
+            report(err)
                 .eprint(ariadne::Source::from(&cli.filter))
                 .unwrap();
         }
@@ -105,4 +105,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(last.map(|b| (!b).into()).unwrap_or(4));
     }
     Ok(())
+}
+
+pub fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
+    use ariadne::{Color, Fmt, Label, Report, ReportKind};
+    use chumsky::error::SimpleReason;
+
+    let msg = if let SimpleReason::Custom(msg) = e.reason() {
+        msg.clone()
+    } else {
+        let found = if e.found().is_some() {
+            "Unexpected token"
+        } else {
+            "Unexpected end of input"
+        };
+        let when = if let Some(label) = e.label() {
+            format!(" while parsing {}", label)
+        } else {
+            String::new()
+        };
+        let expected = if e.expected().len() == 0 {
+            "something else".to_string()
+        } else {
+            e.expected()
+                .map(|expected| match expected {
+                    Some(expected) => expected.to_string(),
+                    None => "end of input".to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        format!("{found}{when}, expected {expected}",)
+    };
+
+    let label = match e.reason() {
+        SimpleReason::Custom(msg) => msg.clone(),
+        _ => format!(
+            "Unexpected {}",
+            e.found()
+                .map(|c| format!("token {}", c.fg(Color::Red)))
+                .unwrap_or_else(|| "end of input".to_string())
+        ),
+    };
+
+    let report = Report::build(ReportKind::Error, (), e.span().start)
+        .with_message(msg)
+        .with_label(
+            Label::new(e.span())
+                .with_message(label)
+                .with_color(Color::Red),
+        );
+
+    let report = match e.reason() {
+        SimpleReason::Unclosed { span, delimiter } => report.with_label(
+            Label::new(span.clone())
+                .with_message(format!(
+                    "Unclosed delimiter {}",
+                    delimiter.fg(Color::Yellow)
+                ))
+                .with_color(Color::Yellow),
+        ),
+        SimpleReason::Unexpected => report,
+        SimpleReason::Custom(_) => report,
+    };
+
+    report.finish()
 }
