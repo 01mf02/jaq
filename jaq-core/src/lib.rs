@@ -1,3 +1,4 @@
+//! JSON query language interpreter.
 #![no_std]
 
 extern crate alloc;
