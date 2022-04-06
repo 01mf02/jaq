@@ -8,6 +8,18 @@ use core::fmt;
 use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
 
+/// JSON value with sharing.
+///
+/// The speciality of this type is that numbers are distinguished into
+/// positive integers, negative integers, and 64-bit floating-point numbers.
+/// All integers are machine-sized.
+/// This allows using integers to index arrays,
+/// while using floating-point numbers to do general math.
+///
+/// Operations on numbers follow a few principles:
+/// * The sum, difference, product, and remainder of two integers is integer.
+/// * The quotient of two integers is integer if the remainder of the integers is zero.
+/// * Any other operation between two numbers yields a float.
 #[derive(Clone, Debug)]
 pub enum Val {
     Null,
@@ -17,7 +29,7 @@ pub enum Val {
     Pos(usize),
     /// Negative integer
     Neg(usize),
-    /// Floating-point value
+    /// Floating-point number
     Float(f64),
     /// String
     Str(Rc<String>),
@@ -31,16 +43,18 @@ pub enum Val {
 pub type ValR = Result<Val, Error>;
 
 /// A stream of values.
-pub type Vals<'a> = Box<dyn Iterator<Item = Val> + 'a>;
+type Vals<'a> = Box<dyn Iterator<Item = Val> + 'a>;
 
 /// A stream of value results.
 pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
 impl Val {
+    /// True if the value is neither null nor false.
     pub fn as_bool(&self) -> bool {
         !matches!(self, Val::Null | Val::Bool(false))
     }
 
+    /// If the value is a positive integer, return it, else fail.
     pub fn as_usize(&self) -> Result<usize, Error> {
         match self {
             Self::Pos(p) => Ok(*p),
@@ -49,6 +63,7 @@ impl Val {
         }
     }
 
+    /// If the value is integer, return its absolute value and whether its positive, else fail.
     pub fn as_posneg(&self) -> Result<(usize, bool), Error> {
         match self {
             Self::Pos(p) => Ok((*p, true)),
@@ -57,6 +72,7 @@ impl Val {
         }
     }
 
+    /// If the value is a string, return it, else fail.
     pub fn as_obj_key(&self) -> Result<Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(Rc::clone(s)),
@@ -64,6 +80,10 @@ impl Val {
         }
     }
 
+    /// Return 0 for null, the absolute value for numbers, and
+    /// the length for strings, arrays, and objects.
+    ///
+    /// Fail on booleans.
     pub fn len(&self) -> Result<Self, Error> {
         match self {
             Self::Null => Ok(Self::Pos(0)),
@@ -72,10 +92,11 @@ impl Val {
             Self::Float(f) => Ok(Self::Float(f.abs())),
             Self::Str(s) => Ok(Self::Pos(s.chars().count())),
             Self::Arr(a) => Ok(Self::Pos(a.len())),
-            Self::Obj(o) => Ok(Self::Pos(o.keys().count())),
+            Self::Obj(o) => Ok(Self::Pos(o.len())),
         }
     }
 
+    /// Return the type of the value, e.g. "boolean" for true and false.
     pub fn typ(&self) -> &str {
         match self {
             Self::Null => "null",
@@ -87,6 +108,9 @@ impl Val {
         }
     }
 
+    /// Apply a rounding function to floating-point numbers, then convert them to integers.
+    ///
+    /// Return integers unchanged, and fail on any other input.
     pub fn round(&self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
         match self {
             Self::Pos(_) | Self::Neg(_) => Ok(self.clone()),
@@ -102,6 +126,7 @@ impl Val {
         }
     }
 
+    /// Return all numbers in the range `[self, other)` if both inputs are integer, else fail.
     pub fn range(&self, other: &Self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match (self, other) {
             (Self::Pos(x), Self::Pos(y)) => Ok(Box::new((*x..*y).map(Self::Pos))),
@@ -116,6 +141,9 @@ impl Val {
         }
     }
 
+    /// Return true if `value | .[key]` is defined.
+    ///
+    /// Fail on values that are neither null, arrays, nor objects.
     pub fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
             (Self::Null, _) => Ok(false),
@@ -125,6 +153,9 @@ impl Val {
         }
     }
 
+    /// Return any `key` for which `value | .[key]` is defined.
+    ///
+    /// Fail on values that are neither arrays nor objects.
     pub fn keys(&self) -> Result<Vals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new((0..a.len()).map(Val::Pos))),
@@ -133,6 +164,9 @@ impl Val {
         }
     }
 
+    /// Return the elements of an array or the values of an object (omitting its keys).
+    ///
+    /// Fail on any other value.
     pub fn iter(&self) -> Result<Vals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
@@ -141,6 +175,12 @@ impl Val {
         }
     }
 
+    /// `a` contains `b` iff either
+    /// * the string `b` is a substring of `a`,
+    /// * every element in the array `b` is contained in some element of the array `a`,
+    /// * for every key-value pair `k, v` in `b`,
+    ///   there is a key-value pair `k, v'` in `a` such that `v'` contains `v`, or
+    /// * `a equals `b`.
     pub fn contains(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.contains(&**r),
