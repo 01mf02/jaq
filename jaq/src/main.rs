@@ -107,7 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
+fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
     use ariadne::{Color, Fmt, Label, Report, ReportKind};
     use chumsky::error::SimpleReason;
 
