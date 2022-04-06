@@ -21,4 +21,4 @@ use path::Path;
 use recurse::Recurse;
 pub use toplevel::Definitions;
 use unparse::unparse;
-pub use val::{Val, ValR, ValRs, Vals};
+pub use val::Val;

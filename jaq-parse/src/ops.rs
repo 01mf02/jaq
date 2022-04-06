@@ -4,7 +4,7 @@ use core::ops::{Add, Div, Mul, Rem, Sub};
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum MathOp {
     Add,
     Sub,

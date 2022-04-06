@@ -1,4 +1,5 @@
-use crate::{Filter, Val, ValR};
+use crate::val::{Val, ValR};
+use crate::Filter;
 use alloc::collections::VecDeque;
 
 pub struct Recurse<F> {

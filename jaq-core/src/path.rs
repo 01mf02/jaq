@@ -1,4 +1,5 @@
-use crate::{Error, Filter, Val, ValR, ValRs};
+use crate::val::{Val, ValR, ValRs};
+use crate::{Error, Filter};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use jaq_parse::path::Opt;
 
@@ -133,7 +134,7 @@ impl PathElem<Vec<Val>> {
                     for i in indices.iter() {
                         use indexmap::map::Entry::*;
                         match (i, opt) {
-                            (Val::Str(s), _) => match o.entry((**s).clone()) {
+                            (Val::Str(s), _) => match o.entry(Rc::clone(s)) {
                                 Occupied(mut e) => {
                                     match f(e.get().clone()).next().transpose()? {
                                         Some(y) => e.insert(y),

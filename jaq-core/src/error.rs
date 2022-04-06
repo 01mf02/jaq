@@ -3,7 +3,6 @@
 use crate::Val;
 use alloc::string::String;
 use core::fmt;
-use jaq_parse::MathOp;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
@@ -20,7 +19,7 @@ pub enum Error {
     Keys(Val),
     Iter(Val),
     Neg(Val),
-    MathOp(Val, Val, MathOp),
+    MathOp(&'static str, Val, Val),
     Index(Val),
     IndexWith(Val, Val),
     IndexOutOfBounds((usize, bool)),
@@ -47,7 +46,7 @@ impl fmt::Display for Error {
             Range => write!(f, "range bounds must be integers"),
             Iter(v) => write!(f, "cannot iterate over {}", v),
             Neg(v) => write!(f, "cannot negate {}", v),
-            MathOp(l, r, op) => write!(f, "{} and {} cannot be {}", l, r, passive(op)),
+            MathOp(l, r, op) => write!(f, "cannot {} {} and {}", l, r, op),
             Index(v) => write!(f, "cannot index {}", v),
             IndexWith(v, i) => write!(f, "cannot index {} with {}", v, i),
             IndexOutOfBounds((i, true)) => write!(f, "index {} is out of bounds", i),
@@ -56,16 +55,6 @@ impl fmt::Display for Error {
             Usize(v) => write!(f, "cannot use {} as unsigned integer", v),
             SliceAssign(v) => write!(f, "cannot assign non-array ({}) to an array slice", v),
         }
-    }
-}
-
-fn passive(op: &MathOp) -> &str {
-    match op {
-        MathOp::Add => "added",
-        MathOp::Sub => "subtracted",
-        MathOp::Mul => "multiplied",
-        MathOp::Div => "divided",
-        MathOp::Rem => "divided (remainder)",
     }
 }
 

@@ -1,14 +1,12 @@
 //! JSON values with reference-counted sharing.
 
 use crate::Error;
-use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 use core::cmp::Ordering;
 use core::convert::{TryFrom, TryInto};
 use core::fmt;
 use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
-pub use jaq_parse::{MathOp, OrdOp};
 
 #[derive(Clone, Debug)]
 pub enum Val {
@@ -26,7 +24,7 @@ pub enum Val {
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Order-preserving map
-    Obj(Rc<IndexMap<String, Val, FxBuildHasher>>),
+    Obj(Rc<IndexMap<Rc<String>, Val, FxBuildHasher>>),
 }
 
 /// A value result.
@@ -59,9 +57,9 @@ impl Val {
         }
     }
 
-    pub fn as_obj_key(&self) -> Result<String, Error> {
+    pub fn as_obj_key(&self) -> Result<Rc<String>, Error> {
         match self {
-            Self::Str(s) => Ok(s.to_string()),
+            Self::Str(s) => Ok(Rc::clone(s)),
             _ => Err(Error::ObjKey(self.clone())),
         }
     }
@@ -130,7 +128,7 @@ impl Val {
     pub fn keys(&self) -> Result<Vals, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new((0..a.len()).map(Val::Pos))),
-            Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::new(k.clone()))))),
+            Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::clone(k))))),
             _ => Err(Error::Keys(self.clone())),
         }
     }
@@ -173,7 +171,9 @@ impl From<serde_json::Value> for Val {
             },
             String(s) => Self::Str(Rc::new(s)),
             Array(a) => Self::Arr(Rc::new(a.into_iter().map(|x| x.into()).collect())),
-            Object(o) => Self::Obj(Rc::new(o.into_iter().map(|(k, v)| (k, v.into())).collect())),
+            Object(o) => Self::Obj(Rc::new(
+                o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect(),
+            )),
         }
     }
 }
@@ -191,7 +191,7 @@ impl From<Val> for serde_json::Value {
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             Val::Obj(o) => Object(
                 o.iter()
-                    .map(|(k, v)| (k.clone(), v.clone().into()))
+                    .map(|(k, v)| ((**k).clone(), v.clone().into()))
                     .collect(),
             ),
         }
@@ -224,7 +224,7 @@ impl core::ops::Add for Val {
                 Rc::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
                 Ok(Obj(l))
             }
-            (l, r) => Err(Error::MathOp(l, r, MathOp::Add)),
+            (l, r) => Err(Error::MathOp("add", l, r)),
         }
     }
 }
@@ -243,7 +243,7 @@ impl core::ops::Sub for Val {
             (Float(f), Pos(p)) => Ok(Float(f - p as f64)),
             (Float(f), Neg(n)) => Ok(Float(f + n as f64)),
             (Float(x), Float(y)) => Ok(Float(x - y)),
-            (l, r) => Err(Error::MathOp(l, r, MathOp::Sub)),
+            (l, r) => Err(Error::MathOp("subtract", l, r)),
         }
     }
 }
@@ -258,7 +258,7 @@ impl core::ops::Mul for Val {
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f * p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(-f * n as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
-            (l, r) => Err(Error::MathOp(l, r, MathOp::Mul)),
+            (l, r) => Err(Error::MathOp("multiply", l, r)),
         }
     }
 }
@@ -277,7 +277,7 @@ impl core::ops::Div for Val {
             (Float(f), Pos(p)) => Ok(Float(f / p as f64)),
             (Float(f), Neg(n)) => Ok(Float(-f / n as f64)),
             (Float(x), Float(y)) => Ok(Float(x / y)),
-            (l, r) => Err(Error::MathOp(l, r, MathOp::Div)),
+            (l, r) => Err(Error::MathOp("divide", l, r)),
         }
     }
 }
@@ -289,7 +289,7 @@ impl core::ops::Rem for Val {
         match (self, rhs) {
             (Pos(x), Pos(y) | Neg(y)) => Ok(Pos(x % y)),
             (Neg(x), Pos(y) | Neg(y)) => Ok(Neg(x % y)),
-            (l, r) => Err(Error::MathOp(l, r, MathOp::Rem)),
+            (l, r) => Err(Error::MathOp("build remainder of", l, r)),
         }
     }
 }

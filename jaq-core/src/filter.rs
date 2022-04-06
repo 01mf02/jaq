@@ -1,4 +1,5 @@
-use crate::{Error, Path, Val, ValR, ValRs};
+use crate::val::{Val, ValR, ValRs};
+use crate::{Error, Path};
 use alloc::{boxed::Box, rc::Rc, string::String, string::ToString, vec::Vec};
 use jaq_parse::{MathOp, OrdOp};
 
