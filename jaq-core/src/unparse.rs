@@ -4,11 +4,25 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, KeyVal};
 use jaq_parse::{Error, Spanned};
 
-pub fn unparse<F>(fns: &F, vars: &[String], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
+pub fn unparse<F>(
+    fns: &F,
+    args: &[String],
+    vars: Vec<String>,
+    body: Spanned<Expr>,
+    errs: &mut Vec<Error>,
+) -> Filter
 where
     F: Fn(&(String, usize)) -> Option<Filter>,
 {
-    let get = |f, errs: &mut _| Box::new(unparse(fns, vars, f, errs));
+    let get = |f, errs: &mut _| Box::new(unparse(fns, args, vars.clone(), f, errs));
+    let mut call = |name, args: Vec<Spanned<Expr>>| {
+        let fun = fns(&(name, args.len())).unwrap_or_else(|| {
+            errs.push(Error::custom(body.1.clone(), "could not find function"));
+            Filter::Path(Path(Vec::new()))
+        });
+        let args = args.into_iter().map(|arg| *get(arg, errs));
+        fun.subst(&args.collect::<Vec<_>>())
+    };
     match body.0 {
         Expr::Num(n) => {
             if n.contains(['.', 'e', 'E']) {
@@ -44,16 +58,9 @@ where
             Filter::Object(kvs.collect())
         }
 
-        Expr::Call(name, args) => match vars.iter().position(|v| *v == name) {
-            Some(pos) if args.is_empty() => Filter::Var(pos),
-            _ => {
-                let fun = fns(&(name, args.len())).unwrap_or_else(|| {
-                    errs.push(Error::custom(body.1, "could not find function"));
-                    Filter::Path(Path(Vec::new()))
-                });
-                let args = args.into_iter().map(|arg| *get(arg, errs));
-                fun.subst(&args.collect::<Vec<_>>())
-            }
+        Expr::Call(name, call_args) => match args.iter().position(|v| *v == name) {
+            Some(pos) if call_args.is_empty() => Filter::Arg(pos),
+            _ => call(name, call_args),
         },
         Expr::Neg(f) => Filter::Neg(get(*f, errs)),
         Expr::Binary(l, BinaryOp::Pipe(None), r) => Filter::Pipe(get(*l, errs), get(*r, errs)),

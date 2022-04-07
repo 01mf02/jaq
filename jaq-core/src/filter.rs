@@ -46,24 +46,24 @@ pub enum Filter {
     Range(Box<Self>, Box<Self>),
     Fold(Box<Self>, Box<Self>, Box<Self>),
 
-    Var(usize),
+    Arg(usize),
 }
 
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
-        let var = |v| Box::new(Self::Var(v));
+        let arg = |v| Box::new(Self::Arg(v));
         macro_rules! make_builtin {
             ($name: expr, 0, $cons: expr) => {
                 (($name.to_string(), 0), $cons)
             };
             ($name: expr, 1, $cons: expr) => {
-                (($name.to_string(), 1), $cons(var(0)))
+                (($name.to_string(), 1), $cons(arg(0)))
             };
             ($name: expr, 2, $cons: expr) => {
-                (($name.to_string(), 2), $cons(var(0), var(1)))
+                (($name.to_string(), 2), $cons(arg(0), arg(1)))
             };
             ($name: expr, 3, $cons: expr) => {
-                (($name.to_string(), 3), $cons(var(0), var(1), var(2)))
+                (($name.to_string(), 3), $cons(arg(0), arg(1), arg(2)))
             };
         }
         Vec::from([
@@ -237,7 +237,7 @@ impl Filter {
                 }
             }
 
-            Self::Var(_) => panic!("BUG: unsubstituted variable encountered"),
+            Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
     }
 
@@ -295,7 +295,7 @@ impl Filter {
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
             Self::Fold(xs, init, f) => Self::Fold(sub(xs), sub(init), sub(f)),
-            Self::Var(v) => args[v].clone(),
+            Self::Arg(v) => args[v].clone(),
         }
     }
 }

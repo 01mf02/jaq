@@ -11,14 +11,14 @@ impl Definitions {
 
     pub fn add(&mut self, defs: Vec<Def>, errs: &mut Vec<Error>) {
         for def in defs {
-            let f = unparse(&self.get(), &def.args, def.body, errs);
+            let f = unparse(&self.get(), &def.args, Vec::new(), def.body, errs);
             self.0.insert((def.name, def.args.len()), f);
         }
     }
 
     pub fn finish(mut self, (defs, body): Main, errs: &mut Vec<Error>) -> Filter {
         self.add(defs, errs);
-        unparse(&self.get(), &[], body, errs)
+        unparse(&self.get(), &[], Vec::new(), body, errs)
     }
 
     fn get(&self) -> impl Fn(&(String, usize)) -> Option<Filter> + '_ {
