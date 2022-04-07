@@ -8,6 +8,7 @@ pub enum Token {
     Str(String),
     Op(String),
     Ident(String),
+    Var(String),
     Ctrl(char),
     Dot(Option<String>),
     Def,
@@ -17,15 +18,17 @@ pub enum Token {
     End,
     Or,
     And,
+    As,
 }
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
+            Self::Var(s) => write!(f, "${s}"),
             Self::Ctrl(c) => c.fmt(f),
             Self::Dot(None) => ".".fmt(f),
-            Self::Dot(Some(s)) => write!(f, r#".{}"#, s),
+            Self::Dot(Some(s)) => write!(f, ".{s}"),
             Self::Def => "def".fmt(f),
             Self::If => "if".fmt(f),
             Self::Then => "then".fmt(f),
@@ -33,6 +36,7 @@ impl fmt::Display for Token {
             Self::End => "end".fmt(f),
             Self::Or => "or".fmt(f),
             Self::And => "and".fmt(f),
+            Self::As => "as".fmt(f),
         }
     }
 }
@@ -62,6 +66,8 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     let dot_id = text::ident().or(text::whitespace().ignore_then(str_()));
     let dot = just('.').ignore_then(dot_id.or_not());
 
+    let var = just('$').ignore_then(text::ident());
+
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("{}()[]:;,?");
 
@@ -74,6 +80,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         "end" => Token::End,
         "or" => Token::Or,
         "and" => Token::And,
+        "as" => Token::As,
         _ => Token::Ident(ident),
     });
 
@@ -82,6 +89,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
         .or(dot.map(Token::Dot))
+        .or(var.map(Token::Var))
         .or(num().map(Token::Num))
         .or(str_().map(Token::Str))
         .recover_with(skip_then_retry_until([]))
