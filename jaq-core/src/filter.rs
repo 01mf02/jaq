@@ -46,6 +46,9 @@ pub enum Filter {
     Range(Box<Self>, Box<Self>),
     Fold(Box<Self>, Box<Self>, Box<Self>),
 
+    EmptyCtx(Box<Self>),
+    Var(usize),
+
     Arg(usize),
 }
 
@@ -237,6 +240,9 @@ impl Filter {
                 }
             }
 
+            Self::EmptyCtx(f) => f.run(v),
+            Self::Var(v) => todo!(),
+
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
     }
@@ -295,6 +301,8 @@ impl Filter {
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
             Self::Fold(xs, init, f) => Self::Fold(sub(xs), sub(init), sub(f)),
+            Self::EmptyCtx(f) => Self::EmptyCtx(sub(f)),
+            Self::Var(_) => self,
             Self::Arg(v) => args[v].clone(),
         }
     }
