@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(4);
         });
         //println!("Got {:?}", input);
-        for output in filter.run(input) {
+        for output in filter.run((Default::default(), input)) {
             let output = output.unwrap_or_else(|e| {
                 eprintln!("Error: {}", e);
                 std::process::exit(5);

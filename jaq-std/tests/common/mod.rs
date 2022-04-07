@@ -30,6 +30,6 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let expected = ys.into_iter().map(|y| Ok(to(y)));
     let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
 
-    let out: Vec<_> = f.run(to(x)).collect();
+    let out: Vec<_> = f.run((Default::default(), to(x))).collect();
     assert_eq!(out, expected);
 }

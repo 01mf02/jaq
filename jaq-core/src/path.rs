@@ -1,7 +1,7 @@
 use crate::val::{Val, ValR, ValRs};
-use crate::{Error, Filter};
+use crate::Error;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use jaq_parse::path::Opt;
+pub use jaq_parse::path::Opt;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
@@ -16,47 +16,6 @@ pub enum PathElem<I> {
 impl<F> Path<F> {
     pub fn new(path: Vec<(PathElem<F>, Opt)>) -> Self {
         Self(path)
-    }
-}
-
-type PathOptR = Result<(PathElem<Vec<Val>>, Opt), Error>;
-
-impl Path<Filter> {
-    pub fn run<'f, F>(&self, v: Val, f: F) -> ValRs<'f>
-    where
-        F: Fn(Val) -> ValRs<'f> + Copy,
-    {
-        match self.run_indices(&v).collect::<Result<Vec<_>, _>>() {
-            Ok(path) => PathElem::run(path.iter(), v, f),
-            Err(e) => Box::new(core::iter::once(Err(e))),
-        }
-    }
-
-    fn run_indices<'a>(&'a self, v: &'a Val) -> impl Iterator<Item = PathOptR> + 'a {
-        let path = self.0.iter();
-        path.map(move |(p, opt)| Ok((p.run_indices(v.clone())?, *opt)))
-    }
-
-    pub fn collect(&self, v: Val) -> Result<Vec<Val>, Error> {
-        let init = Vec::from([v.clone()]);
-        self.run_indices(&v).try_fold(init, |acc, p_opt| {
-            let (p, opt) = p_opt?;
-            opt.collect(acc.into_iter().flat_map(|x| p.collect(x)))
-        })
-    }
-}
-
-impl PathElem<Filter> {
-    pub fn run_indices(&self, v: Val) -> Result<PathElem<Vec<Val>>, Error> {
-        use PathElem::*;
-        match self {
-            Index(i) => Ok(Index(i.run(v).collect::<Result<_, _>>()?)),
-            Range(from, until) => {
-                let from = from.as_ref().map(|f| f.run(v.clone()).collect());
-                let until = until.as_ref().map(|u| u.run(v).collect());
-                Ok(Range(from.transpose()?, until.transpose()?))
-            }
-        }
     }
 }
 
