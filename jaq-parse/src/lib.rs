@@ -9,16 +9,18 @@ mod token;
 mod toplevel;
 
 pub use ops::{MathOp, OrdOp};
-pub use path::Path;
-pub use token::Token;
+use path::Path;
+use token::Token;
 pub use toplevel::{defs, main, Def, Main};
 
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 
 type Span = core::ops::Range<usize>;
+/// An object with position information.
 pub type Spanned<T> = (T, Span);
 
+/// Lex/parse error.
 pub type Error = Simple<String>;
 
 fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
@@ -31,6 +33,9 @@ fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
         .repeated()
 }
 
+/// Parse a string with a given parser.
+///
+/// May produce `Some` output even if there were errors.
 pub fn parse<T, P>(src: &str, parser: P) -> (Option<T>, Vec<Error>)
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,

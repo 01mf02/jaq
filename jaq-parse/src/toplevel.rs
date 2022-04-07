@@ -5,6 +5,7 @@ use chumsky::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// A definition, such as `def map(f): [.[] | f];`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def {
@@ -13,6 +14,7 @@ pub struct Def {
     pub body: Spanned<Filter>,
 }
 
+/// (Potentially empty) sequence of definitions, followed by a filter.
 pub type Main = (Vec<Def>, Spanned<Filter>);
 
 fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
@@ -31,10 +33,12 @@ fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
         .labelled("definition")
 }
 
+/// Parser for a sequence of definitions.
 pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
     def().repeated().collect()
 }
 
+/// Parser for a (potentially empty) sequence of definitions, followed by a filter.
 pub fn main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
     defs().then(filter())
 }

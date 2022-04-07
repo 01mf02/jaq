@@ -3,13 +3,19 @@ use core::ops::{Add, Div, Mul, Rem, Sub};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum MathOp {
+    /// Addition
     Add,
+    /// Subtraction
     Sub,
+    /// Multiplication
     Mul,
+    /// Division
     Div,
+    /// Remainder
     Rem,
 }
 
@@ -44,7 +50,7 @@ impl fmt::Display for MathOp {
     }
 }
 
-/// An operation that takes two values and returns a boolean value.
+/// An operation that orders two values, such as `<`, `<=`, `>`, `>=`, `==`, `!=`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum OrdOp {

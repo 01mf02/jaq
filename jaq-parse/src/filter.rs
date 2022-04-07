@@ -8,8 +8,11 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum AssignOp {
+    /// `=`
     Assign,
+    /// `|=`
     Update,
+    /// `+=`, `-=`, `*=`, `/=`, `%=`
     UpdateWith(MathOp),
 }
 
@@ -35,6 +38,10 @@ pub enum BinaryOp {
     Ord(OrdOp),
 }
 
+/// An element of an object construction filter.
+///
+/// For example, the object construction filter `{(.): 1, b: 2}`
+/// consists of two elements, namely `(.): 1` and `b: 2`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum KeyVal {
@@ -42,11 +49,15 @@ pub enum KeyVal {
     Str(String, Option<Spanned<Filter>>),
 }
 
+/// Function from value to stream of values, such as `.[] | add / length`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum Filter {
+    /// Integer or floating-point number.
     Num(String),
+    /// String
     Str(String),
+    /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
     Object(Vec<KeyVal>),
     Path(Path<Self>),
