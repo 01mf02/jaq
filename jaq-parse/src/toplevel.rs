@@ -1,4 +1,4 @@
-use crate::filter::{args, expr, Expr};
+use crate::filter::{args, filter, Filter};
 use crate::{Spanned, Token};
 use alloc::{string::String, vec::Vec};
 use chumsky::prelude::*;
@@ -10,14 +10,10 @@ use serde::{Deserialize, Serialize};
 pub struct Def {
     pub name: String,
     pub args: Vec<String>,
-    pub body: Spanned<Expr>,
+    pub body: Spanned<Filter>,
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Main {
-    pub defs: Vec<Def>,
-    pub body: Spanned<Expr>,
-}
+pub type Main = (Vec<Def>, Spanned<Filter>);
 
 fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
@@ -29,7 +25,7 @@ fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
         .ignore_then(ident.labelled("filter name"))
         .then(args(ident).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
-        .then(expr())
+        .then(filter())
         .then_ignore(just(Token::Ctrl(';')))
         .map(|((name, args), body)| Def { name, args, body })
         .labelled("definition")
@@ -40,5 +36,5 @@ pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
 }
 
 pub fn main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
-    defs().then(expr()).map(|(defs, body)| Main { defs, body })
+    defs().then(filter())
 }

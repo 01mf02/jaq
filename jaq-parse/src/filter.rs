@@ -38,14 +38,13 @@ pub enum BinaryOp {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum KeyVal {
-    Expr(Spanned<Expr>, Spanned<Expr>),
-    Str(String, Option<Spanned<Expr>>),
+    Filter(Spanned<Filter>, Spanned<Filter>),
+    Str(String, Option<Spanned<Filter>>),
 }
 
-// An expression node in the AST. Children are spanned so we can generate useful runtime errors.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
-pub enum Expr {
+pub enum Filter {
     Num(String),
     Str(String),
     Array(Option<Box<Spanned<Self>>>),
@@ -57,26 +56,26 @@ pub enum Expr {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }
 
-impl From<String> for Expr {
+impl From<String> for Filter {
     fn from(s: String) -> Self {
         Self::Str(s)
     }
 }
 
-impl Expr {
+impl Filter {
     fn binary_with_span(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
-        (Expr::Binary(Box::new(a), op, Box::new(b)), span)
+        (Filter::Binary(Box::new(a), op, Box::new(b)), span)
     }
 }
 
-fn bin<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+fn bin<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
-    P: Parser<Token, Spanned<Expr>> + Clone,
+    P: Parser<Token, Spanned<Filter>> + Clone,
     O: Parser<Token, BinaryOp, Error = P::Error> + Clone,
 {
     let args = prev.clone().then(op.then(prev).repeated());
-    args.foldl(|a, (op, b)| Expr::binary_with_span(a, op, b))
+    args.foldl(|a, (op, b)| Filter::binary_with_span(a, op, b))
 }
 
 pub(crate) fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
@@ -89,14 +88,14 @@ where
         .map(Option::unwrap_or_default)
 }
 
-// 'Atoms' are expressions that contain no ambiguity
-fn atom<P>(expr: P, sans_comma: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+// 'Atoms' are filters that contain no ambiguity
+fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
-    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
+    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
     let val = filter_map(|span, tok| match tok {
-        Token::Num(n) => Ok(Expr::Num(n)),
-        Token::Str(s) => Ok(Expr::Str(s)),
+        Token::Num(n) => Ok(Filter::Num(n)),
+        Token::Str(s) => Ok(Filter::Str(s)),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     })
     .labelled("value");
@@ -113,53 +112,53 @@ where
     })
     .labelled("object key");
 
-    // Atoms can also just be normal expressions, but surrounded with parentheses
-    let parenthesised = expr
+    // Atoms can also just be normal filters, but surrounded with parentheses
+    let parenthesised = filter
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
-    let array = expr
+    let array = filter
         .clone()
         .or_not()
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-        .map_with_span(|arr, span| (Expr::Array(arr.map(Box::new)), span));
+        .map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span));
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(sans_comma);
+    let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
-    let key_expr = parenthesised
+    let key_filter = parenthesised
         .clone()
         .then(is_val)
-        .map(|(key, val)| KeyVal::Expr(key, val));
+        .map(|(key, val)| KeyVal::Filter(key, val));
     let object = key_str
-        .or(key_expr)
+        .or(key_filter)
         .separated_by(just(Token::Ctrl(',')))
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
-    let object = object.map_with_span(|obj, span| (Expr::Object(obj), span));
+    let object = object.map_with_span(|obj, span| (Filter::Object(obj), span));
 
-    let path = crate::path::path(expr.clone());
-    let path = path.map_with_span(|path, span| (Expr::Path(path), span));
+    let path = crate::path::path(filter.clone());
+    let path = path.map_with_span(|path, span| (Filter::Path(path), span));
 
-    let if_ = just(Token::If).ignore_then(expr.clone().map(Box::new));
-    let then = just(Token::Then).ignore_then(expr.clone().map(Box::new));
-    let else_ = just(Token::Else).ignore_then(expr.clone().map(Box::new));
+    let if_ = just(Token::If).ignore_then(filter.clone().map(Box::new));
+    let then = just(Token::Then).ignore_then(filter.clone().map(Box::new));
+    let else_ = just(Token::Else).ignore_then(filter.clone().map(Box::new));
     let ite = if_.then(then).then(else_).then_ignore(just(Token::End));
-    let ite = ite.map_with_span(|((if_, then), else_), span| (Expr::If(if_, then, else_), span));
+    let ite = ite.map_with_span(|((if_, then), else_), span| (Filter::If(if_, then, else_), span));
 
-    let call = ident.then(args(expr));
-    let call = call.map_with_span(|(f, args), span| (Expr::Call(f, args), span));
+    let call = ident.then(args(filter));
+    let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));
 
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
         nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
-            (Expr::Path(Vec::new()), span)
+            (Filter::Path(Vec::new()), span)
         })
     };
 
-    val.map_with_span(|expr, span| (expr, span))
+    val.map_with_span(|filter, span| (filter, span))
         .or(parenthesised)
         .or(array)
         .or(object)
@@ -171,9 +170,9 @@ where
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
 }
 
-fn math<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone
+fn math<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone
 where
-    P: Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone,
+    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
     let neg = just(Token::Op("-".to_string()))
         .map_with_span(|_, span| span)
@@ -181,7 +180,7 @@ where
         .then(prev)
         .foldr(|a, b| {
             let span = a.start..b.1.end;
-            (Expr::Neg(Box::new(b)), span)
+            (Filter::Neg(Box::new(b)), span)
         });
 
     let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
@@ -193,9 +192,9 @@ where
     bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)))
 }
 
-fn ord<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+fn ord<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
-    P: Parser<Token, Spanned<Expr>> + Clone,
+    P: Parser<Token, Spanned<Filter>> + Clone,
 {
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
 
@@ -210,9 +209,9 @@ where
     bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)))
 }
 
-fn assign<P>(prev: P) -> impl Parser<Token, Spanned<Expr>, Error = P::Error> + Clone
+fn assign<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
-    P: Parser<Token, Spanned<Expr>> + Clone,
+    P: Parser<Token, Spanned<Filter>> + Clone,
 {
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
 
@@ -228,10 +227,12 @@ where
     ));
 
     let args = prev.clone().then(assign).repeated().then(prev);
-    args.foldr(|(a, op), b| Expr::binary_with_span(a, op, b))
+    args.foldr(|(a, op), b| Filter::binary_with_span(a, op, b))
 }
 
-pub(crate) fn expr() -> impl Parser<Token, Spanned<Expr>, Error = Simple<Token>> + Clone {
+pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
+    // filters that may or may not contain commas on the toplevel,
+    // i.e. not inside parentheses
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
 

@@ -1,7 +1,7 @@
 use crate::path::PathElem;
 use crate::{Filter, Path};
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_parse::filter::{AssignOp, BinaryOp, Expr, KeyVal};
+use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, KeyVal};
 use jaq_parse::{Error, Spanned};
 
 pub fn unparse<F>(fns: &F, vars: &[String], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
@@ -31,7 +31,7 @@ where
         Expr::Array(a) => Filter::Array(a.map(|a| get(*a, errs))),
         Expr::Object(o) => {
             let kvs = o.into_iter().map(|kv| match kv {
-                KeyVal::Expr(k, v) => (*get(k, errs), *get(v, errs)),
+                KeyVal::Filter(k, v) => (*get(k, errs), *get(v, errs)),
                 KeyVal::Str(k, v) => {
                     let v = match v {
                         None => Filter::Path(Path::from(PathElem::Index(Filter::Str(k.clone())))),

@@ -16,9 +16,9 @@ impl Definitions {
         }
     }
 
-    pub fn finish(mut self, main: Main, errs: &mut Vec<Error>) -> Filter {
-        self.add(main.defs, errs);
-        unparse(&self.get(), &[], main.body, errs)
+    pub fn finish(mut self, (defs, body): Main, errs: &mut Vec<Error>) -> Filter {
+        self.add(defs, errs);
+        unparse(&self.get(), &[], body, errs)
     }
 
     fn get(&self) -> impl Fn(&(String, usize)) -> Option<Filter> + '_ {
