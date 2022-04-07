@@ -28,6 +28,7 @@ where
             }
         }
         Expr::Str(s) => Filter::Str(s),
+        Expr::Var(_v) => todo!(),
         Expr::Array(a) => Filter::Array(a.map(|a| get(*a, errs))),
         Expr::Object(o) => {
             let kvs = o.into_iter().map(|kv| match kv {
@@ -55,7 +56,8 @@ where
             }
         },
         Expr::Neg(f) => Filter::Neg(get(*f, errs)),
-        Expr::Binary(l, BinaryOp::Pipe, r) => Filter::Pipe(get(*l, errs), get(*r, errs)),
+        Expr::Binary(l, BinaryOp::Pipe(None), r) => Filter::Pipe(get(*l, errs), get(*r, errs)),
+        Expr::Binary(_l, BinaryOp::Pipe(_), _r) => todo!(),
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Or, r) => Filter::Logic(get(*l, errs), true, get(*r, errs)),
         Expr::Binary(l, BinaryOp::And, r) => Filter::Logic(get(*l, errs), false, get(*r, errs)),

@@ -29,7 +29,7 @@ impl fmt::Display for AssignOp {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum BinaryOp {
-    Pipe,
+    Pipe(Option<String>),
     Comma,
     Or,
     And,
@@ -57,6 +57,8 @@ pub enum Filter {
     Num(String),
     /// String
     Str(String),
+    /// Variable, such as $x (without leading '$')
+    Var(String),
     /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
     Object(Vec<KeyVal>),
@@ -99,6 +101,14 @@ where
         .map(Option::unwrap_or_default)
 }
 
+fn var() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
+    filter_map(|span, tok| match tok {
+        Token::Var(v) => Ok(v),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    })
+    .labelled("variable")
+}
+
 // 'Atoms' are filters that contain no ambiguity
 fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
@@ -127,6 +137,8 @@ where
     let parenthesised = filter
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
+
+    let var = var().map_with_span(|v, span| (Filter::Var(v), span));
 
     let array = filter
         .clone()
@@ -176,6 +188,7 @@ where
         .or(path)
         .or(ite)
         .or(call)
+        .or(var)
         .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
         .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
@@ -255,7 +268,11 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let assign = assign(or).boxed();
 
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
-    let pipe = just(Token::Op("|".to_string())).to(BinaryOp::Pipe);
+
+    let as_var = just(Token::As).ignore_then(var()).or_not();
+    let pipe = as_var
+        .then_ignore(just(Token::Op("|".to_string())))
+        .map(BinaryOp::Pipe);
 
     sans_comma.define(bin(assign.clone(), pipe.clone()));
     with_comma.define(bin(bin(assign, comma), pipe));
