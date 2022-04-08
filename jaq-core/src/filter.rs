@@ -15,7 +15,7 @@ pub enum Filter {
     Object(Vec<(Self, Self)>),
 
     Neg(Box<Self>),
-    Pipe(Box<Self>, Box<Self>),
+    Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
     IfThenElse(Box<Self>, Box<Self>, Box<Self>),
 
@@ -121,10 +121,13 @@ impl Filter {
                     }),
             ),
             Self::Neg(f) => Box::new(f.run(cv).map(|v| -v?)),
-            Self::Pipe(l, r) => Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
-                Ok(y) => r.run((cv.0.clone(), y)),
-                Err(e) => Box::new(once(Err(e))),
-            })),
+            Self::Pipe(l, false, r) => {
+                Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
+                    Ok(y) => r.run((cv.0.clone(), y)),
+                    Err(e) => Box::new(once(Err(e))),
+                }))
+            }
+            Self::Pipe(_l, true, _r) => todo!(),
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
             Self::IfThenElse(if_, then, else_) => {
                 Box::new(if_.run(cv.clone()).flat_map(move |y| match y {
@@ -285,7 +288,7 @@ impl Filter {
                     .collect(),
             ),
             Self::Neg(f) => Self::Neg(sub(f)),
-            Self::Pipe(l, r) => Self::Pipe(sub(l), sub(r)),
+            Self::Pipe(l, bind, r) => Self::Pipe(sub(l), bind, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::IfThenElse(if_, then, else_) => Self::IfThenElse(sub(if_), sub(then), sub(else_)),
             Self::Path(path) => Self::Path(path.map(|f| f.subst(args))),

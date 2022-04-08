@@ -7,7 +7,7 @@ use jaq_parse::{Error, Spanned};
 pub fn unparse<F>(
     fns: &F,
     args: &[String],
-    vars: Vec<String>,
+    mut vars: Vec<String>,
     body: Spanned<Expr>,
     errs: &mut Vec<Error>,
 ) -> Filter
@@ -42,7 +42,13 @@ where
             }
         }
         Expr::Str(s) => Filter::Str(s),
-        Expr::Var(_v) => todo!(),
+        Expr::Var(v) => match vars.iter().rev().position(|i| *i == v) {
+            None => {
+                errs.push(Error::custom(body.1, "undefined variable"));
+                Filter::Var(0)
+            }
+            Some(v) => Filter::Var(v),
+        },
         Expr::Array(a) => Filter::Array(a.map(|a| get(*a, errs))),
         Expr::Object(o) => {
             let kvs = o.into_iter().map(|kv| match kv {
@@ -63,8 +69,15 @@ where
             _ => call(name, call_args),
         },
         Expr::Neg(f) => Filter::Neg(get(*f, errs)),
-        Expr::Binary(l, BinaryOp::Pipe(None), r) => Filter::Pipe(get(*l, errs), get(*r, errs)),
-        Expr::Binary(_l, BinaryOp::Pipe(_), _r) => todo!(),
+        Expr::Binary(l, BinaryOp::Pipe(None), r) => {
+            Filter::Pipe(get(*l, errs), false, get(*r, errs))
+        }
+        Expr::Binary(l, BinaryOp::Pipe(Some(v)), r) => {
+            let l = get(*l, errs);
+            vars.push(v);
+            let r = Box::new(unparse(fns, args, vars, *r, errs));
+            Filter::Pipe(l, true, r)
+        }
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Or, r) => Filter::Logic(get(*l, errs), true, get(*r, errs)),
         Expr::Binary(l, BinaryOp::And, r) => Filter::Logic(get(*l, errs), false, get(*r, errs)),
