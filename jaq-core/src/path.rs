@@ -4,22 +4,22 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 pub use jaq_parse::path::Opt;
 
 #[derive(Clone, Debug)]
-pub struct Path<F>(pub Vec<(PathElem<F>, Opt)>);
+pub struct Path<F>(pub Vec<(Part<F>, Opt)>);
 
 #[derive(Clone, Debug)]
-pub enum PathElem<I> {
+pub enum Part<I> {
     Index(I),
     /// if both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
 }
 
 impl<F> Path<F> {
-    pub fn new(path: Vec<(PathElem<F>, Opt)>) -> Self {
+    pub fn new(path: Vec<(Part<F>, Opt)>) -> Self {
         Self(path)
     }
 }
 
-impl PathElem<Vec<Val>> {
+impl Part<Vec<Val>> {
     pub fn collect(&self, current: Val) -> ValRs {
         use core::iter::once;
         match self {
@@ -185,9 +185,9 @@ impl<F> Path<F> {
     }
 }
 
-impl<F> PathElem<F> {
-    pub fn map2<F2>(self, f: impl Fn(F) -> F2) -> PathElem<F2> {
-        use PathElem::*;
+impl<F> Part<F> {
+    pub fn map2<F2>(self, f: impl Fn(F) -> F2) -> Part<F2> {
+        use Part::*;
         match self {
             Index(i) => Index(f(i)),
             Range(from, until) => Range(from.map(&f), until.map(&f)),
@@ -195,8 +195,8 @@ impl<F> PathElem<F> {
     }
 }
 
-impl<F> From<PathElem<F>> for Path<F> {
-    fn from(p: PathElem<F>) -> Self {
+impl<F> From<Part<F>> for Path<F> {
+    fn from(p: Part<F>) -> Self {
         Path(Vec::from([(p, Opt::Essential)]))
     }
 }

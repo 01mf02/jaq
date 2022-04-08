@@ -1,5 +1,5 @@
-use crate::path::PathElem;
-use crate::{Filter, Path};
+use crate::path::{self, Path};
+use crate::Filter;
 use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, KeyVal};
 use jaq_parse::{Error, Spanned};
@@ -49,7 +49,7 @@ where
                 KeyVal::Filter(k, v) => (*get(k, errs), *get(v, errs)),
                 KeyVal::Str(k, v) => {
                     let v = match v {
-                        None => Filter::Path(Path::from(PathElem::Index(Filter::Str(k.clone())))),
+                        None => Filter::Path(Path::from(path::Part::Index(Filter::Str(k.clone())))),
                         Some(v) => *get(v, errs),
                     };
                     (Filter::Str(k), v)
@@ -92,11 +92,11 @@ where
         Expr::Path(path) => {
             use jaq_parse::path::Part;
             let path = path.into_iter().map(|(p, opt)| match p {
-                Part::Index(i) => (PathElem::Index(*get(i, errs)), opt),
+                Part::Index(i) => (path::Part::Index(*get(i, errs)), opt),
                 Part::Range(lower, upper) => {
                     let lower = lower.map(|f| *get(f, errs));
                     let upper = upper.map(|f| *get(f, errs));
-                    (PathElem::Range(lower, upper), opt)
+                    (path::Part::Range(lower, upper), opt)
                 }
             });
             Filter::Path(Path(path.collect()))

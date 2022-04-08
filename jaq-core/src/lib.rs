@@ -16,7 +16,6 @@ pub use jaq_parse as parse;
 
 pub use error::Error;
 pub use filter::Filter;
-use path::Path;
 pub use toplevel::Definitions;
 use unparse::unparse;
 pub use val::Val;

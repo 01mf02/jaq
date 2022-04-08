@@ -314,7 +314,7 @@ impl Filter {
     }
 }
 
-type PathOptR = Result<(path::PathElem<Vec<Val>>, path::Opt), Error>;
+type PathOptR = Result<(path::Part<Vec<Val>>, path::Opt), Error>;
 
 impl Path<Filter> {
     pub fn run<'f, F>(&self, cv: (Ctx, Val), f: F) -> ValRs<'f>
@@ -322,7 +322,7 @@ impl Path<Filter> {
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
         match self.run_indices(&cv).collect::<Result<Vec<_>, _>>() {
-            Ok(path) => path::PathElem::run(path.iter(), cv.1, f),
+            Ok(path) => path::Part::run(path.iter(), cv.1, f),
             Err(e) => Box::new(core::iter::once(Err(e))),
         }
     }
@@ -341,9 +341,9 @@ impl Path<Filter> {
     }
 }
 
-impl path::PathElem<Filter> {
-    pub fn run_indices(&self, cv: (Ctx, Val)) -> Result<path::PathElem<Vec<Val>>, Error> {
-        use path::PathElem::*;
+impl path::Part<Filter> {
+    pub fn run_indices(&self, cv: (Ctx, Val)) -> Result<path::Part<Vec<Val>>, Error> {
+        use path::Part::*;
         match self {
             Index(i) => Ok(Index(i.run(cv).collect::<Result<_, _>>()?)),
             Range(from, until) => {
