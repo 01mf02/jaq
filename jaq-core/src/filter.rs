@@ -54,6 +54,12 @@ pub enum Filter {
 
 type Ctx = ();
 
+#[derive(Copy, Clone, Default)]
+struct Offset {
+    inner: usize,
+    outer: usize,
+}
+
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
         let arg = |v| Box::new(Self::Arg(v));
@@ -277,23 +283,65 @@ impl Filter {
         Self::Update(path, Box::new(math))
     }
 
-    pub(crate) fn subst(self, args: &[Self]) -> Self {
-        let sub = |f: Box<Self>| Box::new(f.subst(args));
+    fn bindings(&self) -> usize {
         match self {
+            Self::Pipe(l, bind, r) => l.bindings() + usize::from(*bind) + r.bindings(),
+            _ => 0,
+        }
+    }
+
+    pub(crate) fn subst(self, args: &[Self]) -> Self {
+        self.subst2(
+            &mut Offset::default(),
+            &|v, off| v + off.inner,
+            &|a, off| args[a].clone().subst_arg(off.outer + off.inner),
+        )
+    }
+
+    fn subst_arg(self, off: usize) -> Self {
+        let bindings = self.bindings();
+        self.subst2(
+            &mut Offset::default(),
+            &|v, _| v + if v > bindings { off } else { 0 },
+            &|a, _| Self::Arg(a),
+        )
+    }
+
+    // TODO: take &self
+    fn subst2<V, A>(self, off: &mut Offset, fv: &V, fa: &A) -> Self
+    where
+        V: Fn(usize, Offset) -> usize,
+        A: Fn(usize, Offset) -> Self,
+    {
+        let subst = |f: Self| f.subst2(&mut off.clone(), fv, fa);
+        let sub = |f: Box<Self>| Box::new(subst(*f));
+
+        match self {
+            Self::Pipe(l, true, r) => {
+                let l = Box::new(l.subst2(off, fv, fa));
+                off.outer += 1;
+                let r = Box::new(r.subst2(off, fv, fa));
+                Self::Pipe(l, true, r)
+            }
+            Self::Var(v) => Self::Var(fv(v, *off)),
+            Self::Arg(a) => {
+                let a = fa(a, *off);
+                off.inner += a.bindings();
+                a
+            }
+
             Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
             Self::Array(f) => Self::Array(f.map(sub)),
-            Self::Object(kvs) => Self::Object(
-                kvs.into_iter()
-                    .map(|(k, v)| (k.subst(args), v.subst(args)))
-                    .collect(),
-            ),
+            Self::Object(kvs) => {
+                Self::Object(kvs.into_iter().map(|(k, v)| (subst(k), subst(v))).collect())
+            }
             Self::Neg(f) => Self::Neg(sub(f)),
-            Self::Pipe(l, bind, r) => Self::Pipe(sub(l), bind, sub(r)),
+            Self::Pipe(l, false, r) => Self::Pipe(sub(l), false, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::IfThenElse(if_, then, else_) => Self::IfThenElse(sub(if_), sub(then), sub(else_)),
-            Self::Path(path) => Self::Path(path.map(|f| f.subst(args))),
-            Self::Assign(path, f) => Self::Assign(path.map(|f| f.subst(args)), sub(f)),
-            Self::Update(path, f) => Self::Update(path.map(|f| f.subst(args)), sub(f)),
+            Self::Path(path) => Self::Path(path.map(subst)),
+            Self::Assign(path, f) => Self::Assign(path.map(subst), sub(f)),
+            Self::Update(path, f) => Self::Update(path.map(subst), sub(f)),
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
@@ -311,8 +359,6 @@ impl Filter {
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
             Self::Fold(xs, init, f) => Self::Fold(sub(xs), sub(init), sub(f)),
-            Self::Var(_) => self,
-            Self::Arg(v) => args[v].clone(),
         }
     }
 }
