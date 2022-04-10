@@ -52,7 +52,27 @@ pub enum Filter {
     Arg(usize),
 }
 
-type Ctx = ();
+#[derive(Clone, Debug)]
+pub enum Ctx {
+    Nil,
+    Cons(Val, Rc<Ctx>),
+}
+
+impl Default for Ctx {
+    fn default() -> Self {
+        Self::Nil
+    }
+}
+
+impl Ctx {
+    fn get(&self, n: usize) -> Option<&Val> {
+        match (self, n) {
+            (Self::Nil, _) => None,
+            (Self::Cons(x, _), 0) => Some(x),
+            (Self::Cons(_, xs), n) => xs.get(n - 1),
+        }
+    }
+}
 
 #[derive(Copy, Clone, Default)]
 struct Offset {
@@ -133,7 +153,12 @@ impl Filter {
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
-            Self::Pipe(_l, true, _r) => todo!(),
+            Self::Pipe(l, true, r) => {
+                Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
+                    Ok(y) => r.run((Ctx::Cons(y.clone(), Rc::new(cv.0.clone())), y)),
+                    Err(e) => Box::new(once(Err(e))),
+                }))
+            }
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
             Self::IfThenElse(if_, then, else_) => {
                 Box::new(if_.run(cv.clone()).flat_map(move |y| match y {
@@ -258,7 +283,7 @@ impl Filter {
                 }
             }
 
-            Self::Var(_) => todo!(),
+            Self::Var(v) => Box::new(once(Ok(cv.0.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
     }
