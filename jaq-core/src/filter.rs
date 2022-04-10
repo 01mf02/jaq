@@ -17,6 +17,7 @@ pub enum Filter {
     Neg(Box<Self>),
     Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
+    Alt(Box<Self>, Box<Self>),
     IfThenElse(Box<Self>, Box<Self>, Box<Self>),
 
     Path(Path<Self>),
@@ -160,6 +161,15 @@ impl Filter {
                 }))
             }
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
+            Self::Alt(l, r) => {
+                let mut l = l
+                    .run(cv.clone())
+                    .filter(|v| v.as_ref().map_or(true, |v| v.as_bool()));
+                match l.next() {
+                    Some(head) => Box::new(once(head).chain(l)),
+                    None => r.run(cv),
+                }
+            }
             Self::IfThenElse(if_, then, else_) => {
                 Box::new(if_.run(cv.clone()).flat_map(move |y| match y {
                     Ok(y) => (if y.as_bool() { then } else { else_ }).run(cv.clone()),
@@ -355,6 +365,7 @@ impl Filter {
             Self::Neg(f) => Self::Neg(sub(f)),
             Self::Pipe(l, false, r) => Self::Pipe(sub(l), false, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
+            Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
             Self::IfThenElse(if_, then, else_) => Self::IfThenElse(sub(if_), sub(then), sub(else_)),
             Self::Path(path) => Self::Path(path.map(subst)),
             Self::Assign(path, f) => Self::Assign(path.map(subst), sub(f)),
