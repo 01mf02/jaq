@@ -91,6 +91,15 @@ where
     args.foldl(|a, (op, b)| Filter::binary_with_span(a, op, b))
 }
 
+fn binr<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Filter>> + Clone,
+    O: Parser<Token, BinaryOp, Error = P::Error> + Clone,
+{
+    let args = prev.clone().then(op).repeated().then(prev);
+    args.foldr(|(a, op), b| Filter::binary_with_span(a, op, b))
+}
+
 pub(crate) fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
 where
     P: Parser<Token, T> + Clone,
@@ -233,14 +242,11 @@ where
     bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)))
 }
 
-fn assign<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
-where
-    P: Parser<Token, Spanned<Filter>> + Clone,
-{
+fn assign() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
-
     let update_with = |op: MathOp| assign(AssignOp::UpdateWith(op));
-    let assign = choice((
+
+    choice((
         assign(AssignOp::Assign),
         assign(AssignOp::Update),
         update_with(MathOp::Add),
@@ -248,10 +254,7 @@ where
         update_with(MathOp::Mul),
         update_with(MathOp::Div),
         update_with(MathOp::Rem),
-    ));
-
-    let args = prev.clone().then(assign).repeated().then(prev);
-    args.foldr(|(a, op), b| Filter::binary_with_span(a, op, b))
+    ))
 }
 
 pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
@@ -265,7 +268,7 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let ord = ord(math).boxed();
     let and = bin(ord, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));
-    let assign = assign(or).boxed();
+    let assign = binr(or, assign()).boxed();
 
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 
@@ -274,8 +277,8 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
         .then_ignore(just(Token::Op("|".to_string())))
         .map(BinaryOp::Pipe);
 
-    sans_comma.define(bin(assign.clone(), pipe.clone()));
-    with_comma.define(bin(bin(assign, comma), pipe));
+    sans_comma.define(binr(assign.clone(), pipe.clone()));
+    with_comma.define(binr(bin(assign, comma), pipe));
 
     with_comma
 }
