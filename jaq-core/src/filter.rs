@@ -283,35 +283,31 @@ impl Filter {
         Self::Update(path, Box::new(math))
     }
 
-    // TODO: remove this
-    fn bindings(&self) -> usize {
-        match self {
-            Self::Pipe(l, bind, r) => l.bindings() + usize::from(*bind) + r.bindings(),
-            _ => 0,
-        }
-    }
-
     pub(crate) fn subst(self, args: &[Self]) -> Self {
         self.subst2(
             &mut Offset::default(),
             &|v, off| v + off.inner,
-            &|a, off| args[a].clone().subst_arg(off.outer + off.inner),
+            &|a, off| args[a].clone().subst_arg(off),
         )
     }
 
-    fn subst_arg(self, off: usize) -> Self {
-        self.subst2(
-            &mut Offset::default(),
-            &|v, off2| v + if v < off2.outer { 0 } else { off },
+    fn subst_arg(self, off: &mut Offset) -> Self {
+        let sum = off.outer + off.inner;
+        let mut bindings = Offset::default();
+        let out = self.subst2(
+            &mut bindings,
+            &|v, off2| v + if v < off2.outer { 0 } else { sum },
             &|a, _| Self::Arg(a),
-        )
+        );
+        off.inner += bindings.outer;
+        out
     }
 
     // TODO: take &self
     fn subst2<V, A>(self, off: &mut Offset, fv: &V, fa: &A) -> Self
     where
         V: Fn(usize, Offset) -> usize,
-        A: Fn(usize, Offset) -> Self,
+        A: Fn(usize, &mut Offset) -> Self,
     {
         let subst = |f: Self| f.subst2(&mut off.clone(), fv, fa);
         let sub = |f: Box<Self>| Box::new(subst(*f));
@@ -324,11 +320,7 @@ impl Filter {
                 Self::Pipe(l, true, r)
             }
             Self::Var(v) => Self::Var(fv(v, *off)),
-            Self::Arg(a) => {
-                let a = fa(a, *off);
-                off.inner += a.bindings();
-                a
-            }
+            Self::Arg(a) => fa(a, off),
 
             Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
             Self::Array(f) => Self::Array(f.map(sub)),
