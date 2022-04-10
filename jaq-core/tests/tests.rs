@@ -40,6 +40,22 @@ fn logic() {
 
 #[test]
 fn precedence() {
+    // concatenation binds stronger than application
+    give(json!(null), "[0, 1 | . + 1]", json!([1, 2]));
+    give(json!(null), "[0, (1 | . + 1)]", json!([0, 2]));
+
+    // assignment binds stronger than concatenation
+    give(json!(1), "[. += 1, 2]", json!([2, 2]));
+    give(json!(1), "[. += (1, 2)]", json!([2, 3]));
+
+    // alternation binds stronger than assignment
+    give(json!(false), "[(., .) | . = . // 0]", json!([0, 0]));
+    give(json!(false), "((., .) | . = .) // 0", json!(0));
+
+    // disjunction binds stronger than alternation
+    give(json!(false), ". or . // 0", json!(0));
+    give(json!(false), ". or (. // 0)", json!(true));
+
     // conjunction binds stronger than disjunction
     give(json!(true), "(0 != 0) and . or .", json!(true));
     give(json!(true), "(0 != 0) and (. or .)", json!(false));

@@ -31,6 +31,7 @@ impl fmt::Display for AssignOp {
 pub enum BinaryOp {
     Pipe(Option<String>),
     Comma,
+    Alt,
     Or,
     And,
     Math(MathOp),
@@ -268,7 +269,8 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let ord = ord(math).boxed();
     let and = bin(ord, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));
-    let assign = binr(or, assign()).boxed();
+    let alt = bin(or, just(Token::Op("//".to_string())).to(BinaryOp::Alt));
+    let assign = binr(alt, assign()).boxed();
 
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 

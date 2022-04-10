@@ -61,7 +61,7 @@ fn str_() -> impl Parser<char, String, Error = Simple<char>> {
 
 pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
-    let op = one_of("|=!<>+-*/%").chain(just('=').or_not()).collect();
+    let op = one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect();
 
     let dot_id = text::ident().or(text::whitespace().ignore_then(str_()));
     let dot = just('.').ignore_then(dot_id.or_not());
