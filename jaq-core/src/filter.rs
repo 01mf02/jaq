@@ -283,6 +283,7 @@ impl Filter {
         Self::Update(path, Box::new(math))
     }
 
+    // TODO: remove this
     fn bindings(&self) -> usize {
         match self {
             Self::Pipe(l, bind, r) => l.bindings() + usize::from(*bind) + r.bindings(),
@@ -299,10 +300,9 @@ impl Filter {
     }
 
     fn subst_arg(self, off: usize) -> Self {
-        let bindings = self.bindings();
         self.subst2(
             &mut Offset::default(),
-            &|v, _| v + if v > bindings { off } else { 0 },
+            &|v, off2| v + if v < off2.outer { 0 } else { off },
             &|a, _| Self::Arg(a),
         )
     }
