@@ -5,6 +5,7 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Assignment operators, such as `=`, `|=` (update), and `+=`, `-=`, ...
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum AssignOp {
@@ -26,6 +27,7 @@ impl fmt::Display for AssignOp {
     }
 }
 
+/// Binary operators, such as `|`, `,`, `//`, ...
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum BinaryOp {
@@ -46,7 +48,10 @@ pub enum BinaryOp {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum KeyVal {
+    /// Both key and value are proper filters, e.g. `{(.+1): .+2}`
     Filter(Spanned<Filter>, Spanned<Filter>),
+    /// Key is a string, and value is an optional filter, e.g. `{a: 1, b}`
+    /// (this is equivalent to `{("a"): 1, ("b"): .b}`)
     Str(String, Option<Spanned<Filter>>),
 }
 

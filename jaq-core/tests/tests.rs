@@ -44,6 +44,7 @@ fn alt() {
     give(json!([null, false]), ".[] // 0", json!(0));
     give(json!([null, 1, false, 2]), "[.[] // 0]", json!([1, 2]));
     give(json!([1, 2]), "[.[] // 0]", json!([1, 2]));
+    give(json!([1, 2]), "[.[] // error]", json!([1, 2]));
 }
 
 #[test]
