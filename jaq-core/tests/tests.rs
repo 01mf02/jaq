@@ -39,6 +39,14 @@ fn logic() {
 }
 
 #[test]
+fn alt() {
+    give(json!([]), ".[] // 0", json!(0));
+    give(json!([null, false]), ".[] // 0", json!(0));
+    give(json!([null, 1, false, 2]), "[.[] // 0]", json!([1, 2]));
+    give(json!([1, 2]), "[.[] // 0]", json!([1, 2]));
+}
+
+#[test]
 fn precedence() {
     // concatenation binds stronger than application
     give(json!(null), "[0, 1 | . + 1]", json!([1, 2]));
