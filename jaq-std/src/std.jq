@@ -68,3 +68,5 @@ def all(cond): all(.[]; cond);
 def any(cond): any(.[]; cond);
 def all: all(.[]; .);
 def any: any(.[]; .);
+def in(xs)    : . as $x | xs | has     ($x);
+def inside(xs): . as $x | xs | contains($x);

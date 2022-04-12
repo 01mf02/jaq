@@ -41,6 +41,22 @@ fn entries() {
 }
 
 #[test]
+fn inside() {
+    give(json!(["foo", "bar"]), r#"map(in({"foo": 42}))"#, json!([true, false]));
+    give(json!([2, 0]), r#"map(in([0,1]))"#, json!([false, true]));
+
+    give(json!("bar"), r#"inside("foobar")"#, json!(true));
+
+    let f = r#"inside(["foobar", "foobaz", "blarp"])"#;
+    give(json!(["baz", "bar"]), f, json!(true));
+    give(json!(["bazzzz", "bar"]), f, json!(false));
+
+    let f = r#"inside({"foo": 12, "bar":[1,2,{"barp":12, "blip":13}]})"#;
+    give(json!({"foo": 12, "bar": [{"barp": 12}]}), f, json!(true));
+    give(json!({"foo": 12, "bar": [{"barp": 15}]}), f, json!(false));
+}
+
+#[test]
 fn map() {
     give(json!([1, 2]), "map(.+1)", json!([2, 3]));
 }
