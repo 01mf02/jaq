@@ -1,8 +1,8 @@
 //! JSON values with reference-counted sharing.
 
 use crate::Error;
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use alloc::string::{String, ToString};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
 use fxhash::FxBuildHasher;
