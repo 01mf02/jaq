@@ -1,9 +1,9 @@
 //! JSON values with reference-counted sharing.
 
 use crate::Error;
-use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::string::{String, ToString};
 use core::cmp::Ordering;
-use core::convert::{TryFrom, TryInto};
 use core::fmt;
 use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
@@ -31,6 +31,8 @@ pub enum Val {
     Neg(usize),
     /// Floating-point number
     Float(f64),
+    /// Floating-point number or integer not fitting neither into `Pos` nor `Neg`
+    Num(Rc<serde_json::Number>),
     /// String
     Str(Rc<String>),
     /// Array
@@ -89,6 +91,7 @@ impl Val {
             Self::Null => Ok(Self::Pos(0)),
             Self::Bool(_) => Err(Error::Length(self.clone())),
             Self::Pos(l) | Self::Neg(l) => Ok(Self::Pos(*l)),
+            Self::Num(n) => Self::from(&**n).len(),
             Self::Float(f) => Ok(Self::Float(f.abs())),
             Self::Str(s) => Ok(Self::Pos(s.chars().count())),
             Self::Arr(a) => Ok(Self::Pos(a.len())),
@@ -101,7 +104,7 @@ impl Val {
         match self {
             Self::Null => "null",
             Self::Bool(_) => "boolean",
-            Self::Pos(_) | Self::Neg(_) | Self::Float(_) => "number",
+            Self::Pos(_) | Self::Neg(_) | Self::Float(_) | Self::Num(_) => "number",
             Self::Str(_) => "string",
             Self::Arr(_) => "array",
             Self::Obj(_) => "object",
@@ -122,6 +125,7 @@ impl Val {
                     Ok(Self::Pos(rounded as usize))
                 }
             }
+            Self::Num(n) => Self::from(&**n).round(f),
             _ => Err(Error::Round(self.clone())),
         }
     }
@@ -199,16 +203,15 @@ impl From<serde_json::Value> for Val {
         match v {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
-            Number(n) => match n.as_u64() {
-                Some(p) => p.try_into().map_or(Self::Null, Self::Pos),
-                None => match n.as_i64() {
-                    Some(n) => (-n).try_into().map_or(Self::Null, Self::Neg),
-                    None => match n.as_f64() {
-                        Some(f) => Self::Float(f),
-                        None => Self::Null,
-                    },
-                },
-            },
+            Number(n) => {
+                // try to map numbers into positive/negative integers
+                let s = n.to_string();
+                let n = || Self::Num(Rc::new(n));
+                match s.strip_prefix('-') {
+                    Some(neg) => neg.parse().map_or_else(|_| n(), Self::Neg),
+                    None => s.parse().map_or_else(|_| n(), Self::Pos),
+                }
+            }
             String(s) => Self::Str(Rc::new(s)),
             Array(a) => Self::Arr(Rc::new(a.into_iter().map(|x| x.into()).collect())),
             Object(o) => Self::Obj(Rc::new(
@@ -227,6 +230,7 @@ impl From<Val> for serde_json::Value {
             Val::Pos(p) => Number(p.into()),
             Val::Neg(n) => isize::try_from(n).map_or(Null, |n| Number((-n).into())),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
+            Val::Num(n) => Number((*n).clone()),
             Val::Str(s) => String((*s).clone()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             Val::Obj(o) => Object(
@@ -235,6 +239,12 @@ impl From<Val> for serde_json::Value {
                     .collect(),
             ),
         }
+    }
+}
+
+impl From<&serde_json::Number> for Val {
+    fn from(n: &serde_json::Number) -> Self {
+        n.to_string().parse().map_or(Self::Null, Self::Float)
     }
 }
 
@@ -252,6 +262,8 @@ impl core::ops::Add for Val {
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f + p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(f - n as f64)),
             (Float(x), Float(y)) => Ok(Float(x + y)),
+            (Num(n), r) => Self::from(&*n) + r,
+            (l, Num(n)) => l + Self::from(&*n),
             (Str(mut l), Str(r)) => {
                 Rc::make_mut(&mut l).push_str(&r);
                 Ok(Str(l))
@@ -283,6 +295,8 @@ impl core::ops::Sub for Val {
             (Float(f), Pos(p)) => Ok(Float(f - p as f64)),
             (Float(f), Neg(n)) => Ok(Float(f + n as f64)),
             (Float(x), Float(y)) => Ok(Float(x - y)),
+            (Num(n), r) => Self::from(&*n) - r,
+            (l, Num(n)) => l - Self::from(&*n),
             (l, r) => Err(Error::MathOp("subtract", l, r)),
         }
     }
@@ -298,6 +312,8 @@ impl core::ops::Mul for Val {
             (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f * p as f64)),
             (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(-f * n as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
+            (Num(n), r) => Self::from(&*n) * r,
+            (l, Num(n)) => l * Self::from(&*n),
             (l, r) => Err(Error::MathOp("multiply", l, r)),
         }
     }
@@ -317,6 +333,8 @@ impl core::ops::Div for Val {
             (Float(f), Pos(p)) => Ok(Float(f / p as f64)),
             (Float(f), Neg(n)) => Ok(Float(-f / n as f64)),
             (Float(x), Float(y)) => Ok(Float(x / y)),
+            (Num(n), r) => Self::from(&*n) / r,
+            (l, Num(n)) => l / Self::from(&*n),
             (l, r) => Err(Error::MathOp("divide", l, r)),
         }
     }
@@ -342,6 +360,7 @@ impl core::ops::Neg for Val {
             Pos(x) => Ok(Neg(x)),
             Neg(x) => Ok(Pos(x)),
             Float(x) => Ok(Float(-x)),
+            Num(n) => -Self::from(&*n),
             x => Err(Error::Neg(x)),
         }
     }
@@ -361,6 +380,9 @@ impl PartialEq for Val {
                 float_eq(&-(*n as f64), f)
             }
             (Self::Float(x), Self::Float(y)) => float_eq(x, y),
+            (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
+            (Self::Num(n), y) => &Self::from(&**n) == y,
+            (x, Self::Num(n)) => x == &Self::from(&**n),
             (Self::Str(x), Self::Str(y)) => x == y,
             (Self::Arr(x), Self::Arr(y)) => x == y,
             (Self::Obj(x), Self::Obj(y)) => x == y,
@@ -393,6 +415,9 @@ impl Ord for Val {
             (Self::Float(f), Self::Pos(p)) => float_cmp(f, &(*p as f64)),
             (Self::Float(f), Self::Neg(n)) => float_cmp(f, &-(*n as f64)),
             (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
+            (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
+            (Self::Num(n), y) => Self::from(&**n).cmp(y),
+            (x, Self::Num(n)) => x.cmp(&Self::from(&**n)),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => {
@@ -449,10 +474,11 @@ impl fmt::Display for Val {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             Self::Null => write!(f, "null"),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Pos(p) => write!(f, "{}", p),
+            Self::Bool(b) => b.fmt(f),
+            Self::Pos(p) => p.fmt(f),
             Self::Neg(n) => write!(f, "-{}", n),
-            Self::Float(x) => write!(f, "{}", x),
+            Self::Float(x) => x.fmt(f),
+            Self::Num(n) => n.fmt(f),
             Self::Str(s) => write!(f, "\"{}\"", s),
             Self::Arr(a) => {
                 write!(f, "[")?;
