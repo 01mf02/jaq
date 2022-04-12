@@ -4,8 +4,10 @@ use chumsky::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// A path such as `.[].a?[1:]`.
 pub type Path<T> = Vec<(Part<Spanned<T>>, Opt)>;
 
+/// A part of a path, such as `[]`, `a`, and `[1:]` in `.[].a?[1:]`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum Part<I> {
@@ -14,10 +16,17 @@ pub enum Part<I> {
     Range(Option<I>, Option<I>),
 }
 
+/// Optionality of a path part.
+///
+/// For example, `[] | .a` fails with an error, while `[] | .a?` returns nothing.
+/// By default, path parts are *essential*, meaning that they fail.
+/// Annotating them with `?` makes them *optional*.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
 pub enum Opt {
+    /// Return nothing if the input cannot be accessed with the path
     Optional,
+    /// Fail if the input cannot be accessed with the path
     Essential,
 }
 

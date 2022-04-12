@@ -68,10 +68,15 @@ pub enum Filter {
     /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
     Object(Vec<KeyVal>),
+    /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Path<Self>),
+    /// If-then-else
     If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
+    /// Negation
     Neg(Box<Spanned<Self>>),
+    /// Binary operation, such as `0, 1`, `[] | .[]`, `.[] += 1`, `0 == 0`, ...
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }
 
