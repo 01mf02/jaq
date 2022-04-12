@@ -48,7 +48,7 @@ def max: fold(.[0]; .[]; if .[1] > .[0] then .[1] else .[0] end);
 
 # Arrays
 def reverse: [.[length - 1 - range(length)]];
-def transpose: [{ i: range([.[] | length] | max), a: . } | [.a[][.i]]];
+def transpose: [range([.[] | length] | max) as $i | [.[][$i]]];
 def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
@@ -56,7 +56,7 @@ def nth(n): .[ n];
 def nth(n; g): last(limit(n + 1; g));
 
 # Objects <-> Arrays
-def   to_entries: [{ key: keys, v: . } | { key, value: .v[.key] }];
+def   to_entries: [keys as $k | { key: $k, value: .[$k] }];
 def from_entries: map({ (.key): .value }) | add;
 def with_entries(f): to_entries | map(f) | from_entries;
 
