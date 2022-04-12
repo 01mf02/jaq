@@ -1,3 +1,4 @@
+//! Value access and iteration.
 use crate::{Spanned, Token};
 use alloc::{string::String, vec::Vec};
 use chumsky::prelude::*;
@@ -11,8 +12,9 @@ pub type Path<T> = Vec<(Part<Spanned<T>>, Opt)>;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum Part<I> {
+    /// Access arrays with integer and objects with string indices
     Index(I),
-    /// if both are `None`, return iterator over whole array/object
+    /// Iterate over arrays with optional range bounds and over objects without bounds
     Range(Option<I>, Option<I>),
 }
 

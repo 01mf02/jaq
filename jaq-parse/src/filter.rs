@@ -1,3 +1,4 @@
+//! Functions from values to streams of values.
 use crate::{MathOp, OrdOp, Path, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
