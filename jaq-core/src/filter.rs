@@ -154,12 +154,10 @@ impl Filter {
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
-            Self::Pipe(l, true, r) => {
-                Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
-                    Ok(y) => r.run((Ctx::Cons(y.clone(), Rc::new(cv.0.clone())), y)),
-                    Err(e) => Box::new(once(Err(e))),
-                }))
-            }
+            Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| match y {
+                Ok(y) => r.run((Ctx::Cons(y.clone(), Rc::new(cv.0.clone())), cv.1.clone())),
+                Err(e) => Box::new(once(Err(e))),
+            })),
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
             Self::Alt(l, r) => {
                 let mut l = l
