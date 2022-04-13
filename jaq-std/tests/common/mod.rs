@@ -20,7 +20,9 @@ pub fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
 pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
     let mut defs = Definitions::core();
     let mut errs = Vec::new();
-    defs.add(jaq_std::std(), &mut errs);
+    jaq_std::std()
+        .into_iter()
+        .for_each(|def| defs.add(def, &mut errs));
     let f = parse::parse(&f, parse::main()).0.unwrap();
     let f = defs.finish(f, &mut errs);
     assert_eq!(errs, Vec::new());

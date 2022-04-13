@@ -38,7 +38,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut errs = Vec::new();
     let mut defs = Definitions::core();
-    defs.add(jaq_std::std(), &mut errs);
+    jaq_std::std()
+        .into_iter()
+        .for_each(|def| defs.insert(def, &mut errs));
     assert!(errs.is_empty());
 
     let (main, mut errs) = jaq_core::parse::parse(&cli.filter, jaq_core::parse::main());
@@ -84,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(4);
         });
         //println!("Got {:?}", input);
-        for output in filter.run((Default::default(), input)) {
+        for output in filter.run(input) {
             let output = output.unwrap_or_else(|e| {
                 eprintln!("Error: {}", e);
                 std::process::exit(5);

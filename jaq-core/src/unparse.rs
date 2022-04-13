@@ -1,5 +1,5 @@
+use crate::filter::Filter;
 use crate::path::{self, Path};
-use crate::Filter;
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, KeyVal};
 use jaq_parse::{Error, Spanned};

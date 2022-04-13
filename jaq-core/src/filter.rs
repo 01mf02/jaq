@@ -54,7 +54,7 @@ pub enum Filter {
 }
 
 #[derive(Clone, Debug)]
-pub enum Ctx {
+enum Ctx {
     Nil,
     Cons(Val, Rc<Ctx>),
 }
@@ -122,7 +122,11 @@ impl Filter {
         ])
     }
 
-    pub fn run(&self, cv: (Ctx, Val)) -> ValRs {
+    pub fn run_with_empty_ctx(&self, val: Val) -> ValRs {
+        self.run((Ctx::Nil, val))
+    }
+
+    fn run(&self, cv: (Ctx, Val)) -> ValRs {
         use core::iter::once;
         use itertools::Itertools;
         match self {
@@ -389,7 +393,7 @@ impl Filter {
 type PathOptR = Result<(path::Part<Vec<Val>>, path::Opt), Error>;
 
 impl Path<Filter> {
-    pub fn run<'f, F>(&self, cv: (Ctx, Val), f: F) -> ValRs<'f>
+    fn run<'f, F>(&self, cv: (Ctx, Val), f: F) -> ValRs<'f>
     where
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
@@ -399,7 +403,7 @@ impl Path<Filter> {
         }
     }
 
-    pub fn collect(&self, cv: (Ctx, Val)) -> Result<Vec<Val>, Error> {
+    fn collect(&self, cv: (Ctx, Val)) -> Result<Vec<Val>, Error> {
         let init = Vec::from([cv.1.clone()]);
         self.run_indices(&cv).try_fold(init, |acc, p_opt| {
             let (p, opt) = p_opt?;
@@ -414,7 +418,7 @@ impl Path<Filter> {
 }
 
 impl path::Part<Filter> {
-    pub fn run_indices(&self, cv: (Ctx, Val)) -> Result<path::Part<Vec<Val>>, Error> {
+    fn run_indices(&self, cv: (Ctx, Val)) -> Result<path::Part<Vec<Val>>, Error> {
         use path::Part::*;
         match self {
             Index(i) => Ok(Index(i.run(cv).collect::<Result<_, _>>()?)),
@@ -435,7 +439,7 @@ pub struct Recurse<F> {
 }
 
 impl<F> Recurse<F> {
-    pub fn new(filter: F, (ctx, val): (Ctx, Val)) -> Self {
+    fn new(filter: F, (ctx, val): (Ctx, Val)) -> Self {
         Self {
             filter,
             ctx,
