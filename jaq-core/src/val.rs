@@ -1,11 +1,11 @@
 //! JSON values with reference-counted sharing.
 
 use crate::Error;
+use ahash::RandomState;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
-use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
 use jaq_parse::MathOp;
 
@@ -39,7 +39,7 @@ pub enum Val {
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Order-preserving map
-    Obj(Rc<IndexMap<Rc<String>, Val, FxBuildHasher>>),
+    Obj(Rc<IndexMap<Rc<String>, Val, RandomState>>),
 }
 
 /// A value result.
