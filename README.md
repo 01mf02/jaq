@@ -24,7 +24,7 @@ This should allow users proficient in jq to easily use jaq.
 To use jaq, you need a Rust toolchain.
 See <https://rustup.rs/> for instructions.
 (Note that Rust compilers shipped with Linux distributions
-may be too outdated to compile jaq. I use Rust 1.51.)
+may be too outdated to compile jaq. I use Rust 1.59.)
 
 The following command installs the latest stable jaq:
 
@@ -92,6 +92,8 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Equality and comparison operators (`.a == .b`, `.a < .b`)
 - [x] Arithmetic operations on numbers (`+`, `-`, `*`, `/`, `%`)
 - [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
+- [x] Variables (`. as $x | $x`)
+- [ ] Error handling (`try ... catch`)
 
 ## Paths
 
@@ -148,13 +150,11 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 
 jaq currently does *not* aim to support the advanced features of jq, such as:
 
-- Variables
 - Modules
 - I/O
 - Dates
 - Regular expressions
 - String interpolation
-- try-catch
 - SQL-style operators
 - Streaming
 
