@@ -10,7 +10,7 @@ use jaq_parse::{MathOp, OrdOp};
 pub enum Filter {
     Pos(usize),
     Float(f64),
-    Str(String),
+    Str(Rc<String>),
     Array(Option<Box<Self>>),
     Object(Vec<(Self, Self)>),
 
@@ -128,7 +128,7 @@ impl Filter {
         match self {
             Self::Pos(n) => Box::new(once(Ok(Val::Pos(*n)))),
             Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
-            Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::new(s.clone()))))),
+            Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::clone(s))))),
             Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
             Self::Array(Some(f)) => Box::new(once(
                 f.run(cv)
