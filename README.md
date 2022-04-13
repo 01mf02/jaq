@@ -93,6 +93,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Arithmetic operations on numbers (`+`, `-`, `*`, `/`, `%`)
 - [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
 - [x] Variables (`. as $x | $x`)
+- [ ] Reduction (`reduce .[] as $x (0, . + $x)`)
 - [ ] Error handling (`try ... catch`)
 
 ## Paths
