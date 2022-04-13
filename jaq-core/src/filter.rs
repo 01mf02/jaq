@@ -159,7 +159,7 @@ impl Filter {
                 }))
             }
             Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| match y {
-                Ok(y) => r.run((Ctx::Cons(y.clone(), Rc::new(cv.0.clone())), cv.1.clone())),
+                Ok(y) => r.run((Ctx::Cons(y, Rc::new(cv.0.clone())), cv.1.clone())),
                 Err(e) => Box::new(once(Err(e))),
             })),
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
@@ -275,7 +275,7 @@ impl Filter {
             Some((if_, then)) => Box::new(if_.run(cv.clone()).flat_map(move |v| match v {
                 Ok(v) if v.as_bool() => then.run(cv.clone()),
                 Ok(_) => Self::if_then_else(if_thens.clone(), else_, cv.clone()),
-                Err(_) => Box::new(core::iter::once(v)),
+                Err(e) => Box::new(core::iter::once(Err(e))),
             })),
         }
     }
