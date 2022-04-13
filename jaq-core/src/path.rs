@@ -25,7 +25,7 @@ impl Part<Vec<Val>> {
         match self {
             Self::Index(indices) => match current {
                 Val::Arr(a) => Box::new(indices.iter().map(move |i| {
-                    Ok(abs_index(i.as_posneg()?, a.len())
+                    Ok(abs_index(i.as_int()?, a.len())
                         .map(|i| a[i].clone())
                         .unwrap_or(Val::Null))
                 })),
@@ -116,7 +116,7 @@ impl Part<Vec<Val>> {
                     let a = Rc::make_mut(a);
                     for i in indices.iter() {
                         let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
-                        let i = match (i.as_posneg().and_then(abs_or), opt) {
+                        let i = match (i.as_int().and_then(abs_or), opt) {
                             (Ok(i), _) => i,
                             (Err(e), Essential) => return Err(e),
                             (Err(_), Optional) => continue,
@@ -204,7 +204,7 @@ impl<F> From<Part<F>> for Path<F> {
 type RelBounds<'a> = Box<dyn Iterator<Item = Result<Option<(usize, bool)>, Error>> + 'a>;
 fn rel_bounds(f: &Option<Vec<Val>>) -> RelBounds<'_> {
     match f {
-        Some(f) => Box::new(f.iter().map(move |i| Ok(Some(i.as_posneg()?)))),
+        Some(f) => Box::new(f.iter().map(move |i| Ok(Some(i.as_int()?)))),
         None => Box::new(core::iter::once(Ok(None))),
     }
 }

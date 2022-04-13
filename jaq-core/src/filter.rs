@@ -191,10 +191,7 @@ impl Filter {
             Self::Ord(l, op, r) => {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
-            Self::Error => Box::new(once(Err(Error::Custom(match cv.1 {
-                Val::Str(s) => (*s).clone(),
-                v => v.to_string(),
-            })))),
+            Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
             Self::Length => Box::new(once(cv.1.len())),
             Self::Type => Box::new(once(Ok(Val::Str(Rc::new(cv.1.typ().to_string()))))),
             Self::Keys => match cv.1.keys() {
@@ -263,7 +260,7 @@ impl Filter {
             Self::Limit(n, f) => {
                 let n = n.run(cv.clone()).map(|n| n?.as_usize());
                 Box::new(n.flat_map(move |n| match n {
-                    Ok(n) => Box::new(f.run(cv.clone()).take(n as usize)),
+                    Ok(n) => Box::new(f.run(cv.clone()).take(n)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }

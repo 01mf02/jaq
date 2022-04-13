@@ -7,6 +7,7 @@ use core::cmp::Ordering;
 use core::fmt;
 use fxhash::FxBuildHasher;
 use indexmap::IndexMap;
+use jaq_parse::MathOp;
 
 /// JSON value with sharing.
 ///
@@ -61,16 +62,16 @@ impl Val {
         match self {
             Self::Pos(p) => Ok(*p),
             Self::Neg(0) => Ok(0),
-            _ => Err(Error::Usize(self.clone())),
+            _ => Err(Error::Nat(self.clone())),
         }
     }
 
     /// If the value is integer, return its absolute value and whether its positive, else fail.
-    pub fn as_posneg(&self) -> Result<(usize, bool), Error> {
+    pub fn as_int(&self) -> Result<(usize, bool), Error> {
         match self {
             Self::Pos(p) => Ok((*p, true)),
             Self::Neg(n) => Ok((*n, false)),
-            _ => Err(Error::Isize(self.clone())),
+            _ => Err(Error::Int(self.clone())),
         }
     }
 
@@ -276,7 +277,7 @@ impl core::ops::Add for Val {
                 Rc::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
                 Ok(Obj(l))
             }
-            (l, r) => Err(Error::MathOp("add", l, r)),
+            (l, r) => Err(Error::MathOp(l, MathOp::Add, r)),
         }
     }
 }
@@ -297,7 +298,7 @@ impl core::ops::Sub for Val {
             (Float(x), Float(y)) => Ok(Float(x - y)),
             (Num(n), r) => Self::from(&*n) - r,
             (l, Num(n)) => l - Self::from(&*n),
-            (l, r) => Err(Error::MathOp("subtract", l, r)),
+            (l, r) => Err(Error::MathOp(l, MathOp::Sub, r)),
         }
     }
 }
@@ -314,7 +315,7 @@ impl core::ops::Mul for Val {
             (Float(x), Float(y)) => Ok(Float(x * y)),
             (Num(n), r) => Self::from(&*n) * r,
             (l, Num(n)) => l * Self::from(&*n),
-            (l, r) => Err(Error::MathOp("multiply", l, r)),
+            (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
         }
     }
 }
@@ -335,7 +336,7 @@ impl core::ops::Div for Val {
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from(&*n) / r,
             (l, Num(n)) => l / Self::from(&*n),
-            (l, r) => Err(Error::MathOp("divide", l, r)),
+            (l, r) => Err(Error::MathOp(l, MathOp::Div, r)),
         }
     }
 }
@@ -347,7 +348,7 @@ impl core::ops::Rem for Val {
         match (self, rhs) {
             (Pos(x), Pos(y) | Neg(y)) => Ok(Pos(x % y)),
             (Neg(x), Pos(y) | Neg(y)) => Ok(Neg(x % y)),
-            (l, r) => Err(Error::MathOp("build remainder of", l, r)),
+            (l, r) => Err(Error::MathOp(l, MathOp::Rem, r)),
         }
     }
 }
