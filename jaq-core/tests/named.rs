@@ -15,14 +15,6 @@ fn first_last() {
 }
 
 #[test]
-fn fold() {
-    // the corresponding jq command is:
-    //     reduce recurse(if . == 1000 then [] | .[] else .+1 end) as $x (0; . + $x)
-    let f = "fold(0; recurse(if . == 1000 then [] | .[] else .+1 end); .[0] + .[1])";
-    give(json!(0), f, json!(500500));
-}
-
-#[test]
 fn keys() {
     give(json!([0, null, "a"]), "[keys]", json!([0, 1, 2]));
     give(json!({"a": 1, "b": 2}), "[keys]", json!(["a", "b"]));
