@@ -59,12 +59,6 @@ enum Ctx {
     Cons(Val, Rc<Ctx>),
 }
 
-impl Default for Ctx {
-    fn default() -> Self {
-        Self::Nil
-    }
-}
-
 impl Ctx {
     fn get(&self, n: usize) -> Option<&Val> {
         match (self, n) {
