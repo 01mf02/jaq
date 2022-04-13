@@ -101,9 +101,13 @@ where
                 AssignOp::UpdateWith(op) => Filter::update_math(l, op, *r),
             }
         }
-        Expr::If(if_, then, else_) => {
-            Filter::IfThenElse(get(*if_, errs), get(*then, errs), get(*else_, errs))
-        }
+        Expr::If(if_thens, else_) => Filter::IfThenElse(
+            if_thens
+                .into_iter()
+                .map(|(if_, then)| (*get(if_, errs), *get(then, errs)))
+                .collect(),
+            get(*else_, errs),
+        ),
         Expr::Path(path) => {
             use jaq_parse::path::Part;
             let path = path.into_iter().map(|(p, opt)| match p {

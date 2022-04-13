@@ -72,7 +72,7 @@ pub enum Filter {
     /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Path<Self>),
     /// If-then-else
-    If(Box<Spanned<Self>>, Box<Spanned<Self>>, Box<Spanned<Self>>),
+    If(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
     /// Negation
@@ -186,11 +186,16 @@ where
     let path = crate::path::path(filter.clone());
     let path = path.map_with_span(|path, span| (Filter::Path(path), span));
 
-    let if_ = just(Token::If).ignore_then(filter.clone().map(Box::new));
-    let then = just(Token::Then).ignore_then(filter.clone().map(Box::new));
+    let if_ = just(Token::If).ignore_then(filter.clone());
+    let then = just(Token::Then).ignore_then(filter.clone());
+    let elif = just(Token::Elif).ignore_then(filter.clone());
     let else_ = just(Token::Else).ignore_then(filter.clone().map(Box::new));
-    let ite = if_.then(then).then(else_).then_ignore(just(Token::End));
-    let ite = ite.map_with_span(|((if_, then), else_), span| (Filter::If(if_, then, else_), span));
+    let ite = if_
+        .then(then.clone())
+        .chain::<(Spanned<Filter>, Spanned<Filter>), _, _>(elif.then(then).repeated())
+        .then(else_)
+        .then_ignore(just(Token::End));
+    let ite = ite.map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span));
 
     let call = ident.then(args(filter));
     let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));

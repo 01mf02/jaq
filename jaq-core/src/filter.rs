@@ -18,7 +18,7 @@ pub enum Filter {
     Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
-    IfThenElse(Box<Self>, Box<Self>, Box<Self>),
+    IfThenElse(Vec<(Self, Self)>, Box<Self>),
 
     Path(Path<Self>),
     Assign(Path<Self>, Box<Self>),
@@ -172,12 +172,14 @@ impl Filter {
                     None => r.run(cv),
                 }
             }
-            Self::IfThenElse(if_, then, else_) => {
+            Self::IfThenElse(if_thens, else_) => todo!(),
+            /*
                 Box::new(if_.run(cv.clone()).flat_map(move |y| match y {
                     Ok(y) => (if y.as_bool() { then } else { else_ }).run(cv.clone()),
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
+            */
             Self::Path(path) => match path.collect(cv) {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
@@ -332,7 +334,13 @@ impl Filter {
             Self::Pipe(l, false, r) => Self::Pipe(sub(l), false, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
-            Self::IfThenElse(if_, then, else_) => Self::IfThenElse(sub(if_), sub(then), sub(else_)),
+            Self::IfThenElse(if_thens, else_) => Self::IfThenElse(
+                if_thens
+                    .into_iter()
+                    .map(|(if_, then)| (subst(if_), subst(then)))
+                    .collect(),
+                sub(else_),
+            ),
             Self::Path(path) => Self::Path(path.map(subst)),
             Self::Assign(path, f) => Self::Assign(path.map(subst), sub(f)),
             Self::Update(path, f) => Self::Update(path.map(subst), sub(f)),
