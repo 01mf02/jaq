@@ -64,7 +64,6 @@ where
             });
             Filter::Object(kvs.collect())
         }
-
         Expr::Call(name, call_args) => match args.iter().position(|v| *v == name) {
             Some(pos) if call_args.is_empty() => Filter::Arg(pos),
             _ => call(name, call_args),
@@ -78,6 +77,13 @@ where
             vars.push(v);
             let r = Box::new(unparse(fns, args, vars, *r, errs));
             Filter::Pipe(l, true, r)
+        }
+        Expr::Reduce(xs, v, init, f) => {
+            let xs = get(*xs, errs);
+            let init = get(*init, errs);
+            vars.push(v);
+            let f = Box::new(unparse(fns, args, vars, *f, errs));
+            Filter::Reduce(xs, init, f)
         }
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Alt, r) => Filter::Alt(get(*l, errs), get(*r, errs)),

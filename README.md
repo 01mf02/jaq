@@ -93,7 +93,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Arithmetic operations on numbers (`+`, `-`, `*`, `/`, `%`)
 - [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
 - [x] Variables (`. as $x | $x`)
-- [ ] Reduction (`reduce .[] as $x (0, . + $x)`)
+- [x] Reduction (`reduce .[] as $x (0, . + $x)`)
 - [ ] Error handling (`try ... catch`)
 
 ## Paths
@@ -198,26 +198,6 @@ Examples:
     $ jaq -n '1.0 + 2'
     3.0
 
-## Reduce
-
-jq has special syntax to fold over a sequence.
-For example, to add a sequence of numbers, you may use:
-
-    reduce .[] as $item (0; . + $item)
-
-jaq does not have the `reduce ... as` syntax.
-As substitute, it provides a `fold` filter, in which the above can be written as:
-
-    fold(0; .[]; .[0] + .[1])
-
-Here,
-   `0` is the initial value,
- `.[]` is the list of values to fold over,
-`.[0]` is the accumulator (which is initially the initial value), and
-`.[1]` is the current value.
-
-Note that `fold` is likely less efficient than `reduce ... as`,
-because it constructs a new array `[acc, x]` at every step.
 
 ## Assignments
 

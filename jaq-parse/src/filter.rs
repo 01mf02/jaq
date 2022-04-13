@@ -73,6 +73,13 @@ pub enum Filter {
     Path(Path<Self>),
     /// If-then-else
     If(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
+    /// Reduction, e.g. `reduce .[] as $x (0; .+$x)`
+    Reduce(
+        Box<Spanned<Self>>,
+        String,
+        Box<Spanned<Self>>,
+        Box<Spanned<Self>>,
+    ),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
     /// Negation
@@ -122,7 +129,7 @@ where
         .map(Option::unwrap_or_default)
 }
 
-fn var() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
+fn variable() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     filter_map(|span, tok| match tok {
         Token::Var(v) => Ok(v),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -159,7 +166,7 @@ where
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
-    let var = var().map_with_span(|v, span| (Filter::Var(v), span));
+    let var = variable().map_with_span(|v, span| (Filter::Var(v), span));
 
     let array = filter
         .clone()
@@ -167,7 +174,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
         .map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span));
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
+    let is_val = just(Token::Ctrl(':')).ignore_then(no_comma.clone());
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
@@ -197,6 +204,19 @@ where
         .then_ignore(just(Token::End));
     let ite = ite.map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span));
 
+    let args2 = filter
+        .clone()
+        .map(Box::new)
+        .then_ignore(just(Token::Ctrl(';')))
+        .then(filter.clone().map(Box::new))
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
+    let reduce = just(Token::Reduce)
+        .ignore_then(filter.clone().map(Box::new))
+        .then_ignore(just(Token::As))
+        .then(variable())
+        .then(args2)
+        .map_with_span(|((xs, v), (init, f)), span| (Filter::Reduce(xs, v, init, f), span));
+
     let call = ident.then(args(filter));
     let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));
 
@@ -214,6 +234,7 @@ where
         .or(path)
         .or(ite)
         .or(call)
+        .or(reduce)
         .or(var)
         .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
         .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
@@ -290,7 +311,7 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
 
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 
-    let as_var = just(Token::As).ignore_then(var()).or_not();
+    let as_var = just(Token::As).ignore_then(variable()).or_not();
     let pipe = as_var
         .then_ignore(just(Token::Op("|".to_string())))
         .map(BinaryOp::Pipe);

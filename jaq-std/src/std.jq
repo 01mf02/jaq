@@ -41,10 +41,10 @@ def recurse(f; cond): recurse(f | select(cond));
 # Iterators
 def map(f): [.[] | f];
 def map_values(f): .[] |= f;
-def add: fold(null; .[]; .[0] + .[1]);
-def join(x): fold(null; .[]; if .[0] == null then .[1] else .[0] + x + .[1] end);
-def min: fold(.[0]; .[]; if .[1] < .[0] then .[1] else .[0] end);
-def max: fold(.[0]; .[]; if .[1] > .[0] then .[1] else .[0] end);
+def add: reduce .[] as $x (null; . + $x);
+def join(x): reduce .[] as $x (null; if . == null then $x else . + x + $x end);
+def min: reduce .[] as $x (.[0]; if $x < . then $x else . end);
+def max: reduce .[] as $x (.[0]; if $x > . then $x else . end);
 
 # Arrays
 def reverse: [.[length - 1 - range(length)]];

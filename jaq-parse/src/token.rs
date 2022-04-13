@@ -20,6 +20,7 @@ pub enum Token {
     Or,
     And,
     As,
+    Reduce,
 }
 
 impl fmt::Display for Token {
@@ -39,6 +40,7 @@ impl fmt::Display for Token {
             Self::Or => "or".fmt(f),
             Self::And => "and".fmt(f),
             Self::As => "as".fmt(f),
+            Self::Reduce => "reduce".fmt(f),
         }
     }
 }
@@ -84,6 +86,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         "or" => Token::Or,
         "and" => Token::And,
         "as" => Token::As,
+        "reduce" => Token::Reduce,
         _ => Token::Ident(ident),
     });
 

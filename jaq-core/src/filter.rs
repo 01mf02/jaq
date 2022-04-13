@@ -19,6 +19,7 @@ pub enum Filter {
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     IfThenElse(Vec<(Self, Self)>, Box<Self>),
+    Reduce(Box<Self>, Box<Self>, Box<Self>),
 
     Path(Path<Self>),
     Assign(Path<Self>, Box<Self>),
@@ -47,7 +48,6 @@ pub enum Filter {
     Contains(Box<Self>),
     Limit(Box<Self>, Box<Self>),
     Range(Box<Self>, Box<Self>),
-    Fold(Box<Self>, Box<Self>, Box<Self>),
 
     Var(usize),
     Arg(usize),
@@ -88,9 +88,6 @@ impl Filter {
             ($name: expr, 2, $cons: expr) => {
                 (($name.to_string(), 2), $cons(arg(0), arg(1)))
             };
-            ($name: expr, 3, $cons: expr) => {
-                (($name.to_string(), 3), $cons(arg(0), arg(1), arg(2)))
-            };
         }
         Vec::from([
             make_builtin!("error", 0, Self::Error),
@@ -112,7 +109,6 @@ impl Filter {
             make_builtin!("contains", 1, Self::Contains),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
-            make_builtin!("fold", 3, Self::Fold),
         ])
     }
 
@@ -237,11 +233,11 @@ impl Filter {
                 f.run(cv.clone())
                     .map(move |y| y.map(|y| Val::Bool(cv.1.contains(&y)))),
             ),
-            Self::Fold(init, xs, f) => {
+            Self::Reduce(xs, init, f) => {
                 let init: Result<Vec<_>, _> = init.run(cv.clone()).collect();
                 let mut xs = xs.run(cv.clone());
                 match init.and_then(|init| {
-                    xs.try_fold(init, |acc, x| f.fold_step(cv.0.clone(), acc, &x?))
+                    xs.try_fold(init, |acc, x| f.reduce_step(cv.0.clone(), acc, &x?))
                 }) {
                     Ok(y) => Box::new(y.into_iter().map(Ok)),
                     Err(e) => Box::new(once(Err(e))),
@@ -274,10 +270,9 @@ impl Filter {
         }
     }
 
-    fn fold_step(&self, ctx: Ctx, acc: Vec<Val>, x: &Val) -> Result<Vec<Val>, Error> {
+    fn reduce_step(&self, ctx: Ctx, acc: Vec<Val>, x: &Val) -> Result<Vec<Val>, Error> {
         acc.into_iter()
-            .map(|acc| Val::Arr(Rc::new(Vec::from([acc, x.clone()]).into_iter().collect())))
-            .flat_map(|arr| self.run((ctx.clone(), arr)))
+            .flat_map(|acc| self.run((Ctx::Cons(x.clone(), Rc::new(ctx.clone())), acc)))
             .collect()
     }
 
@@ -323,6 +318,14 @@ impl Filter {
                 let r = Box::new(r.subst2(off, fv, fa));
                 Self::Pipe(l, true, r)
             }
+            Self::Reduce(xs, init, f) => {
+                let xs = sub(xs);
+                let init = sub(init);
+                off.outer += 1;
+                let f = Box::new(f.subst2(off, fv, fa));
+                off.outer -= 1;
+                Self::Reduce(xs, init, f)
+            }
             Self::Var(v) => Self::Var(fv(v, *off)),
             Self::Arg(a) => fa(a, off),
 
@@ -361,7 +364,6 @@ impl Filter {
             Self::Contains(f) => Self::Contains(sub(f)),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
-            Self::Fold(xs, init, f) => Self::Fold(sub(xs), sub(init), sub(f)),
         }
     }
 }
