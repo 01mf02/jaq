@@ -205,43 +205,10 @@ impl Filter {
             Self::Floor => Box::new(once(cv.1.round(|f| f.floor()))),
             Self::Round => Box::new(once(cv.1.round(|f| f.round()))),
             Self::Ceil => Box::new(once(cv.1.round(|f| f.ceil()))),
-            Self::FromJson => match cv.1 {
-                Val::Str(ref s) => match serde_json::from_str::<serde_json::Value>(s) {
-                    Ok(json) => Box::new(once(Ok(Val::from(json)))),
-                    Err(e) => Box::new(once(Err(Error::FromJson(cv.1, Some(e.to_string()))))),
-                },
-                v => Box::new(once(Err(Error::FromJson(v, None)))),
-            },
+            Self::FromJson => Box::new(once(cv.1.from_json())),
             Self::ToJson => Box::new(once(Ok(Val::Str(Rc::new(cv.1.to_string()))))),
-            Self::Sort => match cv.1 {
-                Val::Arr(mut a) => {
-                    Rc::make_mut(&mut a).sort();
-                    Box::new(once(Ok(Val::Arr(a))))
-                }
-                v => Box::new(once(Err(Error::Sort(v)))),
-            },
-            Self::SortBy(f) => match cv.1 {
-                Val::Arr(mut a) => {
-                    let mut err = None;
-                    Rc::make_mut(&mut a).sort_by_cached_key(|x| {
-                        if err.is_some() {
-                            return Vec::new();
-                        };
-                        match f.run((cv.0.clone(), x.clone())).collect() {
-                            Ok(y) => y,
-                            Err(e) => {
-                                err = Some(e);
-                                Vec::new()
-                            }
-                        }
-                    });
-                    match err {
-                        Some(e) => Box::new(once(Err(e))),
-                        None => Box::new(once(Ok(Val::Arr(a)))),
-                    }
-                }
-                v => Box::new(once(Err(Error::Sort(v)))),
-            },
+            Self::Sort => Box::new(once(cv.1.sort())),
+            Self::SortBy(f) => Box::new(once(cv.1.sort_by(|v| f.run((cv.0.clone(), v))))),
             Self::Has(f) => Box::new(
                 f.run(cv.clone())
                     .map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))),

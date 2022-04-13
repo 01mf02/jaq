@@ -196,6 +196,57 @@ impl Val {
             _ => self == other,
         }
     }
+
+    /// Convert string to JSON.
+    ///
+    /// Fail on any other value.
+    pub fn from_json(self) -> ValR {
+        match self {
+            Self::Str(ref s) => serde_json::from_str::<serde_json::Value>(s)
+                .map(Val::from)
+                .map_err(|e| Error::FromJson(self, Some(e.to_string()))),
+            _ => Err(Error::FromJson(self, None)),
+        }
+    }
+
+    /// Sort array by the default order.
+    ///
+    /// Fail on any other value.
+    pub fn sort(self) -> ValR {
+        match self {
+            Val::Arr(mut a) => {
+                Rc::make_mut(&mut a).sort();
+                Ok(Val::Arr(a))
+            }
+            v => Err(Error::Sort(v)),
+        }
+    }
+
+    /// Sort array by the given function.
+    ///
+    /// Fail on any other value.
+    pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        match self {
+            Self::Arr(mut a) => {
+                // Some(e) iff an error has previously occurred
+                let mut err = None;
+                Rc::make_mut(&mut a).sort_by_cached_key(|x| {
+                    if err.is_some() {
+                        return Vec::new();
+                    };
+                    match f(x.clone()).collect() {
+                        Ok(y) => y,
+                        Err(e) => {
+                            err = Some(e);
+                            Vec::new()
+                        }
+                    }
+                });
+                err.map_or(Ok(Val::Arr(a)), Err)
+            }
+            _ => Err(Error::Sort(self)),
+        }
+    }
 }
 
 impl From<serde_json::Value> for Val {
