@@ -133,3 +133,15 @@ fn eq() {
 
     give(json!({"a": 1, "b": 2}), ". == {b: 2, a: 1}", json!(true));
 }
+
+#[test]
+fn vars() {
+    give(json!(1), " 2  as $x | . + $x", json!(3));
+    give(json!(1), ".+1 as $x | . + $x", json!(3));
+
+    let f = r#"def g(f): "z" as $z | f | .+$z; "x" as $x | g("y" as $y | $x+$y)"#;
+    give(json!(null), f, json!("xyz"));
+
+    let f = r#". as $x | ("y" as $y | "z") | $x"#;
+    give(json!("x"), f, json!("x"));
+}
