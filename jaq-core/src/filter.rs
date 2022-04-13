@@ -172,14 +172,7 @@ impl Filter {
                     None => r.run(cv),
                 }
             }
-            Self::IfThenElse(if_thens, else_) => todo!(),
-            /*
-                Box::new(if_.run(cv.clone()).flat_map(move |y| match y {
-                    Ok(y) => (if y.as_bool() { then } else { else_ }).run(cv.clone()),
-                    Err(e) => Box::new(once(Err(e))),
-                }))
-            }
-            */
+            Self::IfThenElse(if_thens, else_) => Self::if_then_else(if_thens.iter(), else_, cv),
             Self::Path(path) => match path.collect(cv) {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
@@ -271,6 +264,20 @@ impl Filter {
         let r: Vec<_> = other.run(cv).collect();
         use itertools::Itertools;
         l.into_iter().cartesian_product(r)
+    }
+
+    fn if_then_else<'a, I>(mut if_thens: I, else_: &'a Self, cv: (Ctx, Val)) -> ValRs
+    where
+        I: Iterator<Item = &'a (Self, Self)> + Clone + 'a,
+    {
+        match if_thens.next() {
+            None => else_.run(cv),
+            Some((if_, then)) => Box::new(if_.run(cv.clone()).flat_map(move |v| match v {
+                Ok(v) if v.as_bool() => then.run(cv.clone()),
+                Ok(_) => Self::if_then_else(if_thens.clone(), else_, cv.clone()),
+                Err(_) => Box::new(core::iter::once(v)),
+            })),
+        }
     }
 
     fn fold_step(&self, ctx: Ctx, acc: Vec<Val>, x: &Val) -> Result<Vec<Val>, Error> {

@@ -94,11 +94,13 @@ fn object() {
 
 #[test]
 fn if_then_else() {
-    gives(
-        json!([-1, 42, -42]),
-        r#".[] | if . < 0 then "n" else "p" end"#,
-        [json!("n"), json!("p"), json!("n")],
-    )
+    gives(json!([]), "if . | .[] then 0 else 0 end", []);
+
+    let f = r#".[] | if . < 0 then "n" else "p" end"#;
+    gives(json!([-1, 1, -1]), f, [json!("n"), json!("p"), json!("n")]);
+
+    let f = r#".[] | if .<0 then "n" elif .>0 then "p" else "z" end"#;
+    gives(json!([-1, 0, 1]), f, [json!("n"), json!("z"), json!("p")]);
 }
 
 #[test]
