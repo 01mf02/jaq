@@ -22,7 +22,7 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let mut errs = Vec::new();
     jaq_std::std()
         .into_iter()
-        .for_each(|def| defs.add(def, &mut errs));
+        .for_each(|def| defs.insert(def, &mut errs));
     let f = parse::parse(&f, parse::main()).0.unwrap();
     let f = defs.finish(f, &mut errs);
     assert_eq!(errs, Vec::new());
@@ -32,6 +32,6 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let expected = ys.into_iter().map(|y| Ok(to(y)));
     let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
 
-    let out: Vec<_> = f.run((Default::default(), to(x))).collect();
+    let out: Vec<_> = f.run(to(x)).collect();
     assert_eq!(out, expected);
 }
