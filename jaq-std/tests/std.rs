@@ -61,6 +61,19 @@ fn inside() {
 }
 
 #[test]
+fn join() {
+    give(json!([]), r#"join(" ")"#, json!(null));
+    give(
+        json!(["Hello", "world"]),
+        r#"join(" ")"#,
+        json!("Hello world"),
+    );
+
+    // 2 + 1 + 3 + 1 + 4 + 1 + 5
+    give(json!([2, 3, 4, 5]), "join(1)", json!(17));
+}
+
+#[test]
 fn map() {
     give(json!([1, 2]), "map(.+1)", json!([2, 3]));
 }
