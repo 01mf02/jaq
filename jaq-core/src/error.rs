@@ -4,6 +4,7 @@ use core::fmt;
 
 /// Errors that can occur during filter execution.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Error {
     Val(Val),
     ObjKey(Val),
