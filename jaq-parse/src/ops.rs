@@ -20,6 +20,7 @@ pub enum MathOp {
 }
 
 impl MathOp {
+    /// Perform the arithmetic operation on the given inputs.
     pub fn run<I, O>(&self, l: I, r: I) -> O
     where
         I: Add<Output = O>,
@@ -69,6 +70,7 @@ pub enum OrdOp {
 }
 
 impl OrdOp {
+    /// Perform the ordering operation on the given inputs.
     pub fn run<I: PartialOrd + PartialEq>(&self, l: &I, r: &I) -> bool {
         match self {
             Self::Gt => l > r,

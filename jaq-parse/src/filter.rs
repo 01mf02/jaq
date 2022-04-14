@@ -32,13 +32,21 @@ impl fmt::Display for AssignOp {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum BinaryOp {
+    /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
     Pipe(Option<String>),
+    /// Concatenation, i.e. `l, r`
     Comma,
+    /// Alternation, i.e. `l // r`
     Alt,
+    /// Logical disjunction, i.e. `l or r`
     Or,
+    /// Logical conjunction, i.e. `l and r`
     And,
+    /// Arithmetic operation, e.g. `l + r`, `l - r`, ...
     Math(MathOp),
+    /// Assignment, i.e. `l = r`, `l |= r`, `l += r`, `l -= r`, ...
     Assign(AssignOp),
+    /// Ordering operation, e.g. `l == r`, `l <= r`, ...
     Ord(OrdOp),
 }
 

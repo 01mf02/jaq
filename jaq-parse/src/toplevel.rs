@@ -9,8 +9,11 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def {
+    /// Name of the filter, e.g. `map`
     pub name: String,
+    /// Arguments of the filter, e.g. `["f"]`
     pub args: Vec<String>,
+    /// Body of the filter, e.g. `[.[] | f`.
     pub body: Spanned<Filter>,
 }
 

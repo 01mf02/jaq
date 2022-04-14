@@ -80,7 +80,7 @@ where
 }
 
 impl Opt {
-    /// If the value is optional, return `x`, else fail with `f(x)`.
+    /// If `self` is optional, return `x`, else fail with `f(x)`.
     pub fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
         match self {
             Self::Optional => Ok(x),
@@ -88,6 +88,8 @@ impl Opt {
         }
     }
 
+    /// If `self` is optional, return all items of the iterator that are `Ok` and succeed,
+    /// else return all items of the iterator and fail if any is `Err`.
     pub fn collect<T, E>(self, iter: impl Iterator<Item = Result<T, E>>) -> Result<Vec<T>, E> {
         match self {
             Self::Optional => Ok(iter.filter_map(|x| x.ok()).collect()),
