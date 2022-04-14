@@ -61,23 +61,29 @@ enum Ctx {
 }
 
 impl Ctx {
-    fn get(&self, n: usize) -> Option<&Val> {
-        match (self, n) {
-            (Self::Nil, _) => None,
-            (Self::Cons(x, _), 0) => Some(x),
-            (Self::Cons(_, xs), n) => xs.get(n - 1),
-        }
+    fn get(&self, mut n: usize) -> Option<&Val> {
+        let mut ctx = self;
+        while let Self::Cons(x, xs) = ctx {
+            if n == 0 {
+                return Some(x)
+            } else {
+                n -= 1;
+                ctx = xs;
+            }
+        };
+        None
     }
 
-    fn skip(mut self, mut n: usize) -> Self {
+    fn skip(&self, mut n: usize) -> &Self {
+        let mut ctx = self;
         while n > 0 {
             match self {
-                Self::Cons(_, xs) => self = (*xs).clone(),
-                Self::Nil => return Self::Nil,
+                Self::Cons(_, xs) => ctx = xs,
+                Self::Nil => return &Self::Nil,
             }
             n -= 1;
         }
-        self
+        ctx
     }
 }
 
@@ -250,7 +256,7 @@ impl Filter {
                 }
             }
 
-            Self::SkipCtx(n, f) => f.run((cv.0.skip(*n), cv.1)),
+            Self::SkipCtx(n, f) => f.run((cv.0.skip(*n).clone(), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
