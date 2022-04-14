@@ -49,6 +49,7 @@ pub enum Filter {
     Limit(Box<Self>, Box<Self>),
     Range(Box<Self>, Box<Self>),
 
+    SkipCtx(usize, Box<Self>),
     Var(usize),
     Arg(usize),
 }
@@ -67,12 +68,17 @@ impl Ctx {
             (Self::Cons(_, xs), n) => xs.get(n - 1),
         }
     }
-}
 
-#[derive(Copy, Clone, Default)]
-struct Offset {
-    inner: usize,
-    outer: usize,
+    fn skip(mut self, mut n: usize) -> Self {
+        while n > 0 {
+            match self {
+                Self::Cons(_, xs) => self = (*xs).clone(),
+                Self::Nil => return Self::Nil,
+            }
+            n -= 1;
+        }
+        self
+    }
 }
 
 impl Filter {
@@ -244,6 +250,7 @@ impl Filter {
                 }
             }
 
+            Self::SkipCtx(n, f) => f.run((cv.0.skip(*n), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
@@ -282,60 +289,18 @@ impl Filter {
         Self::Update(path, Box::new(math))
     }
 
-    pub(crate) fn subst(self, args: &[Self]) -> Self {
-        self.subst2(
-            &mut Offset::default(),
-            &|v, off| v + off.inner,
-            &|a, off| args[a].clone().subst_arg(off),
-        )
-    }
-
-    fn subst_arg(self, off: &mut Offset) -> Self {
-        let sum = off.outer + off.inner;
-        let mut bindings = Offset::default();
-        let out = self.subst2(
-            &mut bindings,
-            &|v, off2| v + if v < off2.outer { 0 } else { sum },
-            &|a, _| Self::Arg(a),
-        );
-        off.inner += bindings.outer;
-        out
-    }
-
-    // TODO: take &self
-    fn subst2<V, A>(self, off: &mut Offset, fv: &V, fa: &A) -> Self
-    where
-        V: Fn(usize, Offset) -> usize,
-        A: Fn(usize, &mut Offset) -> Self,
-    {
-        let subst = |f: Self| f.subst2(&mut off.clone(), fv, fa);
+    pub fn subst(self, args: &[Self]) -> Self {
+        let subst = |f: Self| f.subst(args);
         let sub = |f: Box<Self>| Box::new(subst(*f));
 
         match self {
-            Self::Pipe(l, true, r) => {
-                let l = Box::new(l.subst2(off, fv, fa));
-                off.outer += 1;
-                let r = Box::new(r.subst2(off, fv, fa));
-                Self::Pipe(l, true, r)
-            }
-            Self::Reduce(xs, init, f) => {
-                let xs = sub(xs);
-                let init = sub(init);
-                off.outer += 1;
-                let f = Box::new(f.subst2(off, fv, fa));
-                off.outer -= 1;
-                Self::Reduce(xs, init, f)
-            }
-            Self::Var(v) => Self::Var(fv(v, *off)),
-            Self::Arg(a) => fa(a, off),
-
             Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
             Self::Array(f) => Self::Array(f.map(sub)),
             Self::Object(kvs) => {
                 Self::Object(kvs.into_iter().map(|(k, v)| (subst(k), subst(v))).collect())
             }
             Self::Neg(f) => Self::Neg(sub(f)),
-            Self::Pipe(l, false, r) => Self::Pipe(sub(l), false, sub(r)),
+            Self::Pipe(l, bind, r) => Self::Pipe(sub(l), bind, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
             Self::IfThenElse(if_thens, else_) => Self::IfThenElse(
@@ -345,6 +310,7 @@ impl Filter {
                     .collect(),
                 sub(else_),
             ),
+            Self::Reduce(xs, init, f) => Self::Reduce(sub(xs), sub(init), sub(f)),
             Self::Path(path) => Self::Path(path.map(subst)),
             Self::Assign(path, f) => Self::Assign(path.map(subst), sub(f)),
             Self::Update(path, f) => Self::Update(path.map(subst), sub(f)),
@@ -364,6 +330,10 @@ impl Filter {
             Self::Contains(f) => Self::Contains(sub(f)),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
+
+            Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
+            Self::Var(_) => self,
+            Self::Arg(a) => args[a].clone(),
         }
     }
 }

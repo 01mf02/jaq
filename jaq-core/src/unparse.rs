@@ -65,7 +65,14 @@ where
             Filter::Object(kvs.collect())
         }
         Expr::Call(name, call_args) => match args.iter().position(|v| *v == name) {
-            Some(pos) if call_args.is_empty() => Filter::Arg(pos),
+            Some(pos) if call_args.is_empty() => {
+                let arg = Filter::Arg(pos);
+                if vars.is_empty() {
+                    arg
+                } else {
+                    Filter::SkipCtx(vars.len(), Box::new(arg))
+                }
+            }
             _ => call(name, call_args),
         },
         Expr::Neg(f) => Filter::Neg(get(*f, errs)),
