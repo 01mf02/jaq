@@ -174,7 +174,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
         .map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span));
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(no_comma.clone());
+    let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
     let key_str = key
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
