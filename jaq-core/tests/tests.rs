@@ -140,6 +140,7 @@ fn eq() {
 fn vars() {
     give(json!(1), " 2  as $x | . + $x", json!(3));
     give(json!(1), ".+1 as $x | . + $x", json!(3));
+    give(json!(1), ". as $x | (2 as $y | 3) | $x", json!(1));
 
     let f = r#"def g(f): "z" as $z | f | .+$z; "x" as $x | g("y" as $y | $x+$y)"#;
     give(json!(null), f, json!("xyz"));
@@ -152,4 +153,12 @@ fn vars() {
 fn reduce() {
     let f = "reduce recurse(if . == 1000 then [] | .[] else .+1 end) as $x (0; . + $x)";
     give(json!(0), f, json!(500500));
+
+    let ff = |s| format!(". as $x | reduce 2 as $y (4; {}) | . + $x", s);
+
+    let f = ff("3 as $z | . + $x + $y + $z");
+    give(json!(1), &f, json!(11));
+
+    let f = "def g(x; y): 3 as $z | . + x + y + $z; ".to_owned() + &ff("g($x; $y)");
+    give(json!(1), &f, json!(11));
 }
