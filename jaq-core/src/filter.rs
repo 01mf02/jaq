@@ -65,12 +65,12 @@ impl Ctx {
         let mut ctx = self;
         while let Self::Cons(x, xs) = ctx {
             if n == 0 {
-                return Some(x)
+                return Some(x);
             } else {
                 n -= 1;
                 ctx = xs;
             }
-        };
+        }
         None
     }
 
