@@ -1,5 +1,5 @@
 use crate::val::{Val, ValR, ValRs};
-use crate::Error;
+use crate::{Error, Int};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 pub use jaq_parse::path::Opt;
 
@@ -201,7 +201,7 @@ impl<F> From<Part<F>> for Path<F> {
     }
 }
 
-type RelBounds<'a> = Box<dyn Iterator<Item = Result<Option<(usize, bool)>, Error>> + 'a>;
+type RelBounds<'a> = Box<dyn Iterator<Item = Result<Option<Int>, Error>> + 'a>;
 fn rel_bounds(f: &Option<Vec<Val>>) -> RelBounds<'_> {
     match f {
         Some(f) => Box::new(f.iter().map(move |i| Ok(Some(i.as_int()?)))),
@@ -224,32 +224,32 @@ fn skip_take(from: usize, until: usize) -> (usize, usize) {
 
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
 /// else return `default`.
-fn abs_bound(i: Option<(usize, bool)>, len: usize, default: usize) -> usize {
+fn abs_bound(i: Option<Int>, len: usize, default: usize) -> usize {
     let abs = |i| core::cmp::min(wrap(i, len).unwrap_or(0), len);
     i.map(abs).unwrap_or(default)
 }
 
 /// Absolutise an index and return result if it is inside [0, len).
-fn abs_index((i, pos): (usize, bool), len: usize) -> Option<usize> {
-    wrap((i, pos), len).filter(|i| *i < len)
+fn abs_index(i: Int, len: usize) -> Option<usize> {
+    wrap(i, len).filter(|i| *i < len)
 }
 
-fn wrap((i, pos): (usize, bool), len: usize) -> Option<usize> {
-    if pos {
-        Some(i)
-    } else if len < i {
+fn wrap(i: Int, len: usize) -> Option<usize> {
+    if i.is_positive() {
+        Some(i.abs())
+    } else if len < i.abs() {
         None
     } else {
-        Some(len - i)
+        Some(len - i.abs())
     }
 }
 
 #[test]
 fn wrap_test() {
     let len = 4;
-    assert_eq!(wrap((0, true), len), Some(0));
-    assert_eq!(wrap((8, true), len), Some(8));
-    assert_eq!(wrap((1, false), len), Some(3));
-    assert_eq!(wrap((4, false), len), Some(0));
-    assert_eq!(wrap((8, false), len), None);
+    assert_eq!(wrap(Int::from(0), len), Some(0));
+    assert_eq!(wrap(Int::from(8), len), Some(8));
+    assert_eq!(wrap(-Int::from(1), len), Some(3));
+    assert_eq!(wrap(-Int::from(4), len), Some(0));
+    assert_eq!(wrap(-Int::from(8), len), None);
 }

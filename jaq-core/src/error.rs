@@ -1,30 +1,52 @@
-use crate::Val;
+use crate::{Int, Val};
 use alloc::string::String;
 use core::fmt;
 
 /// Errors that can occur during filter execution.
+///
+/// Each variant shows an example of how it can be produced.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
+    /// `0 | error`
     Val(Val),
+    /// `{a: 1} | .[0]`
     ObjKey(Val),
+    /// `0 == 0 | length`
     Length(Val),
+    /// `"a" | round`
     Round(Val),
+    /// `0 | fromjson` or `"[1, 2" | fromjson`
     FromJson(Val, Option<String>),
+    /// `0 | keys`
     ToNumber(Val),
+    /// `0 | sort`
     Sort(Val),
+    /// `[] | has("a")` or `{} | has(0)`
     Has(Val, Val),
+    /// `"a b c" | split(0)`
     Split,
+    /// `range(0; "a")`
     Range,
+    /// `0 | keys`
     Keys(Val),
+    /// `0 | .[]`
     Iter(Val),
+    /// `-"a"`
     Neg(Val),
+    /// `1 - "a"`
     MathOp(Val, jaq_parse::MathOp, Val),
+    /// `0 | .[0]`
     Index(Val),
+    /// `{} | .[0]`
     IndexWith(Val, Val),
-    IndexOutOfBounds((usize, bool)),
+    /// `[] | .[0] = 0`
+    IndexOutOfBounds(Int),
+    /// `[] | .["a"]`
     Int(Val),
+    /// `limit(-1; .)`
     Nat(Val),
+    /// `[] | .[0:] = 0`
     SliceAssign(Val),
 }
 
@@ -49,8 +71,7 @@ impl fmt::Display for Error {
             Self::MathOp(l, op, r) => write!(f, "cannot calculate {l} {op} {r}"),
             Self::Index(v) => write!(f, "cannot index {v}"),
             Self::IndexWith(v, i) => write!(f, "cannot index {v} with {i}"),
-            Self::IndexOutOfBounds((i, true)) => write!(f, "index {i} is out of bounds"),
-            Self::IndexOutOfBounds((i, false)) => write!(f, "index -{i} is out of bounds"),
+            Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),
             Self::Int(v) => write!(f, "cannot use {v} as integer"),
             Self::Nat(v) => write!(f, "cannot use {v} as positive integer"),
             Self::SliceAssign(v) => write!(f, "cannot assign non-array ({v}) to an array slice"),

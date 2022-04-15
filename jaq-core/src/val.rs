@@ -1,6 +1,6 @@
 //! JSON values with reference-counted sharing.
 
-use crate::Error;
+use crate::{Error, Int};
 use ahash::RandomState;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
@@ -67,10 +67,10 @@ impl Val {
     }
 
     /// If the value is integer, return its absolute value and whether its positive, else fail.
-    pub fn as_int(&self) -> Result<(usize, bool), Error> {
+    pub fn as_int(&self) -> Result<Int, Error> {
         match self {
-            Self::Pos(p) => Ok((*p, true)),
-            Self::Neg(n) => Ok((*n, false)),
+            Self::Pos(p) => Ok(Int::from(*p)),
+            Self::Neg(n) => Ok(-Int::from(*n)),
             _ => Err(Error::Int(self.clone())),
         }
     }
@@ -523,7 +523,7 @@ fn float_cmp(left: &f64, right: &f64) -> Ordering {
 }
 
 impl fmt::Display for Val {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => b.fmt(f),
