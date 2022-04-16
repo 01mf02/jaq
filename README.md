@@ -183,8 +183,7 @@ For example:
 
 The rules of jaq are:
 
-* The sum, difference, product, and remainder of two integers is integer.
-* The quotient of two integers is integer if the remainder of the integers is zero.
+* The sum, difference, product, quotient, and remainder of two integers is integer.
 * Any other operation between two numbers yields a float.
 
 Examples:
@@ -194,6 +193,8 @@ Examples:
     $ jaq -n '10 / 2'
     5
     $ jaq -n '11 / 2'
+    5
+    $ jaq -n '11.0 / 2'
     5.5
     $ jaq -n '1.0 + 2'
     3.0

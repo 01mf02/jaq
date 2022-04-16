@@ -96,9 +96,6 @@ fn nth() {
 fn range_reverse() {
     give(json!(null), "[range(1, 2)]", json!([0, 0, 1]));
 
-    let y = json!([-1, -1, 0, 1, 1]);
-    give(json!(null), "[range(-1, 1; 0, 2)]", y);
-
     give(json!(3), "[range(.)] | reverse", json!([2, 1, 0]));
 }
 

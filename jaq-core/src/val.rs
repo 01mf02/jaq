@@ -26,13 +26,11 @@ pub enum Val {
     Null,
     /// Boolean
     Bool(bool),
-    /// Positive integer
-    Pos(usize),
-    /// Negative integer
-    Neg(usize),
+    /// Integer
+    Int(Int),
     /// Floating-point number
     Float(f64),
-    /// Floating-point number or integer not fitting neither into `Pos` nor `Neg`
+    /// Floating-point number or integer not fitting into `Int`
     Num(Rc<serde_json::Number>),
     /// String
     Str(Rc<String>),
@@ -60,8 +58,7 @@ impl Val {
     /// If the value is a positive integer, return it, else fail.
     pub fn as_usize(&self) -> Result<usize, Error> {
         match self {
-            Self::Pos(p) => Ok(*p),
-            Self::Neg(0) => Ok(0),
+            Self::Int(i) if i.is_positive() => Ok(i.abs()),
             _ => Err(Error::Nat(self.clone())),
         }
     }
@@ -69,8 +66,7 @@ impl Val {
     /// If the value is integer, return its absolute value and whether its positive, else fail.
     pub fn as_int(&self) -> Result<Int, Error> {
         match self {
-            Self::Pos(p) => Ok(Int::from(*p)),
-            Self::Neg(n) => Ok(-Int::from(*n)),
+            Self::Int(i) => Ok(*i),
             _ => Err(Error::Int(self.clone())),
         }
     }
@@ -89,14 +85,14 @@ impl Val {
     /// Fail on booleans.
     pub fn len(&self) -> Result<Self, Error> {
         match self {
-            Self::Null => Ok(Self::Pos(0)),
+            Self::Null => Ok(Self::Int(Int::from(0))),
             Self::Bool(_) => Err(Error::Length(self.clone())),
-            Self::Pos(l) | Self::Neg(l) => Ok(Self::Pos(*l)),
+            Self::Int(i) => Ok(Self::Int(Int::from(i.abs()))),
             Self::Num(n) => Self::from(&**n).len(),
             Self::Float(f) => Ok(Self::Float(f.abs())),
-            Self::Str(s) => Ok(Self::Pos(s.chars().count())),
-            Self::Arr(a) => Ok(Self::Pos(a.len())),
-            Self::Obj(o) => Ok(Self::Pos(o.len())),
+            Self::Str(s) => Ok(Self::Int(s.chars().count().into())),
+            Self::Arr(a) => Ok(Self::Int(a.len().into())),
+            Self::Obj(o) => Ok(Self::Int(o.len().into())),
         }
     }
 
@@ -105,7 +101,7 @@ impl Val {
         match self {
             Self::Null => "null",
             Self::Bool(_) => "boolean",
-            Self::Pos(_) | Self::Neg(_) | Self::Float(_) | Self::Num(_) => "number",
+            Self::Int(_) | Self::Float(_) | Self::Num(_) => "number",
             Self::Str(_) => "string",
             Self::Arr(_) => "array",
             Self::Obj(_) => "object",
@@ -117,13 +113,13 @@ impl Val {
     /// Return integers unchanged, and fail on any other input.
     pub fn round(&self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
         match self {
-            Self::Pos(_) | Self::Neg(_) => Ok(self.clone()),
+            Self::Int(_) => Ok(self.clone()),
             Self::Float(x) => {
                 let rounded = f(*x);
                 if rounded < 0.0 {
-                    Ok(Self::Neg(-rounded as usize))
+                    Ok(Self::Int(-Int::from(-rounded as usize)))
                 } else {
-                    Ok(Self::Pos(rounded as usize))
+                    Ok(Self::Int(Int::from(rounded as usize)))
                 }
             }
             Self::Num(n) => Self::from(&**n).round(f),
@@ -134,14 +130,7 @@ impl Val {
     /// Return all numbers in the range `[self, other)` if both inputs are integer, else fail.
     pub fn range(&self, other: &Self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match (self, other) {
-            (Self::Pos(x), Self::Pos(y)) => Ok(Box::new((*x..*y).map(Self::Pos))),
-            (Self::Neg(x), Self::Neg(y)) => Ok(Box::new((*y + 1..*x + 1).rev().map(Self::Neg))),
-            (Self::Neg(_), Self::Pos(_)) => {
-                let neg = self.range(&Self::Neg(0));
-                let pos = Self::Pos(0).range(other);
-                Ok(Box::new(neg?.chain(pos?)))
-            }
-            (Self::Pos(_), Self::Neg(_)) => Ok(Box::new(core::iter::empty())),
+            (Self::Int(x), Self::Int(y)) => Ok(Box::new(x.range(y).map(Self::Int))),
             _ => Err(Error::Range),
         }
     }
@@ -152,7 +141,7 @@ impl Val {
     pub fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
             (Self::Null, _) => Ok(false),
-            (Self::Arr(a), Self::Pos(i)) => Ok(*i < a.len()),
+            (Self::Arr(a), Self::Int(i)) if i.is_positive() => Ok(i.abs() < a.len()),
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
             _ => Err(Error::Has(self.clone(), key.clone())),
         }
@@ -163,7 +152,7 @@ impl Val {
     /// Fail on values that are neither arrays nor objects.
     pub fn keys(&self) -> Result<Vals, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new((0..a.len()).map(Val::Pos))),
+            Self::Arr(a) => Ok(Box::new((0..a.len()).map(|i| Val::Int(i.into())))),
             Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::clone(k))))),
             _ => Err(Error::Keys(self.clone())),
         }
@@ -260,8 +249,12 @@ impl From<serde_json::Value> for Val {
                 let s = n.to_string();
                 let n = || Self::Num(Rc::new(n));
                 match s.strip_prefix('-') {
-                    Some(neg) => neg.parse().map_or_else(|_| n(), Self::Neg),
-                    None => s.parse().map_or_else(|_| n(), Self::Pos),
+                    Some(neg) => neg
+                        .parse::<usize>()
+                        .map_or_else(|_| n(), |u| Self::Int(-Int::from(u))),
+                    None => s
+                        .parse::<usize>()
+                        .map_or_else(|_| n(), |p| Self::Int(Int::from(p))),
                 }
             }
             String(s) => Self::Str(Rc::new(s)),
@@ -279,8 +272,8 @@ impl From<Val> for serde_json::Value {
         match v {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
-            Val::Pos(p) => Number(p.into()),
-            Val::Neg(n) => isize::try_from(n).map_or(Null, |n| Number((-n).into())),
+            Val::Int(i) if i.is_positive() => Number(i.abs().into()),
+            Val::Int(i) => isize::try_from(i.abs()).map_or(Null, |n| Number((-n).into())),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
             Val::Num(n) => Number((*n).clone()),
             Val::Str(s) => String((*s).clone()),
@@ -307,12 +300,8 @@ impl core::ops::Add for Val {
         match (self, rhs) {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
-            (Pos(x), Pos(y)) => Ok(Pos(x + y)),
-            (Neg(x), Neg(y)) => Ok(Neg(x + y)),
-            (Pos(s), Neg(l)) | (Neg(l), Pos(s)) if s < l => Ok(Neg(l - s)),
-            (Pos(l), Neg(s)) | (Neg(s), Pos(l)) => Ok(Pos(l - s)),
-            (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f + p as f64)),
-            (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(f - n as f64)),
+            (Int(x), Int(y)) => Ok(Int(x + y)),
+            (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i.as_f64())),
             (Float(x), Float(y)) => Ok(Float(x + y)),
             (Num(n), r) => Self::from(&*n) + r,
             (l, Num(n)) => l + Self::from(&*n),
@@ -338,14 +327,9 @@ impl core::ops::Sub for Val {
     fn sub(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Pos(p), Neg(n)) => Ok(Pos(p + n)),
-            (Neg(n), Pos(p)) => Ok(Neg(p + n)),
-            (Pos(s), Pos(l)) | (Neg(l), Neg(s)) if s < l => Ok(Neg(l - s)),
-            (Pos(l), Pos(s)) | (Neg(s), Neg(l)) => Ok(Pos(l - s)),
-            (Pos(p), Float(f)) => Ok(Float(p as f64 - f)),
-            (Neg(n), Float(f)) => Ok(Float(-(n as f64) - f)),
-            (Float(f), Pos(p)) => Ok(Float(f - p as f64)),
-            (Float(f), Neg(n)) => Ok(Float(f + n as f64)),
+            (Int(x), Int(y)) => Ok(Int(x - y)),
+            (Float(f), Int(i)) => Ok(Float(f - i.as_f64())),
+            (Int(i), Float(f)) => Ok(Float(i.as_f64() - f)),
             (Float(x), Float(y)) => Ok(Float(x - y)),
             (Num(n), r) => Self::from(&*n) - r,
             (l, Num(n)) => l - Self::from(&*n),
@@ -359,10 +343,8 @@ impl core::ops::Mul for Val {
     fn mul(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Pos(x), Pos(y)) | (Neg(x), Neg(y)) => Ok(Pos(x * y)),
-            (Pos(x), Neg(y)) | (Neg(x), Pos(y)) => Ok(Neg(x * y)),
-            (Pos(p), Float(f)) | (Float(f), Pos(p)) => Ok(Float(f * p as f64)),
-            (Neg(n), Float(f)) | (Float(f), Neg(n)) => Ok(Float(-f * n as f64)),
+            (Int(x), Int(y)) => Ok(Int(x * y)),
+            (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i.as_f64())),
             (Float(x), Float(y)) => Ok(Float(x * y)),
             (Num(n), r) => Self::from(&*n) * r,
             (l, Num(n)) => l * Self::from(&*n),
@@ -376,14 +358,9 @@ impl core::ops::Div for Val {
     fn div(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Pos(x), Pos(y)) | (Neg(x), Neg(y)) if x % y == 0 => Ok(Pos(x / y)),
-            (Pos(x), Neg(y)) | (Neg(x), Pos(y)) if x % y == 0 => Ok(Neg(x / y)),
-            (Pos(x), Pos(y)) | (Neg(x), Neg(y)) => Ok(Float(x as f64 / y as f64)),
-            (Pos(x), Neg(y)) | (Neg(x), Pos(y)) => Ok(Float(-(x as f64 / y as f64))),
-            (Pos(p), Float(f)) => Ok(Float(p as f64 / f)),
-            (Neg(n), Float(f)) => Ok(Float(n as f64 / -f)),
-            (Float(f), Pos(p)) => Ok(Float(f / p as f64)),
-            (Float(f), Neg(n)) => Ok(Float(-f / n as f64)),
+            (Int(x), Int(y)) => Ok(Int(x / y)),
+            (Float(f), Int(i)) => Ok(Float(f / i.as_f64())),
+            (Int(i), Float(f)) => Ok(Float(i.as_f64() / f)),
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from(&*n) / r,
             (l, Num(n)) => l / Self::from(&*n),
@@ -397,8 +374,7 @@ impl core::ops::Rem for Val {
     fn rem(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Pos(x), Pos(y) | Neg(y)) => Ok(Pos(x % y)),
-            (Neg(x), Pos(y) | Neg(y)) => Ok(Neg(x % y)),
+            (Int(x), Int(y)) => Ok(Int(x % y)),
             (l, r) => Err(Error::MathOp(l, MathOp::Rem, r)),
         }
     }
@@ -409,8 +385,7 @@ impl core::ops::Neg for Val {
     fn neg(self) -> Self::Output {
         use Val::*;
         match self {
-            Pos(x) => Ok(Neg(x)),
-            Neg(x) => Ok(Pos(x)),
+            Int(x) => Ok(Int(-x)),
             Float(x) => Ok(Float(-x)),
             Num(n) => -Self::from(&*n),
             x => Err(Error::Neg(x)),
@@ -423,13 +398,9 @@ impl PartialEq for Val {
         match (self, other) {
             (Self::Null, Self::Null) => true,
             (Self::Bool(x), Self::Bool(y)) => x == y,
-            (Self::Pos(x), Self::Pos(y)) | (Self::Neg(x), Self::Neg(y)) => x == y,
-            (Self::Pos(p), Self::Neg(n)) | (Self::Neg(n), Self::Pos(p)) => *p == 0 && *n == 0,
-            (Self::Pos(p), Self::Float(f)) | (Self::Float(f), Self::Pos(p)) => {
-                float_eq(&(*p as f64), f)
-            }
-            (Self::Neg(n), Self::Float(f)) | (Self::Float(f), Self::Neg(n)) => {
-                float_eq(&-(*n as f64), f)
+            (Self::Int(x), Self::Int(y)) => x == y,
+            (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
+                float_eq(&i.as_f64(), f)
             }
             (Self::Float(x), Self::Float(y)) => float_eq(x, y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
@@ -457,15 +428,9 @@ impl Ord for Val {
         match (self, other) {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
-            (Self::Pos(x), Self::Pos(y)) => x.cmp(y),
-            (Self::Neg(x), Self::Neg(y)) => x.cmp(y).reverse(),
-            (Self::Pos(p), Self::Neg(n)) | (Self::Neg(n), Self::Pos(p)) if *p + *n == 0 => Equal,
-            (Self::Pos(_), Self::Neg(_)) => Greater,
-            (Self::Neg(_), Self::Pos(_)) => Less,
-            (Self::Pos(p), Self::Float(f)) => float_cmp(&(*p as f64), f),
-            (Self::Neg(n), Self::Float(f)) => float_cmp(&-(*n as f64), f),
-            (Self::Float(f), Self::Pos(p)) => float_cmp(f, &(*p as f64)),
-            (Self::Float(f), Self::Neg(n)) => float_cmp(f, &-(*n as f64)),
+            (Self::Int(x), Self::Int(y)) => x.cmp(y),
+            (Self::Int(i), Self::Float(f)) => float_cmp(&i.as_f64(), f),
+            (Self::Float(f), Self::Int(i)) => float_cmp(f, &i.as_f64()),
             (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
             (Self::Num(n), y) => Self::from(&**n).cmp(y),
@@ -492,8 +457,8 @@ impl Ord for Val {
             (Self::Bool(_), _) => Less,
             (_, Self::Bool(_)) => Greater,
             // numbers are smaller than anything else, except for nulls and bools
-            (Self::Pos(_) | Self::Neg(_) | Self::Float(_), _) => Less,
-            (_, Self::Pos(_) | Self::Neg(_) | Self::Float(_)) => Greater,
+            (Self::Int(_) | Self::Float(_), _) => Less,
+            (_, Self::Int(_) | Self::Float(_)) => Greater,
             // etc.
             (Self::Str(_), _) => Less,
             (_, Self::Str(_)) => Greater,
@@ -527,8 +492,7 @@ impl fmt::Display for Val {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => b.fmt(f),
-            Self::Pos(p) => p.fmt(f),
-            Self::Neg(n) => write!(f, "-{}", n),
+            Self::Int(i) => i.fmt(f),
             Self::Float(x) => x.fmt(f),
             Self::Num(n) => n.fmt(f),
             Self::Str(s) => write!(f, "\"{}\"", s),

@@ -19,7 +19,7 @@ fn keys() {
     give(json!([0, null, "a"]), "[keys]", json!([0, 1, 2]));
     give(json!({"a": 1, "b": 2}), "[keys]", json!(["a", "b"]));
 
-    fail(json!(0), "keys", Error::Keys(Val::Pos(0)));
+    fail(json!(0), "keys", Error::Keys(Val::Int(0.into())));
     fail(json!(null), "keys", Error::Keys(Val::Null));
 }
 
@@ -40,6 +40,12 @@ fn limit() {
     gives(json!(null), "limit(0; 1,2)", []);
     // jaq does not support negative indices in limit
     give(json!(null), "[limit(1, 0, 3; 0, 1)]", json!([0, 0, 1]));
+}
+
+#[test]
+fn range() {
+    let y = json!([-1, -1, 0, 1, 1]);
+    give(json!(null), "[range(-1, 1; 0, 2)]", y);
 }
 
 #[test]

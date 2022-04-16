@@ -132,7 +132,7 @@ impl Filter {
         use core::iter::once;
         use itertools::Itertools;
         match self {
-            Self::Pos(n) => Box::new(once(Ok(Val::Pos(*n)))),
+            Self::Pos(n) => Box::new(once(Ok(Val::Int((*n).into())))),
             Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
             Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::clone(s))))),
             Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
