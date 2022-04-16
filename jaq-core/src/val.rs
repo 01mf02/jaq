@@ -429,18 +429,23 @@ impl Ord for Val {
             (x, Self::Num(n)) => x.cmp(&Self::from(&**n)),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
-            (Self::Obj(x), Self::Obj(y)) => {
-                let mut l: Vec<_> = x.iter().collect();
-                let mut r: Vec<_> = y.iter().collect();
-                l.sort_by_key(|(k, _v)| *k);
-                r.sort_by_key(|(k, _v)| *k);
-                // TODO: make this nicer
-                let kl = l.iter().map(|(k, _v)| k);
-                let kr = r.iter().map(|(k, _v)| k);
-                let vl = l.iter().map(|(_k, v)| v);
-                let vr = r.iter().map(|(_k, v)| v);
-                kl.cmp(kr).then_with(|| vl.cmp(vr))
-            }
+            (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
+                (0, 0) => Equal,
+                (0, _) => Less,
+                (_, 0) => Greater,
+                _ => {
+                    let mut l: Vec<_> = x.iter().collect();
+                    let mut r: Vec<_> = y.iter().collect();
+                    l.sort_by_key(|(k, _v)| *k);
+                    r.sort_by_key(|(k, _v)| *k);
+                    // TODO: make this nicer
+                    let kl = l.iter().map(|(k, _v)| k);
+                    let kr = r.iter().map(|(k, _v)| k);
+                    let vl = l.iter().map(|(_k, v)| v);
+                    let vr = r.iter().map(|(_k, v)| v);
+                    kl.cmp(kr).then_with(|| vl.cmp(vr))
+                }
+            },
 
             // nulls are smaller than anything else
             (Self::Null, _) => Less,
