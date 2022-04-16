@@ -19,10 +19,12 @@ enum Sign {
 use Sign::*;
 
 impl Int {
+    /// Construct a positive integer.
     fn pos(abs: usize) -> Self {
         Self { abs, sign: Pos }
     }
 
+    /// Construct a negative integer.
     fn neg(abs: usize) -> Self {
         Self { abs, sign: Neg }
     }
