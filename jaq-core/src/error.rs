@@ -10,7 +10,7 @@ use core::fmt;
 pub enum Error {
     /// `0 | error`
     Val(Val),
-    /// `{a: 1} | .[0]`
+    /// `{(0): 1}`
     ObjKey(Val),
     /// `0 == 0 | length`
     Length(Val),
