@@ -15,6 +15,25 @@ fn first_last() {
 }
 
 #[test]
+fn has() {
+    give(json!(null), "has(0)", json!(false));
+    let err = Error::Has(Val::Int(0.into()), Val::Null);
+    fail(json!(0), "has([] | .[0])", err);
+    let err = Error::Has(Val::Int(0.into()), Val::Int(1.into()));
+    fail(json!(0), "has(1)", err);
+    let err = Error::Has(Val::Str("a".to_string().into()), Val::Int(0.into()));
+    fail(json!("a"), "has(0)", err);
+
+    give(json!([0, null]), "has(0)", json!(true));
+    give(json!([0, null]), "has(1)", json!(true));
+    give(json!([0, null]), "has(2)", json!(false));
+
+    give(json!({"a": 1, "b": null}), r#"has("a")"#, json!(true));
+    give(json!({"a": 1, "b": null}), r#"has("b")"#, json!(true));
+    give(json!({"a": 1, "b": null}), r#"has("c")"#, json!(false));
+}
+
+#[test]
 fn keys() {
     give(json!([0, null, "a"]), "[keys]", json!([0, 1, 2]));
     give(json!({"a": 1, "b": 2}), "[keys]", json!(["a", "b"]));
