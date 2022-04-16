@@ -44,8 +44,6 @@ pub enum Error {
     IndexOutOfBounds(Int),
     /// `[] | .["a"]`
     Int(Val),
-    /// `limit(-1; .)`
-    Nat(Val),
     /// `[] | .[0:] = 0`
     SliceAssign(Val),
 }
@@ -73,7 +71,6 @@ impl fmt::Display for Error {
             Self::IndexWith(v, i) => write!(f, "cannot index {v} with {i}"),
             Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),
             Self::Int(v) => write!(f, "cannot use {v} as integer"),
-            Self::Nat(v) => write!(f, "cannot use {v} as positive integer"),
             Self::SliceAssign(v) => write!(f, "cannot assign non-array ({v}) to an array slice"),
         }
     }

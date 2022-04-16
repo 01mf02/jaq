@@ -37,6 +37,14 @@ impl Int {
         self.sign == Pos
     }
 
+    /// If the integer is positive, return it, else nothing.
+    pub fn positive(self) -> Option<usize> {
+        match self.sign {
+            Pos => Some(self.abs),
+            Neg => None,
+        }
+    }
+
     /// Convert integer to a floating-point value.
     pub fn as_f64(self) -> f64 {
         match self.sign {

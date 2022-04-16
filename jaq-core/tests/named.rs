@@ -38,8 +38,10 @@ fn length() {
 fn limit() {
     // a big WTF: jq outputs "1" here! that looks like another bug ...
     gives(json!(null), "limit(0; 1,2)", []);
-    // jaq does not support negative indices in limit
     give(json!(null), "[limit(1, 0, 3; 0, 1)]", json!([0, 0, 1]));
+
+    // here, jaq diverges from jq, which returns `[0, 1]`
+    give(json!(null), "[limit(-1; 0, 1)]", json!([]));
 }
 
 #[test]

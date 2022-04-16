@@ -55,14 +55,6 @@ impl Val {
         !matches!(self, Val::Null | Val::Bool(false))
     }
 
-    /// If the value is a positive integer, return it, else fail.
-    pub fn as_usize(&self) -> Result<usize, Error> {
-        match self {
-            Self::Int(i) if i.is_positive() => Ok(i.abs()),
-            _ => Err(Error::Nat(self.clone())),
-        }
-    }
-
     /// If the value is integer, return its absolute value and whether its positive, else fail.
     pub fn as_int(&self) -> Result<Int, Error> {
         match self {

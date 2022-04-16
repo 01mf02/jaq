@@ -226,9 +226,9 @@ impl Filter {
                 Err(e) => Box::new(once(Err(e))),
             },
             Self::Limit(n, f) => {
-                let n = n.run(cv.clone()).map(|n| n?.as_usize());
+                let n = n.run(cv.clone()).map(|n| n?.as_int());
                 Box::new(n.flat_map(move |n| match n {
-                    Ok(n) => Box::new(f.run(cv.clone()).take(n)),
+                    Ok(n) => Box::new(f.run(cv.clone()).take(n.positive().unwrap_or(0))),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
