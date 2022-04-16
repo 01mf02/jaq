@@ -18,8 +18,6 @@ pub enum Error {
     Round(Val),
     /// `0 | fromjson` or `"[1, 2" | fromjson`
     FromJson(Val, Option<String>),
-    /// `0 | keys`
-    ToNumber(Val),
     /// `0 | sort`
     Sort(Val),
     /// `[] | has("a")` or `{} | has(0)`
@@ -42,7 +40,7 @@ pub enum Error {
     IndexWith(Val, Val),
     /// `[] | .[0] = 0`
     IndexOutOfBounds(Int),
-    /// `[] | .["a"]`
+    /// `[] | .["a"]` or `limit("a"; 0)`
     Int(Val),
     /// `[] | .[0:] = 0`
     SliceAssign(Val),
@@ -59,7 +57,6 @@ impl fmt::Display for Error {
             Self::Sort(v) => write!(f, "cannot sort {v}, as it is not an array"),
             Self::FromJson(v, None) => write!(f, "cannot parse {v} as JSON"),
             Self::FromJson(v, Some(why)) => write!(f, "cannot parse {v} as JSON: {why}"),
-            Self::ToNumber(v) => write!(f, "cannot parse {v} as number"),
             Self::Keys(v) => write!(f, "{v} has no keys"),
             Self::Has(v, k) => write!(f, "cannot check whether {v} has key {k}"),
             Self::Split => write!(f, "split input and separator must be strings"),
