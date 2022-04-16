@@ -17,6 +17,7 @@ fn first_last() {
 #[test]
 fn has() {
     give(json!(null), "has(0)", json!(false));
+
     let err = Error::Has(Val::Int(0.into()), Val::Null);
     fail(json!(0), "has([] | .[0])", err);
     let err = Error::Has(Val::Int(0.into()), Val::Int(1.into()));
