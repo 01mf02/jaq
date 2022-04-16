@@ -88,18 +88,6 @@ impl Val {
         }
     }
 
-    /// Return the type of the value, e.g. "boolean" for true and false.
-    pub fn typ(&self) -> &str {
-        match self {
-            Self::Null => "null",
-            Self::Bool(_) => "boolean",
-            Self::Int(_) | Self::Float(_) | Self::Num(_) => "number",
-            Self::Str(_) => "string",
-            Self::Arr(_) => "array",
-            Self::Obj(_) => "object",
-        }
-    }
-
     /// Apply a rounding function to floating-point numbers, then convert them to integers.
     ///
     /// Return integers unchanged, and fail on any other input.

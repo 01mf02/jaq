@@ -121,6 +121,20 @@ fn repeat() {
 fn select() {
     give(json!([1, 2]), ".[] | select(.>1)", json!(2));
     give(json!([0, 1, 2]), "map(select(.<1, 1<.))", json!([0, 2]));
+
+    let v = json!([null, false, true, 1, 1.0, "", "a", [], [0], {}, {"a": 1}]);
+    let iterables = json!([[], [0], {}, {"a": 1}]);
+    let scalars = json!([null, false, true, 1, 1.0, "", "a"]);
+    let values = json!([false, true, 1, 1.0, "", "a", [], [0], {}, {"a": 1}]);
+    give(v.clone(), ".[] | nulls", json!(null));
+    give(v.clone(), "[.[] | booleans]", json!([false, true]));
+    give(v.clone(), "[.[] | numbers]", json!([1, 1.0]));
+    give(v.clone(), "[.[] | strings]", json!(["", "a"]));
+    give(v.clone(), "[.[] | arrays]", json!([[], [0]]));
+    give(v.clone(), "[.[] | objects]", json!([{}, {"a": 1}]));
+    give(v.clone(), "[.[] | iterables]", iterables);
+    give(v.clone(), "[.[] | scalars]", scalars);
+    give(v.clone(), "[.[] | values]", values);
 }
 
 #[test]
@@ -130,4 +144,15 @@ fn transpose() {
 
     let y = json!([[1, 2], [3, 4]]);
     give(json!([[1, 3], [2, 4]]), "transpose", y);
+}
+
+#[test]
+fn typ() {
+    give(json!({"a": 1, "b": 2}), "type", json!("object"));
+    give(json!([0, 1]), "type", json!("array"));
+    give(json!("Hello"), "type", json!("string"));
+    give(json!(1), "type", json!("number"));
+    give(json!(1.0), "type", json!("number"));
+    give(json!(true), "type", json!("boolean"));
+    give(json!(null), "type", json!("null"));
 }

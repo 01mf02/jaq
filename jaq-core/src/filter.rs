@@ -31,7 +31,6 @@ pub enum Filter {
 
     Error,
     Length,
-    Type,
     Floor,
     Round,
     Ceil,
@@ -104,7 +103,6 @@ impl Filter {
         Vec::from([
             make_builtin!("error", 0, Self::Error),
             make_builtin!("length", 0, Self::Length),
-            make_builtin!("type", 0, Self::Type),
             make_builtin!("keys", 0, Self::Keys),
             make_builtin!("floor", 0, Self::Floor),
             make_builtin!("round", 0, Self::Round),
@@ -194,7 +192,6 @@ impl Filter {
             }
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
             Self::Length => Box::new(once(cv.1.len())),
-            Self::Type => Box::new(once(Ok(Val::Str(Rc::new(cv.1.typ().to_string()))))),
             Self::Keys => match cv.1.keys() {
                 Ok(keys) => Box::new(keys.collect::<Vec<_>>().into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
@@ -323,7 +320,7 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Error | Self::Length | Self::Type | Self::Keys => self,
+            Self::Error | Self::Length | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::FromJson | Self::ToJson => self,
             Self::Sort => self,

@@ -16,17 +16,26 @@ def isinfinite: . == infinite or -. == infinite;
 def isfinite: isinfinite | not;
 def isnormal: isnan or isinfinite | not;
 
+# Type
+def type:
+    if . == null then "null"
+  elif . == true or . == false then "boolean"
+  elif . < "" then "number"
+  elif . < [] then "string"
+  elif . < {} then "array"
+  else "object" end;
+
 # Selection
 def select(f): if f then . else empty end;
 def values:    select(. != null);
 def nulls:     select(. == null);
-def booleans:  select(type == "boolean");
-def numbers:   select(type == "number");
-def strings:   select(type == "string");
-def arrays:    select(type == "array");
-def objects:   select(type == "object");
-def iterables: select(type | . == "array" or  . == "object");
-def scalars:   select(type | . != "array" and . != "object");
+def booleans:  select(. == true or . == false);
+def numbers:   select(. > true and . < "");
+def strings:   select(. >= ""  and . < []);
+def arrays:    select(. >= []  and . < {});
+def objects:   select(. >= {});
+def iterables: select(. >= []);
+def scalars:   select(. <  []);
 
 # Conversion
 def tostring: if type == "string" then . else   tojson end;

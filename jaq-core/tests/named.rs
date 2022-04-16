@@ -74,13 +74,3 @@ fn round() {
     fail(json!([]), "round", Error::Round(Val::from(json!([]))));
     fail(json!({}), "round", Error::Round(Val::from(json!({}))));
 }
-
-#[test]
-fn typ() {
-    give(json!({"a": 1, "b": 2}), "type", json!("object"));
-    give(json!("Hello"), "type", json!("string"));
-    give(json!(1), "type", json!("number"));
-    give(json!(1.0), "type", json!("number"));
-    give(json!(true), "type", json!("boolean"));
-    give(json!(null), "type", json!("null"));
-}
