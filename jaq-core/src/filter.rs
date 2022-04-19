@@ -8,7 +8,7 @@ use jaq_parse::{MathOp, OrdOp};
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug)]
 pub enum Filter {
-    Pos(usize),
+    Int(isize),
     Float(f64),
     Str(Rc<String>),
     Array(Option<Box<Self>>),
@@ -130,7 +130,7 @@ impl Filter {
         use core::iter::once;
         use itertools::Itertools;
         match self {
-            Self::Pos(n) => Box::new(once(Ok(Val::Int((*n).into())))),
+            Self::Int(n) => Box::new(once(Ok(Val::Int(*n)))),
             Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
             Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::clone(s))))),
             Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
@@ -225,7 +225,7 @@ impl Filter {
             Self::Limit(n, f) => {
                 let n = n.run(cv.clone()).map(|n| n?.as_int());
                 Box::new(n.flat_map(move |n| match n {
-                    Ok(n) => Box::new(f.run(cv.clone()).take(n.positive().unwrap_or(0))),
+                    Ok(n) => Box::new(f.run(cv.clone()).take(core::cmp::max(0, n) as usize)),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
@@ -297,7 +297,7 @@ impl Filter {
         let sub = |f: Box<Self>| Box::new(subst(*f));
 
         match self {
-            Self::Pos(_) | Self::Float(_) | Self::Str(_) => self,
+            Self::Int(_) | Self::Float(_) | Self::Str(_) => self,
             Self::Array(f) => Self::Array(f.map(sub)),
             Self::Object(kvs) => {
                 Self::Object(kvs.into_iter().map(|(k, v)| (subst(k), subst(v))).collect())

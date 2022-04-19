@@ -1,6 +1,6 @@
 //! JSON values with reference-counted sharing.
 
-use crate::{Error, Int};
+use crate::Error;
 use ahash::RandomState;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
@@ -27,7 +27,7 @@ pub enum Val {
     /// Boolean
     Bool(bool),
     /// Integer
-    Int(Int),
+    Int(isize),
     /// Floating-point number
     Float(f64),
     /// Floating-point number or integer not fitting into `Int`
@@ -56,7 +56,7 @@ impl Val {
     }
 
     /// If the value is integer, return its absolute value and whether its positive, else fail.
-    pub fn as_int(&self) -> Result<Int, Error> {
+    pub fn as_int(&self) -> Result<isize, Error> {
         match self {
             Self::Int(i) => Ok(*i),
             _ => Err(Error::Int(self.clone())),
@@ -77,14 +77,14 @@ impl Val {
     /// Fail on booleans.
     pub fn len(&self) -> Result<Self, Error> {
         match self {
-            Self::Null => Ok(Self::Int(Int::from(0))),
+            Self::Null => Ok(Self::Int(0)),
             Self::Bool(_) => Err(Error::Length(self.clone())),
-            Self::Int(i) => Ok(Self::Int(Int::from(i.abs()))),
+            Self::Int(i) => Ok(Self::Int(i.abs())),
             Self::Num(n) => Self::from(&**n).len(),
             Self::Float(f) => Ok(Self::Float(f.abs())),
-            Self::Str(s) => Ok(Self::Int(s.chars().count().into())),
-            Self::Arr(a) => Ok(Self::Int(a.len().into())),
-            Self::Obj(o) => Ok(Self::Int(o.len().into())),
+            Self::Str(s) => Ok(Self::Int(s.chars().count() as isize)),
+            Self::Arr(a) => Ok(Self::Int(a.len() as isize)),
+            Self::Obj(o) => Ok(Self::Int(o.len() as isize)),
         }
     }
 
@@ -94,14 +94,7 @@ impl Val {
     pub fn round(&self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
         match self {
             Self::Int(_) => Ok(self.clone()),
-            Self::Float(x) => {
-                let rounded = f(*x);
-                if rounded < 0.0 {
-                    Ok(Self::Int(-Int::from(-rounded as usize)))
-                } else {
-                    Ok(Self::Int(Int::from(rounded as usize)))
-                }
-            }
+            Self::Float(x) => Ok(Self::Int(f(*x) as isize)),
             Self::Num(n) => Self::from(&**n).round(f),
             _ => Err(Error::Round(self.clone())),
         }
@@ -110,7 +103,7 @@ impl Val {
     /// Return all numbers in the range `[self, other)` if both inputs are integer, else fail.
     pub fn range(&self, other: &Self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match (self, other) {
-            (Self::Int(x), Self::Int(y)) => Ok(Box::new(x.range(y).map(Self::Int))),
+            (Self::Int(x), Self::Int(y)) => Ok(Box::new((*x..*y).map(Self::Int))),
             _ => Err(Error::Range),
         }
     }
@@ -121,7 +114,7 @@ impl Val {
     pub fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
             (Self::Null, _) => Ok(false),
-            (Self::Arr(a), Self::Int(i)) if i.is_positive() => Ok(i.abs() < a.len()),
+            (Self::Arr(a), Self::Int(i)) if *i >= 0 => Ok((*i as usize) < a.len()),
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
             _ => Err(Error::Has(self.clone(), key.clone())),
         }
@@ -132,7 +125,7 @@ impl Val {
     /// Fail on values that are neither arrays nor objects.
     pub fn keys(&self) -> Result<Vals, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new((0..a.len()).map(|i| Val::Int(i.into())))),
+            Self::Arr(a) => Ok(Box::new((0..a.len() as isize).map(Val::Int))),
             Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::clone(k))))),
             _ => Err(Error::Keys(self.clone())),
         }
@@ -224,19 +217,10 @@ impl From<serde_json::Value> for Val {
         match v {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
-            Number(n) => {
-                // try to map numbers into positive/negative integers
-                let s = n.to_string();
-                let n = || Self::Num(Rc::new(n));
-                match s.strip_prefix('-') {
-                    Some(neg) => neg
-                        .parse::<usize>()
-                        .map_or_else(|_| n(), |u| Self::Int(-Int::from(u))),
-                    None => s
-                        .parse::<usize>()
-                        .map_or_else(|_| n(), |p| Self::Int(Int::from(p))),
-                }
-            }
+            Number(n) => n
+                .to_string()
+                .parse()
+                .map_or_else(|_| Self::Num(Rc::new(n)), Self::Int),
             String(s) => Self::Str(Rc::new(s)),
             Array(a) => Self::Arr(Rc::new(a.into_iter().map(|x| x.into()).collect())),
             Object(o) => Self::Obj(Rc::new(
@@ -252,8 +236,7 @@ impl From<Val> for serde_json::Value {
         match v {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
-            Val::Int(i) if i.is_positive() => Number(i.abs().into()),
-            Val::Int(i) => isize::try_from(i.abs()).map_or(Null, |n| Number((-n).into())),
+            Val::Int(i) => Number(i.into()),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
             Val::Num(n) => Number((*n).clone()),
             Val::Str(s) => String((*s).clone()),
@@ -281,7 +264,7 @@ impl core::ops::Add for Val {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
             (Int(x), Int(y)) => Ok(Int(x + y)),
-            (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i.as_f64())),
+            (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i as f64)),
             (Float(x), Float(y)) => Ok(Float(x + y)),
             (Num(n), r) => Self::from(&*n) + r,
             (l, Num(n)) => l + Self::from(&*n),
@@ -308,8 +291,8 @@ impl core::ops::Sub for Val {
         use Val::*;
         match (self, rhs) {
             (Int(x), Int(y)) => Ok(Int(x - y)),
-            (Float(f), Int(i)) => Ok(Float(f - i.as_f64())),
-            (Int(i), Float(f)) => Ok(Float(i.as_f64() - f)),
+            (Float(f), Int(i)) => Ok(Float(f - i as f64)),
+            (Int(i), Float(f)) => Ok(Float(i as f64 - f)),
             (Float(x), Float(y)) => Ok(Float(x - y)),
             (Num(n), r) => Self::from(&*n) - r,
             (l, Num(n)) => l - Self::from(&*n),
@@ -324,7 +307,7 @@ impl core::ops::Mul for Val {
         use Val::*;
         match (self, rhs) {
             (Int(x), Int(y)) => Ok(Int(x * y)),
-            (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i.as_f64())),
+            (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
             (Num(n), r) => Self::from(&*n) * r,
             (l, Num(n)) => l * Self::from(&*n),
@@ -339,8 +322,8 @@ impl core::ops::Div for Val {
         use Val::*;
         match (self, rhs) {
             (Int(x), Int(y)) => Ok(Int(x / y)),
-            (Float(f), Int(i)) => Ok(Float(f / i.as_f64())),
-            (Int(i), Float(f)) => Ok(Float(i.as_f64() / f)),
+            (Float(f), Int(i)) => Ok(Float(f / i as f64)),
+            (Int(i), Float(f)) => Ok(Float(i as f64 / f)),
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from(&*n) / r,
             (l, Num(n)) => l / Self::from(&*n),
@@ -380,7 +363,7 @@ impl PartialEq for Val {
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Int(x), Self::Int(y)) => x == y,
             (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
-                float_eq(&i.as_f64(), f)
+                float_eq(&(*i as f64), f)
             }
             (Self::Float(x), Self::Float(y)) => float_eq(x, y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
@@ -409,8 +392,8 @@ impl Ord for Val {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Int(x), Self::Int(y)) => x.cmp(y),
-            (Self::Int(i), Self::Float(f)) => float_cmp(&i.as_f64(), f),
-            (Self::Float(f), Self::Int(i)) => float_cmp(f, &i.as_f64()),
+            (Self::Int(i), Self::Float(f)) => float_cmp(&(*i as f64), f),
+            (Self::Float(f), Self::Int(i)) => float_cmp(f, &(*i as f64)),
             (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
             (Self::Num(n), y) => Self::from(&**n).cmp(y),

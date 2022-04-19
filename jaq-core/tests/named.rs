@@ -18,11 +18,11 @@ fn first_last() {
 fn has() {
     give(json!(null), "has(0)", json!(false));
 
-    let err = Error::Has(Val::Int(0.into()), Val::Null);
+    let err = Error::Has(Val::Int(0), Val::Null);
     fail(json!(0), "has([] | .[0])", err);
-    let err = Error::Has(Val::Int(0.into()), Val::Int(1.into()));
+    let err = Error::Has(Val::Int(0), Val::Int(1));
     fail(json!(0), "has(1)", err);
-    let err = Error::Has(Val::Str("a".to_string().into()), Val::Int(0.into()));
+    let err = Error::Has(Val::Str("a".to_string().into()), Val::Int(0));
     fail(json!("a"), "has(0)", err);
 
     give(json!([0, null]), "has(0)", json!(true));
@@ -39,7 +39,7 @@ fn keys() {
     give(json!([0, null, "a"]), "[keys]", json!([0, 1, 2]));
     give(json!({"a": 1, "b": 2}), "[keys]", json!(["a", "b"]));
 
-    fail(json!(0), "keys", Error::Keys(Val::Int(0.into())));
+    fail(json!(0), "keys", Error::Keys(Val::Int(0)));
     fail(json!(null), "keys", Error::Keys(Val::Null));
 }
 

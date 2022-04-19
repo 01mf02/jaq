@@ -1,4 +1,4 @@
-use crate::{Int, Val};
+use crate::Val;
 use alloc::string::String;
 use core::fmt;
 
@@ -39,7 +39,7 @@ pub enum Error {
     /// `{} | .[0]`
     IndexWith(Val, Val),
     /// `[] | .[0] = 0`
-    IndexOutOfBounds(Int),
+    IndexOutOfBounds(isize),
     /// `[] | .["a"]` or `limit("a"; 0)`
     Int(Val),
     /// `[] | .[0:] = 0`

@@ -1,7 +1,7 @@
 pub mod common;
 
 use common::{fail, give, gives};
-use jaq_core::{Error, Int};
+use jaq_core::Error;
 use serde_json::json;
 
 #[test]
@@ -82,8 +82,8 @@ fn index_update() {
     give(json!([0, 1, 2]), ".[ 0, 0] |= ([] | .[])", json!([2]));
 
     use Error::IndexOutOfBounds as Oob;
-    fail(json!([0, 1, 2]), ".[ 3] |=  3", Oob(Int::from(3)));
-    fail(json!([0, 1, 2]), ".[-4] |= -1", Oob(-Int::from(4)));
+    fail(json!([0, 1, 2]), ".[ 3] |=  3", Oob(3));
+    fail(json!([0, 1, 2]), ".[-4] |= -1", Oob(-4));
 
     give(json!({"a": 1}), r#".[0, "a"]? |= .+1"#, json!({"a": 2}));
     give(json!([0, 1, 2]), r#".["a", 0]? |= .+1"#, json!([1, 1, 2]));

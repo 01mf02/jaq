@@ -7,7 +7,6 @@ extern crate std;
 
 mod error;
 mod filter;
-mod int;
 mod path;
 mod unparse;
 mod val;
@@ -15,7 +14,6 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
-pub use int::Int;
 pub use val::Val;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};

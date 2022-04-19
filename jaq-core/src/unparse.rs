@@ -33,12 +33,12 @@ where
                     errs.push(Error::custom(body.1, err));
                     Filter::Float(0.)
                 }
-            } else if let Ok(f) = n.parse::<usize>() {
-                Filter::Pos(f)
+            } else if let Ok(f) = n.parse::<isize>() {
+                Filter::Int(f)
             } else {
                 let err = "cannot interpret as machine-size integer";
                 errs.push(Error::custom(body.1, err));
-                Filter::Pos(0)
+                Filter::Int(0)
             }
         }
         Expr::Str(s) => Filter::Str(Rc::new(s)),
