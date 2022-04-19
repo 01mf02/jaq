@@ -23,6 +23,7 @@ use jaq_parse::MathOp;
 /// * Any other operation between two numbers yields a float.
 #[derive(Clone, Debug)]
 pub enum Val {
+    /// Null
     Null,
     /// Boolean
     Bool(bool),

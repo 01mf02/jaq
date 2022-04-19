@@ -1,5 +1,6 @@
 //! JSON query language interpreter.
 #![no_std]
+#![warn(missing_docs)]
 
 extern crate alloc;
 #[cfg(feature = "std")]

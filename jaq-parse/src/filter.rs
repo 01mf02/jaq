@@ -76,6 +76,7 @@ pub enum Filter {
     Var(String),
     /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
+    /// Object, specifying its key-value pairs
     Object(Vec<KeyVal>),
     /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Path<Self>),

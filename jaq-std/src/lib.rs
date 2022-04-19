@@ -11,6 +11,7 @@
 //! this crate precompiles the standard library,
 //! in order to reduce startup time.
 #![no_std]
+#![warn(missing_docs)]
 
 extern crate alloc;
 use alloc::vec::Vec;
