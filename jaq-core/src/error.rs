@@ -10,16 +10,18 @@ use core::fmt;
 pub enum Error {
     /// `0 | error`
     Val(Val),
+    /// `[1114112] | implode`
+    Char(isize),
     /// `{(0): 1}`
     Str(Val),
+    /// `0 | sort` or `0 | implode`
+    Arr(Val),
     /// `0 == 0 | length`
     Length(Val),
     /// `"a" | round`
     Round(Val),
     /// `0 | fromjson` or `"[1, 2" | fromjson`
     FromJson(Val, Option<String>),
-    /// `0 | sort`
-    Sort(Val),
     /// `[] | has("a")` or `{} | has(0)`
     Has(Val, Val),
     /// `"a b c" | split(0)`
@@ -51,10 +53,11 @@ impl fmt::Display for Error {
         match self {
             Self::Val(Val::Str(s)) => s.fmt(f),
             Self::Val(v) => v.fmt(f),
+            Self::Char(i) => write!(f, "cannot use {i} as character"),
             Self::Str(v) => write!(f, "cannot use {v} as string"),
+            Self::Arr(v) => write!(f, "cannot use {v} as array"),
             Self::Length(v) => write!(f, "{v} has no length"),
             Self::Round(v) => write!(f, "cannot round {v}"),
-            Self::Sort(v) => write!(f, "cannot sort {v}, as it is not an array"),
             Self::FromJson(v, None) => write!(f, "cannot parse {v} as JSON"),
             Self::FromJson(v, Some(why)) => write!(f, "cannot parse {v} as JSON: {why}"),
             Self::Keys(v) => write!(f, "{v} has no keys"),

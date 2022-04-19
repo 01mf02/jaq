@@ -71,6 +71,13 @@ impl Val {
         }
     }
 
+    fn as_arr(&self) -> Result<Rc<Vec<Val>>, Error> {
+        match self {
+            Self::Arr(a) => Ok(Rc::clone(a)),
+            _ => Err(Error::Arr(self.clone())),
+        }
+    }
+
     /// Return 0 for null, the absolute value for numbers, and
     /// the length for strings, arrays, and objects.
     ///
@@ -173,23 +180,30 @@ impl Val {
 
     /// Convert a string into an array of its Unicode codepoints.
     pub fn explode(self) -> ValR {
+        // conversion from u32 to isize may fail on 32-bit systems for high values of c
+        let conv = |c: char| Val::Int(isize::try_from(c as u32).unwrap());
         self.as_str()
-            .map(|s| Val::Arr(Rc::new(s.chars().map(|c| Val::Int(c as isize)).collect())))
+            .map(|s| Val::Arr(Rc::new(s.chars().map(conv).collect())))
     }
 
     /// Convert an array of Unicode codepoints into a string.
     pub fn implode(self) -> ValR {
-        let conv = |c: isize| char::from_u32(c.try_into().unwrap()).unwrap();
-        match self {
-            Val::Arr(a) => a
-                .iter()
-                .map(|v| v.as_int().map(conv))
+        // conversion from isize to u32 may fail on 64-bit systems for high values of c
+        let conv = |i: isize| {
+            u32::try_from(i)
+                .ok()
+                .and_then(|u| char::from_u32(u))
+                .ok_or_else(|| Error::Char(i))
+        };
+        self.as_arr().and_then(|a| {
+            a.iter()
+                .map(|v| v.as_int().and_then(conv))
                 .collect::<Result<String, _>>()
-                .map(|s| Self::Str(Rc::new(s))),
-            _ => Err(todo!()),
-        }
+                .map(|s| Self::Str(Rc::new(s)))
+        })
     }
 
+    /// Apply a function to a string.
     pub fn mutate_str(self, f: impl Fn(&mut str)) -> ValR {
         self.as_str().map(|mut s| {
             f(Rc::make_mut(&mut s).as_mut_str());
@@ -201,39 +215,33 @@ impl Val {
     ///
     /// Fail on any other value.
     pub fn sort(self) -> ValR {
-        match self {
-            Val::Arr(mut a) => {
-                Rc::make_mut(&mut a).sort();
-                Ok(Val::Arr(a))
-            }
-            v => Err(Error::Sort(v)),
-        }
+        self.as_arr().map(|mut a| {
+            Rc::make_mut(&mut a).sort();
+            Val::Arr(a)
+        })
     }
 
     /// Sort array by the given function.
     ///
     /// Fail on any other value.
     pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        match self {
-            Self::Arr(mut a) => {
-                // Some(e) iff an error has previously occurred
-                let mut err = None;
-                Rc::make_mut(&mut a).sort_by_cached_key(|x| {
-                    if err.is_some() {
-                        return Vec::new();
-                    };
-                    match f(x.clone()).collect() {
-                        Ok(y) => y,
-                        Err(e) => {
-                            err = Some(e);
-                            Vec::new()
-                        }
+        self.as_arr().and_then(|mut a| {
+            // Some(e) iff an error has previously occurred
+            let mut err = None;
+            Rc::make_mut(&mut a).sort_by_cached_key(|x| {
+                if err.is_some() {
+                    return Vec::new();
+                };
+                match f(x.clone()).collect() {
+                    Ok(y) => y,
+                    Err(e) => {
+                        err = Some(e);
+                        Vec::new()
                     }
-                });
-                err.map_or(Ok(Val::Arr(a)), Err)
-            }
-            _ => Err(Error::Sort(self)),
-        }
+                }
+            });
+            err.map_or(Ok(Val::Arr(a)), Err)
+        })
     }
 }
 

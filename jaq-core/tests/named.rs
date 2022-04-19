@@ -19,6 +19,8 @@ fn explode_implode() {
 
     give(json!("❤ の"), "explode | implode", json!("❤ の"));
     give(json!("y̆"), "explode | implode", json!("y̆"));
+
+    fail(json!([1114112]), "implode", Error::Char(1114112));
 }
 
 #[test]
