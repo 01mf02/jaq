@@ -19,7 +19,6 @@ use jaq_parse::MathOp;
 ///
 /// Operations on numbers follow a few principles:
 /// * The sum, difference, product, and remainder of two integers is integer.
-/// * The quotient of two integers is integer if the remainder of the integers is zero.
 /// * Any other operation between two numbers yields a float.
 #[derive(Clone, Debug)]
 pub enum Val {
@@ -322,7 +321,7 @@ impl core::ops::Div for Val {
     fn div(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Int(x / y)),
+            (Int(x), Int(y)) => Ok(Float(x as f64 / y as f64)),
             (Float(f), Int(i)) => Ok(Float(f / i as f64)),
             (Int(i), Float(f)) => Ok(Float(i as f64 / f)),
             (Float(x), Float(y)) => Ok(Float(x / y)),

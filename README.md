@@ -95,6 +95,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Variables (`. as $x | $x`)
 - [x] Reduction (`reduce .[] as $x (0, . + $x)`)
 - [ ] Error handling (`try ... catch`)
+- [ ] Recursion (`def r: r; r`)
 
 ## Paths
 
@@ -166,7 +167,7 @@ jaq currently does *not* aim to support the advanced features of jq, such as:
 
 jq uses 64-bit floating-point numbers (floats) for any number.
 By contrast, jaq interprets
-numbers such as 0   or -42 as 64-bit integers and
+numbers such as 0   or -42 as machine-sized integers and
 numbers such as 0.0 or 3e8 as 64-bit floats.
 Many operations in jaq, such as array indexing,
 check whether the passed numbers are indeed integer.
@@ -183,7 +184,7 @@ For example:
 
 The rules of jaq are:
 
-* The sum, difference, product, quotient, and remainder of two integers is integer.
+* The sum, difference, product, and remainder of two integers is integer.
 * Any other operation between two numbers yields a float.
 
 Examples:
@@ -191,11 +192,7 @@ Examples:
     $ jaq -n '1 + 2'
     3
     $ jaq -n '10 / 2'
-    5
-    $ jaq -n '11 / 2'
-    5
-    $ jaq -n '11.0 / 2'
-    5.5
+    5.0
     $ jaq -n '1.0 + 2'
     3.0
 
