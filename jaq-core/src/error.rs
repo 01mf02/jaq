@@ -11,7 +11,7 @@ pub enum Error {
     /// `0 | error`
     Val(Val),
     /// `{(0): 1}`
-    ObjKey(Val),
+    Str(Val),
     /// `0 == 0 | length`
     Length(Val),
     /// `"a" | round`
@@ -51,7 +51,7 @@ impl fmt::Display for Error {
         match self {
             Self::Val(Val::Str(s)) => s.fmt(f),
             Self::Val(v) => v.fmt(f),
-            Self::ObjKey(v) => write!(f, "cannot use {v} as object key"),
+            Self::Str(v) => write!(f, "cannot use {v} as string"),
             Self::Length(v) => write!(f, "{v} has no length"),
             Self::Round(v) => write!(f, "cannot round {v}"),
             Self::Sort(v) => write!(f, "cannot sort {v}, as it is not an array"),

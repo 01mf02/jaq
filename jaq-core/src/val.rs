@@ -55,7 +55,7 @@ impl Val {
         !matches!(self, Val::Null | Val::Bool(false))
     }
 
-    /// If the value is integer, return its absolute value and whether its positive, else fail.
+    /// If the value is integer, return it, else fail.
     pub fn as_int(&self) -> Result<isize, Error> {
         match self {
             Self::Int(i) => Ok(*i),
@@ -64,10 +64,10 @@ impl Val {
     }
 
     /// If the value is a string, return it, else fail.
-    pub fn as_obj_key(&self) -> Result<Rc<String>, Error> {
+    pub fn as_str(&self) -> Result<Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(Rc::clone(s)),
-            _ => Err(Error::ObjKey(self.clone())),
+            _ => Err(Error::Str(self.clone())),
         }
     }
 
@@ -168,6 +168,25 @@ impl Val {
                 .map(Val::from)
                 .map_err(|e| Error::FromJson(self, Some(e.to_string()))),
             _ => Err(Error::FromJson(self, None)),
+        }
+    }
+
+    /// Convert a string into an array of its Unicode codepoints.
+    pub fn explode(self) -> ValR {
+        self.as_str()
+            .map(|s| Val::Arr(Rc::new(s.chars().map(|c| Val::Int(c as isize)).collect())))
+    }
+
+    /// Convert an array of Unicode codepoints into a string.
+    pub fn implode(self) -> ValR {
+        let conv = |c: isize| char::from_u32(c.try_into().unwrap()).unwrap();
+        match self {
+            Val::Arr(a) => a
+                .iter()
+                .map(|v| v.as_int().map(conv))
+                .collect::<Result<String, _>>()
+                .map(|s| Self::Str(Rc::new(s))),
+            _ => Err(todo!()),
         }
     }
 

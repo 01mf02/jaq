@@ -129,7 +129,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
-- [ ] More string filters (`explode`, `startswith`, `ltrimstr`, ...)
+- [ ] More string filters (`startswith`, `ltrimstr`, ...)
 - [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
 
 ## Standard filters

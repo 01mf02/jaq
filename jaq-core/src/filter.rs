@@ -37,6 +37,8 @@ pub enum Filter {
     FromJson,
     ToJson,
     Keys,
+    Explode,
+    Implode,
     Sort,
     SortBy(Box<Self>),
     Has(Box<Self>),
@@ -110,6 +112,8 @@ impl Filter {
             make_builtin!("fromjson", 0, Self::FromJson),
             make_builtin!("tojson", 0, Self::ToJson),
             make_builtin!("sort", 0, Self::Sort),
+            make_builtin!("explode", 0, Self::Explode),
+            make_builtin!("implode", 0, Self::Implode),
             make_builtin!("sort_by", 1, Self::SortBy),
             make_builtin!("has", 1, Self::Has),
             make_builtin!("split", 1, Self::Split),
@@ -146,7 +150,7 @@ impl Filter {
                     .multi_cartesian_product()
                     .map(|kvs| {
                         kvs.into_iter()
-                            .map(|(k, v)| Ok((k?.as_obj_key()?, v?)))
+                            .map(|(k, v)| Ok((k?.as_str()?, v?)))
                             .collect::<Result<_, _>>()
                             .map(|kvs| Val::Obj(Rc::new(kvs)))
                     }),
@@ -201,6 +205,8 @@ impl Filter {
             Self::Ceil => Box::new(once(cv.1.round(|f| f.ceil()))),
             Self::FromJson => Box::new(once(cv.1.from_json())),
             Self::ToJson => Box::new(once(Ok(Val::Str(Rc::new(cv.1.to_string()))))),
+            Self::Explode => Box::new(once(cv.1.explode())),
+            Self::Implode => Box::new(once(cv.1.implode())),
             Self::Sort => Box::new(once(cv.1.sort())),
             Self::SortBy(f) => Box::new(once(cv.1.sort_by(|v| f.run((cv.0.clone(), v))))),
             Self::Has(f) => Box::new(
@@ -323,6 +329,7 @@ impl Filter {
             Self::Error | Self::Length | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::FromJson | Self::ToJson => self,
+            Self::Explode | Self::Implode => self,
             Self::Sort => self,
             Self::SortBy(f) => Self::SortBy(sub(f)),
             Self::Has(f) => Self::Has(sub(f)),
