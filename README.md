@@ -124,6 +124,8 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Type (`type`)
 - [x] Rounding (`floor`, `round`, `ceil`)
 - [x] String <-> JSON (`fromjson`, `tojson`)
+- [x] String <-> integers (`explode`, `implode`)
+- [x] String case normalisation (`ascii_downcase`, `ascii_upcase`)
 - [x] String splitting (`split("foo")`)
 - [x] Sorting (`sort`, `sort_by(-.)`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)

@@ -7,6 +7,21 @@ use jaq_core::{Error, Val};
 use serde_json::json;
 
 #[test]
+fn ascii() {
+    give(json!("aAaAäの"), "ascii_upcase", json!("AAAAäの"));
+    give(json!("aAaAäの"), "ascii_downcase", json!("aaaaäの"));
+}
+
+#[test]
+fn explode_implode() {
+    give(json!("❤ の"), "explode", json!([10084, 32, 12398]));
+    give(json!("y̆"), "explode", json!([121, 774]));
+
+    give(json!("❤ の"), "explode | implode", json!("❤ の"));
+    give(json!("y̆"), "explode | implode", json!("y̆"));
+}
+
+#[test]
 fn first_last() {
     gives(json!([]), "first(.[])", []);
     gives(json!([]), "last(.[])", []);

@@ -190,6 +190,13 @@ impl Val {
         }
     }
 
+    pub fn mutate_str(self, f: impl Fn(&mut str)) -> ValR {
+        self.as_str().map(|mut s| {
+            f(Rc::make_mut(&mut s).as_mut_str());
+            Self::Str(s)
+        })
+    }
+
     /// Sort array by the default order.
     ///
     /// Fail on any other value.
