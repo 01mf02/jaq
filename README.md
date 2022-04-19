@@ -196,6 +196,13 @@ Examples:
     $ jaq -n '1.0 + 2'
     3.0
 
+You can convert an integer to a floating-point number e.g.
+by adding 0.0, by multiplying with 1.0, or by dividing with 1.
+You can convert a floating-point number to an integer by
+`round`, `floor`, or `ceil`:
+
+    $ jaq -n '1.2 | [floor, round, ceil]'
+    [1, 1, 2]
 
 ## Assignments
 
