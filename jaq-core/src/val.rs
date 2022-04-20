@@ -12,8 +12,7 @@ use jaq_parse::MathOp;
 /// JSON value with sharing.
 ///
 /// The speciality of this type is that numbers are distinguished into
-/// positive integers, negative integers, and 64-bit floating-point numbers.
-/// All integers are machine-sized.
+/// machine-sized integers and 64-bit floating-point numbers.
 /// This allows using integers to index arrays,
 /// while using floating-point numbers to do general math.
 ///
