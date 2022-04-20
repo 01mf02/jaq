@@ -56,7 +56,6 @@ def min: reduce .[] as $x (.[0]; if $x < . then $x else . end);
 def max: reduce .[] as $x (.[0]; if $x > . then $x else . end);
 
 # Arrays
-def reverse: [.[length - 1 - range(length)]];
 def transpose: [range([.[] | length] | max) as $i | [.[][$i]]];
 def first:  .[ 0];
 def last:   .[-1];
