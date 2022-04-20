@@ -75,6 +75,16 @@ impl Val {
         }
     }
 
+    /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
+    fn as_codepoint(&self) -> Result<char, Error> {
+        let i = self.as_int()?;
+        // conversion from isize to u32 may fail on 64-bit systems for high values of c
+        u32::try_from(i)
+            .ok()
+            .and_then(char::from_u32)
+            .ok_or(Error::Char(i))
+    }
+
     /// Return 0 for null, the absolute value for numbers, and
     /// the length for strings, arrays, and objects.
     ///
@@ -173,17 +183,7 @@ impl Val {
 
     /// Convert an array of Unicode codepoints into a string.
     pub fn implode(&self) -> Result<String, Error> {
-        // conversion from isize to u32 may fail on 64-bit systems for high values of c
-        let conv = |i: isize| {
-            u32::try_from(i)
-                .ok()
-                .and_then(char::from_u32)
-                .ok_or(Error::Char(i))
-        };
-        self.as_arr()?
-            .iter()
-            .map(|v| conv(v.as_int()?))
-            .collect::<Result<String, _>>()
+        self.as_arr()?.iter().map(|v| v.as_codepoint()).collect()
     }
 
     /// Apply a function to a string.
