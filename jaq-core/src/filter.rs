@@ -120,11 +120,11 @@ impl Filter {
             make_builtin!("ascii_upcase", 0, Self::AsciiUpcase),
             make_builtin!("sort_by", 1, Self::SortBy),
             make_builtin!("has", 1, Self::Has),
+            make_builtin!("contains", 1, Self::Contains),
             make_builtin!("split", 1, Self::Split),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, Self::Recurse),
-            make_builtin!("contains", 1, Self::Contains),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
         ])
@@ -198,37 +198,34 @@ impl Filter {
             Self::Ord(l, op, r) => {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
+
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
             Self::Length => Box::new(once(cv.1.len())),
-            Self::Keys => match cv.1.keys() {
-                Ok(keys) => Box::new(keys.collect::<Vec<_>>().into_iter().map(Ok)),
-                Err(e) => Box::new(once(Err(e))),
-            },
+            Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
             Self::Floor => Box::new(once(cv.1.round(|f| f.floor()))),
             Self::Round => Box::new(once(cv.1.round(|f| f.round()))),
             Self::Ceil => Box::new(once(cv.1.round(|f| f.ceil()))),
             Self::FromJson => Box::new(once(cv.1.from_json())),
             Self::ToJson => Box::new(once(Ok(Val::Str(Rc::new(cv.1.to_string()))))),
-            Self::Explode => Box::new(once(cv.1.explode())),
-            Self::Implode => Box::new(once(cv.1.implode())),
+            Self::Explode => Box::new(once(cv.1.explode().map(|a| Val::Arr(Rc::new(a))))),
+            Self::Implode => Box::new(once(cv.1.implode().map(|s| Val::Str(Rc::new(s))))),
             Self::AsciiDowncase => Box::new(once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))),
             Self::AsciiUpcase => Box::new(once(cv.1.mutate_str(|s| s.make_ascii_uppercase()))),
-            Self::Sort => Box::new(once(cv.1.sort())),
+            Self::Sort => Box::new(once(cv.1.mutate_arr(|a| a.sort()))),
             Self::SortBy(f) => Box::new(once(cv.1.sort_by(|v| f.run((cv.0.clone(), v))))),
             Self::Has(f) => Box::new(
                 f.run(cv.clone())
                     .map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))),
             ),
-            Self::Split(f) => Box::new(f.run(cv.clone()).map(move |sep| {
-                match (&cv.1, sep?) {
-                    (Val::Str(s), Val::Str(sep)) => Ok(Val::Arr(Rc::new(
-                        s.split(&*sep)
-                            .map(|s| Val::Str(Rc::new(s.to_string())))
-                            .collect(),
-                    ))),
-                    _ => Err(Error::Split),
-                }
-            })),
+            Self::Contains(f) => Box::new(
+                f.run(cv.clone())
+                    .map(move |y| Ok(Val::Bool(cv.1.contains(&y?)))),
+            ),
+            Self::Split(f) => Box::new(
+                f.run(cv.clone())
+                    .map(move |sep| Ok(Val::Arr(Rc::new(cv.1.split(&sep?)?)))),
+            ),
+
             Self::First(f) => Box::new(f.run(cv).take(1)),
             Self::Last(f) => match f.run(cv).try_fold(None, |_, x| Ok(Some(x?))) {
                 Ok(y) => Box::new(y.map(Ok).into_iter()),
@@ -243,17 +240,13 @@ impl Filter {
             }
             Self::Range(from, until) => {
                 let prod = Self::cartesian(from, until, cv);
-                let ranges = prod.map(|(from, until)| from?.range(&until?));
+                let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
                 Box::new(ranges.flat_map(|range| match range {
-                    Ok(range) => Box::new(range.map(Ok)),
+                    Ok((l, u)) => Box::new((l..u).map(|i| Ok(Val::Int(i)))),
                     Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 }))
             }
             Self::Recurse(f) => Box::new(Recurse::new(&**f, cv)),
-            Self::Contains(f) => Box::new(
-                f.run(cv.clone())
-                    .map(move |y| y.map(|y| Val::Bool(cv.1.contains(&y)))),
-            ),
             Self::Reduce(xs, init, f) => {
                 let init: Result<Vec<_>, _> = init.run(cv.clone()).collect();
                 let mut xs = xs.run(cv.clone());
@@ -340,11 +333,11 @@ impl Filter {
             Self::Sort => self,
             Self::SortBy(f) => Self::SortBy(sub(f)),
             Self::Has(f) => Self::Has(sub(f)),
+            Self::Contains(f) => Self::Contains(sub(f)),
             Self::Split(f) => Self::Split(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f) => Self::Recurse(sub(f)),
-            Self::Contains(f) => Self::Contains(sub(f)),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
 

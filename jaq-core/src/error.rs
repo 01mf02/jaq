@@ -12,7 +12,7 @@ pub enum Error {
     Val(Val),
     /// `[1114112] | implode`
     Char(isize),
-    /// `{(0): 1}`
+    /// `{(0): 1}` or `0 | fromjson` or `0 | explode` or `"a b c" | split(0)`
     Str(Val),
     /// `0 | sort` or `0 | implode`
     Arr(Val),
@@ -20,14 +20,10 @@ pub enum Error {
     Length(Val),
     /// `"a" | round`
     Round(Val),
-    /// `0 | fromjson` or `"[1, 2" | fromjson`
-    FromJson(Val, Option<String>),
+    /// `"[1, 2" | fromjson`
+    FromJson(Val, String),
     /// `[] | has("a")` or `{} | has(0)`
     Has(Val, Val),
-    /// `"a b c" | split(0)`
-    Split,
-    /// `range(0; "a")`
-    Range,
     /// `0 | keys`
     Keys(Val),
     /// `0 | .[]`
@@ -42,7 +38,7 @@ pub enum Error {
     IndexWith(Val, Val),
     /// `[] | .[0] = 0`
     IndexOutOfBounds(isize),
-    /// `[] | .["a"]` or `limit("a"; 0)`
+    /// `[] | .["a"]` or `limit("a"; 0)` or `range(0; "a")`
     Int(Val),
     /// `[] | .[0:] = 0`
     SliceAssign(Val),
@@ -58,12 +54,9 @@ impl fmt::Display for Error {
             Self::Arr(v) => write!(f, "cannot use {v} as array"),
             Self::Length(v) => write!(f, "{v} has no length"),
             Self::Round(v) => write!(f, "cannot round {v}"),
-            Self::FromJson(v, None) => write!(f, "cannot parse {v} as JSON"),
-            Self::FromJson(v, Some(why)) => write!(f, "cannot parse {v} as JSON: {why}"),
+            Self::FromJson(v, why) => write!(f, "cannot parse {v} as JSON: {why}"),
             Self::Keys(v) => write!(f, "{v} has no keys"),
             Self::Has(v, k) => write!(f, "cannot check whether {v} has key {k}"),
-            Self::Split => write!(f, "split input and separator must be strings"),
-            Self::Range => write!(f, "range bounds must be integers"),
             Self::Iter(v) => write!(f, "cannot iterate over {v}"),
             Self::Neg(v) => write!(f, "cannot negate {v}"),
             Self::MathOp(l, op, r) => write!(f, "cannot calculate {l} {op} {r}"),

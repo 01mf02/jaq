@@ -107,14 +107,6 @@ impl Val {
         }
     }
 
-    /// Return all numbers in the range `[self, other)` if both inputs are integer, else fail.
-    pub fn range(&self, other: &Self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
-        match (self, other) {
-            (Self::Int(x), Self::Int(y)) => Ok(Box::new((*x..*y).map(Self::Int))),
-            _ => Err(Error::Range),
-        }
-    }
-
     /// Return true if `value | .[key]` is defined.
     ///
     /// Fail on values that are neither null, arrays, nor objects.
@@ -130,10 +122,10 @@ impl Val {
     /// Return any `key` for which `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
-    pub fn keys(&self) -> Result<Vals, Error> {
+    pub fn keys(&self) -> Result<Vec<Val>, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new((0..a.len() as isize).map(Val::Int))),
-            Self::Obj(o) => Ok(Box::new(o.keys().map(|k| Val::Str(Rc::clone(k))))),
+            Self::Arr(a) => Ok((0..a.len() as isize).map(Val::Int).collect()),
+            Self::Obj(o) => Ok(o.keys().map(|k| Val::Str(Rc::clone(k))).collect()),
             _ => Err(Error::Keys(self.clone())),
         }
     }
@@ -169,25 +161,21 @@ impl Val {
     /// Convert string to JSON.
     ///
     /// Fail on any other value.
-    pub fn from_json(self) -> ValR {
-        match self {
-            Self::Str(ref s) => serde_json::from_str::<serde_json::Value>(s)
-                .map(Val::from)
-                .map_err(|e| Error::FromJson(self, Some(e.to_string()))),
-            _ => Err(Error::FromJson(self, None)),
-        }
+    pub fn from_json(&self) -> ValR {
+        let serde = serde_json::from_str::<serde_json::Value>(&self.as_str()?)
+            .map_err(|e| Error::FromJson(self.clone(), e.to_string()))?;
+        Ok(Val::from(serde))
     }
 
     /// Convert a string into an array of its Unicode codepoints.
-    pub fn explode(self) -> ValR {
+    pub fn explode(&self) -> Result<Vec<Val>, Error> {
         // conversion from u32 to isize may fail on 32-bit systems for high values of c
         let conv = |c: char| Val::Int(isize::try_from(c as u32).unwrap());
-        self.as_str()
-            .map(|s| Val::Arr(Rc::new(s.chars().map(conv).collect())))
+        Ok(self.as_str()?.chars().map(conv).collect())
     }
 
     /// Convert an array of Unicode codepoints into a string.
-    pub fn implode(self) -> ValR {
+    pub fn implode(&self) -> Result<String, Error> {
         // conversion from isize to u32 may fail on 64-bit systems for high values of c
         let conv = |i: isize| {
             u32::try_from(i)
@@ -195,53 +183,57 @@ impl Val {
                 .and_then(|u| char::from_u32(u))
                 .ok_or_else(|| Error::Char(i))
         };
-        self.as_arr().and_then(|a| {
-            a.iter()
-                .map(|v| v.as_int().and_then(conv))
-                .collect::<Result<String, _>>()
-                .map(|s| Self::Str(Rc::new(s)))
-        })
+        self.as_arr()?
+            .iter()
+            .map(|v| conv(v.as_int()?))
+            .collect::<Result<String, _>>()
     }
 
     /// Apply a function to a string.
-    pub fn mutate_str(self, f: impl Fn(&mut str)) -> ValR {
-        self.as_str().map(|mut s| {
-            f(Rc::make_mut(&mut s).as_mut_str());
-            Self::Str(s)
-        })
+    pub fn mutate_str(&self, f: impl Fn(&mut String)) -> ValR {
+        let mut s = self.as_str()?;
+        f(Rc::make_mut(&mut s));
+        Ok(Self::Str(s))
     }
 
-    /// Sort array by the default order.
-    ///
-    /// Fail on any other value.
-    pub fn sort(self) -> ValR {
-        self.as_arr().map(|mut a| {
-            Rc::make_mut(&mut a).sort();
-            Val::Arr(a)
-        })
+    /// Apply a function to an array.
+    pub fn mutate_arr(&self, f: impl Fn(&mut Vec<Val>)) -> ValR {
+        let mut a = self.as_arr()?;
+        f(Rc::make_mut(&mut a));
+        Ok(Self::Arr(a))
     }
 
     /// Sort array by the given function.
     ///
     /// Fail on any other value.
-    pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        self.as_arr().and_then(|mut a| {
-            // Some(e) iff an error has previously occurred
-            let mut err = None;
-            Rc::make_mut(&mut a).sort_by_cached_key(|x| {
-                if err.is_some() {
-                    return Vec::new();
-                };
-                match f(x.clone()).collect() {
-                    Ok(y) => y,
-                    Err(e) => {
-                        err = Some(e);
-                        Vec::new()
-                    }
+    pub fn sort_by<'a>(&self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        let mut a = self.as_arr()?;
+        // Some(e) iff an error has previously occurred
+        let mut err = None;
+        Rc::make_mut(&mut a).sort_by_cached_key(|x| {
+            if err.is_some() {
+                return Vec::new();
+            };
+            match f(x.clone()).collect() {
+                Ok(y) => y,
+                Err(e) => {
+                    err = Some(e);
+                    Vec::new()
                 }
-            });
-            err.map_or(Ok(Val::Arr(a)), Err)
-        })
+            }
+        });
+        err.map_or(Ok(Val::Arr(a)), Err)
+    }
+
+    /// Split a string by a given separator string.
+    ///
+    /// Fail if any of the two given values is not a string.
+    pub fn split(&self, sep: &Self) -> Result<Vec<Val>, Error> {
+        Ok(self
+            .as_str()?
+            .split(&*sep.as_str()?)
+            .map(|s| Val::Str(Rc::new(s.to_string())))
+            .collect())
     }
 }
 

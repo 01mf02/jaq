@@ -53,8 +53,8 @@ fn has() {
 
 #[test]
 fn keys() {
-    give(json!([0, null, "a"]), "[keys]", json!([0, 1, 2]));
-    give(json!({"a": 1, "b": 2}), "[keys]", json!(["a", "b"]));
+    give(json!([0, null, "a"]), "keys", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "keys", json!(["a", "b"]));
 
     fail(json!(0), "keys", Error::Keys(Val::Int(0)));
     fail(json!(null), "keys", Error::Keys(Val::Null));
