@@ -79,10 +79,8 @@ impl Val {
     fn as_codepoint(&self) -> Result<char, Error> {
         let i = self.as_int()?;
         // conversion from isize to u32 may fail on 64-bit systems for high values of c
-        u32::try_from(i)
-            .ok()
-            .and_then(char::from_u32)
-            .ok_or(Error::Char(i))
+        let u = u32::try_from(i).map_err(|_| Error::Char(i))?;
+        char::from_u32(u).ok_or(Error::Char(i))
     }
 
     /// Return 0 for null, the absolute value for numbers, and
