@@ -67,6 +67,7 @@ impl Val {
         }
     }
 
+    /// If the value is an array, return it, else fail.
     fn as_arr(&self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(Rc::clone(a)),
