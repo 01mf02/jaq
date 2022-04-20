@@ -179,8 +179,8 @@ impl Val {
         let conv = |i: isize| {
             u32::try_from(i)
                 .ok()
-                .and_then(|u| char::from_u32(u))
-                .ok_or_else(|| Error::Char(i))
+                .and_then(char::from_u32)
+                .ok_or(Error::Char(i))
         };
         self.as_arr()?
             .iter()
