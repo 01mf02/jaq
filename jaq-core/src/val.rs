@@ -42,9 +42,6 @@ pub enum Val {
 /// A value result.
 pub type ValR = Result<Val, Error>;
 
-/// A stream of values.
-type Vals<'a> = Box<dyn Iterator<Item = Val> + 'a>;
-
 /// A stream of value results.
 pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
@@ -132,7 +129,7 @@ impl Val {
     /// Return the elements of an array or the values of an object (omitting its keys).
     ///
     /// Fail on any other value.
-    pub fn iter(&self) -> Result<Vals, Error> {
+    pub fn iter(&self) -> Result<Box<dyn Iterator<Item = Val> + '_>, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
             Self::Obj(o) => Ok(Box::new(o.values().cloned())),
