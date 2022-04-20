@@ -23,7 +23,7 @@ def type:
   elif . < "" then "number"
   elif . < [] then "string"
   elif . < {} then "array"
-  else "object" end;
+  else             "object" end;
 
 # Selection
 def select(f): if f then . else empty end;
