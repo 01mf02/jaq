@@ -32,7 +32,23 @@ pub enum Opt {
     Essential,
 }
 
-pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
+fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
+    just(Token::Ctrl('?')).or_not().map(|q| match q {
+        Some(_) => Opt::Optional,
+        None => Opt::Essential,
+    })
+}
+
+pub(crate) fn index<T: From<String>>(
+) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = Simple<Token>> + Clone {
+    filter_map(|span, tok| match tok {
+        Token::Ident(id) | Token::Str(id) => Ok(Part::Index((T::from(id), span))),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    })
+    .then(opt())
+}
+
+pub(crate) fn path2<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
     T: From<String>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
@@ -54,28 +70,27 @@ where
             .map(|o| o.unwrap_or(Part::Range(None, None)))
     };
 
-    let opt = just(Token::Ctrl('?')).or_not().map(|q| match q {
-        Some(_) => Opt::Optional,
-        None => Opt::Essential,
-    });
-
-    let dot_id = filter_map(|span, tok| match tok {
-        Token::Dot(Some(ident)) => Ok((T::from(ident), span)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-    let dot = just(Token::Dot(None)).then(opt.clone());
-    let dot_id = dot_id.map(Part::Index).then(opt.clone());
-
     let ranges = range
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-        .then(opt)
+        .then(opt())
         .repeated();
 
-    let head = dot.ignore_then(ranges.clone());
-    let tail = dot_id.chain(ranges);
+    let dot_id = just(Token::Dot).ignore_then(index());
 
-    head.or(tail.clone())
-        .chain(tail.repeated().flatten())
+    ranges
+        .clone()
+        .chain(dot_id.chain(ranges).repeated().flatten())
+        .collect()
+}
+
+pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
+where
+    T: From<String>,
+    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
+{
+    just(Token::Dot)
+        .ignore_then(index().or_not())
+        .chain(path2(expr))
         .collect()
 }
 

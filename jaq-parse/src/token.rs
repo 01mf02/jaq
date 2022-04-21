@@ -10,7 +10,7 @@ pub enum Token {
     Ident(String),
     Var(String),
     Ctrl(char),
-    Dot(Option<String>),
+    Dot,
     Def,
     If,
     Then,
@@ -29,8 +29,7 @@ impl fmt::Display for Token {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Var(s) => write!(f, "${s}"),
             Self::Ctrl(c) => c.fmt(f),
-            Self::Dot(None) => ".".fmt(f),
-            Self::Dot(Some(s)) => write!(f, ".{s}"),
+            Self::Dot => ".".fmt(f),
             Self::Def => "def".fmt(f),
             Self::If => "if".fmt(f),
             Self::Then => "then".fmt(f),
@@ -67,9 +66,6 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect();
 
-    let dot_id = text::ident().or(text::whitespace().ignore_then(str_()));
-    let dot = just('.').ignore_then(dot_id.or_not());
-
     let var = just('$').ignore_then(text::ident());
 
     // A parser for control characters (delimiters, semicolons, etc.)
@@ -92,9 +88,9 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
 
     // A single token can be one of the above
     ident
+        .or(just('.').map(|_| Token::Dot))
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
-        .or(dot.map(Token::Dot))
         .or(var.map(Token::Var))
         .or(num().map(Token::Num))
         .or(str_().map(Token::Str))
