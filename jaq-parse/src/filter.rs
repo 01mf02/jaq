@@ -163,7 +163,7 @@ where
     let if_ = just(Token::If).ignore_then(filter.clone());
     let then = just(Token::Then).ignore_then(filter.clone());
     let elif = just(Token::Elif).ignore_then(filter.clone());
-    let else_ = just(Token::Else).ignore_then(filter.clone().map(Box::new));
+    let else_ = just(Token::Else).ignore_then(filter.map(Box::new));
     if_.then(then.clone())
         .chain::<(Spanned<Filter>, Spanned<Filter>), _, _>(elif.then(then).repeated())
         .then(else_)
@@ -238,7 +238,7 @@ where
 
     let object = object.map_with_span(|obj, span| (Filter::Object(obj), span));
 
-    let call = ident.then(args(filter.clone()));
+    let call = ident.then(args(filter));
     let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));
 
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
