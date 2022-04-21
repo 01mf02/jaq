@@ -148,6 +148,35 @@ fn variable() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     .labelled("variable")
 }
 
+fn if_then_else<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
+{
+    let if_ = just(Token::If).ignore_then(filter.clone());
+    let then = just(Token::Then).ignore_then(filter.clone());
+    let elif = just(Token::Elif).ignore_then(filter.clone());
+    let else_ = just(Token::Else).ignore_then(filter.clone().map(Box::new));
+    if_.then(then.clone())
+        .chain::<(Spanned<Filter>, Spanned<Filter>), _, _>(elif.then(then).repeated())
+        .then(else_)
+        .then_ignore(just(Token::End))
+        .map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span))
+}
+
+fn reduce<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
+{
+    let arg = || filter.clone().map(Box::new);
+    let args = arg().then_ignore(just(Token::Ctrl(';'))).then(arg());
+    just(Token::Reduce)
+        .ignore_then(arg())
+        .then_ignore(just(Token::As))
+        .then(variable())
+        .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
+        .map_with_span(|((xs, v), (init, f)), span| (Filter::Reduce(xs, v, init, f), span))
+}
+
 // 'Atoms' are filters that contain no ambiguity
 fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
@@ -202,33 +231,10 @@ where
     let object = object.map_with_span(|obj, span| (Filter::Object(obj), span));
 
     let path = crate::path::path(filter.clone());
-    let path = path.map_with_span(|path, span| (Filter::Path(Box::new((Filter::Id, 0..0)), path), span));
+    let path =
+        path.map_with_span(|path, span| (Filter::Path(Box::new((Filter::Id, 0..0)), path), span));
 
-    let if_ = just(Token::If).ignore_then(filter.clone());
-    let then = just(Token::Then).ignore_then(filter.clone());
-    let elif = just(Token::Elif).ignore_then(filter.clone());
-    let else_ = just(Token::Else).ignore_then(filter.clone().map(Box::new));
-    let ite = if_
-        .then(then.clone())
-        .chain::<(Spanned<Filter>, Spanned<Filter>), _, _>(elif.then(then).repeated())
-        .then(else_)
-        .then_ignore(just(Token::End));
-    let ite = ite.map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span));
-
-    let args2 = filter
-        .clone()
-        .map(Box::new)
-        .then_ignore(just(Token::Ctrl(';')))
-        .then(filter.clone().map(Box::new))
-        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
-    let reduce = just(Token::Reduce)
-        .ignore_then(filter.clone().map(Box::new))
-        .then_ignore(just(Token::As))
-        .then(variable())
-        .then(args2)
-        .map_with_span(|((xs, v), (init, f)), span| (Filter::Reduce(xs, v, init, f), span));
-
-    let call = ident.then(args(filter));
+    let call = ident.then(args(filter.clone()));
     let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));
 
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
@@ -243,10 +249,10 @@ where
         .or(array)
         .or(object)
         .or(path)
-        .or(ite)
         .or(call)
-        .or(reduce)
         .or(var)
+        .or(reduce(filter.clone()))
+        .or(if_then_else(filter))
         .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
         .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
