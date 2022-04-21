@@ -270,8 +270,14 @@ impl Filter {
     fn cartesian(&self, other: &Self, cv: (Ctx, Val)) -> impl Iterator<Item = (ValR, ValR)> + '_ {
         let l = self.run(cv.clone());
         let r: Vec<_> = other.run(cv).collect();
-        use itertools::Itertools;
-        l.into_iter().cartesian_product(r)
+        if r.len() == 1 {
+            // this special case is to avoid cloning the left-hand side,
+            // which massively improves performance of filters like `add`
+            Box::new(l.map(move |l| (l, r[0].clone())))
+        } else {
+            use itertools::Itertools;
+            Box::new(l.into_iter().cartesian_product(r)) as Box<dyn Iterator<Item = _>>
+        }
     }
 
     fn if_then_else<'a, I>(mut if_thens: I, else_: &'a Self, cv: (Ctx, Val)) -> ValRs
