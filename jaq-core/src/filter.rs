@@ -156,7 +156,7 @@ impl Filter {
                     .multi_cartesian_product()
                     .map(|kvs| {
                         kvs.into_iter()
-                            .map(|(k, v)| Ok((k?.as_str()?, v?)))
+                            .map(|(k, v)| Ok((k?.str()?, v?)))
                             .collect::<Result<_, _>>()
                             .map(|kvs| Val::Obj(Rc::new(kvs)))
                     }),

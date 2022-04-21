@@ -58,17 +58,33 @@ impl Val {
     }
 
     /// If the value is a string, return it, else fail.
-    pub fn as_str(&self) -> Result<Rc<String>, Error> {
+    pub fn str(self) -> Result<Rc<String>, Error> {
         match self {
-            Self::Str(s) => Ok(Rc::clone(s)),
+            Self::Str(s) => Ok(s),
+            _ => Err(Error::Str(self)),
+        }
+    }
+
+    /// If the value is a string, return it, else fail.
+    fn as_str(&self) -> Result<&Rc<String>, Error> {
+        match self {
+            Self::Str(s) => Ok(s),
             _ => Err(Error::Str(self.clone())),
         }
     }
 
     /// If the value is an array, return it, else fail.
-    fn as_arr(&self) -> Result<Rc<Vec<Val>>, Error> {
+    fn arr(self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
-            Self::Arr(a) => Ok(Rc::clone(a)),
+            Self::Arr(a) => Ok(a),
+            _ => Err(Error::Arr(self)),
+        }
+    }
+
+    /// If the value is an array, return it, else fail.
+    fn as_arr(&self) -> Result<&Rc<Vec<Val>>, Error> {
+        match self {
+            Self::Arr(a) => Ok(a),
             _ => Err(Error::Arr(self.clone())),
         }
     }
@@ -165,7 +181,7 @@ impl Val {
     ///
     /// Fail on any other value.
     pub fn from_json(&self) -> ValR {
-        let serde = serde_json::from_str::<serde_json::Value>(&self.as_str()?)
+        let serde = serde_json::from_str::<serde_json::Value>(self.as_str()?)
             .map_err(|e| Error::FromJson(self.clone(), e.to_string()))?;
         Ok(Val::from(serde))
     }
@@ -183,15 +199,15 @@ impl Val {
     }
 
     /// Apply a function to a string.
-    pub fn mutate_str(&self, f: impl Fn(&mut String)) -> ValR {
-        let mut s = self.as_str()?;
+    pub fn mutate_str(self, f: impl Fn(&mut String)) -> ValR {
+        let mut s = self.str()?;
         f(Rc::make_mut(&mut s));
         Ok(Self::Str(s))
     }
 
     /// Apply a function to an array.
-    pub fn mutate_arr(&self, f: impl Fn(&mut Vec<Val>)) -> ValR {
-        let mut a = self.as_arr()?;
+    pub fn mutate_arr(self, f: impl Fn(&mut Vec<Val>)) -> ValR {
+        let mut a = self.arr()?;
         f(Rc::make_mut(&mut a));
         Ok(Self::Arr(a))
     }
@@ -199,8 +215,8 @@ impl Val {
     /// Sort array by the given function.
     ///
     /// Fail on any other value.
-    pub fn sort_by<'a>(&self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        let mut a = self.as_arr()?;
+    pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        let mut a = self.arr()?;
         // Some(e) iff an error has previously occurred
         let mut err = None;
         Rc::make_mut(&mut a).sort_by_cached_key(|x| {
@@ -224,7 +240,7 @@ impl Val {
     pub fn split(&self, sep: &Self) -> Result<Vec<Val>, Error> {
         Ok(self
             .as_str()?
-            .split(&*sep.as_str()?)
+            .split(&**sep.as_str()?)
             .map(|s| Val::Str(Rc::new(s.to_string())))
             .collect())
     }
@@ -292,6 +308,7 @@ impl core::ops::Add for Val {
                 Ok(Str(l))
             }
             (Arr(mut l), Arr(r)) => {
+                //dbg!(Rc::strong_count(&l));
                 Rc::make_mut(&mut l).extend(r.iter().cloned());
                 Ok(Arr(l))
             }
