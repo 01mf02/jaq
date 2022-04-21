@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{MathOp, OrdOp, Path, Spanned, Token};
+use crate::{MathOp, OrdOp, Path, Span, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
@@ -109,6 +109,14 @@ impl Filter {
     fn binary_with_span(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
         (Filter::Binary(Box::new(a), op, Box::new(b)), span)
+    }
+
+    fn path(f: Spanned<Self>, path: Path<Self>, span: Span) -> Spanned<Self> {
+        if path.is_empty() {
+            f
+        } else {
+            (Filter::Path(Box::new(f), path), span)
+        }
     }
 }
 
@@ -230,10 +238,6 @@ where
 
     let object = object.map_with_span(|obj, span| (Filter::Object(obj), span));
 
-    let path = crate::path::path(filter.clone());
-    let path =
-        path.map_with_span(|path, span| (Filter::Path(Box::new((Filter::Id, 0..0)), path), span));
-
     let call = ident.then(args(filter.clone()));
     let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));
 
@@ -248,11 +252,8 @@ where
         .or(parenthesised)
         .or(array)
         .or(object)
-        .or(path)
         .or(call)
         .or(var)
-        .or(reduce(filter.clone()))
-        .or(if_then_else(filter))
         .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
         .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
@@ -318,7 +319,18 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
 
-    let atom = atom(with_comma.clone(), sans_comma.clone()).boxed();
+    use crate::path;
+    let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
+    let id_path = path::index().or_not().chain(path::path(with_comma.clone()));
+
+    let atom = atom(with_comma.clone(), sans_comma.clone())
+        .then(path::path(with_comma.clone()).collect::<Path<_>>())
+        .or(id.then(id_path.collect()))
+        .map_with_span(|(f, path), span| Filter::path(f, path, span))
+        .or(reduce(with_comma.clone()))
+        .or(if_then_else(with_comma.clone()))
+        .boxed();
+
     let math = math(atom).boxed();
     let ord = ord(math).boxed();
     let and = bin(ord, just(Token::And).to(BinaryOp::And));

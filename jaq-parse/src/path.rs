@@ -48,7 +48,7 @@ pub(crate) fn index<T: From<String>>(
     .then(opt())
 }
 
-pub(crate) fn path2<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
+pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
     T: From<String>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
@@ -80,17 +80,6 @@ where
     ranges
         .clone()
         .chain(dot_id.chain(ranges).repeated().flatten())
-        .collect()
-}
-
-pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
-where
-    T: From<String>,
-    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
-{
-    just(Token::Dot)
-        .ignore_then(index().or_not())
-        .chain(path2(expr))
         .collect()
 }
 
