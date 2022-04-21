@@ -8,6 +8,7 @@ use jaq_parse::{MathOp, OrdOp};
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug)]
 pub enum Filter {
+    Id,
     Int(isize),
     Float(f64),
     Str(Rc<String>),
@@ -140,6 +141,7 @@ impl Filter {
         use core::iter::once;
         use itertools::Itertools;
         match self {
+            Self::Id => Box::new(once(Ok(cv.1))),
             Self::Int(n) => Box::new(once(Ok(Val::Int(*n)))),
             Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
             Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::clone(s))))),
@@ -311,6 +313,7 @@ impl Filter {
         let sub = |f: Box<Self>| Box::new(subst(*f));
 
         match self {
+            Self::Id => self,
             Self::Int(_) | Self::Float(_) | Self::Str(_) => self,
             Self::Array(f) => Self::Array(f.map(sub)),
             Self::Object(kvs) => {
