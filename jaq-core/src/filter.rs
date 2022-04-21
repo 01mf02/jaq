@@ -22,7 +22,7 @@ pub enum Filter {
     IfThenElse(Vec<(Self, Self)>, Box<Self>),
     Reduce(Box<Self>, Box<Self>, Box<Self>),
 
-    Path(Path<Self>),
+    Path(Box<Self>, Path<Self>),
     Assign(Path<Self>, Box<Self>),
     Update(Path<Self>, Box<Self>),
 
@@ -185,7 +185,7 @@ impl Filter {
                 }
             }
             Self::IfThenElse(if_thens, else_) => Self::if_then_else(if_thens.iter(), else_, cv),
-            Self::Path(path) => match path.collect(cv) {
+            Self::Path(f, path) => match path.collect(cv, f) {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
             },
@@ -303,9 +303,16 @@ impl Filter {
     }
 
     pub(crate) fn update_math(path: Path<Self>, op: MathOp, f: Self) -> Self {
-        let id = Self::Path(Path::new(Vec::new()));
-        let math = Self::Math(Box::new(id), op, Box::new(f));
+        let math = Self::Math(Box::new(Self::Id), op, Box::new(f));
         Self::Update(path, Box::new(math))
+    }
+
+    pub(crate) fn path(self) -> Option<Path<Filter>> {
+        match self {
+            Self::Id => Some(Path::new(Vec::new())),
+            Self::Path(f, path) if matches!(*f, Self::Id) => Some(path),
+            _ => None,
+        }
     }
 
     pub fn subst(self, args: &[Self]) -> Self {
@@ -331,7 +338,7 @@ impl Filter {
                 sub(else_),
             ),
             Self::Reduce(xs, init, f) => Self::Reduce(sub(xs), sub(init), sub(f)),
-            Self::Path(path) => Self::Path(path.map(subst)),
+            Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
             Self::Assign(path, f) => Self::Assign(path.map(subst), sub(f)),
             Self::Update(path, f) => Self::Update(path.map(subst), sub(f)),
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
@@ -373,8 +380,8 @@ impl Path<Filter> {
         }
     }
 
-    fn collect(&self, cv: (Ctx, Val)) -> Result<Vec<Val>, Error> {
-        let init = Vec::from([cv.1.clone()]);
+    fn collect(&self, cv: (Ctx, Val), init: &Filter) -> Result<Vec<Val>, Error> {
+        let init = init.run(cv.clone()).collect::<Result<Vec<_>, _>>()?;
         self.run_indices(&cv).try_fold(init, |acc, p_opt| {
             let (p, opt) = p_opt?;
             opt.collect(acc.into_iter().flat_map(|x| p.collect(x)))

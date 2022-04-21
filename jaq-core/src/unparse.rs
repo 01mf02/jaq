@@ -18,12 +18,13 @@ where
     let mut call = |name, args: Vec<Spanned<Expr>>| {
         let fun = fns(&(name, args.len())).unwrap_or_else(|| {
             errs.push(Error::custom(body.1.clone(), "could not find function"));
-            Filter::Path(Path(Vec::new()))
+            Filter::Id
         });
         let args = args.into_iter().map(|arg| *get(arg, errs));
         fun.subst(&args.collect::<Vec<_>>())
     };
     match body.0 {
+        Expr::Id => Filter::Id,
         Expr::Num(n) => {
             if n.contains(['.', 'e', 'E']) {
                 if let Ok(f) = n.parse::<f64>() {
@@ -56,7 +57,10 @@ where
                 KeyVal::Str(k, v) => {
                     let k = Filter::Str(Rc::new(k));
                     let v = match v {
-                        None => Filter::Path(Path::from(path::Part::Index(k.clone()))),
+                        None => Filter::Path(
+                            Box::new(Filter::Id),
+                            Path::from(path::Part::Index(k.clone())),
+                        ),
                         Some(v) => *get(v, errs),
                     };
                     (k, v)
@@ -101,7 +105,7 @@ where
         Expr::Binary(l, BinaryOp::Assign(op), r) => {
             let l_span = l.1.clone();
             let (l, r) = (get(*l, errs), get(*r, errs));
-            let l = if let Filter::Path(path) = *l {
+            let l = if let Some(path) = l.path() {
                 path
             } else {
                 let err = "left-hand side of assignment must be a path";
@@ -121,7 +125,8 @@ where
                 .collect(),
             get(*else_, errs),
         ),
-        Expr::Path(path) => {
+        Expr::Path(f, path) => {
+            let f = get(*f, errs);
             use jaq_parse::path::Part;
             let path = path.into_iter().map(|(p, opt)| match p {
                 Part::Index(i) => (path::Part::Index(*get(i, errs)), opt),
@@ -131,7 +136,7 @@ where
                     (path::Part::Range(lower, upper), opt)
                 }
             });
-            Filter::Path(Path(path.collect()))
+            Filter::Path(f, Path(path.collect()))
         }
     }
 }

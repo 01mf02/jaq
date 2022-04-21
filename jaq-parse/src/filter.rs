@@ -68,6 +68,8 @@ pub enum KeyVal {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub enum Filter {
+    /// Identity, i.e. `.`
+    Id,
     /// Integer or floating-point number.
     Num(String),
     /// String
@@ -79,7 +81,7 @@ pub enum Filter {
     /// Object, specifying its key-value pairs
     Object(Vec<KeyVal>),
     /// Path such as `.`, `.a`, `.[][]."b"`
-    Path(Path<Self>),
+    Path(Box<Spanned<Self>>, Path<Self>),
     /// If-then-else
     If(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
     /// Reduction, e.g. `reduce .[] as $x (0; .+$x)`
@@ -200,7 +202,7 @@ where
     let object = object.map_with_span(|obj, span| (Filter::Object(obj), span));
 
     let path = crate::path::path(filter.clone());
-    let path = path.map_with_span(|path, span| (Filter::Path(path), span));
+    let path = path.map_with_span(|path, span| (Filter::Path(Box::new((Filter::Id, 0..0)), path), span));
 
     let if_ = just(Token::If).ignore_then(filter.clone());
     let then = just(Token::Then).ignore_then(filter.clone());
@@ -232,7 +234,7 @@ where
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
         nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
-            (Filter::Path(Vec::new()), span)
+            (Filter::Id, span)
         })
     };
 
