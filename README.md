@@ -79,6 +79,27 @@ Repeatedly apply a filter to itself and output the intermediate results:
     [0, 1, 2]
 
 
+# Performance
+
+The following benchmark
+compares the performance of jaq and jq 1.6:
+
+| Command                                                                            | jaq \[s\] | jq \[s\] |
+| ---------------------------------------------------------------------------------- | --------: | -------: |
+| `empty` (128 iterations)                                                           |  **0.21** |    6.46  |
+| `[range(1000000)] \| reverse \| length`                                            |  **0.03** |    1.32  |
+| `[range(1000000) \| -.] \| sort \| length`                                         |  **0.15** |    1.44  |
+| `[range(1000000) \| [.]] \| add \| length`                                         |  **0.62** |    1.44  |
+| `[range(100000) \| {(tostring): .}] \| add \| length`                              |  **0.21** |    0.37  |
+| `[range( 5000) \| {(tostring): .}] \| add \| .[] += 1 \| length`                   |  **0.02** |    2.94  |
+| `[range(100000) \| {(tostring): .}] \| add \| with_entries(.value += 1) \| length` |  **0.67** |    1.68  |
+| `[limit(1000000; repeat("a"))] \| add \| explode \| implode \| length`             |  **0.84** |    2.11  |
+| `def trees: recurse([., .]); 0 \| nth(16; trees) \| flatten \| length`             |  **0.35** |    0.54  |
+| `"[" + ([range(100000) \| tojson] \| join(",")) + "]" \| fromjson \| add`          |    5.69   | **3.16** |
+
+I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
+
+
 # Features
 
 Here is an overview of the features
