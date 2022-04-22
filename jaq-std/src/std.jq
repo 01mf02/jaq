@@ -79,9 +79,9 @@ def any: any(.[]; .);
 def in(xs)    : . as $x | xs | has     ($x);
 def inside(xs): . as $x | xs | contains($x);
 
-def flatten: [recurse | scalars];
+def flatten: [recurse(arrays | .[]) | select(type != "array")];
 def flatten(d): d as $d |
   [ { d: $d, x: . } |
-    recurse(select(.d >= 0 and .x >= []) | { d: .d - 1, x: .x[] }) |
-    select(.d < 0 or .x < []) | .x
+    recurse(select(.d >= 0 and .x >= [] and .x < {}) | { d: .d - 1, x: .x[] }) |
+    select(.d < 0 or .x < [] or .x >= {}) | .x
   ];

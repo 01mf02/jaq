@@ -42,11 +42,16 @@ fn entries() {
 
 #[test]
 fn flatten() {
-    let a0 = || json!([1, [2, {"a": 3}]]);
-    let a1 = || json!([1, 2, {"a": 3}]);
-    let a2 = || json!([1, 2, 3]);
+    let a0 = || json!([1, [{"a": 2}, [3]]]);
+    let a1 = || json!([1, {"a": 2}, [3]]);
+    let a2 = || json!([1, {"a": 2}, 3]);
     give(a0(), "flatten", json!(a2()));
-    give(a0(), "[flatten(0, 1, 2)]", json!([a0(), a1(), a2()]));
+    give(a0(), "[flatten(0, 1, 2, 3)]", json!([a0(), a1(), a2(), a2()]));
+
+    // here, we diverge from jq, which returns just 1
+    give(json!({"a": 1}), "flatten", json!([{"a": 1}]));
+    // jq gives an error here
+    give(json!(0), "flatten", json!([0]));
 }
 
 #[test]
