@@ -108,36 +108,39 @@ Contributions to extend jaq are highly welcome, see below.
 
 ## Basic features
 
+- [x] Identity (`.`)
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] Logical operators (`and`, `or`)
 - [x] Equality and comparison operators (`.a == .b`, `.a < .b`)
 - [x] Arithmetic operations on numbers (`+`, `-`, `*`, `/`, `%`)
 - [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
-- [x] Variables (`. as $x | $x`)
-- [x] Reduction (`reduce .[] as $x (0, . + $x)`)
+- [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
-- [ ] Error handling (`try ... catch`)
-- [ ] Recursion (`def r: r; r`)
 
 ## Paths
 
-- [x] Identity (`.`)
 - [x] Indexing of arrays/objects (`.[0]`, `.a`, `.["a"]`)
 - [x] Iterating over arrays/objects (`.[]`)
 - [x] Optional indexing/iteration (`.a?`, `.[]?`)
 - [x] Array slices (`.[3:7]`, `.[0:-1]`)
 - [x] String slices
 
-## Assignment
-
-- [x] Plain assignment (`=`)
-- [x] Update assignment (`|=`)
-
 ## Filter combinators
 
 - [x] Composition (`|`)
+- [x] Binding (`. as $x | $x`)
 - [x] Concatenation (`,`)
+- [x] Plain assignment (`=`)
+- [x] Update assignment (`|=`)
+- [x] Alternation (`//`)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
+- [x] Reduction (`reduce .[] as $x (0, . + $x)`)
+- [ ] Error handling (`try ... catch`)
+
+## Definitions
+
+- [x] Basic definitions (`def map(f): [.[] | f];`)
+- [ ] Recursive definitions (`def r: r; r`)
 
 ## Core filters
 
@@ -180,7 +183,6 @@ jaq currently does *not* aim to support the advanced features of jq, such as:
 - I/O
 - Dates
 - Regular expressions
-- String interpolation
 - SQL-style operators
 - Streaming
 
