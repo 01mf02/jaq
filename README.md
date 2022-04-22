@@ -81,8 +81,8 @@ Repeatedly apply a filter to itself and output the intermediate results:
 
 # Performance
 
-The following benchmark
-compares the performance of jaq and jq 1.6:
+The following benchmark compares the performance of jaq and jq 1.6.
+Each command is run via `jq -n <CMD>` and `jaq -n <CMD>`, respectively.
 
 | Command                                                                            | jaq \[s\] | jq \[s\] |
 | ---------------------------------------------------------------------------------- | --------: | -------: |
