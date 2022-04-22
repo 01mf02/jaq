@@ -146,7 +146,6 @@ Contributions to extend jaq are highly welcome, see below.
 
 - [x] Errors (`error`)
 - [x] Length (`length`)
-- [x] Type (`type`)
 - [x] Rounding (`floor`, `round`, `ceil`)
 - [x] String <-> JSON (`fromjson`, `tojson`)
 - [x] String <-> integers (`explode`, `implode`)
@@ -166,12 +165,13 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 
 - [x] Undefined/Empty (`null`, `empty`)
 - [x] Booleans (`true`, `false`, `not`)
+- [x] Special numbers (`nan`, `infinite`, `isnan`, `isinfinite`, `isfinite`, `isnormal`)
+- [x] Type (`type`)
 - [x] Filtering (`select(. >= 0)`)
 - [x] Selection (`values`, `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`, `iterables`, `scalars`)
 - [x] Conversion (`tostring`, `tonumber`)
-- [x] Special numbers (`nan`, `infinite`, `isnan`, `isinfinite`, `isfinite`, `isnormal`)
 - [x] Iterable filters (`map(.+1)`, `map_values(.+1)`, `add`, `join("a")`, `min`, `max`)
-- [x] Array filters (`first`, `last`, `nth(10)`, `flatten`)
+- [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`)
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
 
