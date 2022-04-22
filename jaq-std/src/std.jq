@@ -16,6 +16,13 @@ def isinfinite: . == infinite or -. == infinite;
 def isfinite: isinfinite | not;
 def isnormal: isnan or isinfinite | not;
 
+# Not defined in jq!
+def isboolean: . == true or . == false;
+def isnumber:  . > true and . < "";
+def isstring:  . >= ""  and . < [];
+def isarray:   . >= []  and . < {};
+def isobject:  . >= {};
+
 # Type
 def type:
     if . == null then "null"
@@ -29,17 +36,17 @@ def type:
 def select(f): if f then . else empty end;
 def values:    select(. != null);
 def nulls:     select(. == null);
-def booleans:  select(. == true or . == false);
-def numbers:   select(. > true and . < "");
-def strings:   select(. >= ""  and . < []);
-def arrays:    select(. >= []  and . < {});
-def objects:   select(. >= {});
+def booleans:  select(isboolean);
+def numbers:   select(isnumber);
+def strings:   select(isstring);
+def arrays:    select(isarray);
+def objects:   select(isobject);
 def iterables: select(. >= []);
 def scalars:   select(. <  []);
 
 # Conversion
-def tostring: if type == "string" then . else   tojson end;
-def tonumber: if type == "number" then . else fromjson end;
+def tostring: if isstring then . else   tojson end;
+def tonumber: if isnumber then . else fromjson end;
 
 # Generators
 def range(x): range(0; x);
@@ -79,9 +86,9 @@ def any: any(.[]; .);
 def in(xs)    : . as $x | xs | has     ($x);
 def inside(xs): . as $x | xs | contains($x);
 
-def flatten: [recurse(arrays | .[]) | select(type != "array")];
+def flatten: [recurse(arrays | .[]) | select(isarray | not)];
 def flatten(d): d as $d |
   [ { d: $d, x: . } |
-    recurse(select(.d >= 0 and .x >= [] and .x < {}) | { d: .d - 1, x: .x[] }) |
-    select(.d < 0 or .x < [] or .x >= {}) | .x
+    recurse(select(.d >= 0 and (.x | isarray)) | { d: .d - 1, x: .x[] }) |
+    select(.d < 0 or (.x | isarray | not)) | .x
   ];
