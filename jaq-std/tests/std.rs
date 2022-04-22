@@ -41,6 +41,15 @@ fn entries() {
 }
 
 #[test]
+fn flatten() {
+    let a0 = || json!([1, [2, {"a": 3}]]);
+    let a1 = || json!([1, 2, {"a": 3}]);
+    let a2 = || json!([1, 2, 3]);
+    give(a0(), "flatten", json!(a2()));
+    give(a0(), "[flatten(0, 1, 2)]", json!([a0(), a1(), a2()]));
+}
+
+#[test]
 fn inside() {
     give(
         json!(["foo", "bar"]),
