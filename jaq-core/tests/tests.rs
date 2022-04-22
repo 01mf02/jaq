@@ -151,7 +151,8 @@ fn vars() {
 
 #[test]
 fn redefine() {
-    give(json!(0), "def a: 1; def b: a; def a: 2; [a, b]", json!([2, 1]));
+    let f = "def a: 1; def b: a; def a: 2; [a, b]";
+    give(json!(0), f, json!([2, 1]));
 }
 
 #[test]
