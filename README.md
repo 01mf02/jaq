@@ -115,6 +115,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
 - [x] Variables (`. as $x | $x`)
 - [x] Reduction (`reduce .[] as $x (0, . + $x)`)
+- [ ] Format strings (`@csv`, `@html`, `@json`)
 - [ ] Error handling (`try ... catch`)
 - [ ] Recursion (`def r: r; r`)
 
