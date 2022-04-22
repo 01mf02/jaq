@@ -150,6 +150,11 @@ fn vars() {
 }
 
 #[test]
+fn redefine() {
+    give(json!(0), "def a: 1; def b: a; def a: 2; [a, b]", json!([2, 1]));
+}
+
+#[test]
 fn reduce() {
     let f = "reduce recurse(if . == 1000 then [] | .[] else .+1 end) as $x (0; . + $x)";
     give(json!(0), f, json!(500500));
