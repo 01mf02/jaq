@@ -38,7 +38,7 @@ impl Filter {
 pub struct Definitions(BTreeMap<(String, usize), filter::Filter>);
 
 impl Definitions {
-    /// Start out with only core filters, such as `length`, `type`, ...
+    /// Start out with only core filters, such as `length`, `keys`, ...
     ///
     /// Does not import filters from the standard library, such as `map`.
     pub fn core() -> Self {
