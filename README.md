@@ -265,8 +265,8 @@ You can convert a floating-point number to an integer by
 
 ### NaN and infinity
 
-In jq, 'n / 0' yields `nan` (not a number) if `n == 0` and fails otherwise.
-In jaq, 'n / 0' yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
+In jq, `n / 0` yields `nan` (not a number) if `n == 0` and fails otherwise.
+In jaq, `n / 0` yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
 jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
 
 jaq implements a total ordering on floating-point numbers to allow sorting values.
