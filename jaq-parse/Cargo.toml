@@ -1,6 +1,6 @@
 [package]
 name = "jaq-parse"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
