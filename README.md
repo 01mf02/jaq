@@ -4,12 +4,32 @@
 jaq is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
-I created jaq primarily because I was bothered by
-[jq's long start-up time](https://github.com/stedolan/jq/issues/1411),
-which amounts to about 50ms on my machine.
-This can particularly show when processing of a large number of small files.
-I have written more about my motivation
-[here](https://github.com/01mf02/adam-notes#2020-12-04).
+jaq focusses on three goals:
+
+* **Correctness**:
+  Many filters in jq have surprising behaviour. For example:
+  * `nan > nan` is false, while `nan < nan` is true.
+  * `[[]] | implode` crashes jq, and this was not fixed at the time of writing despite
+    [being known since five years](https://github.com/stedolan/jq/issues/1160).
+  * The [jq manual] claims that `limit(n; exp)` "extracts up to `n` outputs from `exp`".
+    This holds for values of `n > 1`, e.g. `jq -n '[limit(2; 1, 2, 3)]'` yields
+    `[1, 2]`, but when `n == 0`, `jq -n '[limit(0; 1, 2, 3)]'` yields `[1]` instead of `[]`.
+    And perhaps even worse, when `n < 0`, then `limit` yields *all* outputs from `exp`,
+    which is not documented.
+
+  jaq aims to provide a more correct and predictable implementation of jq,
+  while preserving compatibility with jq in most cases.
+* **Performance**:
+  I created jaq originally because I was bothered by
+  [jq's long start-up time](https://github.com/stedolan/jq/issues/1411),
+  which amounts to about 50ms on my machine.
+  This can particularly show when processing of a large number of small files.
+  jaq starts up about 30 times faster than jq and
+  [outperforms jq also on many other benchmarks](#performance).
+* **Simplicity**:
+  jaq aims to have a simple and small implementation, in order to
+  reduce the potential for bugs and to
+  facilitate contributions.
 
 I drew inspiration from another Rust program, namely [jql].
 However, unlike jql, jaq aims to closely imitate jq's syntax and semantics.
@@ -19,9 +39,10 @@ This should allow users proficient in jq to easily use jaq.
 [jql]: https://github.com/yamafaktory/jql
 
 
+
 # Installation
 
-To use jaq, you need a Rust toolchain.
+To compile jaq, you need a Rust toolchain.
 See <https://rustup.rs/> for instructions.
 (Note that Rust compilers shipped with Linux distributions
 may be too outdated to compile jaq. I use Rust 1.59.)
@@ -37,6 +58,7 @@ And the latest development version:
 On my system, both commands place the executable at `~/.cargo/bin/jaq`.
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
+
 
 
 # Examples
@@ -79,6 +101,7 @@ Repeatedly apply a filter to itself and output the intermediate results:
     [0, 1, 2]
 
 
+
 # Performance
 
 The following benchmark compares the performance of jaq and jq 1.6.
@@ -100,11 +123,13 @@ Each command is run via `jq -n '<CMD>'` and `jaq -n '<CMD>'`, respectively.
 I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
 
 
+
 # Features
 
 Here is an overview of the features
 already implemented and not yet implemented.
-Contributions to extend jaq are highly welcome, see below.
+[Contributions to extend jaq are highly welcome.](#contributing)
+
 
 ## Basic features
 
@@ -117,6 +142,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
 
+
 ## Paths
 
 - [x] Indexing of arrays/objects (`.[0]`, `.a`, `.["a"]`)
@@ -124,6 +150,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Optional indexing/iteration (`.a?`, `.[]?`)
 - [x] Array slices (`.[3:7]`, `.[0:-1]`)
 - [x] String slices
+
 
 ## Filter combinators
 
@@ -137,10 +164,12 @@ Contributions to extend jaq are highly welcome, see below.
 - [x] Reduction (`reduce .[] as $x (0, . + $x)`)
 - [ ] Error handling (`try ... catch`)
 
+
 ## Definitions
 
 - [x] Basic definitions (`def map(f): [.[] | f];`)
 - [ ] Recursive definitions (`def r: r; r`)
+
 
 ## Core filters
 
@@ -157,6 +186,7 @@ Contributions to extend jaq are highly welcome, see below.
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
 - [ ] More string filters (`startswith`, `ltrimstr`, ...)
 - [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
+
 
 ## Standard filters
 
@@ -175,6 +205,7 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
 
+
 ## Advanced features
 
 jaq currently does *not* aim to support the advanced features of jq, such as:
@@ -187,7 +218,9 @@ jaq currently does *not* aim to support the advanced features of jq, such as:
 - Streaming
 
 
+
 # Differences between jq and jaq
+
 
 ## Numbers
 
@@ -230,6 +263,38 @@ You can convert a floating-point number to an integer by
     $ jaq -n '1.2 | [floor, round, ceil]'
     [1, 1, 2]
 
+### NaN and infinity
+
+In jq, 'n / 0' yields `nan` (not a number) if `n == 0` and fails otherwise.
+In jaq, 'n / 0' yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
+jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
+
+jaq implements a total ordering on floating-point numbers to allow sorting values.
+Therefore, it unfortunately has to enforce that `nan == nan`.
+(jq gets around this by enforcing `nan < nan`, which breaks basic laws about total orders.)
+
+Like jq, jaq prints `nan` and `infinite` as `null` in JSON,
+because JSON does not support encoding these values as numbers.
+
+### Preservation of fractional numbers
+
+jaq preserves fractional numbers coming from JSON data perfectly
+(as long as they are not used in some arithmetic operation),
+whereas jq may silently convert to 64-bit floating-point numbers:
+
+    $ echo '1e500' | jq '.'
+    1.7976931348623157e+308
+    $ echo '1e500' | jaq '.'
+    1e500
+
+Therefore, unlike jq, jaq satisfies the following paragraph in the [jq manual]:
+
+> An important point about the identity filter is that
+> it guarantees to preserve the literal decimal representation of values.
+> This is particularly important when dealing with numbers which can't be
+> losslessly converted to an IEEE754 double precision representation.
+
+
 ## Assignments
 
 jaq does not allow so-called "complex assignments" of the form `p |= f`,
@@ -245,6 +310,7 @@ A slightly more verbose version is allowed in jaq:
 
     $ jaq -n '[0, 1, 2] | .[] |= if .<2 then .+1 else . end'
     [1, 2, 2]
+
 
 ## Definitions
 
@@ -262,13 +328,14 @@ Note that while `recurse` cannot be defined manually in jaq,
 jaq provides `recurse` as core filter.
 
 
+
 # Contributing
 
 Contributions to jaq are welcome.
 In particular, implementing various filters of jq in jaq
 is a relatively low-hanging fruit.
 
-To add a new core filter (such as `sort`), it suffices to:
+To add a new core filter (such as `group_by`), it suffices to:
 
 1. Implement the filter in [the `filter` module](jaq-core/src/filter.rs).
 2. Add a test with the filter name to [`tests.rs`](jaq-core/tests/named.rs),
@@ -278,3 +345,22 @@ To add a new core filter (such as `sort`), it suffices to:
 Voilà!
 
 Please make sure that after your change, `cargo test` runs successfully.
+
+
+
+# Acknowledgements
+
+jaq has profited tremendously from:
+
+* [serde_json] to read and [colored_json] to output JSON,
+* [chumsky] to parse and [ariadne] to pretty-print parse errors,
+* [mimalloc] to boost the performance of memory allocation, and
+* the Rust standard library, in particular its awesome [Iterator],
+  which builds the rock-solid base of jaq's filter execution
+
+[serde_json]: https://docs.rs/serde_json/
+[colored_json]: https://docs.rs/colored_json/
+[chumsky]: https://docs.rs/chumsky/
+[ariadne]: https://docs.rs/ariadne/
+[mimalloc]: https://docs.rs/mimalloc/
+[Iterator]: https://doc.rust-lang.org/std/iter/trait.Iterator.html
