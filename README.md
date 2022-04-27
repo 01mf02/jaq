@@ -7,8 +7,9 @@ jaq aims to support a large subset of jq's syntax and operations.
 jaq focusses on three goals:
 
 * **Correctness**:
-  Many filters in jq have surprising behaviour.
-  <details><summary>Examples</summary>
+  jaq aims to provide a more correct and predictable implementation of jq,
+  while preserving compatibility with jq in most cases.
+  <details><summary>Examples of surprising jq behaviour</summary>
 
   * `nan > nan` is false, while `nan < nan` is true.
   * `[[]] | implode` crashes jq, and this was not fixed at the time of writing despite
@@ -20,8 +21,6 @@ jaq focusses on three goals:
     which is not documented.
 
   </details>
-  jaq aims to provide a more correct and predictable implementation of jq,
-  while preserving compatibility with jq in most cases.
 * **Performance**:
   I created jaq originally because I was bothered by
   [jq's long start-up time](https://github.com/stedolan/jq/issues/1411),
