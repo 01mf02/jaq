@@ -46,7 +46,8 @@ fn flatten() {
     let a1 = || json!([1, {"a": 2}, [3]]);
     let a2 = || json!([1, {"a": 2}, 3]);
     give(a0(), "flatten", json!(a2()));
-    give(a0(), "[flatten(0, 1, 2, 3)]", json!([a0(), a1(), a2(), a2()]));
+    let f = "[flatten(0, 1, 2, 3)]";
+    give(a0(), f, json!([a0(), a1(), a2(), a2()]));
 
     // here, we diverge from jq, which returns just 1
     give(json!({"a": 1}), "flatten", json!([{"a": 1}]));
