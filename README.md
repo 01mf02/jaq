@@ -7,7 +7,8 @@ jaq aims to support a large subset of jq's syntax and operations.
 jaq focusses on three goals:
 
 * **Correctness**:
-  Many filters in jq have surprising behaviour. For example:
+  Many filters in jq have surprising behaviour.
+  <details><summary>Examples</summary>
   * `nan > nan` is false, while `nan < nan` is true.
   * `[[]] | implode` crashes jq, and this was not fixed at the time of writing despite
     [being known since five years](https://github.com/stedolan/jq/issues/1160).
@@ -16,7 +17,7 @@ jaq focusses on three goals:
     `[1, 2]`, but when `n == 0`, `jq -n '[limit(0; 1, 2, 3)]'` yields `[1]` instead of `[]`.
     And perhaps even worse, when `n < 0`, then `limit` yields *all* outputs from `exp`,
     which is not documented.
-
+  </details>
   jaq aims to provide a more correct and predictable implementation of jq,
   while preserving compatibility with jq in most cases.
 * **Performance**:
