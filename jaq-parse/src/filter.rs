@@ -93,6 +93,8 @@ pub enum Filter {
     ),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
+    /// Error suppression, e.g. `keys?`
+    Try(Box<Spanned<Self>>),
     /// Negation
     Neg(Box<Spanned<Self>>),
     /// Binary operation, such as `0, 1`, `[] | .[]`, `.[] += 1`, `0 == 0`, ...
@@ -116,6 +118,14 @@ impl Filter {
             f
         } else {
             (Filter::Path(Box::new(f), path), span)
+        }
+    }
+
+    fn try_(f: Spanned<Self>, try_: Vec<Token>, span: Span) -> Spanned<Self> {
+        if try_.is_empty() {
+            f
+        } else {
+            (Filter::Try(Box::new(f)), span)
         }
     }
 }
@@ -331,7 +341,11 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
         .or(if_then_else(with_comma.clone()))
         .boxed();
 
-    let math = math(atom).boxed();
+    let try_ = atom
+        .then(just(Token::Ctrl('?')).repeated().collect::<Vec<_>>())
+        .map_with_span(|(atom, try_), span| Filter::try_(atom, try_, span));
+
+    let math = math(try_).boxed();
     let ord = ord(math).boxed();
     let and = bin(ord, just(Token::And).to(BinaryOp::And));
     let or = bin(and, just(Token::Or).to(BinaryOp::Or));

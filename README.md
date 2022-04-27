@@ -133,14 +133,13 @@ already implemented and not yet implemented.
 [Contributions to extend jaq are highly welcome.](#contributing)
 
 
-## Basic features
+## Basics
 
 - [x] Identity (`.`)
 - [x] Basic data types (null, boolean, number, string, array, object)
-- [x] Logical operators (`and`, `or`)
-- [x] Equality and comparison operators (`.a == .b`, `.a < .b`)
-- [x] Arithmetic operations on numbers (`+`, `-`, `*`, `/`, `%`)
-- [x] Arithmetic operations on non-numbers (e.g., strings, arrays, objects)
+- [x] if-then-else (`if .a < .b then .a else .b end`)
+- [x] Reduction (`reduce .[] as $x (0, . + $x)`)
+- [ ] Error handling (`try ... catch ...`)
 - [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
 
@@ -154,17 +153,19 @@ already implemented and not yet implemented.
 - [x] String slices
 
 
-## Filter combinators
+## Operators
 
 - [x] Composition (`|`)
 - [x] Binding (`. as $x | $x`)
 - [x] Concatenation (`,`)
 - [x] Plain assignment (`=`)
-- [x] Update assignment (`|=`)
+- [x] Update assignment (`|=`, `+=`, `-=`)
 - [x] Alternation (`//`)
-- [x] if-then-else (`if .a < .b then .a else .b end`)
-- [x] Reduction (`reduce .[] as $x (0, . + $x)`)
-- [ ] Error handling (`try ... catch`)
+- [x] Logic (`or`, `and`)
+- [x] Equality and comparison (`.a == .b`, `.a < .b`)
+- [x] Arithmetic (`+`, `-`, `*`, `/`, `%`)
+- [x] Negation (`-`)
+- [x] Error suppression (`?`)
 
 
 ## Definitions

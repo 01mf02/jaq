@@ -79,6 +79,7 @@ where
             }
             _ => call(name, call_args),
         },
+        Expr::Try(f) => Filter::Try(get(*f, errs)),
         Expr::Neg(f) => Filter::Neg(get(*f, errs)),
         Expr::Binary(l, BinaryOp::Pipe(None), r) => {
             Filter::Pipe(get(*l, errs), false, get(*r, errs))

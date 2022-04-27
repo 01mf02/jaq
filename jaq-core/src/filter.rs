@@ -15,6 +15,7 @@ pub enum Filter {
     Array(Option<Box<Self>>),
     Object(Vec<(Self, Self)>),
 
+    Try(Box<Self>),
     Neg(Box<Self>),
     Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
@@ -163,6 +164,7 @@ impl Filter {
                             .map(|kvs| Val::Obj(Rc::new(kvs)))
                     }),
             ),
+            Self::Try(f) => Box::new(f.run(cv).filter(|y| y.is_ok())),
             Self::Neg(f) => Box::new(f.run(cv).map(|v| -v?)),
             Self::Pipe(l, false, r) => {
                 Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
@@ -326,6 +328,7 @@ impl Filter {
             Self::Object(kvs) => {
                 Self::Object(kvs.into_iter().map(|(k, v)| (subst(k), subst(v))).collect())
             }
+            Self::Try(f) => Self::Try(sub(f)),
             Self::Neg(f) => Self::Neg(sub(f)),
             Self::Pipe(l, bind, r) => Self::Pipe(sub(l), bind, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),

@@ -48,6 +48,13 @@ fn alt() {
 }
 
 #[test]
+fn try_() {
+    give(json!(0), ".?", json!(0));
+    give(json!(0), "keys?, 1", json!(1));
+    give(json!(0), "[(1, error, 2)?]", json!([1, 2]));
+}
+
+#[test]
 fn precedence() {
     // concatenation binds stronger than application
     give(json!(null), "[0, 1 | . + 1]", json!([1, 2]));
