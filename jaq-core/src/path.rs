@@ -47,7 +47,7 @@ impl Part<Vec<Val>> {
                     let until = rel_bounds(until).map(move |i| Ok(abs_bound(i?, len, len)));
                     Box::new(prod(from, until).map(move |(from, until)| {
                         let (skip, take) = skip_take(from?, until?);
-                        let iter = a.iter().cloned().skip(skip).take(take);
+                        let iter = a.iter().skip(skip).take(take).cloned();
                         Ok(Val::Arr(Rc::new(iter.collect())))
                     }))
                 }
@@ -161,7 +161,7 @@ impl Part<Vec<Val>> {
                         let until = abs_bound(until, len, len);
 
                         let (skip, take) = skip_take(from, until);
-                        let iter = a.iter().cloned().skip(skip).take(take);
+                        let iter = a.iter().skip(skip).take(take).cloned();
                         let arr = Val::Arr(Rc::new(iter.collect()));
                         let y = match f(arr).next().transpose()? {
                             None => Vec::new(),
