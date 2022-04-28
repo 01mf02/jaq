@@ -1,5 +1,5 @@
 use clap::Parser;
-use jaq_core::{Definitions, Val};
+use jaq_core::{Definitions, Filter, Val};
 use mimalloc::MiMalloc;
 use std::io::Write;
 use std::rc::Rc;
@@ -29,8 +29,8 @@ struct Cli {
     /// Do not print a newline after each value
     join_output: bool,
 
-    /// Filter to execute
-    filter: String,
+    /// Filter to execute, followed by list of input files
+    args: Vec<String>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -43,7 +43,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .for_each(|def| defs.insert(def, &mut errs));
     assert!(errs.is_empty());
 
-    let (main, mut errs) = jaq_core::parse::parse(&cli.filter, jaq_core::parse::main());
+    let mut args = cli.args.iter();
+    // TODO: do not parse if no filter is given
+    let id = ".".to_string();
+    let filter_str = args.next().unwrap_or(&id);
+    let files: Vec<_> = args.collect();
+
+    let (main, mut errs) = jaq_core::parse::parse(filter_str, jaq_core::parse::main());
 
     let filter = main.map(|main| defs.finish(main, &mut errs));
     let filter = if errs.is_empty() {
@@ -51,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         for err in errs {
             report(err)
-                .eprint(ariadne::Source::from(&cli.filter))
+                .eprint(ariadne::Source::from(filter_str))
                 .unwrap();
         }
         std::process::exit(3);
@@ -59,23 +65,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //println!("Filter: {:?}", filter);
 
     use std::iter::once;
-    let stdin = std::io::stdin();
-    let iter = if cli.null {
-        Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
+    if files.is_empty() {
+        let stdin = std::io::stdin();
+        let inputs = if cli.null {
+            Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
+        } else {
+            Box::new(read_json(stdin.lock()))
+        };
+        let inputs = slurp(cli.slurp, inputs);
+        run_and_print(&cli, &filter, inputs)?;
     } else {
-        let stdin = stdin.lock();
-        let deserializer = serde_json::Deserializer::from_reader(stdin);
-        let iter = deserializer.into_iter::<serde_json::Value>();
-        Box::new(iter.map(|r| r.map(Val::from)))
-    };
+        for file in files {
+            let file = std::fs::File::open(file)?;
+            let file = std::io::BufReader::new(file);
+            let inputs = read_json(file);
+            let inputs = slurp(cli.slurp, inputs);
+            run_and_print(&cli, &filter, inputs)?;
+        }
+    }
+    Ok(())
+}
 
-    let iter = if cli.slurp {
-        let slurped: Result<Vec<_>, _> = iter.collect();
-        Box::new(once(slurped.map(|v| Val::Arr(Rc::new(v)))))
+fn read_json(read: impl std::io::Read) -> impl Iterator<Item = Result<Val, serde_json::Error>> {
+    let deserializer = serde_json::Deserializer::from_reader(read);
+    let iter = deserializer.into_iter::<serde_json::Value>();
+    iter.map(|r| r.map(Val::from))
+}
+
+fn slurp<'a>(
+    slurp: bool,
+    inputs: impl Iterator<Item = Result<Val, serde_json::Error>> + 'a,
+) -> impl Iterator<Item = Result<Val, serde_json::Error>> + 'a {
+    if slurp {
+        let slurped: Result<Vec<_>, _> = inputs.collect();
+        Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
     } else {
-        Box::new(iter) as Box<dyn Iterator<Item = _>>
-    };
+        Box::new(inputs) as Box<dyn Iterator<Item = _>>
+    }
+}
 
+fn run_and_print(
+    cli: &Cli,
+    filter: &Filter,
+    iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
 
