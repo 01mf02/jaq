@@ -60,6 +60,12 @@ pub enum Filter {
     Arg(usize),
 }
 
+impl Default for Filter {
+    fn default() -> Self {
+        Self::Id
+    }
+}
+
 #[derive(Clone, Debug)]
 enum Ctx {
     Nil,

@@ -36,6 +36,40 @@ struct Cli {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    let mut args = cli.args.iter();
+    let filter = args.next().map(parse).unwrap_or_default();
+    //println!("Filter: {:?}", filter);
+    let files: Vec<_> = args.collect();
+
+    use std::iter::once;
+    let last = if files.is_empty() {
+        let stdin = std::io::stdin();
+        let inputs = if cli.null {
+            Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
+        } else {
+            Box::new(read_json(stdin.lock()))
+        };
+        let inputs = slurp(cli.slurp, inputs);
+        run_and_print(&cli, &filter, inputs)?
+    } else {
+        let mut last = None;
+        for file in files {
+            let file = std::fs::File::open(file)?;
+            let file = std::io::BufReader::new(file);
+            let inputs = read_json(file);
+            let inputs = slurp(cli.slurp, inputs);
+            last = run_and_print(&cli, &filter, inputs)?;
+        }
+        last
+    };
+
+    if cli.exit {
+        std::process::exit(last.map(|b| (!b).into()).unwrap_or(4));
+    }
+    Ok(())
+}
+
+fn parse(filter_str: &String) -> Filter {
     let mut errs = Vec::new();
     let mut defs = Definitions::core();
     jaq_std::std()
@@ -43,16 +77,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .for_each(|def| defs.insert(def, &mut errs));
     assert!(errs.is_empty());
 
-    let mut args = cli.args.iter();
-    // TODO: do not parse if no filter is given
-    let id = ".".to_string();
-    let filter_str = args.next().unwrap_or(&id);
-    let files: Vec<_> = args.collect();
-
     let (main, mut errs) = jaq_core::parse::parse(filter_str, jaq_core::parse::main());
 
     let filter = main.map(|main| defs.finish(main, &mut errs));
-    let filter = if errs.is_empty() {
+    if errs.is_empty() {
         filter.unwrap()
     } else {
         for err in errs {
@@ -61,29 +89,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap();
         }
         std::process::exit(3);
-    };
-    //println!("Filter: {:?}", filter);
-
-    use std::iter::once;
-    if files.is_empty() {
-        let stdin = std::io::stdin();
-        let inputs = if cli.null {
-            Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
-        } else {
-            Box::new(read_json(stdin.lock()))
-        };
-        let inputs = slurp(cli.slurp, inputs);
-        run_and_print(&cli, &filter, inputs)?;
-    } else {
-        for file in files {
-            let file = std::fs::File::open(file)?;
-            let file = std::io::BufReader::new(file);
-            let inputs = read_json(file);
-            let inputs = slurp(cli.slurp, inputs);
-            run_and_print(&cli, &filter, inputs)?;
-        }
     }
-    Ok(())
 }
 
 fn read_json(read: impl std::io::Read) -> impl Iterator<Item = Result<Val, serde_json::Error>> {
@@ -108,7 +114,7 @@ fn run_and_print(
     cli: &Cli,
     filter: &Filter,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Option<bool>, Box<dyn std::error::Error>> {
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
 
@@ -135,11 +141,7 @@ fn run_and_print(
         }
     }
     stdout.flush()?;
-
-    if cli.exit {
-        std::process::exit(last.map(|b| (!b).into()).unwrap_or(4));
-    }
-    Ok(())
+    Ok(last)
 }
 
 fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {

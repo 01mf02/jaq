@@ -22,6 +22,7 @@ use parse::{Def, Main};
 use unparse::unparse;
 
 /// Function from a value to a stream of value results.
+#[derive(Default)]
 pub struct Filter(crate::filter::Filter);
 
 impl Filter {
