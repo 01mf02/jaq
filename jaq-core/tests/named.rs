@@ -52,6 +52,15 @@ fn has() {
 }
 
 #[test]
+fn json() {
+    give(json!(1.0), "tojson", json!("1.0"));
+    give(json!(0), "1.0 | tojson", json!("1.0"));
+    give(json!(0), "1.1 | tojson", json!("1.1"));
+    give(json!(0), "0.0 / 0.0 | tojson", json!("null"));
+    give(json!(0), "1.0 / 0.0 | tojson", json!("null"));
+}
+
+#[test]
 fn keys() {
     give(json!([0, null, "a"]), "keys", json!([0, 1, 2]));
     give(json!({"a": 1, "b": 2}), "keys", json!(["a", "b"]));
