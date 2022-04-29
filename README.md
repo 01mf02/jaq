@@ -240,7 +240,7 @@ For example:
     $ jq  -n '[0, 1, 2] | .[1.0000000000000001]'
     1
     $ jaq -n '[0, 1, 2] | .[1.0000000000000001]'
-    Error: cannot use 1 as integer
+    Error: cannot use 1.0 as integer
     $ jaq -n '[0, 1, 2] | .[1]'
     1
 
