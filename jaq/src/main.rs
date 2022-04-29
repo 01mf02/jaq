@@ -1,6 +1,7 @@
 use clap::Parser;
 use jaq_core::{Definitions, Filter, Val};
 use mimalloc::MiMalloc;
+use std::fmt;
 use std::io::Write;
 use std::rc::Rc;
 
@@ -17,23 +18,34 @@ struct Cli {
     #[clap(short)]
     exit: bool,
 
-    #[clap(short)]
     /// Read (slurp) all input values into one array
+    #[clap(short)]
     slurp: bool,
 
-    #[clap(short, long)]
+    /// Overwrite input file with its output
+    #[clap(short)]
+    in_place: bool,
+
     /// Write strings without escaping them with quotes
+    #[clap(short, long)]
     raw_output: bool,
 
-    #[clap(short, long)]
     /// Do not print a newline after each value
+    #[clap(short, long)]
     join_output: bool,
 
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    if let Err(e) = real_main() {
+        println!("Error: {}", e);
+        std::process::exit(e.exit_code());
+    }
+}
+
+fn real_main() -> Result<(), Error> {
     let cli = Cli::parse();
 
     let mut args = cli.args.iter();
@@ -54,11 +66,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let mut last = None;
         for file in files {
-            let file = std::fs::File::open(file)?;
+            let path = std::path::Path::new(file);
+            let file =
+                std::fs::File::open(file).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let file = std::io::BufReader::new(file);
             let inputs = read_json(file);
             let inputs = slurp(cli.slurp, inputs);
-            last = run_and_print(&cli, &filter, inputs)?;
+            if cli.in_place {
+                // create a temporary file where output is written to
+                let location = path.parent().unwrap();
+                let mut tmp = tempfile::Builder::new()
+                    .prefix("jaq")
+                    .tempfile_in(location)?;
+
+                last = run(&filter, inputs, |output| {
+                    writeln!(tmp.as_file_mut(), "{}", output)
+                })?;
+
+                // replace the input file with the temporary file
+                tmp.persist(path).map_err(Error::Persist)?;
+            } else {
+                last = run_and_print(&cli, &filter, inputs)?;
+            }
         }
         last
     };
@@ -110,36 +139,81 @@ fn slurp<'a>(
     }
 }
 
+#[derive(Debug)]
+enum Error {
+    Io(Option<String>, std::io::Error),
+    Serde(serde_json::Error),
+    Jaq(jaq_core::Error),
+    Persist(tempfile::PersistError),
+}
+
+impl Error {
+    fn exit_code(&self) -> i32 {
+        match self {
+            Self::Io(..) | Self::Persist(_) => 2,
+            Self::Serde(_) => 4,
+            Self::Jaq(_) => 5,
+        }
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(None, e)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Io(None, e) => e.fmt(f),
+            Self::Io(Some(s), e) => write!(f, "{}: {}", s, e),
+            Self::Serde(e) => write!(f, "failed to parse JSON: {}", e),
+            Self::Jaq(e) => e.fmt(f),
+            Self::Persist(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+fn run(
+    filter: &Filter,
+    iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
+    mut f: impl FnMut(Val) -> std::io::Result<()>,
+) -> Result<Option<bool>, Error> {
+    let mut last = None;
+    for item in iter {
+        let input = item.map_err(Error::Serde)?;
+        //println!("Got {:?}", input);
+        for output in filter.run(input) {
+            let output = output.map_err(Error::Jaq)?;
+            last = Some(output.as_bool());
+            f(output)?;
+        }
+    }
+    Ok(last)
+}
+
 fn run_and_print(
     cli: &Cli,
     filter: &Filter,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
-) -> Result<Option<bool>, Box<dyn std::error::Error>> {
+) -> Result<Option<bool>, Error> {
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
 
-    let mut last = None;
-    for item in iter {
-        let input = item.unwrap_or_else(|e| {
-            eprintln!("Failed to parse JSON: {}", e);
-            std::process::exit(4);
-        });
-        //println!("Got {:?}", input);
-        for output in filter.run(input) {
-            let output = output.unwrap_or_else(|e| {
-                eprintln!("Error: {}", e);
-                std::process::exit(5);
-            });
-            last = Some(output.as_bool());
-            match output {
-                Val::Str(s) if cli.raw_output => print!("{}", s),
-                _ => colored_json::write_colored_json(&output.into(), &mut stdout)?,
-            };
-            if !cli.join_output {
-                println!()
-            }
-        }
-    }
+    let last = run(filter, iter, |output| {
+        match output {
+            Val::Str(s) if cli.raw_output => print!("{}", s),
+            _ => colored_json::write_colored_json(&output.into(), &mut stdout)?,
+        };
+        if !cli.join_output {
+            println!()
+        };
+        Ok(())
+    })?;
+
     stdout.flush()?;
     Ok(last)
 }
