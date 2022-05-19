@@ -40,10 +40,8 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
     let out_ex = std::fs::read_to_string(out_path)?;
     let out_act = std::fs::read_to_string(out_temp_file.path())?;
     if out_ex.trim() != out_act.trim() {
-        println!(
-            "Expected output:\n{}\n---\nActual ouput:\n{}\n---",
-            out_ex, out_act
-        );
+        println!("Expected output:\n{}\n---", out_ex);
+        println!("Actual output:\n{}\n---", out_act);
         std::process::exit(2);
     }
     Ok(())
@@ -53,7 +51,6 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
 fn one() {
     golden_test("one", &["1"]);
 }
-
 
 #[test]
 fn sparse() {
