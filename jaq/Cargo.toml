@@ -9,6 +9,7 @@ description = "Just another JSON query tool"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["command-line-utilities", "compilers", "parser-implementations"]
+rust-version = "1.59"
 
 [dependencies]
 jaq-core = { version = "0.6", path = "../jaq-core" }
