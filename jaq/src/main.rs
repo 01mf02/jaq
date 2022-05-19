@@ -4,6 +4,7 @@ use jaq_core::{Definitions, Filter, Val};
 use mimalloc::MiMalloc;
 use std::fmt;
 use std::io::Write;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 #[global_allocator]
@@ -31,13 +32,17 @@ struct Cli {
     #[clap(short, long)]
     raw_output: bool,
 
-    /// compact output: print JSON without extra whitespace
+    /// Print JSON compactly, omitting whitespace
     #[clap(short, long)]
     compact: bool,
 
     /// Do not print a newline after each value
     #[clap(short, long)]
     join_output: bool,
+
+    /// Read filter from a file
+    #[clap(short, long)]
+    from_file: Option<PathBuf>,
 
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
@@ -54,7 +59,10 @@ fn real_main() -> Result<(), Error> {
     let cli = Cli::parse();
 
     let mut args = cli.args.iter();
-    let filter = args.next().map(parse).unwrap_or_default();
+    let filter = match &cli.from_file {
+        Some(file) => parse(&std::fs::read_to_string(file)?),
+        None => args.next().map(parse).unwrap_or_default(),
+    };
     //println!("Filter: {:?}", filter);
     let files: Vec<_> = args.collect();
 
