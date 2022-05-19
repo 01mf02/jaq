@@ -1,8 +1,4 @@
-use std::env;
-use std::io;
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
-use tempfile::NamedTempFile;
+use std::{env, fs, io, path, process};
 
 fn golden_test(name: &str, args: &[&str]) {
     if let Err(e) = golden_test_err(name, args) {
@@ -10,34 +6,37 @@ fn golden_test(name: &str, args: &[&str]) {
     }
 }
 fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    let in_path: PathBuf = format!("{}/tests/golden/{}/in.jsonl", manifest_dir, name).into();
-    let out_path: PathBuf = format!("{}/tests/golden/{}/out.jsonl", manifest_dir, name).into();
+    let mut test_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    test_dir.extend(["tests", "golden", name]);
+    let in_path = test_dir.join("in.jsonl");
+    let out_path = test_dir.join("out.jsonl");
     assert!(
         in_path.exists(),
-        "Input should be at {}, but is missing",
-        in_path.as_os_str().to_string_lossy()
+        "Input should be at {:?}, but is missing",
+        in_path
     );
     assert!(
         out_path.exists(),
-        "Output should be at {}, but is missing",
-        out_path.as_os_str().to_string_lossy()
+        "Output should be at {:?}, but is missing",
+        out_path
     );
-    let out_temp_file = NamedTempFile::new()?;
+
+    let out_temp_file = tempfile::NamedTempFile::new()?;
     let jaq_path = env!("CARGO_BIN_EXE_jaq");
-    let jaq_exit = Command::new(jaq_path)
+    let jaq_exit = process::Command::new(jaq_path)
         .args(args)
-        .stdin(std::fs::File::open(in_path)?)
+        .stdin(fs::File::open(in_path)?)
         .stdout(out_temp_file.reopen()?)
         .spawn()?
         .wait()?;
     assert!(jaq_exit.success());
-    let out_ex = std::fs::read_to_string(out_path)?;
-    let out_act = std::fs::read_to_string(out_temp_file.path())?;
+
+    let out_ex = fs::read_to_string(out_path)?;
+    let out_act = fs::read_to_string(out_temp_file.path())?;
     if out_ex.trim() != out_act.trim() {
         println!("Expected output:\n{}\n---", out_ex);
         println!("Actual output:\n{}\n---", out_act);
-        std::process::exit(2);
+        process::exit(2);
     }
     Ok(())
 }
