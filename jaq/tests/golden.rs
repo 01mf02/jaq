@@ -1,4 +1,4 @@
-use std::{env, fs, io, path, process};
+use std::{env, fs, io, path, process, str};
 
 fn golden_test(name: &str, args: &[&str]) {
     if let Err(e) = golden_test_err(name, args) {
@@ -21,18 +21,14 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
         out_path
     );
 
-    let out_temp_file = tempfile::NamedTempFile::new()?;
-    let jaq_path = env!("CARGO_BIN_EXE_jaq");
-    let jaq_exit = process::Command::new(jaq_path)
+    let jaq_out = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
         .args(args)
-        .stdin(fs::File::open(in_path)?)
-        .stdout(out_temp_file.reopen()?)
-        .spawn()?
-        .wait()?;
-    assert!(jaq_exit.success());
+        .stdin(fs::File::open(&in_path)?)
+        .output()?;
+    assert!(jaq_out.status.success());
 
     let out_ex = fs::read_to_string(out_path)?;
-    let out_act = fs::read_to_string(out_temp_file.path())?;
+    let out_act = str::from_utf8(&jaq_out.stdout).expect("invalid UTF-8 in output");
     if out_ex.trim() != out_act.trim() {
         println!("Expected output:\n{}\n---", out_ex);
         println!("Actual output:\n{}\n---", out_act);
