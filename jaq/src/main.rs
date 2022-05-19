@@ -1,4 +1,5 @@
 use clap::Parser;
+use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output};
 use jaq_core::{Definitions, Filter, Val};
 use mimalloc::MiMalloc;
 use std::fmt;
@@ -29,6 +30,10 @@ struct Cli {
     /// Write strings without escaping them with quotes
     #[clap(short, long)]
     raw_output: bool,
+
+    /// compact output: print JSON without extra whitespace
+    #[clap(short, long)]
+    compact: bool,
 
     /// Do not print a newline after each value
     #[clap(short, long)]
@@ -206,7 +211,17 @@ fn run_and_print(
     let last = run(filter, iter, |output| {
         match output {
             Val::Str(s) if cli.raw_output => print!("{}", s),
-            _ => colored_json::write_colored_json(&output.into(), &mut stdout)?,
+            _ => {
+                if cli.compact {
+                    ColoredFormatter::new(CompactFormatter).write_colored_json(
+                        &output.into(),
+                        &mut stdout,
+                        ColorMode::Auto(Output::StdOut),
+                    )?
+                } else {
+                    colored_json::write_colored_json(&output.into(), &mut stdout)?
+                }
+            }
         };
         if !cli.join_output {
             println!()
