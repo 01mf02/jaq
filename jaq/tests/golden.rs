@@ -25,14 +25,9 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
     );
     let out_temp_file = NamedTempFile::new()?;
     let jaq_path = env!("CARGO_BIN_EXE_jaq");
-    let cat_child = Command::new("cat")
-        .arg(in_path)
-        .stdout(Stdio::piped())
-        .spawn()?;
-    let cat_stdout = cat_child.stdout.unwrap();
     let jaq_exit = Command::new(jaq_path)
         .args(args)
-        .stdin(cat_stdout)
+        .stdin(std::fs::File::open(in_path)?)
         .stdout(out_temp_file.reopen()?)
         .spawn()?
         .wait()?;
