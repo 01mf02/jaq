@@ -51,14 +51,13 @@ struct Cli {
 }
 
 fn main() -> ExitCode {
-    if let Err(e) = real_main() {
-        e.report()
-    } else {
-        ExitCode::SUCCESS
+    match real_main() {
+        Ok(exit) => exit,
+        Err(e) => e.report(),
     }
 }
 
-fn real_main() -> Result<(), Error> {
+fn real_main() -> Result<ExitCode, Error> {
     let cli = Cli::parse();
 
     let mut args = cli.args.iter();
@@ -108,10 +107,12 @@ fn real_main() -> Result<(), Error> {
         last
     };
 
-    if cli.exit {
-        std::process::exit(last.map(|b| (!b).into()).unwrap_or(4));
-    }
-    Ok(())
+    Ok(if cli.exit {
+        // return exit code 4 if no value is output
+        ExitCode::from(last.map(|b| (!b).into()).unwrap_or(4))
+    } else {
+        ExitCode::SUCCESS
+    })
 }
 
 fn parse(filter_str: &String) -> Result<Filter, Vec<ParseError>> {
