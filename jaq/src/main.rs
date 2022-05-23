@@ -2,9 +2,9 @@ use clap::Parser;
 use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output};
 use jaq_core::{Definitions, Filter, Val};
 use mimalloc::MiMalloc;
-use std::fmt;
 use std::io::Write;
 use std::path::PathBuf;
+use std::process::{ExitCode, Termination};
 use std::rc::Rc;
 
 #[global_allocator]
@@ -41,17 +41,20 @@ struct Cli {
     join_output: bool,
 
     /// Read filter from a file
-    #[clap(short, long)]
+    ///
+    /// In this case, all arguments are interpreted as input files.
+    #[clap(short, long, value_name = "FILE")]
     from_file: Option<PathBuf>,
 
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
 }
 
-fn main() {
+fn main() -> ExitCode {
     if let Err(e) = real_main() {
-        println!("Error: {}", e);
-        std::process::exit(e.exit_code());
+        e.report()
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
@@ -60,8 +63,8 @@ fn real_main() -> Result<(), Error> {
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
-        Some(file) => parse(&std::fs::read_to_string(file)?),
-        None => args.next().map(parse).unwrap_or_default(),
+        Some(file) => parse(&std::fs::read_to_string(file)?)?,
+        None => args.next().map(parse).transpose()?.unwrap_or_default(),
     };
     //println!("Filter: {:?}", filter);
     let files: Vec<_> = args.collect();
@@ -111,7 +114,7 @@ fn real_main() -> Result<(), Error> {
     Ok(())
 }
 
-fn parse(filter_str: &String) -> Filter {
+fn parse(filter_str: &String) -> Result<Filter, Vec<ParseError>> {
     let mut errs = Vec::new();
     let mut defs = Definitions::core();
     jaq_std::std()
@@ -123,14 +126,15 @@ fn parse(filter_str: &String) -> Filter {
 
     let filter = main.map(|main| defs.finish(main, &mut errs));
     if errs.is_empty() {
-        filter.unwrap()
+        Ok(filter.unwrap())
     } else {
-        for err in errs {
-            report(err)
-                .eprint(ariadne::Source::from(filter_str))
-                .unwrap();
-        }
-        std::process::exit(3);
+        Err(errs
+            .into_iter()
+            .map(|error| ParseError {
+                error,
+                filter: filter_str.clone(),
+            })
+            .collect())
     }
 }
 
@@ -153,20 +157,51 @@ fn slurp<'a>(
 }
 
 #[derive(Debug)]
+struct ParseError {
+    error: chumsky::error::Simple<String>,
+    filter: String,
+}
+
+#[derive(Debug)]
 enum Error {
     Io(Option<String>, std::io::Error),
+    Chumsky(Vec<ParseError>),
     Serde(serde_json::Error),
     Jaq(jaq_core::Error),
     Persist(tempfile::PersistError),
 }
 
-impl Error {
-    fn exit_code(&self) -> i32 {
-        match self {
-            Self::Io(..) | Self::Persist(_) => 2,
-            Self::Serde(_) => 4,
-            Self::Jaq(_) => 5,
-        }
+impl Termination for Error {
+    fn report(self) -> ExitCode {
+        let exit = match self {
+            Self::Io(prefix, e) => {
+                eprint!("Error: ");
+                prefix.into_iter().for_each(|p| eprint!("{}: ", p));
+                eprintln!("{}", e);
+                2
+            }
+            Self::Persist(e) => {
+                eprintln!("Error: {}", e);
+                2
+            }
+            Self::Chumsky(e) => {
+                for err in e.into_iter() {
+                    report(err.error)
+                        .eprint(ariadne::Source::from(err.filter))
+                        .unwrap();
+                }
+                3
+            }
+            Self::Serde(e) => {
+                eprintln!("Error: failed to parse JSON: {}", e);
+                4
+            }
+            Self::Jaq(e) => {
+                eprintln!("Error: {}", e);
+                5
+            }
+        };
+        ExitCode::from(exit)
     }
 }
 
@@ -176,19 +211,11 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Io(None, e) => e.fmt(f),
-            Self::Io(Some(s), e) => write!(f, "{}: {}", s, e),
-            Self::Serde(e) => write!(f, "failed to parse JSON: {}", e),
-            Self::Jaq(e) => e.fmt(f),
-            Self::Persist(e) => e.fmt(f),
-        }
+impl From<Vec<ParseError>> for Error {
+    fn from(e: Vec<ParseError>) -> Self {
+        Self::Chumsky(e)
     }
 }
-
-impl std::error::Error for Error {}
 
 fn run(
     filter: &Filter,
