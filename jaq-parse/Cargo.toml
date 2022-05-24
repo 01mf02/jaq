@@ -15,4 +15,4 @@ default = ["serde"]
 
 [dependencies]
 chumsky = "0.8.0"
-serde = { version = "1.0", features = ["derive"], optional = true }
+serde = { version = "1.0.137", features = ["derive"], optional = true }
