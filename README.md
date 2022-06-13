@@ -321,7 +321,7 @@ A slightly more verbose version is allowed in jaq:
 
 ## Definitions
 
-Like jq, jaq allows for the defininition of filters, such as:
+Like jq, jaq allows for the definition of filters, such as:
 
     def map(f): [.[] | f];
 
