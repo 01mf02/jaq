@@ -1,4 +1,4 @@
-use jaq_core::{parse, Definitions, Error, Val};
+use jaq_core::{parse, Ctx, Definitions, Error, Val};
 use serde_json::Value;
 
 pub fn give(x: Value, f: &str, y: Value) {
@@ -24,7 +24,7 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
         .into_iter()
         .for_each(|def| defs.insert(def, &mut errs));
     let f = parse::parse(&f, parse::main()).0.unwrap();
-    let f = defs.finish(f, &mut errs);
+    let f = defs.finish(f, Vec::new(), &mut errs);
     assert_eq!(errs, Vec::new());
 
     let to = |v| Val::from(v);
@@ -32,6 +32,6 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let expected = ys.into_iter().map(|y| Ok(to(y)));
     let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
 
-    let out: Vec<_> = f.run(to(x)).collect();
+    let out: Vec<_> = f.run(Ctx::new(), to(x)).collect();
     assert_eq!(out, expected);
 }

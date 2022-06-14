@@ -1,6 +1,6 @@
 use crate::path::{self, Path};
 use crate::val::{Val, ValR, ValRs};
-use crate::Error;
+use crate::{Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, collections::VecDeque, rc::Rc, vec::Vec};
 use jaq_parse::{MathOp, OrdOp};
@@ -66,46 +66,6 @@ impl Default for Filter {
     }
 }
 
-#[derive(Clone, Debug)]
-enum Ctx {
-    Nil,
-    Cons(Val, Rc<Ctx>),
-}
-
-impl FromIterator<Val> for Ctx {
-    fn from_iter<I: IntoIterator<Item = Val>>(iter: I) -> Self {
-        iter.into_iter()
-            .fold(Self::Nil, |acc, x| Self::Cons(x, Rc::new(acc)))
-    }
-}
-
-impl Ctx {
-    fn get(&self, mut n: usize) -> Option<&Val> {
-        let mut ctx = self;
-        while let Self::Cons(x, xs) = ctx {
-            if n == 0 {
-                return Some(x);
-            } else {
-                n -= 1;
-                ctx = xs;
-            }
-        }
-        None
-    }
-
-    fn skip(&self, mut n: usize) -> &Self {
-        let mut ctx = self;
-        while n > 0 {
-            match self {
-                Self::Cons(_, xs) => ctx = xs,
-                Self::Nil => return &Self::Nil,
-            }
-            n -= 1;
-        }
-        ctx
-    }
-}
-
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
         let arg = |v| Box::new(Self::Arg(v));
@@ -147,11 +107,7 @@ impl Filter {
         ])
     }
 
-    pub fn run_with_empty_ctx(&self, val: Val) -> ValRs {
-        self.run((Ctx::Nil, val))
-    }
-
-    fn run(&self, cv: (Ctx, Val)) -> ValRs {
+    pub fn run(&self, cv: (Ctx, Val)) -> ValRs {
         use core::iter::once;
         use itertools::Itertools;
         match self {

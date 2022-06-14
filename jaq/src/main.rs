@@ -1,6 +1,6 @@
 use clap::Parser;
 use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output};
-use jaq_core::{Definitions, Filter, Val};
+use jaq_core::{Ctx, Definitions, Filter, Val};
 use mimalloc::MiMalloc;
 use std::io::Write;
 use std::path::PathBuf;
@@ -10,6 +10,7 @@ use std::rc::Rc;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+/// Just Another Query Tool
 #[derive(Parser)]
 struct Cli {
     /// Use null as single input value
@@ -47,6 +48,8 @@ struct Cli {
     from_file: Option<PathBuf>,
 
     /// Set variable `$<a>` to string "<v>"
+    ///
+    /// Unlike jq, this provides the variable *only* in the main filter.
     #[clap(long, value_names = &["a", "v"])]
     arg: Vec<String>,
 
@@ -64,16 +67,25 @@ fn main() -> ExitCode {
 fn real_main() -> Result<ExitCode, Error> {
     let cli = Cli::parse();
 
+    let mut vars = Vec::new();
+    let mut ctx = Ctx::new();
     for arg_val in cli.arg.chunks(2) {
         if let [arg, val] = arg_val {
-            todo!()
+            vars.push(arg.clone());
+            ctx = Ctx::Cons(Val::Str(val.clone().into()), ctx.into());
         }
     }
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
-        Some(file) => parse(&std::fs::read_to_string(file)?)?,
-        None => args.next().map(parse).transpose()?.unwrap_or_default(),
+        Some(file) => parse(&std::fs::read_to_string(file)?, vars)?,
+        None => {
+            if let Some(filter) = args.next() {
+                parse(filter, vars)?
+            } else {
+                Default::default()
+            }
+        }
     };
     //println!("Filter: {:?}", filter);
     let files: Vec<_> = args.collect();
@@ -87,7 +99,7 @@ fn real_main() -> Result<ExitCode, Error> {
             Box::new(read_json(stdin.lock()))
         };
         let inputs = slurp(cli.slurp, inputs);
-        run_and_print(&cli, &filter, inputs)?
+        run_and_print(&cli, &filter, ctx, inputs)?
     } else {
         let mut last = None;
         for file in files {
@@ -104,14 +116,14 @@ fn real_main() -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                last = run(&filter, inputs, |output| {
-                    writeln!(tmp.as_file_mut(), "{}", output)
+                last = run(&filter, ctx.clone(), inputs, |output| {
+                    writeln!(tmp.as_file_mut(), "{output}")
                 })?;
 
                 // replace the input file with the temporary file
                 tmp.persist(path).map_err(Error::Persist)?;
             } else {
-                last = run_and_print(&cli, &filter, inputs)?;
+                last = run_and_print(&cli, &filter, ctx.clone(), inputs)?;
             }
         }
         last
@@ -125,7 +137,7 @@ fn real_main() -> Result<ExitCode, Error> {
     })
 }
 
-fn parse(filter_str: &String) -> Result<Filter, Vec<ParseError>> {
+fn parse(filter_str: &String, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut errs = Vec::new();
     let mut defs = Definitions::core();
     jaq_std::std()
@@ -135,7 +147,7 @@ fn parse(filter_str: &String) -> Result<Filter, Vec<ParseError>> {
 
     let (main, mut errs) = jaq_core::parse::parse(filter_str, jaq_core::parse::main());
 
-    let filter = main.map(|main| defs.finish(main, &mut errs));
+    let filter = main.map(|main| defs.finish(main, vars, &mut errs));
     if errs.is_empty() {
         Ok(filter.unwrap())
     } else {
@@ -230,6 +242,7 @@ impl From<Vec<ParseError>> for Error {
 
 fn run(
     filter: &Filter,
+    ctx: Ctx,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
     mut f: impl FnMut(Val) -> std::io::Result<()>,
 ) -> Result<Option<bool>, Error> {
@@ -237,7 +250,7 @@ fn run(
     for item in iter {
         let input = item.map_err(Error::Serde)?;
         //println!("Got {:?}", input);
-        for output in filter.run(input) {
+        for output in filter.run(ctx.clone(), input) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
@@ -249,12 +262,13 @@ fn run(
 fn run_and_print(
     cli: &Cli,
     filter: &Filter,
+    ctx: Ctx,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
 ) -> Result<Option<bool>, Error> {
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
 
-    let last = run(filter, iter, |output| {
+    let last = run(filter, ctx, iter, |output| {
         match output {
             Val::Str(s) if cli.raw_output => print!("{}", s),
             _ => {

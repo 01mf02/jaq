@@ -9,6 +9,7 @@ extern crate std;
 mod error;
 mod filter;
 mod path;
+mod rc_list;
 mod unparse;
 mod val;
 
@@ -19,7 +20,11 @@ pub use val::Val;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use parse::{Def, Main};
+use rc_list::RcList;
 use unparse::unparse;
+
+/// Variable bindings.
+pub type Ctx = RcList<Val>;
 
 /// Function from a value to a stream of value results.
 #[derive(Default)]
@@ -27,8 +32,8 @@ pub struct Filter(crate::filter::Filter);
 
 impl Filter {
     /// Apply the filter to the given value and return stream of results.
-    pub fn run(&self, val: Val) -> val::ValRs {
-        self.0.run_with_empty_ctx(val)
+    pub fn run(&self, ctx: Ctx, val: Val) -> val::ValRs {
+        self.0.run((ctx, val))
     }
 }
 
@@ -55,9 +60,14 @@ impl Definitions {
     }
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn finish(mut self, (defs, body): Main, errs: &mut Vec<parse::Error>) -> Filter {
+    pub fn finish(
+        mut self,
+        (defs, body): Main,
+        vars: Vec<String>,
+        errs: &mut Vec<parse::Error>,
+    ) -> Filter {
         defs.into_iter().for_each(|def| self.insert(def, errs));
-        Filter(unparse(&self.get(), &[], Vec::new(), body, errs))
+        Filter(unparse(&self.get(), &[], vars, body, errs))
     }
 
     /// Obtain filters by name and arity.

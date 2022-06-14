@@ -38,6 +38,11 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
 }
 
 #[test]
+fn arg() {
+    golden_test("arg", &["--arg", "x", "y", "--arg", "a", "b", "$x + $a"]);
+}
+
+#[test]
 fn one() {
     golden_test("one", &["1"]);
 }
