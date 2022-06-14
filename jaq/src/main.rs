@@ -46,6 +46,10 @@ struct Cli {
     #[clap(short, long, value_name = "FILE")]
     from_file: Option<PathBuf>,
 
+    /// Set variable `$<a>` to string "<v>"
+    #[clap(long, value_names = &["a", "v"])]
+    arg: Vec<String>,
+
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
 }
@@ -59,6 +63,12 @@ fn main() -> ExitCode {
 
 fn real_main() -> Result<ExitCode, Error> {
     let cli = Cli::parse();
+
+    for arg_val in cli.arg.chunks(2) {
+        if let [arg, val] = arg_val {
+            todo!()
+        }
+    }
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
