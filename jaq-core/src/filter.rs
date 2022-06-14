@@ -72,6 +72,13 @@ enum Ctx {
     Cons(Val, Rc<Ctx>),
 }
 
+impl FromIterator<Val> for Ctx {
+    fn from_iter<I: IntoIterator<Item = Val>>(iter: I) -> Self {
+        iter.into_iter()
+            .fold(Self::Nil, |acc, x| Self::Cons(x, Rc::new(acc)))
+    }
+}
+
 impl Ctx {
     fn get(&self, mut n: usize) -> Option<&Val> {
         let mut ctx = self;
