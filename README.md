@@ -1,5 +1,9 @@
-% jaq
+# jaq
 
+![Build status](https://github.com/01mf02/jaq/workflows/Rust/badge.svg)
+[![Crates.io](https://img.shields.io/crates/v/jaq-core.svg)](https://crates.io/crates/jaq-core)
+[![Documentation](https://docs.rs/jaq-core/badge.svg)](https://docs.rs/jaq-core)
+[![Rust 1.61+](https://img.shields.io/badge/rust-1.61+-orange.svg)](https://www.rust-lang.org)
 
 jaq is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
@@ -317,7 +321,7 @@ A slightly more verbose version is allowed in jaq:
 
 ## Definitions
 
-Like jq, jaq allows for the defininition of filters, such as:
+Like jq, jaq allows for the definition of filters, such as:
 
     def map(f): [.[] | f];
 
