@@ -1,4 +1,39 @@
 //! JSON query language interpreter.
+//!
+//! This crate allows you to execute jq-like filters.
+//!
+//! The example below demonstrates how to use this crate.
+//! See the implementation in the `jaq` crate if you are interested in how to:
+//!
+//! * enable usage of the standard library,
+//! * load JSON files lazily,
+//! * handle errors etc.
+//!
+//! ~~~
+//! use jaq_core::{parse, Ctx, Definitions, Error, Val};
+//! use serde_json::{json, Value};
+//!
+//! let input = json!(["Hello", "world"]);
+//! let filter = ".[]";
+//!
+//! // start out only from core filters,
+//! // which do not include filters in the standard library
+//! // such as `map`, `select` etc.
+//! let defs = Definitions::core();
+//!
+//! // parse the filter in the context of the given definitions
+//! let mut errs = Vec::new();
+//! let f = parse::parse(&filter, parse::main()).0.unwrap();
+//! let f = defs.finish(f, Vec::new(), &mut errs);
+//! assert_eq!(errs, Vec::new());
+//!
+//! // iterator over the output values
+//! let mut out = f.run(Ctx::new(), Val::from(input));
+//!
+//! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
+//! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
+//! assert_eq!(out.next(), None);;
+//! ~~~
 #![no_std]
 #![warn(missing_docs)]
 
