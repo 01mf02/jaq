@@ -14,19 +14,19 @@ static GLOBAL: MiMalloc = MiMalloc;
 #[derive(Parser)]
 struct Cli {
     /// Use null as single input value
-    #[clap(short)]
-    null: bool,
+    #[clap(short, long)]
+    null_input: bool,
 
     /// Use the last output value as exit status code
-    #[clap(short)]
-    exit: bool,
+    #[clap(short, long)]
+    exit_status: bool,
 
     /// Read (slurp) all input values into one array
-    #[clap(short)]
+    #[clap(short, long)]
     slurp: bool,
 
     /// Overwrite input file with its output
-    #[clap(short)]
+    #[clap(short, long)]
     in_place: bool,
 
     /// Write strings without escaping them with quotes
@@ -93,7 +93,7 @@ fn real_main() -> Result<ExitCode, Error> {
     use std::iter::once;
     let last = if files.is_empty() {
         let stdin = std::io::stdin();
-        let inputs = if cli.null {
+        let inputs = if cli.null_input {
             Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
         } else {
             Box::new(read_json(stdin.lock()))
@@ -129,7 +129,7 @@ fn real_main() -> Result<ExitCode, Error> {
         last
     };
 
-    Ok(if cli.exit {
+    Ok(if cli.exit_status {
         // return exit code 4 if no value is output
         ExitCode::from(last.map(|b| (!b).into()).unwrap_or(4))
     } else {
