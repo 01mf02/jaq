@@ -2,7 +2,7 @@ use clap::Parser;
 use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output};
 use jaq_core::{Ctx, Definitions, Filter, Val};
 use mimalloc::MiMalloc;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 use std::rc::Rc;
@@ -169,7 +169,7 @@ fn parse(filter_str: &String, vars: Vec<String>) -> Result<Filter, Vec<ParseErro
     }
 }
 
-fn read_json(read: impl std::io::Read) -> impl Iterator<Item = Result<Val, serde_json::Error>> {
+fn read_json(read: impl Read) -> impl Iterator<Item = Result<Val, serde_json::Error>> {
     let deserializer = serde_json::Deserializer::from_reader(read);
     let iter = deserializer.into_iter::<serde_json::Value>();
     iter.map(|r| r.map(Val::from))
