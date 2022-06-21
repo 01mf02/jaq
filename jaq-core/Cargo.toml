@@ -1,6 +1,6 @@
 [package]
 name = "jaq-core"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -15,7 +15,7 @@ default = ["std"]
 std = []
 
 [dependencies]
-jaq-parse = { version = "0.6", path = "../jaq-parse" }
+jaq-parse = { version = "0.7.0", path = "../jaq-parse" }
 ahash = "0.3.8"
 indexmap = "1.8.1"
 itertools = "0.10.3"
