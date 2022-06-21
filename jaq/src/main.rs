@@ -18,6 +18,14 @@ struct Cli {
     null_input: bool,
 
     /// Use the last output value as exit status code
+    ///
+    /// If there is some last output value `v`,
+    /// then the exit status code is
+    /// 1 if `v < true` (that is, if `v` is `false` or `null`) and
+    /// 0 otherwise.
+    /// If there is no output value, then the exit status code is 4.
+    ///
+    /// If any error occurs, then this option is ignored.
     #[clap(short, long)]
     exit_status: bool,
 
