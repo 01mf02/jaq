@@ -65,7 +65,12 @@ On my system, both commands place the executable at `~/.cargo/bin/jaq`.
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
 
+or using [homebrew](https://formulae.brew.sh/formula/jaq) (macOS or Linux)
 
+```sh
+$ brew install jaq
+$ brew install --HEAD jaq # latest development version
+```
 
 # Examples
 
