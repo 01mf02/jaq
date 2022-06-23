@@ -48,29 +48,32 @@ This should allow users proficient in jq to easily use jaq.
 
 # Installation
 
+
+## From Source
+
 To compile jaq, you need a Rust toolchain.
 See <https://rustup.rs/> for instructions.
 (Note that Rust compilers shipped with Linux distributions
-may be too outdated to compile jaq. I use Rust 1.59.)
+may be too outdated to compile jaq.)
 
-The following command installs the latest stable jaq:
+The following command installs jaq:
 
     cargo install jaq
-
-And the latest development version:
-
-    cargo install --branch main --git https://github.com/01mf02/jaq
+    cargo install --git https://github.com/01mf02/jaq # latest development version
 
 On my system, both commands place the executable at `~/.cargo/bin/jaq`.
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
 
-or using [homebrew](https://formulae.brew.sh/formula/jaq) (macOS or Linux)
 
-```sh
-$ brew install jaq
-$ brew install --HEAD jaq # latest development version
-```
+## Binaries
+
+You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
+
+    brew install jaq
+    brew install --HEAD jaq # latest development version
+
+
 
 # Examples
 
