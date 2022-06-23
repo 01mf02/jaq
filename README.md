@@ -58,8 +58,8 @@ may be too outdated to compile jaq.)
 
 The following command installs jaq:
 
-    cargo install jaq
-    cargo install --git https://github.com/01mf02/jaq # latest development version
+    $ cargo install jaq
+    $ cargo install --git https://github.com/01mf02/jaq # latest development version
 
 On my system, both commands place the executable at `~/.cargo/bin/jaq`.
 jaq should work on any system supported by Rust.
@@ -70,8 +70,8 @@ If it does not, please file an issue.
 
 You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
 
-    brew install jaq
-    brew install --HEAD jaq # latest development version
+    $ brew install jaq
+    $ brew install --HEAD jaq # latest development version
 
 
 
