@@ -6,6 +6,19 @@ use common::{give, gives};
 use serde_json::json;
 
 #[test]
+fn cartesian() {
+    give(
+        json!(0),
+        "[{a: (1,2), b: (3,4)}]",
+        json!([{"a": 1, "b": 3}, {"a": 1, "b": 4}, {"a": 2, "b": 3}, {"a": 2, "b": 4}]),
+    );
+
+    // here, jaq diverges from jq, which returns [3,6,4,8]!
+    // idem for other arithmetic operations
+    give(json!(0), "[(1,2) * (3,4)]", json!([3, 4, 6, 8]));
+}
+
+#[test]
 fn add() {
     give(json!(1), ". + 2", json!(3));
     give(json!(1.0), ". + 2.", json!(3.0));
