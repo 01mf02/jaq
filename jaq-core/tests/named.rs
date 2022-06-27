@@ -124,5 +124,9 @@ fn round() {
 #[test]
 fn split() {
     give(json!("aöß"), r#"split("")"#, json!(["a", "ö", "ß"]));
-    give(json!("abcabcdab"), r#"split("ab")"#, json!(["", "c", "cd", ""]));
+    give(
+        json!("abcabcdab"),
+        r#"split("ab")"#,
+        json!(["", "c", "cd", ""]),
+    );
 }
