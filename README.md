@@ -343,6 +343,32 @@ Note that while `recurse` cannot be defined manually in jaq,
 jaq provides `recurse` as core filter.
 
 
+## Miscellaneous
+
+* Slurping: When files are slurped in (via the `-s` / `--slurp` option),
+  jq combines the inputs of all files into one single array, whereas
+  jaq yields an array for every file.
+  The behaviour of jq can be approximated in jaq;
+  for example, to achieve the output of
+  `jq -s . a b`, you may use
+  `jaq -s . <(cat a b)`.
+* Cartesian products:
+  In jq, `[(1,2) * (3,4)]` yields `[3, 6, 4, 8]`, whereas
+  `[{a: (1,2), b: (3,4)} | .a * .b]` yields `[3, 4, 6, 8]`.
+  jaq yields `[3, 4, 6, 8]` in both cases.
+* List updating:
+  In jq, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
+  jq fills up the list with `null`s if we update beyond its size.
+  In contrast, jaq fails with an out-of-bounds error in such a case.
+* Updating with multiple values:
+  When we update with a filter that returns multiple values,
+  jq considers only the first value of the filter regardless of the updated value,
+  whereas jaq may consider multiple values depending on the updated value.
+  For example, `[(1, 3) | . |= (., .+1)]` yields `[1, 2, 3, 4]` in jaq, whereas
+  jq yields only `[1, 3]`.
+  For more examples of this behaviour, see <jaq-core/tests/path.rs>.
+
+
 
 # Contributing
 
