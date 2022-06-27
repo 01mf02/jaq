@@ -68,7 +68,7 @@ where
             });
             Filter::Object(kvs.collect())
         }
-        Expr::Call(name, call_args) => match args.iter().position(|v| *v == name) {
+        Expr::Call(name, call_args) => match args.iter().rposition(|v| *v == name) {
             Some(pos) if call_args.is_empty() => {
                 let arg = Filter::Arg(pos);
                 if vars.is_empty() {

@@ -176,6 +176,14 @@ fn redefine() {
 }
 
 #[test]
+fn shadow() {
+    // arguments from the right are stronger than from the left
+    give(json!(0), "def f(g; g): g; f(1; 2)", json!(2));
+
+    give(json!(0), "1 as $x | 2 as $x | $x", json!(2));
+}
+
+#[test]
 fn reduce() {
     let f = "reduce recurse(if . == 1000 then [] | .[] else .+1 end) as $x (0; . + $x)";
     give(json!(0), f, json!(500500));
