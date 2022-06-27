@@ -238,11 +238,17 @@ impl Val {
     ///
     /// Fail if any of the two given values is not a string.
     pub fn split(&self, sep: &Self) -> Result<Vec<Val>, Error> {
-        Ok(self
-            .as_str()?
-            .split(&**sep.as_str()?)
-            .map(|s| Val::Str(Rc::new(s.to_string())))
-            .collect())
+        let s = self.as_str()?;
+        let sep = sep.as_str()?;
+        let val = |s| Val::Str(Rc::new(s));
+        Ok(if sep.is_empty() {
+            // Rust's `split` function with an empty separator ("")
+            // yields an empty string as first and last result
+            // to prevent this, we are using `chars` instead
+            s.chars().map(|s| val(s.to_string())).collect()
+        } else {
+            s.split(&**sep).map(|s| val(s.to_string())).collect()
+        })
     }
 }
 

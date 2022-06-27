@@ -120,3 +120,9 @@ fn round() {
     fail(json!([]), "round", Error::Round(Val::from(json!([]))));
     fail(json!({}), "round", Error::Round(Val::from(json!({}))));
 }
+
+#[test]
+fn split() {
+    give(json!("aöß"), r#"split("")"#, json!(["a", "ö", "ß"]));
+    give(json!("abcabcdab"), r#"split("ab")"#, json!(["", "c", "cd", ""]));
+}
