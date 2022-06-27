@@ -30,6 +30,10 @@ struct Cli {
     exit_status: bool,
 
     /// Read (slurp) all input values into one array
+    ///
+    /// When input is read from files,
+    /// jaq yields an array for each file, whereas
+    /// jq produces only a single array.
     #[clap(short, long)]
     slurp: bool,
 
