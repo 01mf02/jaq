@@ -15,6 +15,7 @@ rust-version = "1.61"
 jaq-core = { version = "0.7.0", path = "../jaq-core" }
 jaq-std  = { version = "0.7.0", path = "../jaq-std" }
 ariadne = "0.1.5"
+atty = "0.2"
 chumsky = "0.8.0"
 clap = { version = "3.1.18", features = ["derive"] }
 colored_json = "2.1.0"

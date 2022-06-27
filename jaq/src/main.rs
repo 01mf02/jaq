@@ -305,6 +305,15 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
     use ariadne::{Color, Fmt, Label, Report, ReportKind};
     use chumsky::error::SimpleReason;
 
+    // color error messages only if we are on a tty
+    let isatty = atty::is(atty::Stream::Stderr);
+    let (red, yellow) = if isatty {
+        (Color::Red, Color::Yellow)
+    } else {
+        (Color::Unset, Color::Unset)
+    };
+    let config = ariadne::Config::default().with_color(isatty);
+
     let msg = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
@@ -337,31 +346,24 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
         _ => format!(
             "Unexpected {}",
             e.found()
-                .map(|c| format!("token {}", c.fg(Color::Red)))
+                .map(|c| format!("token {}", c.fg(red)))
                 .unwrap_or_else(|| "end of input".to_string())
         ),
     };
 
     let report = Report::build(ReportKind::Error, (), e.span().start)
         .with_message(msg)
-        .with_label(
-            Label::new(e.span())
-                .with_message(label)
-                .with_color(Color::Red),
-        );
+        .with_label(Label::new(e.span()).with_message(label).with_color(red));
 
     let report = match e.reason() {
         SimpleReason::Unclosed { span, delimiter } => report.with_label(
             Label::new(span.clone())
-                .with_message(format!(
-                    "Unclosed delimiter {}",
-                    delimiter.fg(Color::Yellow)
-                ))
-                .with_color(Color::Yellow),
+                .with_message(format!("Unclosed delimiter {}", delimiter.fg(yellow)))
+                .with_color(yellow),
         ),
         SimpleReason::Unexpected => report,
         SimpleReason::Custom(_) => report,
     };
 
-    report.finish()
+    report.with_config(config).finish()
 }

@@ -248,6 +248,7 @@ name = "jaq"
 version = "0.7.0"
 dependencies = [
  "ariadne",
+ "atty",
  "chumsky",
  "clap",
  "colored_json",
