@@ -79,7 +79,7 @@ impl Part<Vec<Val>> {
         }
     }
 
-    pub fn map<F, I>(&self, mut v: Val, opt: Opt, f: F) -> Result<Val, Error>
+    pub fn map<F, I>(&self, mut v: Val, opt: Opt, f: F) -> ValR
     where
         F: Fn(Val) -> I,
         I: Iterator<Item = ValR>,
