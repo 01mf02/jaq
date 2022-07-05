@@ -13,12 +13,6 @@ pub enum Part<I> {
     Range(Option<I>, Option<I>),
 }
 
-impl<F> Path<F> {
-    pub fn new(path: Vec<(Part<F>, Opt)>) -> Self {
-        Self(path)
-    }
-}
-
 impl Part<Vec<Val>> {
     pub fn collect(&self, current: Val) -> ValRs {
         use core::iter::once;

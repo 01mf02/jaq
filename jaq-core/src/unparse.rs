@@ -104,19 +104,11 @@ where
         Expr::Binary(l, BinaryOp::Math(op), r) => Filter::Math(get(*l, errs), op, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Ord(op), r) => Filter::Ord(get(*l, errs), op, get(*r, errs)),
         Expr::Binary(l, BinaryOp::Assign(op), r) => {
-            let l_span = l.1.clone();
             let (l, r) = (get(*l, errs), get(*r, errs));
-            let l = if let Some(path) = l.path() {
-                path
-            } else {
-                let err = "left-hand side of assignment must be a path";
-                errs.push(Error::custom(l_span, err));
-                Path(Vec::new())
-            };
             match op {
                 AssignOp::Assign => Filter::Assign(l, r),
                 AssignOp::Update => Filter::Update(l, r),
-                AssignOp::UpdateWith(op) => Filter::update_math(l, op, *r),
+                AssignOp::UpdateWith(op) => Filter::update_math(l, op, r),
             }
         }
         Expr::If(if_thens, else_) => Filter::IfThenElse(

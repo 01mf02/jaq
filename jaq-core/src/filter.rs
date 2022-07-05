@@ -3,6 +3,7 @@ use crate::val::{Val, ValR, ValRs};
 use crate::{Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, collections::VecDeque, rc::Rc, vec::Vec};
+use dyn_clone::DynClone;
 use jaq_parse::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
@@ -24,13 +25,14 @@ pub enum Filter {
     Reduce(Box<Self>, Box<Self>, Box<Self>),
 
     Path(Box<Self>, Path<Self>),
-    Assign(Path<Self>, Box<Self>),
-    Update(Path<Self>, Box<Self>),
+    Assign(Box<Self>, Box<Self>),
+    Update(Box<Self>, Box<Self>),
 
     Logic(Box<Self>, bool, Box<Self>),
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
+    Empty,
     Error,
     Length,
     Floor,
@@ -66,6 +68,14 @@ impl Default for Filter {
     }
 }
 
+// we can unfortunately not make a `Box<dyn ... + Clone>`
+// that is why we have to go through the pain of making a new trait here
+trait Update<'a>: Fn(Val) -> Box<dyn Iterator<Item = ValR> + 'a> + DynClone {}
+
+impl<'a, T: Fn(Val) -> Box<dyn Iterator<Item = ValR> + 'a> + Clone> Update<'a> for T {}
+
+dyn_clone::clone_trait_object!(<'a> Update<'a>);
+
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
         let arg = |v| Box::new(Self::Arg(v));
@@ -81,6 +91,7 @@ impl Filter {
             };
         }
         Vec::from([
+            make_builtin!("empty", 0, Self::Empty),
             make_builtin!("error", 0, Self::Error),
             make_builtin!("length", 0, Self::Length),
             make_builtin!("keys", 0, Self::Keys),
@@ -155,13 +166,20 @@ impl Filter {
                     None => r.run(cv),
                 }
             }
-            Self::IfThenElse(if_thens, else_) => Self::if_then_else(if_thens.iter(), else_, cv),
+            Self::IfThenElse(if_thens, else_) => {
+                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |f, v| {
+                    f.run((cv.0.clone(), v))
+                })
+            }
             Self::Path(f, path) => match path.collect(cv, f) {
                 Ok(y) => Box::new(y.into_iter().map(Ok)),
                 Err(e) => Box::new(once(Err(e))),
             },
-            Self::Assign(path, f) => path.run(cv.clone(), |_| f.run(cv.clone())),
-            Self::Update(path, f) => path.run((cv.0.clone(), cv.1), |v| f.run((cv.0.clone(), v))),
+            Self::Assign(path, f) => path.update(cv.clone(), Box::new(move |_| f.run(cv.clone()))),
+            Self::Update(path, f) => path.update(
+                (cv.0.clone(), cv.1),
+                Box::new(move |v| f.run((cv.0.clone(), v))),
+            ),
             Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| match l {
                 Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                 Ok(l) if l.as_bool() == *stop => Box::new(once(Ok(Val::Bool(*stop)))),
@@ -174,6 +192,7 @@ impl Filter {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
 
+            Self::Empty => Box::new(core::iter::empty()),
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
             Self::Length => Box::new(once(cv.1.len())),
             Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
@@ -240,6 +259,42 @@ impl Filter {
         }
     }
 
+    fn update<'a>(&'a self, cv: (Ctx, Val), f: Box<dyn Update<'a> + 'a>) -> ValRs {
+        use core::iter::once;
+        match self {
+            Self::Id => f(cv.1),
+            Self::Path(l, path) => l.update(
+                (cv.0.clone(), cv.1),
+                Box::new(move |v| path.run((cv.0.clone(), v), |v| f(v))),
+            ),
+            Self::Pipe(l, false, r) => l.update(
+                (cv.0.clone(), cv.1),
+                Box::new(move |v| r.update((cv.0.clone(), v), f.clone())),
+            ),
+            Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| match y {
+                Ok(y) => r.update(
+                    (Ctx::Cons(y, Rc::new(cv.0.clone())), cv.1.clone()),
+                    f.clone(),
+                ),
+                Err(e) => Box::new(once(Err(e))),
+            })),
+            Self::Comma(l, r) => {
+                let l = l.update((cv.0.clone(), cv.1), f.clone());
+                Box::new(l.flat_map(move |v| match v {
+                    Ok(v) => r.update((cv.0.clone(), v), f.clone()),
+                    Err(e) => Box::new(once(Err(e))),
+                }))
+            }
+            Self::IfThenElse(if_thens, else_) => {
+                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |bla, v| {
+                    bla.update((cv.0.clone(), v), f.clone())
+                })
+            }
+            Self::Empty => Box::new(once(Ok(cv.1))),
+            _ => todo!(),
+        }
+    }
+
     fn cartesian(&self, other: &Self, cv: (Ctx, Val)) -> impl Iterator<Item = (ValR, ValR)> + '_ {
         let l = self.run(cv.clone());
         let r: Vec<_> = other.run(cv).collect();
@@ -253,15 +308,16 @@ impl Filter {
         }
     }
 
-    fn if_then_else<'a, I>(mut if_thens: I, else_: &'a Self, cv: (Ctx, Val)) -> ValRs
+    fn if_then_else<'a, I, F>(mut if_thens: I, else_: &'a Self, cv: (Ctx, Val), f: F) -> ValRs<'a>
     where
         I: Iterator<Item = &'a (Self, Self)> + Clone + 'a,
+        F: Fn(&'a Self, Val) -> ValRs<'a> + 'a + Clone,
     {
         match if_thens.next() {
-            None => else_.run(cv),
+            None => f(else_, cv.1),
             Some((if_, then)) => Box::new(if_.run(cv.clone()).flat_map(move |v| match v {
-                Ok(v) if v.as_bool() => then.run(cv.clone()),
-                Ok(_) => Self::if_then_else(if_thens.clone(), else_, cv.clone()),
+                Ok(v) if v.as_bool() => f(then, cv.1.clone()),
+                Ok(_) => Self::if_then_else(if_thens.clone(), else_, cv.clone(), f.clone()),
                 Err(e) => Box::new(core::iter::once(Err(e))),
             })),
         }
@@ -273,17 +329,9 @@ impl Filter {
             .collect()
     }
 
-    pub(crate) fn update_math(path: Path<Self>, op: MathOp, f: Self) -> Self {
-        let math = Self::Math(Box::new(Self::Id), op, Box::new(f));
+    pub(crate) fn update_math(path: Box<Self>, op: MathOp, f: Box<Self>) -> Self {
+        let math = Self::Math(Box::new(Self::Id), op, f);
         Self::Update(path, Box::new(math))
-    }
-
-    pub(crate) fn path(self) -> Option<Path<Filter>> {
-        match self {
-            Self::Id => Some(Path::new(Vec::new())),
-            Self::Path(f, path) if matches!(*f, Self::Id) => Some(path),
-            _ => None,
-        }
     }
 
     pub fn subst(self, args: &[Self]) -> Self {
@@ -311,12 +359,13 @@ impl Filter {
             ),
             Self::Reduce(xs, init, f) => Self::Reduce(sub(xs), sub(init), sub(f)),
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
-            Self::Assign(path, f) => Self::Assign(path.map(subst), sub(f)),
-            Self::Update(path, f) => Self::Update(path.map(subst), sub(f)),
+            Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),
+            Self::Update(path, f) => Self::Update(sub(path), sub(f)),
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Error | Self::Length | Self::Keys => self,
+            Self::Empty | Self::Error => self,
+            Self::Length | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::FromJson | Self::ToJson => self,
             Self::Explode | Self::Implode => self,
