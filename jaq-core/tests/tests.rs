@@ -185,7 +185,7 @@ fn shadow() {
 
 #[test]
 fn reduce() {
-    let f = "reduce recurse(if . == 1000 then [] | .[] else .+1 end) as $x (0; . + $x)";
+    let f = "reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)";
     give(json!(0), f, json!(500500));
 
     let ff = |s| format!(". as $x | reduce 2 as $y (4; {}) | . + $x", s);

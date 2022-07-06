@@ -99,7 +99,7 @@ fn range() {
 #[test]
 fn recurse() {
     let y = [json!(1), json!(2), json!(3)];
-    gives(json!(1), "recurse(if . < 3 then .+1 else [] | .[] end)", y);
+    gives(json!(1), "recurse(if . < 3 then .+1 else empty end)", y);
 }
 
 #[test]
