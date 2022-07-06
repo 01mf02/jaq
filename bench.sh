@@ -16,6 +16,7 @@ declare -a BENCHES=(
 '[range(  5000) | {(tostring): .}] | add | .[] += 1 | length'
 '[range(100000) | {(tostring): .}] | add | with_entries(.value += 1) | length'
 '[limit(1000000; repeat("a"))] | add | explode | implode | length'
+'reduce range(1000000) as $x ([]; . + [$x + .[-1]]) | length'
 'def trees: recurse([., .]); 0 | nth(16; trees) | flatten | length'
 '"[" + ([range(100000) | tojson] | join(",")) + "]" | fromjson | add'
 )
