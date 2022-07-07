@@ -146,16 +146,39 @@ impl Filter {
             ),
             Self::Try(f) => Box::new(f.run(cv).filter(|y| y.is_ok())),
             Self::Neg(f) => Box::new(f.run(cv).map(|v| -v?)),
+
+            // `l | r`
             Self::Pipe(l, false, r) => {
                 Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
                     Ok(y) => r.run((cv.0.clone(), y)),
                     Err(e) => Box::new(once(Err(e))),
                 }))
             }
-            Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| match y {
-                Ok(y) => r.run((Ctx::Cons(y, Rc::new(cv.0.clone())), cv.1.clone())),
-                Err(e) => Box::new(once(Err(e))),
-            })),
+            // `l as $x | r`
+            Self::Pipe(l, true, r) => {
+                let mut l = l.run(cv.clone());
+
+                // if we expect at most one element from the left side,
+                // we do not need to clone the input value to run the right side;
+                // this can have a significant impact on performance!
+                if l.size_hint().1 == Some(1) {
+                    if let Some(y) = l.next() {
+                        // the Rust documentation states that
+                        // "a buggy iterator may yield [..] more than the upper bound of elements",
+                        // but so far, it seems that all iterators here are not buggy :)
+                        assert!(l.next().is_none());
+                        return match y {
+                            Ok(y) => r.run((Ctx::Cons(y, Rc::new(cv.0)), cv.1)),
+                            Err(e) => Box::new(once(Err(e))),
+                        };
+                    }
+                };
+                Box::new(l.flat_map(move |y| match y {
+                    Ok(y) => r.run((Ctx::Cons(y, Rc::new(cv.0.clone())), cv.1.clone())),
+                    Err(e) => Box::new(once(Err(e))),
+                }))
+            }
+
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
             Self::Alt(l, r) => {
                 let mut l = l
@@ -466,5 +489,10 @@ impl Iterator for Recurse<&Filter> {
                 }
             },
         }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let upper = (self.output.is_empty() && self.input.is_empty()).then(|| 0);
+        (self.output.len(), upper)
     }
 }
