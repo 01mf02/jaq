@@ -4,6 +4,12 @@ pub enum RcList<T> {
     Cons(T, alloc::rc::Rc<Self>),
 }
 
+impl<T> Default for RcList<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> RcList<T> {
     pub fn new() -> Self {
         Self::Nil
