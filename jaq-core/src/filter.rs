@@ -2,7 +2,7 @@ use crate::path::{self, Path};
 use crate::val::{Val, ValR, ValRs};
 use crate::{Ctx, Error};
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, collections::VecDeque, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_parse::{MathOp, OrdOp};
 
@@ -455,8 +455,7 @@ impl path::Part<Filter> {
 pub struct Recurse<F> {
     filter: F,
     ctx: Ctx,
-    input: VecDeque<Val>,
-    output: VecDeque<ValR>,
+    vals: Vec<ValR>,
 }
 
 impl<F> Recurse<F> {
@@ -464,8 +463,7 @@ impl<F> Recurse<F> {
         Self {
             filter,
             ctx,
-            input: VecDeque::new(),
-            output: VecDeque::from([Ok(val)]),
+            vals: Vec::from([Ok(val)]),
         }
     }
 }
@@ -474,25 +472,19 @@ impl Iterator for Recurse<&Filter> {
     type Item = ValR;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.output.pop_front() {
-            Some(o) => {
-                if let Ok(ref o) = o {
-                    self.input.push_back(o.clone());
-                };
-                Some(o)
-            }
-            None => match self.input.pop_front() {
-                None => None,
-                Some(i) => {
-                    self.output = self.filter.run((self.ctx.clone(), i)).collect();
-                    self.next()
-                }
-            },
+        let v = self.vals.pop()?;
+        if let Ok(ref v) = v {
+            let mut out: Vec<_> = self.filter.run((self.ctx.clone(), v.clone())).collect();
+            // without reversal, the *last* output value would arrive at the end of `vals`,
+            // where `pop()` would retrieve it *first*
+            // but we want `pop()` to get the *first* output value *first*
+            out.reverse();
+            self.vals.append(&mut out);
         }
+        Some(v)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let upper = (self.output.is_empty() && self.input.is_empty()).then(|| 0);
-        (self.output.len(), upper)
+        (self.vals.len(), self.vals.is_empty().then(|| 0))
     }
 }
