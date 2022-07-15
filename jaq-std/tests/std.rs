@@ -82,6 +82,26 @@ fn inside() {
 }
 
 #[test]
+fn isfinite() {
+    give(json!(0), "isfinite", json!(true));
+    give(json!(1), "isfinite", json!(true));
+    give(json!(0), "nan | isfinite", json!(true));
+    give(json!(0), "infinite | isfinite", json!(false));
+    give(json!(0), "-infinite | isfinite", json!(false));
+    give(json!(""), "isfinite", json!(false));
+}
+
+#[test]
+fn isnormal() {
+    give(json!(0), "isnormal", json!(false));
+    give(json!(1), "isnormal", json!(true));
+    give(json!(0), "nan | isnormal", json!(false));
+    give(json!(0), "infinite | isnormal", json!(false));
+    give(json!(0), "-infinite | isnormal", json!(false));
+    give(json!(""), "isnormal", json!(false));
+}
+
+#[test]
 fn join() {
     give(json!([]), r#"join(" ")"#, json!(null));
     give(

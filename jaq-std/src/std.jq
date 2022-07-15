@@ -7,14 +7,6 @@ def true:  0 == 0;
 def false: 0 != 0;
 def not: if . then false else true end;
 
-# Numbers
-def nan:      0. / 0.;
-def infinite: 1. / 0.;
-def isnan:      . == nan;
-def isinfinite: . == infinite or -. == infinite;
-def isfinite: isinfinite | not;
-def isnormal: isnan or isinfinite | not;
-
 # Not defined in jq!
 def isboolean: . == true or . == false;
 def isnumber:  . > true and . < "";
@@ -22,10 +14,18 @@ def isstring:  . >= ""  and . < [];
 def isarray:   . >= []  and . < {};
 def isobject:  . >= {};
 
+# Numbers
+def nan:      0 / 0;
+def infinite: 1 / 0;
+def isnan:      . == nan;
+def isinfinite: . == infinite or  . == -infinite;
+def isfinite:   isnumber and (isinfinite | not);
+def isnormal:   isnumber and ((. == 0 or isnan or isinfinite) | not);
+
 # Type
 def type:
     if . == null then "null"
-  elif . == true or . == false then "boolean"
+  elif isboolean then "boolean"
   elif . < "" then "number"
   elif . < [] then "string"
   elif . < {} then "array"
