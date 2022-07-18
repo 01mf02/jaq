@@ -317,10 +317,8 @@ impl Filter {
             Self::Recurse(l) => Box::new(f(cv.1).flat_map(move |v| match v {
                 Ok(v) => {
                     let (c, f) = (cv.0.clone(), f.clone());
-                    l.update(
-                        (c.clone(), v),
-                        Box::new(move |v| self.update((c.clone(), v), f.clone())),
-                    )
+                    let rec = move |v| self.update((c.clone(), v), f.clone());
+                    l.update((cv.0.clone(), v), Box::new(rec))
                 }
                 Err(e) => Box::new(once(Err(e))),
             })),
