@@ -150,6 +150,19 @@ fn recurse() {
 
     let y = [json!(2), json!(4), json!(16)];
     gives(json!(2), "recurse(. * .; . < 20)", y);
+
+    let x = json!([[[0], 1], 2, [3, [4]]]);
+
+    let y = json!([[[1], 2], 3, [4, [5]]]);
+    give(x.clone(), "(recurse(.[]?) | scalars) |= .+1", y);
+
+    // jq gives: `[[[1,42],2,42],3,[4,[5,42],42],42]`
+    let y = json!([[[1,43],2,43],3,[4,[5,43],43],43]);
+    give(x.clone(), "recurse(.[]?) |= if . < [] then .+1 else . + [42] end", y);
+
+    // jq fails here with: "Cannot index number with number"
+    let y = json!([43,[43,[43,1],2],3,[43,4,[43,5]]]);
+    give(x.clone(), "recurse(.[]?) |= if . < [] then .+1 else [42] + . end", y);
 }
 
 #[test]
