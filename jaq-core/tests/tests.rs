@@ -101,6 +101,11 @@ fn object() {
         [json!({"a": 1}), json!({"b": 1})],
     );
     give(
+        json!(null),
+        "{a:1, b:2, c:3,}",
+        json!({"a": 1, "b": 2, "c": 3}),
+    );
+    give(
         json!("c"),
         r#"{a: 1, "b": 2, (.): 3}"#,
         json!({"a": 1, "b": 2, "c": 3}),
@@ -110,6 +115,7 @@ fn object() {
         "{a, c: 3}",
         json!({"a": 1, "c": 3}),
     );
+    give(json!({"a": 1, "b": 2}), "{a,}", json!({"a": 1}));
 }
 
 #[test]
