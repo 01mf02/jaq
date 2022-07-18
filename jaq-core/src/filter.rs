@@ -313,6 +313,17 @@ impl Filter {
                     bla.update((cv.0.clone(), v), f.clone())
                 })
             }
+            // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
+            Self::Recurse(l) => Box::new(f(cv.1).flat_map(move |v| match v {
+                Ok(v) => {
+                    let (c, f) = (cv.0.clone(), f.clone());
+                    l.update(
+                        (c.clone(), v),
+                        Box::new(move |v| self.update((c.clone(), v), f.clone())),
+                    )
+                }
+                Err(e) => Box::new(once(Err(e))),
+            })),
             Self::Empty => Box::new(once(Ok(cv.1))),
             _ => todo!(),
         }
