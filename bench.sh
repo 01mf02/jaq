@@ -3,11 +3,6 @@ JQ=jq
 JAQ=target/release/jaq
 TIME='/usr/bin/time -f %U'
 
-# jaq sometimes uses a bit too much stack space
-# (in particular the `flatten` benchmark),
-# so give it an unlimited amount for now
-ulimit -s unlimited
-
 declare -a BENCHES=(
 '[range(1000000)] | reverse | length'
 '[range(1000000) | -.] | sort | length'
@@ -18,7 +13,7 @@ declare -a BENCHES=(
 '[limit(1000000; repeat("a"))] | add | explode | implode | length'
 'reduce range(1000000) as $x ([]; . + [$x + .[-1]]) | length'
 'def trees: recurse([., .]); 0 | nth(16; trees) | flatten | length'
-'def trees: recurse([., .]); 0 | nth(16; trees) | (recurse | scalars) |= .+1 | length'
+'def trees: recurse([., .]); 0 | nth(16; trees) | (.. | scalars) |= .+1 | length'
 '"[" + ([range(100000) | tojson] | join(",")) + "]" | fromjson | add'
 )
 
