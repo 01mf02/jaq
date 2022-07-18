@@ -154,14 +154,14 @@ fn recurse() {
     let x = json!([[[0], 1], 2, [3, [4]]]);
 
     let y = json!([[[1], 2], 3, [4, [5]]]);
-    give(x.clone(), "(recurse(.[]?) | scalars) |= .+1", y);
+    give(x.clone(), "(.. | scalars) |= .+1", y);
 
-    let f = "recurse(.[]?) |= if . < [] then .+1 else . + [42] end";
+    let f = ".. |= if . < [] then .+1 else . + [42] end";
     let y = json!([[[1, 43], 2, 43], 3, [4, [5, 43], 43], 43]);
     // jq gives: `[[[1, 42], 2, 42], 3, [4, [5, 42], 42], 42]`
     give(x.clone(), f, y);
 
-    let f = "recurse(.[]?) |= if . < [] then .+1 else [42] + . end";
+    let f = ".. |= if . < [] then .+1 else [42] + . end";
     let y = json!([43, [43, [43, 1], 2], 3, [43, 4, [43, 5]]]);
     // jq fails here with: "Cannot index number with number"
     give(x.clone(), f, y);
