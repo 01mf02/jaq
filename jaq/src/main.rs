@@ -1,5 +1,4 @@
-use clap::Parser;
-use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output};
+use clap::{ArgEnum, Parser};
 use jaq_core::{Ctx, Definitions, Filter, Val};
 use mimalloc::MiMalloc;
 use std::io::{Read, Write};
@@ -53,6 +52,10 @@ struct Cli {
     #[clap(short, long)]
     join_output: bool,
 
+    /// Color output
+    #[clap(long, value_name = "WHEN", arg_enum, default_value = "auto")]
+    color: Color,
+
     /// Read filter from a file
     ///
     /// In this case, all arguments are interpreted as input files.
@@ -67,6 +70,13 @@ struct Cli {
 
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
+}
+
+#[derive(Clone, ArgEnum)]
+enum Color {
+    Always,
+    Auto,
+    Never,
 }
 
 fn main() -> ExitCode {
@@ -277,22 +287,36 @@ fn run_and_print(
     ctx: Ctx,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
 ) -> Result<Option<bool>, Error> {
-    let stdout = std::io::stdout();
-    let mut stdout = stdout.lock();
+    let mut stdout = std::io::stdout().lock();
+
+    use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output, PrettyFormatter};
+
+    let color = match cli.color {
+        Color::Always => ColorMode::On,
+        Color::Auto => ColorMode::Auto(Output::StdOut),
+        Color::Never => ColorMode::Off,
+    };
 
     let last = run(filter, ctx, iter, |output| {
         match output {
             Val::Str(s) if cli.raw_output => print!("{}", s),
             _ => {
+                // this looks ugly, but it is hard to abstract over the `Formatter` because
+                // we cannot create a `Box<dyn Formatter>` because
+                // Rust says that the `Formatter` trait is not "object safe"
                 if cli.compact {
                     ColoredFormatter::new(CompactFormatter).write_colored_json(
                         &output.into(),
                         &mut stdout,
-                        ColorMode::Auto(Output::StdOut),
-                    )?
+                        color,
+                    )
                 } else {
-                    colored_json::write_colored_json(&output.into(), &mut stdout)?
-                }
+                    ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(
+                        &output.into(),
+                        &mut stdout,
+                        color,
+                    )
+                }?
             }
         };
         if !cli.join_output {
