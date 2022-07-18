@@ -190,8 +190,8 @@ impl Filter {
                 }
             }
             Self::IfThenElse(if_thens, else_) => {
-                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |f, v| {
-                    f.run((cv.0.clone(), v))
+                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |then, v| {
+                    then.run((cv.0.clone(), v))
                 })
             }
             Self::Path(f, path) => match path.collect(cv, f) {
@@ -309,8 +309,8 @@ impl Filter {
                 }))
             }
             Self::IfThenElse(if_thens, else_) => {
-                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |bla, v| {
-                    bla.update((cv.0.clone(), v), f.clone())
+                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |then, v| {
+                    then.update((cv.0.clone(), v), f.clone())
                 })
             }
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
