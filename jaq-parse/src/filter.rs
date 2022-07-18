@@ -228,6 +228,8 @@ where
 
     let var = variable().map_with_span(|v, span| (Filter::Var(v), span));
 
+    let recurse = just(Token::DotDot).map_with_span(|_, span| (Filter::Recurse, span));
+
     let array = filter
         .clone()
         .or_not()
@@ -266,6 +268,7 @@ where
         .or(object)
         .or(call)
         .or(var)
+        .or(recurse)
         .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
         .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
         .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
@@ -332,20 +335,30 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let mut sans_comma = Recursive::declare();
 
     use crate::path;
-    let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
-    let id_path = path::index().or_not().chain(path::path(with_comma.clone()));
 
-    let atom = atom(with_comma.clone(), sans_comma.clone())
-        .then(path::path(with_comma.clone()).collect::<Path<_>>())
-        .or(id.then(id_path.collect()))
-        .map_with_span(|(f, path), span| Filter::path(f, path, span))
+    // e.g. `keys[]`
+    let atom = atom(with_comma.clone(), sans_comma.clone());
+    let atom_path = || path::path(with_comma.clone());
+    let atom_with_path = atom.then(atom_path().collect());
+
+    // e.g. `.[].a` or `.a`
+    let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
+    let id_path = path::index().or_not().chain(atom_path());
+    let id_with_path = id.then(id_path.collect());
+
+    let path = atom_with_path
+        .or(id_with_path)
+        .map_with_span(|(f, path), span| Filter::path(f, path, span));
+
+    // named operators, such as `reduce` or `if-then-else`
+    let named = path
         .or(reduce(with_comma.clone()))
         .or(if_then_else(with_comma.clone()))
         .boxed();
 
-    let try_ = atom
+    let try_ = named
         .then(just(Token::Ctrl('?')).repeated().collect::<Vec<_>>())
-        .map_with_span(|(atom, try_), span| Filter::try_(atom, try_, span));
+        .map_with_span(|(f, try_), span| Filter::try_(f, try_, span));
 
     let math = math(try_).boxed();
     let ord = ord(math).boxed();
