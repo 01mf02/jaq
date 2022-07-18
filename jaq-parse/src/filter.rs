@@ -97,6 +97,8 @@ pub enum Filter {
     Try(Box<Spanned<Self>>),
     /// Negation
     Neg(Box<Spanned<Self>>),
+    /// Recursion (`..`)
+    Recurse,
     /// Binary operation, such as `0, 1`, `[] | .[]`, `.[] += 1`, `0 == 0`, ...
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }

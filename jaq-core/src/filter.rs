@@ -366,6 +366,15 @@ impl Filter {
         Self::Update(path, Box::new(math))
     }
 
+    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
+    pub(crate) fn recurse() -> Self {
+        // `[]?`
+        let path = (path::Part::Range(None, None), path::Opt::Optional);
+        // `.[]?`
+        let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
+        Filter::Recurse(Box::new(path))
+    }
+
     pub fn subst(self, args: &[Self]) -> Self {
         let subst = |f: Self| f.subst(args);
         let sub = |f: Box<Self>| Box::new(subst(*f));

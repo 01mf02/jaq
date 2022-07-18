@@ -10,6 +10,7 @@ pub enum Token {
     Ident(String),
     Var(String),
     Ctrl(char),
+    DotDot,
     Dot,
     Def,
     If,
@@ -29,6 +30,7 @@ impl fmt::Display for Token {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Var(s) => write!(f, "${s}"),
             Self::Ctrl(c) => c.fmt(f),
+            Self::DotDot => "..".fmt(f),
             Self::Dot => ".".fmt(f),
             Self::Def => "def".fmt(f),
             Self::If => "if".fmt(f),
@@ -88,6 +90,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
 
     // A single token can be one of the above
     ident
+        .or(just("..").map(|_| Token::DotDot))
         .or(just('.').map(|_| Token::Dot))
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
