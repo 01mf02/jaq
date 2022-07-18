@@ -247,6 +247,7 @@ where
     let object = key_str
         .or(key_filter)
         .separated_by(just(Token::Ctrl(',')))
+        .allow_trailing()
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
