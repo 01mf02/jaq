@@ -299,7 +299,7 @@ fn run_and_print(
 
     let last = run(filter, ctx, iter, |output| {
         match output {
-            Val::Str(s) if cli.raw_output => print!("{}", s),
+            Val::Str(s) if cli.raw_output || cli.join_output => print!("{}", s),
             _ => {
                 // this looks ugly, but it is hard to abstract over the `Formatter` because
                 // we cannot create a `Box<dyn Formatter>` because
