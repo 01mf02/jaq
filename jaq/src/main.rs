@@ -11,6 +11,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 /// Just Another Query Tool
 #[derive(Parser)]
+#[clap(version)]
 struct Cli {
     /// Use null as single input value
     #[clap(short, long)]
