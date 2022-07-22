@@ -379,7 +379,7 @@ impl core::ops::Rem for Val {
     fn rem(self, rhs: Self) -> Self::Output {
         use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Int(x % y)),
+            (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
             (l, r) => Err(Error::MathOp(l, MathOp::Rem, r)),
         }
     }
