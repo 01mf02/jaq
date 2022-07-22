@@ -25,7 +25,7 @@ struct Cli {
     /// 0 otherwise.
     /// If there is no output value, then the exit status code is 4.
     ///
-    /// If any error occurs, then this option is ignored.
+    /// If any error occurs, then this option has no effect.
     #[clap(short, long)]
     exit_status: bool,
 
@@ -50,6 +50,8 @@ struct Cli {
     compact: bool,
 
     /// Do not print a newline after each value
+    ///
+    /// Unlike jq, this does not enable `--raw-output`.
     #[clap(short, long)]
     join_output: bool,
 
