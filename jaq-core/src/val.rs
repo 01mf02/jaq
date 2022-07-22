@@ -482,19 +482,12 @@ fn float_eq(left: &f64, right: &f64) -> bool {
     float_cmp(left, right) == Ordering::Equal
 }
 
-// adapted from the currently nightly-only function `f64::total_cmp`
 fn float_cmp(left: &f64, right: &f64) -> Ordering {
     if *left == 0. && *right == 0. {
-        return Ordering::Equal;
+        Ordering::Equal
+    } else {
+        f64::total_cmp(left, right)
     }
-
-    let mut left = left.to_bits() as i64;
-    let mut right = right.to_bits() as i64;
-
-    left ^= (((left >> 63) as u64) >> 1) as i64;
-    right ^= (((right >> 63) as u64) >> 1) as i64;
-
-    left.cmp(&right)
 }
 
 impl fmt::Display for Val {

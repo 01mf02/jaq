@@ -7,8 +7,9 @@ use dyn_clone::DynClone;
 use jaq_parse::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Filter {
+    #[default]
     Id,
     Int(isize),
     Float(f64),
@@ -60,12 +61,6 @@ pub enum Filter {
     SkipCtx(usize, Box<Self>),
     Var(usize),
     Arg(usize),
-}
-
-impl Default for Filter {
-    fn default() -> Self {
-        Self::Id
-    }
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
