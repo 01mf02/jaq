@@ -24,6 +24,7 @@ pub enum Filter {
     Alt(Box<Self>, Box<Self>),
     IfThenElse(Vec<(Self, Self)>, Box<Self>),
     Reduce(Box<Self>, Box<Self>, Box<Self>),
+    Foreach(Box<Self>, Box<Self>, Box<Self>, Box<Self>),
 
     Path(Box<Self>, Path<Self>),
     Assign(Box<Self>, Box<Self>),
@@ -270,6 +271,28 @@ impl Filter {
                     Err(e) => Box::new(once(Err(e))),
                 }
             }
+            Self::Foreach(xs, init, f, proj) => {
+                let init: Vec<ValR> = init.run(cv.clone()).collect();
+                let ys = xs.run(cv.clone()).scan(init, move |state, x| match x {
+                    Ok(x) => {
+                        let ctx = Ctx::Cons(x, Rc::new(cv.0.clone()));
+                        let ys = core::mem::take(state).into_iter().flat_map(|s| match s {
+                            Ok(s) => Box::new(f.run((ctx.clone(), s))),
+                            Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                        });
+                        let ys: Vec<ValR> = ys.collect();
+                        *state = ys.clone();
+                        Some((ys, ctx))
+                    }
+                    Err(e) => Some((Vec::from([Err(e)]), cv.0.clone())),
+                });
+                Box::new(ys.flat_map(move |(ys, ctx)| {
+                    ys.into_iter().flat_map(move |y| match y {
+                        Ok(y) => proj.run((ctx.clone(), y)),
+                        Err(e) => Box::new(once(Err(e))),
+                    })
+                }))
+            }
 
             Self::SkipCtx(n, f) => f.run((cv.0.skip(*n).clone(), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.get(*v).unwrap().clone()))),
@@ -394,6 +417,9 @@ impl Filter {
                 sub(else_),
             ),
             Self::Reduce(xs, init, f) => Self::Reduce(sub(xs), sub(init), sub(f)),
+            Self::Foreach(xs, init, f, proj) => {
+                Self::Foreach(sub(xs), sub(init), sub(f), sub(proj))
+            }
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
             Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),
             Self::Update(path, f) => Self::Update(sub(path), sub(f)),
