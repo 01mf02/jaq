@@ -96,10 +96,8 @@ fn then<'a, T, U: 'a, E: 'a>(
     x: Result<T, E>,
     f: impl FnOnce(T) -> Box<dyn Iterator<Item = Result<U, E>> + 'a>,
 ) -> Box<dyn Iterator<Item = Result<U, E>> + 'a> {
-    match x {
-        Ok(x) => f(x),
-        Err(e) => Box::new(core::iter::once(Err(e))),
-    }
+    x.map(f)
+        .unwrap_or_else(|e| Box::new(core::iter::once(Err(e))))
 }
 
 impl Filter {
