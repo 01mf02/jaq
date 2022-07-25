@@ -22,6 +22,7 @@ pub enum Token {
     And,
     As,
     Reduce,
+    Foreach,
 }
 
 impl fmt::Display for Token {
@@ -42,6 +43,7 @@ impl fmt::Display for Token {
             Self::And => "and".fmt(f),
             Self::As => "as".fmt(f),
             Self::Reduce => "reduce".fmt(f),
+            Self::Foreach => "foreach".fmt(f),
         }
     }
 }
@@ -85,6 +87,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         "and" => Token::And,
         "as" => Token::As,
         "reduce" => Token::Reduce,
+        "foreach" => Token::Foreach,
         _ => Token::Ident(ident),
     });
 
