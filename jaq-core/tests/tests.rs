@@ -202,3 +202,12 @@ fn reduce() {
     let f = "def g(x; y): 3 as $z | . + x + y + $z; ".to_owned() + &ff("g($x; $y)");
     give(json!(1), &f, json!(11));
 }
+
+#[test]
+fn foreach() {
+    let f = "[foreach .[] as $x (0; .+$x)]";
+    give(json!([1, 2, 3]), f, json!([1, 3, 6]));
+
+    let f = "[foreach .[] as $x (0; .+$x; .*$x)]";
+    give(json!([1, 2, 3]), f, json!([1, 6, 18]));
+}
