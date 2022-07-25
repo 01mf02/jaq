@@ -23,7 +23,27 @@ pub enum Filter {
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     IfThenElse(Vec<(Self, Self)>, Box<Self>),
+    /// `reduce xs as $x (init; f)` realises the following filter, where
+    /// `xs` is assumed to evaluate to the value results `x0`, `x1`, ..., `xn`:
+    /// ~~~ text
+    /// init |
+    /// x0 as $x | f |
+    /// x1 as $x | f |
+    /// ...
+    /// xn as $x | f
+    /// ~~~
     Reduce(Box<Self>, Box<Self>, Box<Self>),
+    /// `foreach xs as $x (init; f; proj)` realises the following filter, where
+    /// `xs` is assumed to evaluate to the value results `x0`, `x1`, ..., `xn`:
+    ///
+    /// ~~~ text
+    /// init |
+    /// x0 as $x | f | (proj,
+    /// x1 as $x | f | (proj,
+    /// ...
+    /// xn as $x | f | (proj,
+    /// empty)...))
+    /// ~~~
     Foreach(Box<Self>, Box<Self>, Box<Self>, Box<Self>),
 
     Path(Box<Self>, Path<Self>),
@@ -262,29 +282,54 @@ impl Filter {
             }
             Self::Recurse(f) => Box::new(Recurse::new(&**f, cv)),
             Self::Reduce(xs, init, f) => {
-                let init: Result<Vec<_>, _> = init.run(cv.clone()).collect();
-                let mut xs = xs.run(cv.clone());
-                match init.and_then(|init| {
-                    xs.try_fold(init, |acc, x| f.reduce_step(cv.0.clone(), acc, &x?))
-                }) {
-                    Ok(y) => Box::new(y.into_iter().map(Ok)),
-                    Err(e) => Box::new(once(Err(e))),
-                }
-            }
-            Self::Foreach(xs, init, f, proj) => {
-                let init: Vec<ValR> = init.run(cv.clone()).collect();
-                let ys = xs.run(cv.clone()).scan(init, move |state, x| match x {
-                    Ok(x) => {
+                let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
+                for x in xs.run(cv.clone()) {
+                    if let Ok(x) = x {
                         let ctx = Ctx::Cons(x, Rc::new(cv.0.clone()));
-                        let ys = core::mem::take(state).into_iter().flat_map(|s| match s {
+                        let ys = acc.into_iter().flat_map(|s| match s {
                             Ok(s) => Box::new(f.run((ctx.clone(), s))),
                             Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                         });
-                        let ys: Vec<ValR> = ys.collect();
-                        *state = ys.clone();
-                        Some((ys, ctx))
+                        acc = ys.collect();
+                        if acc.iter().all(|y| y.is_err()) {
+                            break;
+                        }
+                    } else {
+                        acc = acc.into_iter().map(|s| s.and_then(|_| x.clone())).collect();
+                        break;
+                    };
+                }
+                Box::new(acc.into_iter())
+            }
+            Self::Foreach(xs, init, f, proj) => {
+                let init: Vec<ValR> = init.run(cv.clone()).collect();
+                let ys = xs.run(cv.clone()).scan((false, init), move |state, x| {
+                    let (stop, acc) = core::mem::take(state);
+                    if stop {
+                        return None;
                     }
-                    Err(e) => Some((Vec::from([Err(e)]), cv.0.clone())),
+                    let (stop, ys, ctx) = if let Ok(x) = x {
+                        let ctx = Ctx::Cons(x, Rc::new(cv.0.clone()));
+                        let ys = acc.into_iter().flat_map(|s| match s {
+                            Ok(s) => f.run((ctx.clone(), s)),
+                            Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                        });
+                        let ys: Vec<ValR> = ys.collect();
+                        // if all outputs of one iteration are errors,
+                        // then the final output will never change anymore,
+                        // so we can already stop here
+                        let stop = ys.iter().all(|y| y.is_err());
+                        (stop, ys, ctx)
+                    } else {
+                        // if there is a single x that is an error,
+                        // *all* outputs of foreach will be errors too,
+                        // so we can abort immediately here,
+                        // replacing all previous non-errors by the error x
+                        let ys = acc.into_iter().map(|s| s.and_then(|_| x.clone())).collect();
+                        (true, ys, cv.0.clone())
+                    };
+                    *state = (stop, ys.clone());
+                    Some((ys, ctx))
                 });
                 Box::new(ys.flat_map(move |(ys, ctx)| {
                     ys.into_iter().flat_map(move |y| match y {
@@ -371,12 +416,6 @@ impl Filter {
                 Err(e) => Box::new(core::iter::once(Err(e))),
             })),
         }
-    }
-
-    fn reduce_step(&self, ctx: Ctx, acc: Vec<Val>, x: &Val) -> Result<Vec<Val>, Error> {
-        acc.into_iter()
-            .flat_map(|acc| self.run((Ctx::Cons(x.clone(), Rc::new(ctx.clone())), acc)))
-            .collect()
     }
 
     pub(crate) fn update_math(path: Box<Self>, op: MathOp, f: Box<Self>) -> Self {
