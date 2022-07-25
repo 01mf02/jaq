@@ -98,6 +98,17 @@ where
             let f = Box::new(unparse(fns, args, vars, *f, errs));
             Filter::Reduce(xs, init, f)
         }
+        Expr::Foreach(xs, v, init, f, proj) => {
+            let xs = get(*xs, errs);
+            let init = get(*init, errs);
+            vars.push(v);
+            let f = Box::new(unparse(fns, args, vars.clone(), *f, errs));
+            let proj = Box::new(
+                proj.map(|proj| unparse(fns, args, vars, *proj, errs))
+                    .unwrap_or(Filter::Id),
+            );
+            Filter::Foreach(xs, init, f, proj)
+        }
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Alt, r) => Filter::Alt(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Or, r) => Filter::Logic(get(*l, errs), true, get(*r, errs)),

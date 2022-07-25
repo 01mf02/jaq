@@ -91,6 +91,14 @@ pub enum Filter {
         Box<Spanned<Self>>,
         Box<Spanned<Self>>,
     ),
+    /// Reduction returning intermediate results
+    Foreach(
+        Box<Spanned<Self>>,
+        String,
+        Box<Spanned<Self>>,
+        Box<Spanned<Self>>,
+        Option<Box<Spanned<Self>>>,
+    ),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
     /// Error suppression, e.g. `keys?`
@@ -195,6 +203,25 @@ where
         .then(variable())
         .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
         .map_with_span(|((xs, v), (init, f)), span| (Filter::Reduce(xs, v, init, f), span))
+}
+
+fn foreach<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
+{
+    let arg = || filter.clone().map(Box::new);
+    let args = arg()
+        .then_ignore(just(Token::Ctrl(';')))
+        .then(arg())
+        .then(just(Token::Ctrl(';')).ignore_then(arg()).or_not());
+    just(Token::Foreach)
+        .ignore_then(arg())
+        .then_ignore(just(Token::As))
+        .then(variable())
+        .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
+        .map_with_span(|((xs, v), ((init, f), proj)), span| {
+            (Filter::Foreach(xs, v, init, f, proj), span)
+        })
 }
 
 // 'Atoms' are filters that contain no ambiguity
@@ -354,6 +381,7 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     // named operators, such as `reduce` or `if-then-else`
     let named = path
         .or(reduce(with_comma.clone()))
+        .or(foreach(with_comma.clone()))
         .or(if_then_else(with_comma.clone()))
         .boxed();
 
