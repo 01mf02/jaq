@@ -64,6 +64,20 @@ pub enum KeyVal {
     Str(String, Option<Spanned<Filter>>),
 }
 
+/// Common information for folding filters (such as `reduce` and `foreach`)
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug)]
+pub struct Fold<F> {
+    /// Generator
+    pub xs: F,
+    /// Name of assigned variable
+    pub x: String,
+    /// Initial values
+    pub init: F,
+    /// Updater
+    pub f: F,
+}
+
 /// Function from value to stream of values, such as `.[] | add / length`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
@@ -85,20 +99,9 @@ pub enum Filter {
     /// If-then-else
     If(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
     /// Reduction, e.g. `reduce .[] as $x (0; .+$x)`
-    Reduce(
-        Box<Spanned<Self>>,
-        String,
-        Box<Spanned<Self>>,
-        Box<Spanned<Self>>,
-    ),
+    Reduce(Fold<Box<Spanned<Self>>>),
     /// Reduction returning intermediate results
-    Foreach(
-        Box<Spanned<Self>>,
-        String,
-        Box<Spanned<Self>>,
-        Box<Spanned<Self>>,
-        Option<Box<Spanned<Self>>>,
-    ),
+    Foreach(Fold<Box<Spanned<Self>>>, Option<Box<Spanned<Self>>>),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
     /// Error suppression, e.g. `keys?`
@@ -202,7 +205,8 @@ where
         .then_ignore(just(Token::As))
         .then(variable())
         .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
-        .map_with_span(|((xs, v), (init, f)), span| (Filter::Reduce(xs, v, init, f), span))
+        .map(|((xs, x), (init, f))| Fold { xs, x, init, f })
+        .map_with_span(|reduce, span| (Filter::Reduce(reduce), span))
 }
 
 fn foreach<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
@@ -219,9 +223,8 @@ where
         .then_ignore(just(Token::As))
         .then(variable())
         .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
-        .map_with_span(|((xs, v), ((init, f), proj)), span| {
-            (Filter::Foreach(xs, v, init, f, proj), span)
-        })
+        .map(|((xs, x), ((init, f), proj))| (Fold { xs, x, init, f }, proj))
+        .map_with_span(|(reduce, proj), span| (Filter::Foreach(reduce, proj), span))
 }
 
 // 'Atoms' are filters that contain no ambiguity

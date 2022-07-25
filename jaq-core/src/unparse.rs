@@ -1,7 +1,7 @@
 use crate::filter::Filter;
 use crate::path::{self, Path};
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
-use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, KeyVal};
+use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, Fold, KeyVal};
 use jaq_parse::{Error, Spanned};
 
 pub fn unparse<F>(
@@ -91,22 +91,18 @@ where
             let r = Box::new(unparse(fns, args, vars, *r, errs));
             Filter::Pipe(l, true, r)
         }
-        Expr::Reduce(xs, v, init, f) => {
-            let xs = get(*xs, errs);
-            let init = get(*init, errs);
-            vars.push(v);
+        Expr::Reduce(Fold { xs, x, init, f }) => {
+            let (xs, init) = (get(*xs, errs), get(*init, errs));
+            vars.push(x);
             let f = Box::new(unparse(fns, args, vars, *f, errs));
             Filter::Reduce(xs, init, f)
         }
-        Expr::Foreach(xs, v, init, f, proj) => {
-            let xs = get(*xs, errs);
-            let init = get(*init, errs);
-            vars.push(v);
+        Expr::Foreach(Fold { xs, x, init, f }, proj) => {
+            let (xs, init) = (get(*xs, errs), get(*init, errs));
+            vars.push(x);
             let f = Box::new(unparse(fns, args, vars.clone(), *f, errs));
-            let proj = Box::new(
-                proj.map(|proj| unparse(fns, args, vars, *proj, errs))
-                    .unwrap_or(Filter::Id),
-            );
+            let proj = proj.map(|proj| unparse(fns, args, vars, *proj, errs));
+            let proj = Box::new(proj.unwrap_or(Filter::Id));
             Filter::Foreach(xs, init, f, proj)
         }
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
