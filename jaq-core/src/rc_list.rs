@@ -15,6 +15,10 @@ impl<T> RcList<T> {
         Self::Nil
     }
 
+    pub fn cons(self, x: T) -> Self {
+        Self::Cons(x, alloc::rc::Rc::new(self))
+    }
+
     pub fn get(&self, mut n: usize) -> Option<&T> {
         let mut ctx = self;
         while let Self::Cons(x, xs) = ctx {

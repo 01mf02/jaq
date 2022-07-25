@@ -92,6 +92,16 @@ impl<'a, T: Fn(Val) -> Box<dyn Iterator<Item = ValR> + 'a> + Clone> Update<'a> f
 
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
 
+fn then<'a, T, U: 'a, E: 'a>(
+    x: Result<T, E>,
+    f: impl FnOnce(T) -> Box<dyn Iterator<Item = Result<U, E>> + 'a>,
+) -> Box<dyn Iterator<Item = Result<U, E>> + 'a> {
+    match x {
+        Ok(x) => f(x),
+        Err(e) => Box::new(core::iter::once(Err(e))),
+    }
+}
+
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
         let arg = |v| Box::new(Self::Arg(v));
@@ -164,12 +174,10 @@ impl Filter {
             Self::Neg(f) => Box::new(f.run(cv).map(|v| -v?)),
 
             // `l | r`
-            Self::Pipe(l, false, r) => {
-                Box::new(l.run((cv.0.clone(), cv.1)).flat_map(move |y| match y {
-                    Ok(y) => r.run((cv.0.clone(), y)),
-                    Err(e) => Box::new(once(Err(e))),
-                }))
-            }
+            Self::Pipe(l, false, r) => Box::new(
+                l.run((cv.0.clone(), cv.1))
+                    .flat_map(move |y| then(y, |y| r.run((cv.0.clone(), y)))),
+            ),
             // `l as $x | r`
             Self::Pipe(l, true, r) => {
                 let mut l = l.run(cv.clone());
@@ -183,16 +191,12 @@ impl Filter {
                         // "a buggy iterator may yield [..] more than the upper bound of elements",
                         // but so far, it seems that all iterators here are not buggy :)
                         assert!(l.next().is_none());
-                        return match y {
-                            Ok(y) => r.run((Ctx::Cons(y, Rc::new(cv.0)), cv.1)),
-                            Err(e) => Box::new(once(Err(e))),
-                        };
+                        return then(y, |y| r.run((cv.0.cons(y), cv.1)));
                     }
                 };
-                Box::new(l.flat_map(move |y| match y {
-                    Ok(y) => r.run((Ctx::Cons(y, Rc::new(cv.0.clone())), cv.1.clone())),
-                    Err(e) => Box::new(once(Err(e))),
-                }))
+                Box::new(
+                    l.flat_map(move |y| then(y, |y| r.run((cv.0.clone().cons(y), cv.1.clone())))),
+                )
             }
 
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
@@ -210,19 +214,20 @@ impl Filter {
                     then.run((cv.0.clone(), v))
                 })
             }
-            Self::Path(f, path) => match path.collect(cv, f) {
-                Ok(y) => Box::new(y.into_iter().map(Ok)),
-                Err(e) => Box::new(once(Err(e))),
-            },
+            Self::Path(f, path) => then(path.collect(cv, f), |y| Box::new(y.into_iter().map(Ok))),
             Self::Assign(path, f) => path.update(cv.clone(), Box::new(move |_| f.run(cv.clone()))),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| f.run((cv.0.clone(), v))),
             ),
-            Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| match l {
-                Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
-                Ok(l) if l.as_bool() == *stop => Box::new(once(Ok(Val::Bool(*stop)))),
-                Ok(_) => Box::new(r.run(cv.clone()).map(|r| Ok(Val::Bool(r?.as_bool())))),
+            Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| {
+                then(l, |l| {
+                    if l.as_bool() == *stop {
+                        Box::new(once(Ok(Val::Bool(*stop))))
+                    } else {
+                        Box::new(r.run(cv.clone()).map(|r| Ok(Val::Bool(r?.as_bool()))))
+                    }
+                })
             })),
             Self::Math(l, op, r) => {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| op.run(x?, y?)))
@@ -261,23 +266,22 @@ impl Filter {
             ),
 
             Self::First(f) => Box::new(f.run(cv).take(1)),
-            Self::Last(f) => match f.run(cv).try_fold(None, |_, x| Ok(Some(x?))) {
-                Ok(y) => Box::new(y.map(Ok).into_iter()),
-                Err(e) => Box::new(once(Err(e))),
-            },
+            Self::Last(f) => then(f.run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {
+                Box::new(y.map(Ok).into_iter())
+            }),
             Self::Limit(n, f) => {
                 let n = n.run(cv.clone()).map(|n| n?.as_int());
-                Box::new(n.flat_map(move |n| match n {
-                    Ok(n) => Box::new(f.run(cv.clone()).take(core::cmp::max(0, n) as usize)),
-                    Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                Box::new(n.flat_map(move |n| {
+                    then(n, |n| {
+                        Box::new(f.run(cv.clone()).take(core::cmp::max(0, n) as usize))
+                    })
                 }))
             }
             Self::Range(from, until) => {
                 let prod = Self::cartesian(from, until, cv);
                 let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
-                Box::new(ranges.flat_map(|range| match range {
-                    Ok((l, u)) => Box::new((l..u).map(|i| Ok(Val::Int(i)))),
-                    Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
+                Box::new(ranges.flat_map(|range| {
+                    then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
             Self::Recurse(f) => Box::new(Recurse::new(&**f, cv)),
@@ -285,11 +289,10 @@ impl Filter {
                 let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
                 for x in xs.run(cv.clone()) {
                     if let Ok(x) = x {
-                        let ctx = Ctx::Cons(x, Rc::new(cv.0.clone()));
-                        let ys = acc.into_iter().flat_map(|s| match s {
-                            Ok(s) => Box::new(f.run((ctx.clone(), s))),
-                            Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
-                        });
+                        let ctx = cv.0.clone().cons(x);
+                        let ys = acc
+                            .into_iter()
+                            .flat_map(|s| then(s, |s| Box::new(f.run((ctx.clone(), s)))));
                         acc = ys.collect();
                         if acc.iter().all(|y| y.is_err()) {
                             break;
@@ -309,11 +312,10 @@ impl Filter {
                         return None;
                     }
                     let (stop, ys, ctx) = if let Ok(x) = x {
-                        let ctx = Ctx::Cons(x, Rc::new(cv.0.clone()));
-                        let ys = acc.into_iter().flat_map(|s| match s {
-                            Ok(s) => f.run((ctx.clone(), s)),
-                            Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
-                        });
+                        let ctx = cv.0.clone().cons(x);
+                        let ys = acc
+                            .into_iter()
+                            .flat_map(|s| then(s, |s| Box::new(f.run((ctx.clone(), s)))));
                         let ys: Vec<ValR> = ys.collect();
                         // if all outputs of one iteration are errors,
                         // then the final output will never change anymore,
@@ -332,10 +334,8 @@ impl Filter {
                     Some((ys, ctx))
                 });
                 Box::new(ys.flat_map(move |(ys, ctx)| {
-                    ys.into_iter().flat_map(move |y| match y {
-                        Ok(y) => proj.run((ctx.clone(), y)),
-                        Err(e) => Box::new(once(Err(e))),
-                    })
+                    ys.into_iter()
+                        .flat_map(move |y| then(y, |y| proj.run((ctx.clone(), y))))
                 }))
             }
 
@@ -346,7 +346,6 @@ impl Filter {
     }
 
     fn update<'a>(&'a self, cv: (Ctx, Val), f: Box<dyn Update<'a> + 'a>) -> ValRs {
-        use core::iter::once;
         match self {
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
@@ -357,19 +356,14 @@ impl Filter {
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| r.update((cv.0.clone(), v), f.clone())),
             ),
-            Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| match y {
-                Ok(y) => r.update(
-                    (Ctx::Cons(y, Rc::new(cv.0.clone())), cv.1.clone()),
-                    f.clone(),
-                ),
-                Err(e) => Box::new(once(Err(e))),
+            Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| {
+                then(y, |y| {
+                    r.update((cv.0.clone().cons(y), cv.1.clone()), f.clone())
+                })
             })),
             Self::Comma(l, r) => {
                 let l = l.update((cv.0.clone(), cv.1), f.clone());
-                Box::new(l.flat_map(move |v| match v {
-                    Ok(v) => r.update((cv.0.clone(), v), f.clone()),
-                    Err(e) => Box::new(once(Err(e))),
-                }))
+                Box::new(l.flat_map(move |v| then(v, |v| r.update((cv.0.clone(), v), f.clone()))))
             }
             Self::IfThenElse(if_thens, else_) => {
                 Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |then, v| {
@@ -377,15 +371,14 @@ impl Filter {
                 })
             }
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
-            Self::Recurse(l) => Box::new(f(cv.1).flat_map(move |v| match v {
-                Ok(v) => {
+            Self::Recurse(l) => Box::new(f(cv.1).flat_map(move |v| {
+                then(v, |v| {
                     let (c, f) = (cv.0.clone(), f.clone());
                     let rec = move |v| self.update((c.clone(), v), f.clone());
                     l.update((cv.0.clone(), v), Box::new(rec))
-                }
-                Err(e) => Box::new(once(Err(e))),
+                })
             })),
-            Self::Empty => Box::new(once(Ok(cv.1))),
+            Self::Empty => Box::new(core::iter::once(Ok(cv.1))),
             _ => todo!(),
         }
     }
@@ -408,13 +401,18 @@ impl Filter {
         I: Iterator<Item = &'a (Self, Self)> + Clone + 'a,
         F: Fn(&'a Self, Val) -> ValRs<'a> + 'a + Clone,
     {
-        match if_thens.next() {
-            None => f(else_, cv.1),
-            Some((if_, then)) => Box::new(if_.run(cv.clone()).flat_map(move |v| match v {
-                Ok(v) if v.as_bool() => f(then, cv.1.clone()),
-                Ok(_) => Self::if_then_else(if_thens.clone(), else_, cv.clone(), f.clone()),
-                Err(e) => Box::new(core::iter::once(Err(e))),
-            })),
+        if let Some((if_, then_)) = if_thens.next() {
+            Box::new(if_.run(cv.clone()).flat_map(move |v| {
+                then(v, |v| {
+                    if v.as_bool() {
+                        f(then_, cv.1.clone())
+                    } else {
+                        Self::if_then_else(if_thens.clone(), else_, cv.clone(), f.clone())
+                    }
+                })
+            }))
+        } else {
+            f(else_, cv.1)
         }
     }
 
@@ -496,10 +494,10 @@ impl Path<Filter> {
     where
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
-        match self.run_indices(&cv).collect::<Result<Vec<_>, _>>() {
-            Ok(path) => path::Part::run(path.iter(), cv.1, f),
-            Err(e) => Box::new(core::iter::once(Err(e))),
-        }
+        then(
+            self.run_indices(&cv).collect::<Result<Vec<_>, _>>(),
+            |path| path::Part::run(path.iter(), cv.1, f),
+        )
     }
 
     fn collect(&self, cv: (Ctx, Val), init: &Filter) -> Result<Vec<Val>, Error> {
