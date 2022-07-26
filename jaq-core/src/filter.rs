@@ -286,19 +286,11 @@ impl Filter {
             Self::Reduce(xs, init, f) => {
                 let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
                 for x in xs.run(cv.clone()) {
-                    if let Ok(x) = x {
-                        let ctx = cv.0.clone().cons(x);
-                        let ys = acc
-                            .into_iter()
-                            .flat_map(|s| then(s, |s| Box::new(f.run((ctx.clone(), s)))));
-                        acc = ys.collect();
-                        if acc.iter().all(|y| y.is_err()) {
-                            break;
-                        }
-                    } else {
-                        acc = acc.into_iter().map(|s| s.and_then(|_| x.clone())).collect();
+                    let (ctx, ys) = f.fold_step(x, cv.0.clone(), acc);
+                    acc = ys;
+                    if ctx.is_none() {
                         break;
-                    };
+                    }
                 }
                 Box::new(acc.into_iter())
             }
@@ -309,27 +301,9 @@ impl Filter {
                     if stop {
                         return None;
                     }
-                    let (stop, ys, ctx) = if let Ok(x) = x {
-                        let ctx = cv.0.clone().cons(x);
-                        let ys = acc
-                            .into_iter()
-                            .flat_map(|s| then(s, |s| Box::new(f.run((ctx.clone(), s)))));
-                        let ys: Vec<ValR> = ys.collect();
-                        // if all outputs of one iteration are errors,
-                        // then the final output will never change anymore,
-                        // so we can already stop here
-                        let stop = ys.iter().all(|y| y.is_err());
-                        (stop, ys, ctx)
-                    } else {
-                        // if there is a single x that is an error,
-                        // *all* outputs of foreach will be errors too,
-                        // so we can abort immediately here,
-                        // replacing all previous non-errors by the error x
-                        let ys = acc.into_iter().map(|s| s.and_then(|_| x.clone())).collect();
-                        (true, ys, cv.0.clone())
-                    };
-                    *state = (stop, ys.clone());
-                    Some((ys, ctx))
+                    let (ctx, ys) = f.fold_step(x, cv.0.clone(), acc);
+                    *state = (ctx.is_none(), ys.clone());
+                    Some((ys, ctx.unwrap_or_else(|| cv.0.clone())))
                 });
                 Box::new(ys.flat_map(move |(ys, ctx)| {
                     ys.into_iter()
@@ -411,6 +385,27 @@ impl Filter {
             }))
         } else {
             f(else_, cv.1)
+        }
+    }
+
+    fn fold_step(&self, x: ValR, ctx: Ctx, acc: Vec<ValR>) -> (Option<Ctx>, Vec<ValR>) {
+        if let Ok(x) = x {
+            let ctx = ctx.cons(x);
+            let ys = acc
+                .into_iter()
+                .flat_map(|s| then(s, |s| Box::new(self.run((ctx.clone(), s)))));
+            let ys: Vec<ValR> = ys.collect();
+            // if all outputs of one iteration are errors,
+            // then the final output will never change anymore,
+            // so we can already stop here
+            (ys.iter().any(|y| y.is_ok()).then_some(ctx), ys)
+        } else {
+            // if there is a single x that is an error,
+            // *all* outputs of foreach will be errors too,
+            // so we can abort immediately here,
+            // replacing all previous non-errors by the error x
+            let ys = acc.into_iter().map(|s| s.and_then(|_| x.clone())).collect();
+            (None, ys)
         }
     }
 
