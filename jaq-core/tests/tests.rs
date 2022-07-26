@@ -210,4 +210,11 @@ fn foreach() {
 
     let f = "[foreach .[] as $x (0; .+$x; .*$x)]";
     give(json!([1, 2, 3]), f, json!([1, 6, 18]));
+
+    // jq will give only [1, 0, 2, 0] here because
+    // it keeps only the *last* output value as
+    // input value for the next iteration, whereas
+    // jaq keeps all output values as input values
+    let f = "[foreach .[] as $x (0; .+$x, .*$x)]";
+    give(json!([1, 2]), f, json!([1, 0, 3, 2, 2, 0]));
 }
