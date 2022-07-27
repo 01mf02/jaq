@@ -77,6 +77,14 @@ pub enum Filter {
     Recurse(Box<Self>),
     Contains(Box<Self>),
     Limit(Box<Self>, Box<Self>),
+    /// `range(min; max)` returns all integers `n` with `min <= n < max`.
+    ///
+    /// This implements a ~10x faster version of:
+    /// ~~~ text
+    /// range(min; max):
+    ///   min as $min | max as $max | $min | select(. < $max) |
+    ///   recurse(.+1 | select(. < $max))
+    /// ~~~
     Range(Box<Self>, Box<Self>),
 
     SkipCtx(usize, Box<Self>),
