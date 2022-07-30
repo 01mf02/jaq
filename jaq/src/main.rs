@@ -97,7 +97,7 @@ fn real_main() -> Result<ExitCode, Error> {
     for arg_val in cli.arg.chunks(2) {
         if let [arg, val] = arg_val {
             vars.push(arg.clone());
-            ctx = Ctx::Cons(Val::Str(val.clone().into()), ctx.into());
+            ctx = ctx.cons(Val::Str(val.clone().into()));
         }
     }
 
