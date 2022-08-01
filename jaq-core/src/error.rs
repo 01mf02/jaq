@@ -8,6 +8,8 @@ use core::fmt;
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Error {
+    /// `inputs` (when given invalid JSON data)
+    Parse(String),
     /// `0 | error`
     Val(Val),
     /// `[1114112] | implode`
@@ -47,6 +49,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
+            Self::Parse(s) => s.fmt(f),
             Self::Val(Val::Str(s)) => s.fmt(f),
             Self::Val(v) => v.fmt(f),
             Self::Char(i) => write!(f, "cannot use {i} as character"),

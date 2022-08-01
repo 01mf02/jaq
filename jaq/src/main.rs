@@ -93,11 +93,11 @@ fn real_main() -> Result<ExitCode, Error> {
     let cli = Cli::parse();
 
     let mut vars = Vec::new();
-    let mut ctx = Ctx::new();
+    let mut ctx = Vec::new();
     for arg_val in cli.arg.chunks(2) {
         if let [arg, val] = arg_val {
             vars.push(arg.clone());
-            ctx = ctx.cons_var(Val::Str(val.clone().into()));
+            ctx.push(Val::Str(val.clone().into()));
         }
     }
 
@@ -115,14 +115,8 @@ fn real_main() -> Result<ExitCode, Error> {
     //println!("Filter: {:?}", filter);
     let files: Vec<_> = args.collect();
 
-    use std::iter::once;
     let last = if files.is_empty() {
-        let stdin = std::io::stdin();
-        let inputs = if cli.null_input {
-            Box::new(once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>
-        } else {
-            Box::new(read_json(stdin.lock()))
-        };
+        let inputs = read_json(std::io::stdin().lock());
         let inputs = slurp(cli.slurp, inputs);
         run_and_print(&cli, &filter, ctx, inputs)?
     } else {
@@ -141,7 +135,7 @@ fn real_main() -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                last = run(&filter, ctx.clone(), inputs, |output| {
+                last = run(&cli, &filter, ctx.clone(), inputs, |output| {
                     writeln!(tmp.as_file_mut(), "{output}")
                 })?;
 
@@ -214,7 +208,7 @@ struct ParseError {
 enum Error {
     Io(Option<String>, std::io::Error),
     Chumsky(Vec<ParseError>),
-    Serde(serde_json::Error),
+    Serde(jaq_core::Error),
     Jaq(jaq_core::Error),
     Persist(tempfile::PersistError),
 }
@@ -266,14 +260,25 @@ impl From<Vec<ParseError>> for Error {
 }
 
 fn run(
+    cli: &Cli,
     filter: &Filter,
-    ctx: Ctx,
+    vars: Vec<Val>,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
     mut f: impl FnMut(Val) -> std::io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
-    let iter = RcIter::new(iter.into_iter());
-    for item in &iter {
+    // it is unelegant to map parse errors to `jaq_core::Error`s, but it is hard to avoid
+    let iter = iter.map(|r| r.map_err(|e| jaq_core::Error::Parse(e.to_string())));
+
+    let iter = Box::new(iter.into_iter()) as Box<dyn Iterator<Item = _>>;
+    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
+
+    let iter = RcIter::new(iter);
+    let null = RcIter::new(null);
+
+    let ctx = Ctx::new(vars, &iter);
+
+    for item in if cli.null_input { &null } else { &iter } {
         let input = item.map_err(Error::Serde)?;
         //println!("Got {:?}", input);
         for output in filter.run(ctx.clone(), input) {
@@ -288,7 +293,7 @@ fn run(
 fn run_and_print(
     cli: &Cli,
     filter: &Filter,
-    ctx: Ctx,
+    vars: Vec<Val>,
     iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
 ) -> Result<Option<bool>, Error> {
     let mut stdout = std::io::stdout().lock();
@@ -301,7 +306,7 @@ fn run_and_print(
         Color::Never => ColorMode::Off,
     };
 
-    let last = run(filter, ctx, iter, |output| {
+    let last = run(cli, filter, vars, iter, |output| {
         match output {
             Val::Str(s) if cli.raw_output => print!("{}", s),
             _ => {

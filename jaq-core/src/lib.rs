@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_core::{parse, Ctx, Definitions, Error, Val};
+//! use jaq_core::{parse, Ctx, Definitions, Error, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
@@ -27,8 +27,10 @@
 //! let f = defs.finish(f, Vec::new(), &mut errs);
 //! assert_eq!(errs, Vec::new());
 //!
+//! let inputs = RcIter::new(core::iter::empty());
+//!
 //! // iterator over the output values
-//! let mut out = f.run(Ctx::new(), Val::from(input));
+//! let mut out = f.run(Ctx::new([], &inputs), Val::from(input));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -53,37 +55,42 @@ pub use jaq_parse as parse;
 
 pub use error::Error;
 pub use rc_iter::RcIter;
-pub use val::Val;
+pub use val::{Val, ValR};
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use parse::{Def, Main};
 use rc_list::RcList;
 use unparse::unparse;
 
+type Inputs<'i> = RcIter<dyn Iterator<Item = ValR> + 'i>;
+
 /// Filter execution context.
-#[derive(Clone, Default)]
-pub struct Ctx {
+#[derive(Clone)]
+pub struct Ctx<'i> {
     /// variable bindings
     vars: RcList<Val>,
-    //inputs: &'a RcIter<dyn Iterator<Item = ValR> + 'a>,
+    inputs: &'i Inputs<'i>,
 }
 
-impl Ctx {
-    /// Construct an empty context.
-    pub fn new() -> Self {
-        Self::default()
+impl<'i> Ctx<'i> {
+    /// Construct a context.
+    pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'i Inputs<'i>) -> Self {
+        let vars = vars.into_iter().fold(RcList::Nil, |acc, v| acc.cons(v));
+        Self { vars, inputs }
     }
 
     /// Add a new variable binding.
     pub fn cons_var(self, x: Val) -> Self {
         Self {
             vars: self.vars.cons(x),
+            inputs: self.inputs,
         }
     }
 
     fn skip_vars(&self, n: usize) -> Self {
         Self {
             vars: self.vars.skip(n).clone(),
+            inputs: self.inputs.clone(),
         }
     }
 }
@@ -94,7 +101,7 @@ pub struct Filter(crate::filter::Filter);
 
 impl Filter {
     /// Apply the filter to the given value and return stream of results.
-    pub fn run(&self, ctx: Ctx, val: Val) -> val::ValRs {
+    pub fn run<'a>(&'a self, ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
         self.0.run((ctx, val))
     }
 }

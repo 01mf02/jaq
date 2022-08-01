@@ -56,6 +56,7 @@ pub enum Filter {
 
     Empty,
     Error,
+    Inputs,
     Length,
     Floor,
     Round,
@@ -108,6 +109,8 @@ fn then<'a, T, U: 'a, E: 'a>(
         .unwrap_or_else(|e| Box::new(core::iter::once(Err(e))))
 }
 
+type Cv<'c> = (Ctx<'c>, Val);
+
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
         let arg = |v| Box::new(Self::Arg(v));
@@ -125,6 +128,7 @@ impl Filter {
         Vec::from([
             make_builtin!("empty", 0, Self::Empty),
             make_builtin!("error", 0, Self::Error),
+            make_builtin!("inputs", 0, Self::Inputs),
             make_builtin!("length", 0, Self::Length),
             make_builtin!("keys", 0, Self::Keys),
             make_builtin!("floor", 0, Self::Floor),
@@ -150,7 +154,7 @@ impl Filter {
         ])
     }
 
-    pub fn run(&self, cv: (Ctx, Val)) -> ValRs {
+    pub fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::once;
         use itertools::Itertools;
         match self {
@@ -244,6 +248,7 @@ impl Filter {
 
             Self::Empty => Box::new(core::iter::empty()),
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
+            Self::Inputs => Box::new(cv.0.inputs),
             Self::Length => Box::new(once(cv.1.len())),
             Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
             Self::Floor => Box::new(once(cv.1.round(|f| f.floor()))),
@@ -290,7 +295,7 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
-            Self::Recurse(f) => Box::new(Recurse::new(&**f, cv)),
+            Self::Recurse(f) => Box::new(Recurse::new(move |v| f.run((cv.0.clone(), v)), cv.1)),
             Self::Reduce(xs, init, f) => {
                 let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
                 for x in xs.run(cv.clone()) {
@@ -325,7 +330,7 @@ impl Filter {
         }
     }
 
-    fn update<'a>(&'a self, cv: (Ctx, Val), f: Box<dyn Update<'a> + 'a>) -> ValRs {
+    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
         match self {
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
@@ -363,9 +368,9 @@ impl Filter {
         }
     }
 
-    fn cartesian(&self, other: &Self, cv: (Ctx, Val)) -> impl Iterator<Item = (ValR, ValR)> + '_ {
+    fn cartesian<'a>(&'a self, r: &'a Self, cv: Cv<'a>) -> impl Iterator<Item = (ValR, ValR)> + 'a {
         let l = self.run(cv.clone());
-        let r: Vec<_> = other.run(cv).collect();
+        let r: Vec<_> = r.run(cv).collect();
         if r.len() == 1 {
             // this special case is to avoid cloning the left-hand side,
             // which massively improves performance of filters like `add`
@@ -376,7 +381,7 @@ impl Filter {
         }
     }
 
-    fn if_then_else<'a, I, F>(mut if_thens: I, else_: &'a Self, cv: (Ctx, Val), f: F) -> ValRs<'a>
+    fn if_then_else<'a, I, F>(mut if_thens: I, else_: &'a Self, cv: Cv<'a>, f: F) -> ValRs<'a>
     where
         I: Iterator<Item = &'a (Self, Self)> + Clone + 'a,
         F: Fn(&'a Self, Val) -> ValRs<'a> + 'a + Clone,
@@ -396,7 +401,7 @@ impl Filter {
         }
     }
 
-    fn fold_step(&self, x: ValR, ctx: Ctx, acc: Vec<ValR>) -> (Option<Ctx>, Vec<ValR>) {
+    fn fold_step<'a>(&'a self, x: ValR, ctx: Ctx<'a>, acc: Vec<ValR>) -> (Option<Ctx>, Vec<ValR>) {
         if let Ok(x) = x {
             let ctx = ctx.cons_var(x);
             let ys = acc
@@ -464,7 +469,7 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Empty | Self::Error => self,
+            Self::Empty | Self::Error | Self::Inputs => self,
             Self::Length | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::FromJson | Self::ToJson => self,
@@ -491,32 +496,28 @@ impl Filter {
 type PathOptR = Result<(path::Part<Vec<Val>>, path::Opt), Error>;
 
 impl Path<Filter> {
-    fn run<'f, F>(&self, cv: (Ctx, Val), f: F) -> ValRs<'f>
+    fn run<'a: 'f, 'f, F>(&'a self, cv: Cv<'a>, f: F) -> ValRs<'f>
     where
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
-        then(
-            self.run_indices(&cv).collect::<Result<Vec<_>, _>>(),
-            |path| path::Part::run(path.iter(), cv.1, f),
-        )
+        let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
+        then(path.collect(), |path: Vec<_>| {
+            path::Part::run(path.iter(), cv.1, f)
+        })
     }
 
-    fn collect(&self, cv: (Ctx, Val), init: &Filter) -> Result<Vec<Val>, Error> {
+    fn collect<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> Result<Vec<Val>, Error> {
         let init = init.run(cv.clone()).collect::<Result<Vec<_>, _>>()?;
-        self.run_indices(&cv).try_fold(init, |acc, p_opt| {
+        let mut path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
+        path.try_fold(init, |acc, p_opt: PathOptR| {
             let (p, opt) = p_opt?;
             opt.collect(acc.into_iter().flat_map(|x| p.collect(x)))
         })
     }
-
-    fn run_indices<'a>(&'a self, cv: &'a (Ctx, Val)) -> impl Iterator<Item = PathOptR> + 'a {
-        let path = self.0.iter();
-        path.map(move |(p, opt)| Ok((p.run_indices(cv.clone())?, *opt)))
-    }
 }
 
 impl path::Part<Filter> {
-    fn run_indices(&self, cv: (Ctx, Val)) -> Result<path::Part<Vec<Val>>, Error> {
+    fn idx<'a>(&'a self, cv: Cv<'a>) -> Result<path::Part<Vec<Val>>, Error> {
         use path::Part::*;
         match self {
             Index(i) => Ok(Index(i.run(cv).collect::<Result<_, _>>()?)),
@@ -531,27 +532,25 @@ impl path::Part<Filter> {
 
 pub struct Recurse<F> {
     filter: F,
-    ctx: Ctx,
     vals: Vec<ValR>,
 }
 
 impl<F> Recurse<F> {
-    fn new(filter: F, (ctx, val): (Ctx, Val)) -> Self {
+    fn new(filter: F, val: Val) -> Self {
         Self {
             filter,
-            ctx,
             vals: Vec::from([Ok(val)]),
         }
     }
 }
 
-impl Iterator for Recurse<&Filter> {
+impl<'a, F: Fn(Val) -> ValRs<'a> + Clone> Iterator for Recurse<F> {
     type Item = ValR;
 
     fn next(&mut self) -> Option<Self::Item> {
         let v = self.vals.pop()?;
         if let Ok(ref v) = v {
-            let mut out: Vec<_> = self.filter.run((self.ctx.clone(), v.clone())).collect();
+            let mut out: Vec<_> = self.filter.clone()(v.clone()).collect();
             // without reversal, the *last* output value would arrive at the end of `vals`,
             // where `pop()` would retrieve it *first*
             // but we want `pop()` to get the *first* output value *first*

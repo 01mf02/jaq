@@ -91,3 +91,6 @@ def flatten(d): d as $d |
     recurse(select(.d >= 0 and (.x | isarray)) | { d: .d - 1, x: .x[] }) |
     select(.d < 0 or (.x | isarray | not)) | .x
   ];
+
+# I/O
+def input: first(inputs);
