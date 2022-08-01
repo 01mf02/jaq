@@ -44,6 +44,7 @@ extern crate std;
 mod error;
 mod filter;
 mod path;
+mod rc_iter;
 mod rc_list;
 mod unparse;
 mod val;
@@ -51,6 +52,7 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
+pub use rc_iter::RcIter;
 pub use val::Val;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
@@ -58,8 +60,33 @@ use parse::{Def, Main};
 use rc_list::RcList;
 use unparse::unparse;
 
-/// Variable bindings.
-pub type Ctx = RcList<Val>;
+/// Filter execution context.
+#[derive(Clone, Default)]
+pub struct Ctx {
+    /// variable bindings
+    vars: RcList<Val>,
+    //inputs: &'a RcIter<dyn Iterator<Item = ValR> + 'a>,
+}
+
+impl Ctx {
+    /// Construct an empty context.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a new variable binding.
+    pub fn cons_var(self, x: Val) -> Self {
+        Self {
+            vars: self.vars.cons(x),
+        }
+    }
+
+    fn skip_vars(&self, n: usize) -> Self {
+        Self {
+            vars: self.vars.skip(n).clone(),
+        }
+    }
+}
 
 /// Function from a value to a stream of value results.
 #[derive(Default)]

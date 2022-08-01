@@ -197,12 +197,12 @@ impl Filter {
                         // "a buggy iterator may yield [..] more than the upper bound of elements",
                         // but so far, it seems that all iterators here are not buggy :)
                         assert!(l.next().is_none());
-                        return then(y, |y| r.run((cv.0.cons(y), cv.1)));
+                        return then(y, |y| r.run((cv.0.cons_var(y), cv.1)));
                     }
                 };
-                Box::new(
-                    l.flat_map(move |y| then(y, |y| r.run((cv.0.clone().cons(y), cv.1.clone())))),
-                )
+                Box::new(l.flat_map(move |y| {
+                    then(y, |y| r.run((cv.0.clone().cons_var(y), cv.1.clone())))
+                }))
             }
 
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
@@ -319,8 +319,8 @@ impl Filter {
                 }))
             }
 
-            Self::SkipCtx(n, f) => f.run((cv.0.skip(*n).clone(), cv.1)),
-            Self::Var(v) => Box::new(once(Ok(cv.0.get(*v).unwrap().clone()))),
+            Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
+            Self::Var(v) => Box::new(once(Ok(cv.0.vars.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
     }
@@ -338,7 +338,7 @@ impl Filter {
             ),
             Self::Pipe(l, true, r) => Box::new(l.run(cv.clone()).flat_map(move |y| {
                 then(y, |y| {
-                    r.update((cv.0.clone().cons(y), cv.1.clone()), f.clone())
+                    r.update((cv.0.clone().cons_var(y), cv.1.clone()), f.clone())
                 })
             })),
             Self::Comma(l, r) => {
@@ -398,7 +398,7 @@ impl Filter {
 
     fn fold_step(&self, x: ValR, ctx: Ctx, acc: Vec<ValR>) -> (Option<Ctx>, Vec<ValR>) {
         if let Ok(x) = x {
-            let ctx = ctx.cons(x);
+            let ctx = ctx.cons_var(x);
             let ys = acc
                 .into_iter()
                 .flat_map(|s| then(s, |s| Box::new(self.run((ctx.clone(), s)))));

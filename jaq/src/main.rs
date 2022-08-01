@@ -1,5 +1,5 @@
 use clap::{ArgEnum, Parser};
-use jaq_core::{Ctx, Definitions, Filter, Val};
+use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
 use mimalloc::MiMalloc;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -97,7 +97,7 @@ fn real_main() -> Result<ExitCode, Error> {
     for arg_val in cli.arg.chunks(2) {
         if let [arg, val] = arg_val {
             vars.push(arg.clone());
-            ctx = ctx.cons(Val::Str(val.clone().into()));
+            ctx = ctx.cons_var(Val::Str(val.clone().into()));
         }
     }
 
@@ -272,7 +272,8 @@ fn run(
     mut f: impl FnMut(Val) -> std::io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
-    for item in iter {
+    let iter = RcIter::new(iter.into_iter());
+    for item in &iter {
         let input = item.map_err(Error::Serde)?;
         //println!("Got {:?}", input);
         for output in filter.run(ctx.clone(), input) {
