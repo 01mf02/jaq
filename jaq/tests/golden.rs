@@ -64,5 +64,5 @@ fn inputs() {
 
 #[test]
 fn null_input() {
-    golden_test("null_input", &["-n", "-c", r#"{".": .}, {inputs: [inputs]}"#]);
+    golden_test("null_input", &["-nc", r#"{".": .}, {inputs: [inputs]}"#]);
 }
