@@ -188,7 +188,9 @@ already implemented and not yet implemented.
 
 ## Core filters
 
+- [x] Empty (`empty`)
 - [x] Errors (`error`)
+- [x] Input (`inputs`)
 - [x] Length (`length`)
 - [x] Rounding (`floor`, `round`, `ceil`)
 - [x] String <-> JSON (`fromjson`, `tojson`)
@@ -208,7 +210,7 @@ already implemented and not yet implemented.
 These filters are defined via more basic filters.
 Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 
-- [x] Undefined/Empty (`null`, `empty`)
+- [x] Undefined (`null`)
 - [x] Booleans (`true`, `false`, `not`)
 - [x] Special numbers (`nan`, `infinite`, `isnan`, `isinfinite`, `isfinite`, `isnormal`)
 - [x] Type (`type`)
@@ -219,6 +221,7 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`)
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
+- [x] I/O (`input`)
 
 
 ## Advanced features
@@ -226,7 +229,6 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 jaq currently does *not* aim to support the advanced features of jq, such as:
 
 - Modules
-- I/O
 - Dates
 - Regular expressions
 - SQL-style operators
@@ -367,6 +369,9 @@ jaq provides `recurse` as core filter.
   For example, `[(1, 3) | . |= (., .+1)]` yields `[1, 2, 3, 4]` in jaq, whereas
   jq yields only `[1, 3]`.
   For more examples of this behaviour, see <jaq-core/tests/path.rs>.
+* Input reading:
+  When there is no more input value left,
+  in jq, `input` yields an error, whereas in jaq, it yields no output value.
 
 
 
