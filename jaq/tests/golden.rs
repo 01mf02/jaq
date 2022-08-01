@@ -56,3 +56,13 @@ fn sparse() {
 fn compact() {
     golden_test("compact", &["-c", "."]);
 }
+
+#[test]
+fn inputs() {
+    golden_test("inputs", &["-c", r#"{".": .}, {input: input}"#]);
+}
+
+#[test]
+fn null_input() {
+    golden_test("null_input", &["-n", "-c", r#"{".": .}, {inputs: [inputs]}"#]);
+}
