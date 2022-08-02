@@ -61,6 +61,8 @@ def join(x): reduce .[] as $x (null; if . == null then $x else . + x + $x end);
 def min: reduce .[] as $x (.[0]; if $x < . then $x else . end);
 def max: reduce .[] as $x (.[0]; if $x > . then $x else . end);
 
+def del(f): f |= empty;
+
 # Arrays
 def transpose: [range([.[] | length] | max) as $i | [.[][$i]]];
 def first:  .[ 0];
