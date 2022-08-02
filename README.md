@@ -150,7 +150,7 @@ already implemented and not yet implemented.
 - [x] Identity (`.`)
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
-- [x] Reduction (`reduce .[] as $x (0, . + $x)`)
+- [x] Folding (`reduce .[] as $x (0, . + $x)`, `foreach .[] as $x (0, . + $x)`)
 - [ ] Error handling (`try ... catch ...`)
 - [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
