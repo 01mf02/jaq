@@ -221,7 +221,7 @@ struct ParseError {
 enum Error {
     Io(Option<String>, std::io::Error),
     Chumsky(Vec<ParseError>),
-    Serde(jaq_core::Error),
+    Serde(String),
     Jaq(jaq_core::Error),
     Persist(tempfile::PersistError),
 }
@@ -280,8 +280,7 @@ fn run(
     mut f: impl FnMut(Val) -> std::io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
-    // it is unelegant to map parse errors to `jaq_core::Error`s, but it is hard to avoid
-    let iter = iter.map(|r| r.map_err(|e| jaq_core::Error::Parse(e.to_string())));
+    let iter = iter.map(|r| r.map_err(|e| e.to_string()));
 
     let iter = Box::new(iter.into_iter()) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;

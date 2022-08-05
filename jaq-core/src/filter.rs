@@ -248,7 +248,7 @@ impl Filter {
 
             Self::Empty => Box::new(core::iter::empty()),
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
-            Self::Inputs => Box::new(cv.0.inputs),
+            Self::Inputs => Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse))),
             Self::Length => Box::new(once(cv.1.len())),
             Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
             Self::Floor => Box::new(once(cv.1.round(|f| f.floor()))),

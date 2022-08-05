@@ -62,7 +62,7 @@ use parse::{Def, Main};
 use rc_list::RcList;
 use unparse::unparse;
 
-type Inputs<'i> = RcIter<dyn Iterator<Item = ValR> + 'i>;
+type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
 /// Filter execution context.
 #[derive(Clone)]
