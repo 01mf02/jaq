@@ -52,6 +52,7 @@ def range(x): range(0; x);
 def repeat(g): [g] | recurse(.) | .[];
 def recurse: recurse(.[]?);
 def recurse(f; cond): recurse(f | select(cond));
+def while(cond; update): recurse(if cond then update else empty end; cond);
 
 # Iterators
 def map(f): [.[] | f];
