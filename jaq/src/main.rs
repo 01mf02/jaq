@@ -82,6 +82,18 @@ enum Color {
     Never,
 }
 
+impl Cli {
+    fn color_mode(&self) -> colored_json::ColorMode {
+        use colored_json::{ColorMode, Output};
+        match self.color {
+            Color::Always => ColorMode::On,
+            Color::Auto if self.in_place => ColorMode::Off,
+            Color::Auto => ColorMode::Auto(Output::StdOut),
+            Color::Never => ColorMode::Off,
+        }
+    }
+}
+
 fn main() -> ExitCode {
     match real_main() {
         Ok(exit) => exit,
@@ -135,8 +147,9 @@ fn real_main() -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
+                let color = cli.color_mode();
                 last = run(&cli, &filter, ctx.clone(), inputs, |output| {
-                    writeln!(tmp.as_file_mut(), "{output}")
+                    print(&cli, color, output, tmp.as_file_mut())
                 })?;
 
                 // replace the input file with the temporary file
@@ -290,6 +303,40 @@ fn run(
     Ok(last)
 }
 
+fn print(
+    cli: &Cli,
+    color: colored_json::ColorMode,
+    val: Val,
+    writer: &mut impl Write,
+) -> std::io::Result<()> {
+    use colored_json::{ColoredFormatter, CompactFormatter, PrettyFormatter};
+    match val {
+        Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
+        _ => {
+            // this looks ugly, but it is hard to abstract over the `Formatter` because
+            // we cannot create a `Box<dyn Formatter>` because
+            // Rust says that the `Formatter` trait is not "object safe"
+            if cli.compact {
+                ColoredFormatter::new(CompactFormatter).write_colored_json(
+                    &val.into(),
+                    writer,
+                    color,
+                )
+            } else {
+                ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(
+                    &val.into(),
+                    writer,
+                    color,
+                )
+            }?
+        }
+    };
+    if !cli.join_output {
+        writeln!(writer)?
+    }
+    Ok(())
+}
+
 fn run_and_print(
     cli: &Cli,
     filter: &Filter,
@@ -298,40 +345,10 @@ fn run_and_print(
 ) -> Result<Option<bool>, Error> {
     let mut stdout = std::io::stdout().lock();
 
-    use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, Output, PrettyFormatter};
-
-    let color = match cli.color {
-        Color::Always => ColorMode::On,
-        Color::Auto => ColorMode::Auto(Output::StdOut),
-        Color::Never => ColorMode::Off,
-    };
+    let color = cli.color_mode();
 
     let last = run(cli, filter, vars, iter, |output| {
-        match output {
-            Val::Str(s) if cli.raw_output => print!("{}", s),
-            _ => {
-                // this looks ugly, but it is hard to abstract over the `Formatter` because
-                // we cannot create a `Box<dyn Formatter>` because
-                // Rust says that the `Formatter` trait is not "object safe"
-                if cli.compact {
-                    ColoredFormatter::new(CompactFormatter).write_colored_json(
-                        &output.into(),
-                        &mut stdout,
-                        color,
-                    )
-                } else {
-                    ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(
-                        &output.into(),
-                        &mut stdout,
-                        color,
-                    )
-                }?
-            }
-        };
-        if !cli.join_output {
-            println!()
-        };
-        Ok(())
+        print(cli, color, output, &mut stdout)
     })?;
 
     stdout.flush()?;
