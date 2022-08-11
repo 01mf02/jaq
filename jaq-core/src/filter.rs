@@ -563,7 +563,7 @@ impl path::Part<Filter> {
     }
 }
 
-pub struct Recurse<F> {
+struct Recurse<F> {
     filter: F,
     vals: Vec<ValR>,
     /// output values that yield non-empty output
