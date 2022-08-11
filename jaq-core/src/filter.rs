@@ -75,7 +75,7 @@ pub enum Filter {
     Split(Box<Self>),
     First(Box<Self>),
     Last(Box<Self>),
-    Recurse(Box<Self>),
+    Recurse(Box<Self>, bool),
     Contains(Box<Self>),
     Limit(Box<Self>, Box<Self>),
     /// `range(min; max)` returns all integers `n` with `min <= n < max`.
@@ -148,7 +148,8 @@ impl Filter {
             make_builtin!("split", 1, Self::Split),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
-            make_builtin!("recurse", 1, Self::Recurse),
+            make_builtin!("recurse", 1, |f| Self::Recurse(f, true)),
+            make_builtin!("until", 1, |f| Self::Recurse(f, false)),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
         ])
@@ -295,7 +296,11 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
-            Self::Recurse(f) => Box::new(Recurse::new(move |v| f.run((cv.0.clone(), v)), cv.1)),
+            Self::Recurse(f, intermediate) => Box::new(Recurse::new(
+                move |v| f.run((cv.0.clone(), v)),
+                cv.1,
+                *intermediate,
+            )),
             Self::Reduce(xs, init, f) => {
                 let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
                 for x in xs.run(cv.clone()) {
@@ -356,7 +361,7 @@ impl Filter {
                 })
             }
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
-            Self::Recurse(l) => Box::new(f(cv.1).flat_map(move |v| {
+            Self::Recurse(l, true) => Box::new(f(cv.1).flat_map(move |v| {
                 then(v, |v| {
                     let (c, f) = (cv.0.clone(), f.clone());
                     let rec = move |v| self.update((c.clone(), v), f.clone());
@@ -433,7 +438,7 @@ impl Filter {
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?`
         let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
-        Filter::Recurse(Box::new(path))
+        Filter::Recurse(Box::new(path), true)
     }
 
     pub fn subst(self, args: &[Self]) -> Self {
@@ -482,7 +487,7 @@ impl Filter {
             Self::Split(f) => Self::Split(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
-            Self::Recurse(f) => Self::Recurse(sub(f)),
+            Self::Recurse(f, intermediate) => Self::Recurse(sub(f), intermediate),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
 
@@ -533,13 +538,15 @@ impl path::Part<Filter> {
 pub struct Recurse<F> {
     filter: F,
     vals: Vec<ValR>,
+    intermediate: bool,
 }
 
 impl<F> Recurse<F> {
-    fn new(filter: F, val: Val) -> Self {
+    fn new(filter: F, val: Val, intermediate: bool) -> Self {
         Self {
             filter,
             vals: Vec::from([Ok(val)]),
+            intermediate,
         }
     }
 }
@@ -548,16 +555,25 @@ impl<'a, F: Fn(Val) -> ValRs<'a> + Clone> Iterator for Recurse<F> {
     type Item = ValR;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let v = self.vals.pop()?;
-        if let Ok(ref v) = v {
+        loop {
+            let v = match self.vals.pop()? {
+                Ok(v) => v,
+                e => return Some(e),
+            };
+
             let mut out: Vec<_> = self.filter.clone()(v.clone()).collect();
+            let no_output = out.is_empty();
+
             // without reversal, the *last* output value would arrive at the end of `vals`,
             // where `pop()` would retrieve it *first*
             // but we want `pop()` to get the *first* output value *first*
             out.reverse();
             self.vals.append(&mut out);
+
+            if self.intermediate || no_output {
+                return Some(Ok(v));
+            }
         }
-        Some(v)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
