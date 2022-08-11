@@ -44,6 +44,8 @@ pub enum Error {
     Int(Val),
     /// `[] | .[0:] = 0`
     SliceAssign(Val),
+    /// `0 |= .+1`
+    PathExp,
 }
 
 impl fmt::Display for Error {
@@ -68,6 +70,7 @@ impl fmt::Display for Error {
             Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),
             Self::Int(v) => write!(f, "cannot use {v} as integer"),
             Self::SliceAssign(v) => write!(f, "cannot assign non-array ({v}) to an array slice"),
+            Self::PathExp => write!(f, "invalid path expression"),
         }
     }
 }

@@ -10,6 +10,9 @@ repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["command-line-utilities", "compilers", "parser-implementations"]
 
+[features]
+default = ["mimalloc"]
+
 [dependencies]
 jaq-core = { version = "0.7.0", path = "../jaq-core" }
 jaq-std  = { version = "0.7.0", path = "../jaq-std" }
@@ -18,6 +21,6 @@ atty = "0.2"
 chumsky = "0.8.0"
 clap = { version = "3.1.18", features = ["derive"] }
 colored_json = "2.1.0"
-mimalloc = { version = "0.1.29", default-features = false }
+mimalloc = { version = "0.1.29", default-features = false, optional = true }
 serde_json = { version = "1.0.81", features = [ "arbitrary_precision", "preserve_order" ] }
 tempfile = "3.3.0"

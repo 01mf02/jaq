@@ -90,7 +90,7 @@ impl<'i> Ctx<'i> {
     fn skip_vars(&self, n: usize) -> Self {
         Self {
             vars: self.vars.skip(n).clone(),
-            inputs: self.inputs.clone(),
+            inputs: self.inputs,
         }
     }
 }
