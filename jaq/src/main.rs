@@ -1,13 +1,13 @@
 use clap::{ArgEnum, Parser};
 use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
-use mimalloc::MiMalloc;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 use std::rc::Rc;
 
+#[cfg(feature = "mimalloc")]
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Just Another Query Tool
 #[derive(Parser)]
