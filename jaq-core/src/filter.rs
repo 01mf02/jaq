@@ -75,7 +75,7 @@ pub enum Filter {
     Split(Box<Self>),
     First(Box<Self>),
     Last(Box<Self>),
-    Recurse(Box<Self>, bool),
+    Recurse(Box<Self>, bool, bool),
     Contains(Box<Self>),
     Limit(Box<Self>, Box<Self>),
     /// `range(min; max)` returns all integers `n` with `min <= n < max`.
@@ -148,8 +148,9 @@ impl Filter {
             make_builtin!("split", 1, Self::Split),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
-            make_builtin!("recurse", 1, |f| Self::Recurse(f, true)),
-            make_builtin!("until", 1, |f| Self::Recurse(f, false)),
+            make_builtin!("recurse", 1, |f| Self::Recurse(f, true, true)),
+            make_builtin!("recurse_inner", 1, |f| Self::Recurse(f, true, false)),
+            make_builtin!("recurse_outer", 1, |f| Self::Recurse(f, false, true)),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
         ])
@@ -296,10 +297,11 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
-            Self::Recurse(f, intermediate) => Box::new(Recurse::new(
+            Self::Recurse(f, inner, outer) => Box::new(Recurse::new(
                 move |v| f.run((cv.0.clone(), v)),
                 cv.1,
-                *intermediate,
+                *inner,
+                *outer,
             )),
             Self::Reduce(xs, init, f) => {
                 let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
@@ -361,7 +363,7 @@ impl Filter {
                 })
             }
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
-            Self::Recurse(l, true) => Box::new(f(cv.1).flat_map(move |v| {
+            Self::Recurse(l, true, true) => Box::new(f(cv.1).flat_map(move |v| {
                 then(v, |v| {
                     let (c, f) = (cv.0.clone(), f.clone());
                     let rec = move |v| self.update((c.clone(), v), f.clone());
@@ -438,7 +440,7 @@ impl Filter {
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?`
         let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
-        Filter::Recurse(Box::new(path), true)
+        Filter::Recurse(Box::new(path), true, true)
     }
 
     pub fn subst(self, args: &[Self]) -> Self {
@@ -487,7 +489,7 @@ impl Filter {
             Self::Split(f) => Self::Split(sub(f)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
-            Self::Recurse(f, intermediate) => Self::Recurse(sub(f), intermediate),
+            Self::Recurse(f, inner, outer) => Self::Recurse(sub(f), inner, outer),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
 
@@ -545,12 +547,12 @@ pub struct Recurse<F> {
 }
 
 impl<F> Recurse<F> {
-    fn new(filter: F, val: Val, inner: bool) -> Self {
+    fn new(filter: F, val: Val, inner: bool, outer: bool) -> Self {
         Self {
             filter,
             vals: Vec::from([Ok(val)]),
             inner,
-            outer: true,
+            outer,
         }
     }
 }
