@@ -148,6 +148,7 @@ already implemented and not yet implemented.
 ## Basics
 
 - [x] Identity (`.`)
+- [x] Recursion (`..`)
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
 - [x] Folding (`reduce .[] as $x (0, . + $x)`, `foreach .[] as $x (0, . + $x)`)
