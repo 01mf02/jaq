@@ -538,15 +538,19 @@ impl path::Part<Filter> {
 pub struct Recurse<F> {
     filter: F,
     vals: Vec<ValR>,
-    intermediate: bool,
+    /// output values that yield non-empty output
+    inner: bool,
+    /// output values that yield empty output
+    outer: bool,
 }
 
 impl<F> Recurse<F> {
-    fn new(filter: F, val: Val, intermediate: bool) -> Self {
+    fn new(filter: F, val: Val, inner: bool) -> Self {
         Self {
             filter,
             vals: Vec::from([Ok(val)]),
-            intermediate,
+            inner,
+            outer: true,
         }
     }
 }
@@ -570,7 +574,7 @@ impl<'a, F: Fn(Val) -> ValRs<'a> + Clone> Iterator for Recurse<F> {
             out.reverse();
             self.vals.append(&mut out);
 
-            if self.intermediate || no_output {
+            if (self.outer && no_output) || (self.inner && !no_output) {
                 return Some(Ok(v));
             }
         }
