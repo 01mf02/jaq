@@ -154,3 +154,12 @@ fn update_mult() {
     // this is a known bug: <https://github.com/stedolan/jq/issues/2051>
     give(json!([1, 2, 3, 4, 5]), ".[] |= empty", json!([]));
 }
+
+#[test]
+fn update_complex() {
+    // jq returns 1 here, which looks like a bug
+    // in general, `a | a |= .`
+    // works in jq when `a` is either null, a number, or a boolean --- it
+    // does *not* work when `a` is a string, an array, or an object!
+    fail(json!(0), "0 |= .+1", Error::PathExp);
+}

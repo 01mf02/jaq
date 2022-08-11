@@ -338,7 +338,29 @@ impl Filter {
     }
 
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
+        let err = Box::new(core::iter::once(Err(Error::PathExp)));
         match self {
+            Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
+            Self::Array(_) | Self::Object(_) => err,
+            Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
+            Self::Assign(..) | Self::Update(..) => err,
+
+            Self::Length | Self::Keys => err,
+            Self::Floor | Self::Round | Self::Ceil => err,
+            Self::FromJson | Self::ToJson => err,
+            Self::Explode | Self::Implode => err,
+            Self::AsciiDowncase | Self::AsciiUpcase => err,
+            Self::Reverse | Self::Sort | Self::SortBy(_) => err,
+            Self::Has(_) | Self::Contains(_) => err,
+            Self::Split(_) => err,
+            Self::Inputs | Self::Range(..) => err,
+
+            // these are up for grabs to implement :)
+            Self::Try(_) | Self::Alt(..) => todo!(),
+            Self::First(_) | Self::Last(_) | Self::Limit(..) => todo!(),
+            Self::Reduce(..) | Self::Foreach(..) => todo!(),
+
+            Self::Error => Box::new(core::iter::once(Err(Error::Val(cv.1)))),
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
                 (cv.0.clone(), cv.1),
@@ -370,8 +392,12 @@ impl Filter {
                     l.update((cv.0.clone(), v), Box::new(rec))
                 })
             })),
+            Self::Recurse(..) => todo!(),
             Self::Empty => Box::new(core::iter::once(Ok(cv.1))),
-            _ => todo!(),
+
+            Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
+            Self::Var(_) => err,
+            Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
         }
     }
 
