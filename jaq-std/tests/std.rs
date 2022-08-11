@@ -215,7 +215,19 @@ fn typ() {
 
 #[test]
 fn while_() {
-    give(json!(1), "[while(. < 100; . * 2)]", json!([1,2,4,8,16,32,64]));
-    give(json!("a"), "[while(length < 4; . + \"a\")]", json!(["a", "aa", "aaa"]));
-    give(json!([1,2,3]), "[while(length > 0; .[1:])]", json!([[1,2,3],[2,3],[3]]));
+    give(
+        json!(1),
+        "[while(. < 100; . * 2)]",
+        json!([1, 2, 4, 8, 16, 32, 64]),
+    );
+    give(
+        json!("a"),
+        "[while(length < 4; . + \"a\")]",
+        json!(["a", "aa", "aaa"]),
+    );
+    give(
+        json!([1, 2, 3]),
+        "[while(length > 0; .[1:])]",
+        json!([[1, 2, 3], [2, 3], [3]]),
+    );
 }
