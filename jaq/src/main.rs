@@ -169,7 +169,7 @@ fn real_main() -> Result<ExitCode, Error> {
     })
 }
 
-fn parse(filter_str: &String, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
+fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut errs = Vec::new();
     let mut defs = Definitions::core();
     jaq_std::std()
@@ -187,7 +187,7 @@ fn parse(filter_str: &String, vars: Vec<String>) -> Result<Filter, Vec<ParseErro
             .into_iter()
             .map(|error| ParseError {
                 error,
-                filter: filter_str.clone(),
+                filter: filter_str.to_owned(),
             })
             .collect())
     }
@@ -282,7 +282,7 @@ fn run(
     let mut last = None;
     let iter = iter.map(|r| r.map_err(|e| e.to_string()));
 
-    let iter = Box::new(iter.into_iter()) as Box<dyn Iterator<Item = _>>;
+    let iter = Box::new(iter) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
     let iter = RcIter::new(iter);
