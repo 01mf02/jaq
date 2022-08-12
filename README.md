@@ -3,7 +3,7 @@
 ![Build status](https://github.com/01mf02/jaq/workflows/Rust/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/jaq-core.svg)](https://crates.io/crates/jaq-core)
 [![Documentation](https://docs.rs/jaq-core/badge.svg)](https://docs.rs/jaq-core)
-[![Rust 1.61+](https://img.shields.io/badge/rust-1.61+-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.62+](https://img.shields.io/badge/rust-1.62+-orange.svg)](https://www.rust-lang.org)
 
 jaq is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
@@ -121,18 +121,20 @@ Repeatedly apply a filter to itself and output the intermediate results:
 The following benchmark compares the performance of jaq and jq 1.6.
 Each command is run via `jq -n '<CMD>'` and `jaq -n '<CMD>'`, respectively.
 
-| Command                                                                            | jaq \[s\] | jq \[s\] |
-| ---------------------------------------------------------------------------------- | --------: | -------: |
-| `empty` (128 iterations)                                                           |  **0.21** |    6.46  |
-| `[range(1000000)] \| reverse \| length`                                            |  **0.03** |    1.32  |
-| `[range(1000000) \| -.] \| sort \| length`                                         |  **0.15** |    1.44  |
-| `[range(1000000) \| [.]] \| add \| length`                                         |  **0.62** |    1.44  |
-| `[range(100000) \| {(tostring): .}] \| add \| length`                              |  **0.21** |    0.37  |
-| `[range( 5000) \| {(tostring): .}] \| add \| .[] += 1 \| length`                   |  **0.02** |    2.94  |
-| `[range(100000) \| {(tostring): .}] \| add \| with_entries(.value += 1) \| length` |  **0.67** |    1.68  |
-| `[limit(1000000; repeat("a"))] \| add \| explode \| implode \| length`             |  **0.84** |    2.11  |
-| `def trees: recurse([., .]); 0 \| nth(16; trees) \| flatten \| length`             |  **0.35** |    0.54  |
-| `"[" + ([range(100000) \| tojson] \| join(",")) + "]" \| fromjson \| add`          |    5.69   | **3.16** |
+| Command                                                                                | jaq \[s\] | jq \[s\] |
+| -------------------------------------------------------------------------------------- | --------: | -------: |
+| `empty` (128 iterations)                                                               |      0.20 |     5.21 |
+| `[range(1000000)] \| reverse \| length`                                                |      0.06 |     1.25 |
+| `[range(1000000) \| -.] \| sort \| length`                                             |      0.16 |     1.36 |
+| `[range(1000000) \| [.]] \| add \| length`                                             |      0.76 |     1.39 |
+| `[range(100000) \| {(tostring): .}] \| add \| length`                                  |      0.22 |     0.32 |
+| `[range( 5000) \| {(tostring): .}] \| add \| .[] += 1 \| length`                       |      0.00 |     2.76 |
+| `[range(100000) \| {(tostring): .}] \| add \| with_entries(.value += 1) \| length`     |      0.74 |     1.64 |
+| `[limit(1000000; repeat("a"))] \| add \| explode \| implode \| length`                 |      1.11 |     2.11 |
+| `reduce range(1000000) as $x ([]; . + [$x + .[-1]]) \| length`                         |      1.25 |     1.58 |
+| `def trees: recurse([., .]); 0 \| nth(16; trees) \| flatten \| length`                 |      0.32 |     0.48 |
+| `def trees: recurse([., .]); 0 \| nth(16; trees) \| (.. \| scalars) \|= .+1 \| length` |      0.19 |     1.15 |
+| `"[" + ([range(100000) \| tojson] \| join(",")) + "]" \| fromjson \| add`              |      5.90 |     3.08 |
 
 I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
 
