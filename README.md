@@ -123,18 +123,18 @@ Each command is run via `jq -n '<CMD>'` and `jaq -n '<CMD>'`, respectively.
 
 | Command                                                                                | jaq \[s\] | jq \[s\] |
 | -------------------------------------------------------------------------------------- | --------: | -------: |
-| `empty` (128 iterations)                                                               |      0.20 |     5.21 |
-| `[range(1000000)] \| reverse \| length`                                                |      0.06 |     1.25 |
-| `[range(1000000) \| -.] \| sort \| length`                                             |      0.16 |     1.36 |
-| `[range(1000000) \| [.]] \| add \| length`                                             |      0.76 |     1.39 |
-| `[range(100000) \| {(tostring): .}] \| add \| length`                                  |      0.22 |     0.32 |
-| `[range( 5000) \| {(tostring): .}] \| add \| .[] += 1 \| length`                       |      0.00 |     2.76 |
-| `[range(100000) \| {(tostring): .}] \| add \| with_entries(.value += 1) \| length`     |      0.74 |     1.64 |
-| `[limit(1000000; repeat("a"))] \| add \| explode \| implode \| length`                 |      1.11 |     2.11 |
-| `reduce range(1000000) as $x ([]; . + [$x + .[-1]]) \| length`                         |      1.25 |     1.58 |
-| `def trees: recurse([., .]); 0 \| nth(16; trees) \| flatten \| length`                 |      0.32 |     0.48 |
-| `def trees: recurse([., .]); 0 \| nth(16; trees) \| (.. \| scalars) \|= .+1 \| length` |      0.19 |     1.15 |
-| `"[" + ([range(100000) \| tojson] \| join(",")) + "]" \| fromjson \| add`              |      5.90 |     3.08 |
+| `empty` (128 iterations)                                                               |    *0.20* |     5.21 |
+| `[range(1000000)] \| reverse \| length`                                                |    *0.06* |     1.25 |
+| `[range(1000000) \| -.] \| sort \| length`                                             |    *0.16* |     1.36 |
+| `[range(1000000) \| [.]] \| add \| length`                                             |    *0.76* |     1.39 |
+| `[range(100000) \| {(tostring): .}] \| add \| length`                                  |    *0.22* |     0.32 |
+| `[range( 5000) \| {(tostring): .}] \| add \| .[] += 1 \| length`                       |    *0.00* |     2.76 |
+| `[range(100000) \| {(tostring): .}] \| add \| with_entries(.value += 1) \| length`     |    *0.74* |     1.64 |
+| `[limit(1000000; repeat("a"))] \| add \| explode \| implode \| length`                 |    *1.11* |     2.11 |
+| `reduce range(1000000) as $x ([]; . + [$x + .[-1]]) \| length`                         |    *1.25* |     1.58 |
+| `def trees: recurse([., .]); 0 \| nth(16; trees) \| flatten \| length`                 |    *0.32* |     0.48 |
+| `def trees: recurse([., .]); 0 \| nth(16; trees) \| (.. \| scalars) \|= .+1 \| length` |    *0.19* |     1.15 |
+| `"[" + ([range(100000) \| tojson] \| join(",")) + "]" \| fromjson \| add`              |      5.90 |   *3.08* |
 
 I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
 
