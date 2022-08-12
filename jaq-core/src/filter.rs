@@ -609,6 +609,7 @@ impl<'a, F: Fn(Val) -> ValRs<'a> + Clone> Iterator for Recurse<F> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.vals.len(), self.vals.is_empty().then(|| 0))
+        let min = if self.outer { self.vals.len() } else { 0 };
+        (min, self.vals.is_empty().then(|| 0))
     }
 }
