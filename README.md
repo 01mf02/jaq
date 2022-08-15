@@ -317,19 +317,52 @@ Therefore, unlike jq, jaq satisfies the following paragraph in the [jq manual]:
 
 ## Assignments
 
-jaq does not allow so-called "complex assignments" of the form `p |= f`,
-where `p` is a filter that is not a path expression.
+Like jq, jaq allows for assignments of the form `p |= f`.
+However, jaq interprets these assignments differently.
+Fortunately, in most cases, the result is the same.
 
-For example:
+In jq, an assignment `p |= f` first constructs paths to all values that match `p`.
+*Only then*, it applies the filter `f` to these values.
 
-    $ jq -n '[0, 1, 2] | (.[] | select(.<2)) |= .+1'
-    [1, 2, 2]
+In jaq, an assignment `p |= f` applies `f` *immediately* to any value matching `p`.
+Unlike in jq, assignment does not explicitly construct paths.
 
-This is not accepted in jaq, because `.[] | select(.<2)` is not a path expression.
-A slightly more verbose version is allowed in jaq:
+jaq's implementation of assignment likely yields higher performance,
+because it does not construct paths.
+Furthermore, this also prevents several bugs in jq "by design".
+For example, given the filter `[0, 1, 2, 3] | .[] |= empty`,
+jq  yields `[1, 3]`, whereas
+jaq yields `[]`.
+What happens here?
 
-    $ jaq -n '[0, 1, 2] | .[] |= if .<2 then .+1 else . end'
-    [1, 2, 2]
+jq first constructs the paths corresponding to `.[]`, which are `.0, .1, .2, .3`.
+Then, it removes the element at each of these paths.
+However, each of these removals *changes* the value that the remaining paths refer to.
+That is, after removing `.0` (value 0), `.1` does not refer to value 1, but value 2!
+That is also why value 1 (and in consequence also value 3) is not removed.
+
+There is more weirdness ahead in jq;
+for example, `0 | 0 |= .+1` yields `1` in jq,
+although `0` is not a valid path expression.
+However, `1 | 0 |= .+1` yields an error.
+In jaq, any such assignment yields an error.
+
+jaq attempts to use multiple outputs of the right-hand side, whereas
+jq uses only the first.
+For example, `0 | (., .) |= (., .+1)` yields `0 1 1 2` in jaq,
+whereas it yields only `0` in jq.
+However, `{a: 1} | .a |= (2, 3)` yields `{"a": 2}` in both jaq and jq,
+because an object can only associate a single value with any given key,
+so we cannot use multiple outputs in a meaningful way here.
+
+Because jaq does not construct paths,
+it does not allow some filters on the left-hand side of assignments,
+for example `first`, `last`, `limit`:
+For example, `[1, 2, 3] | first(.[]) |= .-1`
+yields `[0, 2, 3]` in jq, but is invalid in jaq.
+Similarly, `[1, 2, 3] | limit(2; .[]) |= .-1`
+yields `[0, 1, 3]` in jq, but is invalid in jaq.
+(Inconsequentially, jq also does not allow for `last`.)
 
 
 ## Definitions
@@ -365,13 +398,6 @@ jaq provides `recurse` as core filter.
   In jq, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
   jq fills up the list with `null`s if we update beyond its size.
   In contrast, jaq fails with an out-of-bounds error in such a case.
-* Updating with multiple values:
-  When we update with a filter that returns multiple values,
-  jq considers only the first value of the filter regardless of the updated value,
-  whereas jaq may consider multiple values depending on the updated value.
-  For example, `[(1, 3) | . |= (., .+1)]` yields `[1, 2, 3, 4]` in jaq, whereas
-  jq yields only `[1, 3]`.
-  For more examples of this behaviour, see <jaq-core/tests/path.rs>.
 * Input reading:
   When there is no more input value left,
   in jq, `input` yields an error, whereas in jaq, it yields no output value.
