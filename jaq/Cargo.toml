@@ -1,6 +1,6 @@
 [package]
 name = "jaq"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2018"
 license = "MIT"
@@ -14,8 +14,8 @@ categories = ["command-line-utilities", "compilers", "parser-implementations"]
 default = ["mimalloc"]
 
 [dependencies]
-jaq-core = { version = "0.7.0", path = "../jaq-core" }
-jaq-std  = { version = "0.7.0", path = "../jaq-std" }
+jaq-core = { version = "0.8.0", path = "../jaq-core" }
+jaq-std  = { version = "0.8.0", path = "../jaq-std" }
 ariadne = "0.1.5"
 atty = "0.2"
 chumsky = "0.8.0"
