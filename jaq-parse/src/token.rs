@@ -58,12 +58,36 @@ fn num() -> impl Parser<char, String, Error = Simple<char>> {
         .collect()
 }
 
-// A parser for strings
+// A parser for strings; adapted from Chumsky's JSON example parser.
 fn str_() -> impl Parser<char, String, Error = Simple<char>> {
+    let unicode = filter(|c: &char| c.is_digit(16))
+        .repeated()
+        .exactly(4)
+        .collect::<String>()
+        .validate(|digits, span, emit| {
+            char::from_u32(u32::from_str_radix(&digits, 16).unwrap()).unwrap_or_else(|| {
+                emit(Simple::custom(span, "invalid unicode character"));
+                '\u{FFFD}' // unicode replacement character
+            })
+        });
+
+    let escape = just('\\').ignore_then(choice((
+        just('\\'),
+        just('/'),
+        just('"'),
+        just('b').to('\x08'),
+        just('f').to('\x0C'),
+        just('n').to('\n'),
+        just('r').to('\r'),
+        just('t').to('\t'),
+        just('u').ignore_then(unicode),
+    )));
+
     just('"')
-        .ignore_then(filter(|c| *c != '"').repeated())
+        .ignore_then(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
         .then_ignore(just('"'))
         .collect()
+        .labelled("string")
 }
 
 pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
