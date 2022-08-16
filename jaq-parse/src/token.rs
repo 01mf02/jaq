@@ -60,7 +60,7 @@ fn num() -> impl Parser<char, String, Error = Simple<char>> {
 
 // A parser for strings; adapted from Chumsky's JSON example parser.
 fn str_() -> impl Parser<char, String, Error = Simple<char>> {
-    let unicode = filter(|c: &char| c.is_digit(16))
+    let unicode = filter(|c: &char| c.is_ascii_hexdigit())
         .repeated()
         .exactly(4)
         .collect::<String>()
