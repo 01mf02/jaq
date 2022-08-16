@@ -214,7 +214,7 @@ fn typ() {
 }
 
 #[test]
-fn while_() {
+fn while_until() {
     give(
         json!(1),
         "[while(. < 100; . * 2)]",
@@ -229,5 +229,17 @@ fn while_() {
         json!([1, 2, 3]),
         "[while(length > 0; .[1:])]",
         json!([[1, 2, 3], [2, 3], [3]]),
+    );
+
+    give(json!(50), "until(. > 100; . * 2)", json!(200));
+    give(
+        json!([1, 2, 3]),
+        "until(length == 1; .[1:]) | .[0]",
+        json!(3),
+    );
+    give(
+        json!(5),
+        "[.,1] | until(.[0] < 1; [.[0] - 1, .[1] * .[0]]) | .[1]",
+        json!(120),
     );
 }
