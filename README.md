@@ -153,7 +153,7 @@ already implemented and not yet implemented.
 - [x] Recursion (`..`)
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
-- [x] Folding (`reduce .[] as $x (0, . + $x)`, `foreach .[] as $x (0, . + $x)`)
+- [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . * 2)`)
 - [ ] Error handling (`try ... catch ...`)
 - [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
