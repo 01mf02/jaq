@@ -114,6 +114,11 @@ Repeatedly apply a filter to itself and output the intermediate results:
     $ echo '0' | jaq '[recurse(.+1; . < 3)]'
     [0, 1, 2]
 
+Lazily fold over inputs and output intermediate results:
+
+    $ seq 1000 | jaq -n 'foreach inputs as $x (0; . + $x)'
+    1 3 6 10 15 [...]
+
 
 
 # Performance
@@ -153,7 +158,7 @@ already implemented and not yet implemented.
 - [x] Recursion (`..`)
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
-- [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . * 2)`)
+- [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
 - [ ] Error handling (`try ... catch ...`)
 - [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
