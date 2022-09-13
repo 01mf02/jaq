@@ -27,6 +27,6 @@ pub fn std() -> Vec<jaq_parse::Def> {
     #[cfg(not(feature = "bincode"))]
     {
         let std = include_str!("std.jq");
-        jaq_parse::parse(std, jaq_parse::defs()).unwrap()
+        jaq_parse::parse(std, jaq_parse::defs()).0.unwrap()
     }
 }
