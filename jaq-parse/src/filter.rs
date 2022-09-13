@@ -243,12 +243,6 @@ where
     }
     .labelled("identifier");
 
-    let key = select! {
-        Token::Ident(s) => s,
-        Token::Str(s) => s,
-    }
-    .labelled("object key");
-
     // Atoms can also just be normal filters, but surrounded with parentheses
     let parenthesised = filter
         .clone()
@@ -262,7 +256,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
 
     let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
-    let key_str = key
+    let key_str = crate::path::key()
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
     let key_filter = parenthesised
@@ -371,16 +365,16 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let id_path = path::index().or_not().chain(atom_path());
     let id_with_path = id.then(id_path.collect());
 
-    let path = atom_with_path
-        .or(id_with_path)
-        .map_with_span(|(f, path), span| Filter::path(f, path, span));
+    let path = atom_with_path.or(id_with_path);
 
     // named operators, such as `reduce` or `if-then-else`
-    let named = path
-        .or(reduce(with_comma.clone()))
-        .or(foreach(with_comma.clone()))
-        .or(if_then_else(with_comma.clone()))
-        .boxed();
+    let named = choice((
+        path.map_with_span(|(f, path), span| Filter::path(f, path, span)),
+        reduce(with_comma.clone()),
+        foreach(with_comma.clone()),
+        if_then_else(with_comma.clone()),
+    ))
+    .boxed();
 
     let try_ = named
         .then(just(Token::Ctrl('?')).repeated().collect::<Vec<_>>())

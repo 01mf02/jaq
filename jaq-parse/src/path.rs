@@ -39,13 +39,19 @@ fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     })
 }
 
+pub(crate) fn key() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
+    select! {
+        Token::Ident(s) => s,
+        Token::Str(s) => s,
+    }
+    .labelled("object key")
+}
+
 pub(crate) fn index<T: From<String>>(
 ) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = Simple<Token>> + Clone {
-    filter_map(|span, tok| match tok {
-        Token::Ident(id) | Token::Str(id) => Ok(Part::Index((T::from(id), span))),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
-    .then(opt())
+    key()
+        .map_with_span(|id, span| Part::Index((T::from(id), span)))
+        .then(opt())
 }
 
 pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
