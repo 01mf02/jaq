@@ -172,10 +172,9 @@ where
 }
 
 fn variable() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
-    filter_map(|span, tok| match tok {
-        Token::Var(v) => Ok(v),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
+    select! {
+        Token::Var(v) => v,
+    }
     .labelled("variable")
 }
 
