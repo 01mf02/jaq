@@ -187,7 +187,7 @@ where
     let elif = just(Token::Elif).ignore_then(filter.clone());
     let else_ = just(Token::Else).ignore_then(filter.map(Box::new));
     if_.then(then.clone())
-        .chain::<(Spanned<Filter>, Spanned<Filter>), _, _>(elif.then(then).repeated())
+        .chain(elif.then(then).repeated())
         .then(else_)
         .then_ignore(just(Token::End))
         .map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span))
