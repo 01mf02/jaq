@@ -232,23 +232,21 @@ fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error 
 where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
-    let val = filter_map(|span, tok| match tok {
-        Token::Num(n) => Ok(Filter::Num(n)),
-        Token::Str(s) => Ok(Filter::Str(s)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
+    let val = select! {
+        Token::Num(n) => Filter::Num(n),
+        Token::Str(s) => Filter::Str(s),
+    }
     .labelled("value");
 
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
+    let ident = select! {
+        Token::Ident(ident) => ident,
+    }
     .labelled("identifier");
 
-    let key = filter_map(|span, tok| match tok {
-        Token::Ident(s) | Token::Str(s) => Ok(s),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    })
+    let key = select! {
+        Token::Ident(s) => s,
+        Token::Str(s) => s,
+    }
     .labelled("object key");
 
     // Atoms can also just be normal filters, but surrounded with parentheses
@@ -256,15 +254,12 @@ where
         .clone()
         .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
-    let var = variable().map_with_span(|v, span| (Filter::Var(v), span));
-
-    let recurse = just(Token::DotDot).map_with_span(|_, span| (Filter::Recurse, span));
+    let recurse = just(Token::DotDot);
 
     let array = filter
         .clone()
         .or_not()
-        .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-        .map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span));
+        .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
 
     let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
     let key_str = key
@@ -281,10 +276,7 @@ where
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
-    let object = object.map_with_span(|obj, span| (Filter::Object(obj), span));
-
     let call = ident.then(args(filter));
-    let call = call.map_with_span(|(f, args), span| (Filter::Call(f, args), span));
 
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
@@ -293,16 +285,18 @@ where
         })
     };
 
-    val.map_with_span(|filter, span| (filter, span))
-        .or(parenthesised)
-        .or(array)
-        .or(object)
-        .or(call)
-        .or(var)
-        .or(recurse)
-        .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
-        .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
-        .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
+    choice((
+        parenthesised,
+        val.map_with_span(|filter, span| (filter, span)),
+        array.map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span)),
+        object.map_with_span(|obj, span| (Filter::Object(obj), span)),
+        call.map_with_span(|(f, args), span| (Filter::Call(f, args), span)),
+        variable().map_with_span(|v, span| (Filter::Var(v), span)),
+        recurse.map_with_span(|_, span| (Filter::Recurse, span)),
+    ))
+    .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
+    .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
+    .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
 }
 
 fn math<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone
