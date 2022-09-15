@@ -37,6 +37,8 @@ def values:    select(. != null);
 def nulls:     select(. == null);
 def booleans:  select(isboolean);
 def numbers:   select(isnumber);
+def finites:   select(isfinite);
+def normals:   select(isnormal);
 def strings:   select(isstring);
 def arrays:    select(isarray);
 def objects:   select(isobject);
