@@ -56,6 +56,7 @@ pub enum Filter {
 
     Empty,
     Error,
+    Debug,
     Inputs,
     Length,
     Floor,
@@ -128,6 +129,7 @@ impl Filter {
         Vec::from([
             make_builtin!("empty", 0, Self::Empty),
             make_builtin!("error", 0, Self::Error),
+            make_builtin!("debug", 0, Self::Debug),
             make_builtin!("inputs", 0, Self::Inputs),
             make_builtin!("length", 0, Self::Length),
             make_builtin!("keys", 0, Self::Keys),
@@ -250,6 +252,10 @@ impl Filter {
 
             Self::Empty => Box::new(core::iter::empty()),
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
+            Self::Debug => {
+                log::debug!("{}", cv.1);
+                Filter::Id.run(cv)
+            }
             Self::Inputs => Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse))),
             Self::Length => Box::new(once(cv.1.len())),
             Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
@@ -361,6 +367,10 @@ impl Filter {
             Self::Reduce(..) | Self::Foreach(..) => todo!(),
 
             Self::Error => Box::new(core::iter::once(Err(Error::Val(cv.1)))),
+            Self::Debug => {
+                log::debug!("{}", cv.1);
+                Filter::Id.update(cv, f)
+            }
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
                 (cv.0.clone(), cv.1),
@@ -502,7 +512,7 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Empty | Self::Error | Self::Inputs => self,
+            Self::Empty | Self::Error | Self::Debug | Self::Inputs => self,
             Self::Length | Self::Keys => self,
             Self::Floor | Self::Round | Self::Ceil => self,
             Self::FromJson | Self::ToJson => self,

@@ -104,6 +104,12 @@ fn main() -> ExitCode {
 fn real_main() -> Result<ExitCode, Error> {
     let cli = Cli::parse();
 
+    use env_logger::Env;
+    env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
+        // omit name of module that emitted log message
+        .format_target(false)
+        .init();
+
     let mut vars = Vec::new();
     let mut ctx = Vec::new();
     for arg_val in cli.arg.chunks(2) {
