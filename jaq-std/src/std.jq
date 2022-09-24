@@ -77,7 +77,7 @@ def nth(n; g): last(limit(n + 1; g));
 
 # Objects <-> Arrays
 def   to_entries: [keys[] as $k | { key: $k, value: .[$k] }];
-def from_entries: map({ (.key): .value }) | add;
+def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;
 
 # Predicates

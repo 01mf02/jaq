@@ -38,6 +38,8 @@ fn entries() {
     let arr = json!([null, 0]);
     let entries = json!([{"key": 0, "value": null}, {"key": 1, "value": 0}]);
     give(arr, "to_entries", entries);
+
+    give(json!([]), "from_entries", json!({}));
 }
 
 #[test]
