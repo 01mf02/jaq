@@ -252,10 +252,7 @@ impl Filter {
 
             Self::Empty => Box::new(core::iter::empty()),
             Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
-            Self::Debug => {
-                log::debug!("{}", cv.1);
-                Filter::Id.run(cv)
-            }
+            Self::Debug => Box::new(once(Ok(cv.1.debug()))),
             Self::Inputs => Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse))),
             Self::Length => Box::new(once(cv.1.len())),
             Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
@@ -367,10 +364,7 @@ impl Filter {
             Self::Reduce(..) | Self::Foreach(..) => todo!(),
 
             Self::Error => Box::new(core::iter::once(Err(Error::Val(cv.1)))),
-            Self::Debug => {
-                log::debug!("{}", cv.1);
-                Filter::Id.update(cv, f)
-            }
+            Self::Debug => f(cv.1.debug()),
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
                 (cv.0.clone(), cv.1),

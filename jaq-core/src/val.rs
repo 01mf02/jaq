@@ -97,6 +97,11 @@ impl Val {
         char::from_u32(u).ok_or(Error::Char(i))
     }
 
+    pub(crate) fn debug(self) -> Self {
+        log::debug!("{}", self);
+        self
+    }
+
     /// Return 0 for null, the absolute value for numbers, and
     /// the length for strings, arrays, and objects.
     ///
