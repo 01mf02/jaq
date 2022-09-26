@@ -53,6 +53,7 @@ fn has() {
 
 #[test]
 fn json() {
+    // TODO: correct this
     give(json!(1.0), "tojson", json!("1.0"));
     give(json!(0), "1.0 | tojson", json!("1.0"));
     give(json!(0), "1.1 | tojson", json!("1.1"));
