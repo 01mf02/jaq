@@ -7,6 +7,7 @@ extern crate alloc;
 pub mod filter;
 mod ops;
 pub mod path;
+mod prec_climb;
 mod token;
 mod toplevel;
 
