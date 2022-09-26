@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{MathOp, OrdOp, Path, Span, Spanned, Token};
+use crate::{prec_climb, MathOp, OrdOp, Path, Span, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
@@ -48,6 +48,28 @@ pub enum BinaryOp {
     Assign(AssignOp),
     /// Ordering operation, e.g. `l == r`, `l <= r`, ...
     Ord(OrdOp),
+}
+
+impl prec_climb::Op for BinaryOp {
+    fn prec(&self) -> usize {
+        match self {
+            Self::Pipe(_) => 0,
+            Self::Comma => 1,
+            Self::Assign(_) => 2,
+            Self::Alt => 3,
+            Self::Or => Self::Alt.prec() + 1,
+            Self::And => Self::Or.prec() + 1,
+            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::And.prec() + 1,
+            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => Self::And.prec() + 2,
+            Self::Math(MathOp::Add | MathOp::Sub) => Self::And.prec() + 3,
+            Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).prec() + 1,
+            Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).prec() + 1,
+        }
+    }
+
+    fn right_assoc(&self) -> bool {
+        matches!(self, Self::Pipe(_) | Self::Assign(_))
+    }
 }
 
 /// An element of an object construction filter.
@@ -120,6 +142,12 @@ impl From<String> for Filter {
     }
 }
 
+impl prec_climb::Output<BinaryOp> for Spanned<Filter> {
+    fn from_op(lhs: Self, op: BinaryOp, rhs: Self) -> Self {
+        Filter::binary_with_span(lhs, op, rhs)
+    }
+}
+
 impl Filter {
     fn binary_with_span(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
@@ -141,24 +169,6 @@ impl Filter {
             (Filter::Try(Box::new(f)), span)
         }
     }
-}
-
-fn bin<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
-where
-    P: Parser<Token, Spanned<Filter>> + Clone,
-    O: Parser<Token, BinaryOp, Error = P::Error> + Clone,
-{
-    let args = prev.clone().then(op.then(prev).repeated());
-    args.foldl(|a, (op, b)| Filter::binary_with_span(a, op, b))
-}
-
-fn binr<P, O>(prev: P, op: O) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
-where
-    P: Parser<Token, Spanned<Filter>> + Clone,
-    O: Parser<Token, BinaryOp, Error = P::Error> + Clone,
-{
-    let args = prev.clone().then(op).repeated().then(prev);
-    args.foldr(|(a, op), b| Filter::binary_with_span(a, op, b))
 }
 
 pub(crate) fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
@@ -292,50 +302,38 @@ where
     .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
 }
 
-fn math<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone
+fn neg<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone
 where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
-    let neg = just(Token::Op("-".to_string()))
+    just(Token::Op("-".to_string()))
         .map_with_span(|_, span| span)
         .repeated()
         .then(prev)
         .foldr(|a, b| {
             let span = a.start..b.1.end;
             (Filter::Neg(Box::new(b)), span)
-        });
-
-    let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
-
-    let rem = bin(neg, math(MathOp::Rem));
-    // Product ops (multiply and divide) have equal precedence
-    let mul_div = bin(rem, math(MathOp::Mul).or(math(MathOp::Div)));
-    // Sum ops (add and subtract) have equal precedence
-    bin(mul_div, math(MathOp::Add).or(math(MathOp::Sub)))
+        })
 }
 
-fn ord<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
-where
-    P: Parser<Token, Spanned<Filter>> + Clone,
-{
-    let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
+fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
+    let as_var = just(Token::As).ignore_then(variable()).or_not();
+    let pipe = as_var
+        .then_ignore(just(Token::Op("|".to_string())))
+        .map(BinaryOp::Pipe);
 
-    let lt_gt = choice((
-        ord(OrdOp::Lt),
-        ord(OrdOp::Gt),
-        ord(OrdOp::Le),
-        ord(OrdOp::Ge),
-    ));
-    let lt_gt = bin(prev, lt_gt);
-    // Comparison ops (equal, not-equal) have equal precedence
-    bin(lt_gt, ord(OrdOp::Eq).or(ord(OrdOp::Ne)))
-}
-
-fn assign() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
     let update_with = |op: MathOp| assign(AssignOp::UpdateWith(op));
 
+    let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
+    let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
+
     choice((
+        pipe,
+        // normally, here would be `,`,
+        // however, in some contexts, we want to exclude `,`
+        // (for example, `f` and `g` in `{a: f, b: g}` must not contain `,`)
+        // therefore, we add `,` later
         assign(AssignOp::Assign),
         assign(AssignOp::Update),
         update_with(MathOp::Add),
@@ -343,7 +341,32 @@ fn assign() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
         update_with(MathOp::Mul),
         update_with(MathOp::Div),
         update_with(MathOp::Rem),
+        just(Token::Op("//".to_string())).to(BinaryOp::Alt),
+        just(Token::Or).to(BinaryOp::Or),
+        just(Token::And).to(BinaryOp::And),
+        ord(OrdOp::Eq),
+        ord(OrdOp::Ne),
+        ord(OrdOp::Lt),
+        ord(OrdOp::Gt),
+        ord(OrdOp::Le),
+        ord(OrdOp::Ge),
+        math(MathOp::Add),
+        math(MathOp::Sub),
+        math(MathOp::Mul),
+        math(MathOp::Div),
+        math(MathOp::Rem),
     ))
+}
+
+fn climb<F, O>(f: F, op: O) -> impl Parser<Token, Spanned<Filter>, Error = O::Error> + Clone
+where
+    F: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
+    O: Parser<Token, BinaryOp, Error = Simple<Token>> + Clone,
+{
+    use prec_climb::Output;
+    f.clone()
+        .then(op.then(f).repeated().collect::<Vec<_>>())
+        .map(|(f, ops)| f.parse(ops))
 }
 
 pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
@@ -379,22 +402,13 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
         .then(just(Token::Ctrl('?')).repeated().collect::<Vec<_>>())
         .map_with_span(|(f, try_), span| Filter::try_(f, try_, span));
 
-    let math = math(try_).boxed();
-    let ord = ord(math).boxed();
-    let and = bin(ord, just(Token::And).to(BinaryOp::And));
-    let or = bin(and, just(Token::Or).to(BinaryOp::Or));
-    let alt = bin(or, just(Token::Op("//".to_string())).to(BinaryOp::Alt));
-    let assign = binr(alt, assign()).boxed();
+    let neg = neg(try_).boxed();
 
+    let op = binary_op().boxed();
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 
-    let as_var = just(Token::As).ignore_then(variable()).or_not();
-    let pipe = as_var
-        .then_ignore(just(Token::Op("|".to_string())))
-        .map(BinaryOp::Pipe);
-
-    sans_comma.define(binr(assign.clone(), pipe.clone()));
-    with_comma.define(binr(bin(assign, comma), pipe));
+    sans_comma.define(climb(neg.clone(), op.clone()));
+    with_comma.define(climb(neg, op.or(comma)));
 
     with_comma
 }
