@@ -7,29 +7,27 @@ pub trait Op {
     }
 }
 
-pub trait Output<A, O: Op>
+pub trait Output<O: Op>
 where
     Self: Sized,
 {
-    fn from_atom(atom: A) -> Self;
     fn from_op(lhs: Self, op: O, rhs: Self) -> Self;
 
-    fn parse(first: A, iter: impl IntoIterator<Item = (O, A)>) -> Self {
+    fn parse(self, iter: impl IntoIterator<Item = (O, Self)>) -> Self {
         let mut iter = iter.into_iter();
-        Self::parse1(Self::from_atom(first), &mut iter.next(), &mut iter, 0)
+        self.parse1(&mut iter.next(), &mut iter, 0)
     }
 
-    fn parse1<I>(mut self, next: &mut Option<(O, A)>, iter: &mut I, min_prec: usize) -> Self
+    fn parse1<I>(mut self, next: &mut Option<(O, Self)>, iter: &mut I, min_prec: usize) -> Self
     where
-        I: Iterator<Item = (O, A)>,
+        I: Iterator<Item = (O, Self)>,
     {
-        while let Some((op, rhs_atom)) = next.take() {
+        while let Some((op, mut rhs)) = next.take() {
             if op.prec() < min_prec {
-                *next = Some((op, rhs_atom));
+                *next = Some((op, rhs));
                 return self;
             }
 
-            let mut rhs = Self::from_atom(rhs_atom);
             *next = iter.next();
 
             while let Some(peek) = next.take() {
