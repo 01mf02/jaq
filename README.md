@@ -147,8 +147,11 @@ I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
 
 # Features
 
-Here is an overview of the features
-already implemented and not yet implemented.
+Here is an overview that summarises:
+
+* [x] features already implemented, and
+* [ ] features not yet implemented.
+
 [Contributions to extend jaq are highly welcome.](#contributing)
 
 
