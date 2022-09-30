@@ -147,8 +147,11 @@ I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
 
 # Features
 
-Here is an overview of the features
-already implemented and not yet implemented.
+Here is an overview that summarises:
+
+* [x] features already implemented, and
+* [ ] features not yet implemented.
+
 [Contributions to extend jaq are highly welcome.](#contributing)
 
 
@@ -406,6 +409,11 @@ jaq provides `recurse` as core filter.
 * Input reading:
   When there is no more input value left,
   in jq, `input` yields an error, whereas in jaq, it yields no output value.
+* Joining:
+  When given an array `[x0, x1, ..., xn]`,
+  in jq, `join(x)` converts all elements of the input array to strings and intersperses them with `x`, whereas
+  in jaq, `join(x)` simply calculates `x0 + x + x1 + x + ... + xn`.
+  When all elements of the input array and `x` are strings, jq and jaq yield the same output.
 
 
 
