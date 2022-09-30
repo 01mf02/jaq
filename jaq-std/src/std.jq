@@ -61,7 +61,7 @@ def until(cond; update): recurse_outer(if cond then empty else update end);
 def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 def add: reduce .[] as $x (null; . + $x);
-def join(x): reduce .[] as $x (null; if . == null then $x else . + x + $x end);
+def join(x): .[:-1][] += x | add;
 def min: reduce .[] as $x (.[0]; if $x < . then $x else . end);
 def max: reduce .[] as $x (.[0]; if $x > . then $x else . end);
 
