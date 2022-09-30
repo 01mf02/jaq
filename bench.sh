@@ -14,7 +14,7 @@ declare -a BENCHES=(
 'reduce range(1000000) as $x ([]; . + [$x + .[-1]]) | length'
 'def trees: recurse([., .]); 0 | nth(16; trees) | flatten | length'
 'def trees: recurse([., .]); 0 | nth(16; trees) | (.. | scalars) |= .+1 | length'
-'"[" + ([range(100000) | tojson] | join(",")) + "]" | fromjson | add'
+'[range(100000) | tojson] | join(",") | "[" + . + "]" | fromjson | add'
 )
 
 echo -n '|' '`empty` (128 iterations)'
