@@ -1,4 +1,4 @@
-use clap::{ArgEnum, Parser};
+use clap::{Parser, ValueEnum};
 use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -56,7 +56,7 @@ struct Cli {
     join_output: bool,
 
     /// Color output
-    #[clap(long, value_name = "WHEN", arg_enum, default_value = "auto")]
+    #[clap(long, value_name = "WHEN", value_enum, default_value = "auto")]
     color: Color,
 
     /// Read filter from a file
@@ -75,7 +75,7 @@ struct Cli {
     args: Vec<String>,
 }
 
-#[derive(Clone, ArgEnum)]
+#[derive(Clone, ValueEnum)]
 enum Color {
     Always,
     Auto,
