@@ -1,6 +1,6 @@
 [package]
 name = "jaq-std"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -13,13 +13,13 @@ keywords = ["json", "query", "jq"]
 default = ["bincode"]
 
 [build-dependencies]
-jaq-parse = { version = "0.8.0", path = "../jaq-parse" }
+jaq-parse = { version = "0.8.1", path = "../jaq-parse" }
 bincode = { version = "1.3.3", optional = true }
 
 [dependencies]
-jaq-parse = { version = "0.8.0", path = "../jaq-parse" }
+jaq-parse = { version = "0.8.1", path = "../jaq-parse" }
 bincode = { version = "1.3.3", optional = true }
 
 [dev-dependencies]
-jaq-core = { version = "0.8.0", path = "../jaq-core" }
+jaq-core = { version = "0.8.1", path = "../jaq-core" }
 serde_json = "1.0"
