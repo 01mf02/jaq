@@ -125,6 +125,8 @@ Lazily fold over inputs and output intermediate results:
 
 The following benchmark compares the performance of jaq and jq 1.6.
 Each command is run via `jq -n '<CMD>'` and `jaq -n '<CMD>'`, respectively.
+Each command except for `empty` is additionally piped through `length`,
+in order not to measure the time needed to print large values.
 
 | Command                                                                       | jaq \[s\] | jq \[s\] |
 | ----------------------------------------------------------------------------- | --------: | -------: |
