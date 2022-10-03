@@ -11,10 +11,10 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 /// Just Another Query Tool
 #[derive(Parser)]
-#[clap(version)]
+#[command(version)]
 struct Cli {
     /// Use null as single input value
-    #[clap(short, long)]
+    #[arg(short, long)]
     null_input: bool,
 
     /// Use the last output value as exit status code
@@ -26,7 +26,7 @@ struct Cli {
     /// If there is no output value, then the exit status code is 4.
     ///
     /// If any error occurs, then this option has no effect.
-    #[clap(short, long)]
+    #[arg(short, long)]
     exit_status: bool,
 
     /// Read (slurp) all input values into one array
@@ -34,41 +34,41 @@ struct Cli {
     /// When input is read from files,
     /// jaq yields an array for each file, whereas
     /// jq produces only a single array.
-    #[clap(short, long)]
+    #[arg(short, long)]
     slurp: bool,
 
     /// Overwrite input file with its output
-    #[clap(short, long)]
+    #[arg(short, long)]
     in_place: bool,
 
     /// Write strings without escaping them with quotes
-    #[clap(short, long)]
+    #[arg(short, long)]
     raw_output: bool,
 
     /// Print JSON compactly, omitting whitespace
-    #[clap(short, long)]
+    #[arg(short, long)]
     compact: bool,
 
     /// Do not print a newline after each value
     ///
     /// Unlike jq, this does not enable `--raw-output`.
-    #[clap(short, long)]
+    #[arg(short, long)]
     join_output: bool,
 
     /// Color output
-    #[clap(long, value_name = "WHEN", value_enum, default_value = "auto")]
+    #[arg(long, value_name = "WHEN", default_value = "auto")]
     color: Color,
 
     /// Read filter from a file
     ///
     /// In this case, all arguments are interpreted as input files.
-    #[clap(short, long, value_name = "FILE")]
+    #[arg(short, long, value_name = "FILE")]
     from_file: Option<PathBuf>,
 
     /// Set variable `$<a>` to string "<v>"
     ///
     /// Unlike jq, this provides the variable *only* in the main filter.
-    #[clap(long, value_names = &["a", "v"])]
+    #[arg(long, value_names = &["a", "v"])]
     arg: Vec<String>,
 
     /// Filter to execute, followed by list of input files
