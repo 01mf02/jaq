@@ -324,8 +324,9 @@ Therefore, unlike jq 1.6, jaq satisfies the following paragraph in the [jq manua
 > This is particularly important when dealing with numbers which can't be
 > losslessly converted to an IEEE754 double precision representation.
 
-Please note that newer development versions of jq
-do not claim anymore to preserve the literal decimal representation.
+Please note that newer development versions of jq (e.g. commit cff5336)
+seem to preserve the literal decimal representation,
+even if it is not stated in the manual.
 
 
 ## Assignments
