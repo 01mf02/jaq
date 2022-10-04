@@ -82,7 +82,7 @@ You should obtain the same outputs by replacing jaq with jq.
 If not, your filing an issue would be appreciated. :)
 The syntax is documented in the [jq manual].
 
-[jq manual]: https://stedolan.github.io/jq/manual/
+[jq manual]: https://stedolan.github.io/jq/manual/v1.6/
 
 Access a field:
 
@@ -317,12 +317,15 @@ whereas jq may silently convert to 64-bit floating-point numbers:
     $ echo '1e500' | jaq '.'
     1e500
 
-Therefore, unlike jq, jaq satisfies the following paragraph in the [jq manual]:
+Therefore, unlike jq 1.6, jaq satisfies the following paragraph in the [jq manual]:
 
 > An important point about the identity filter is that
 > it guarantees to preserve the literal decimal representation of values.
 > This is particularly important when dealing with numbers which can't be
 > losslessly converted to an IEEE754 double precision representation.
+
+Please note that newer development versions of jq
+do not claim anymore to preserve the literal decimal representation.
 
 
 ## Assignments
