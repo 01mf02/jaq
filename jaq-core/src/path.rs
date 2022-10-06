@@ -60,13 +60,13 @@ impl Part<Vec<Val>> {
         }
     }
 
-    pub fn run<'a, 'f, P, F>(mut path: P, v: Val, f: F) -> ValRs<'f>
+    pub fn update<'a, 'f, P, F>(mut path: P, v: Val, f: F) -> ValRs<'f>
     where
         P: Iterator<Item = &'a (Self, Opt)> + Clone,
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
         if let Some((p, opt)) = path.next() {
-            let f = |v| Self::run(path.clone(), v, f);
+            let f = |v| Self::update(path.clone(), v, f);
             Box::new(core::iter::once(p.map(v, *opt, f)))
         } else {
             f(v)

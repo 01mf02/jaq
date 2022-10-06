@@ -228,7 +228,7 @@ impl Filter {
                     then.run((cv.0.clone(), v))
                 })
             }
-            Self::Path(f, path) => then(path.collect(cv, f), |y| Box::new(y.into_iter().map(Ok))),
+            Self::Path(f, path) => then(path.run(cv, f), |y| Box::new(y.into_iter().map(Ok))),
             Self::Assign(path, f) => path.update(cv.clone(), Box::new(move |_| f.run(cv.clone()))),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
@@ -368,7 +368,7 @@ impl Filter {
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
                 (cv.0.clone(), cv.1),
-                Box::new(move |v| path.run((cv.0.clone(), v), |v| f(v))),
+                Box::new(move |v| path.update((cv.0.clone(), v), |v| f(v))),
             ),
             Self::Pipe(l, false, r) => l.update(
                 (cv.0.clone(), cv.1),
@@ -533,17 +533,17 @@ impl Filter {
 type PathOptR = Result<(path::Part<Vec<Val>>, path::Opt), Error>;
 
 impl Path<Filter> {
-    fn run<'a: 'f, 'f, F>(&'a self, cv: Cv<'a>, f: F) -> ValRs<'f>
+    fn update<'a: 'f, 'f, F>(&'a self, cv: Cv<'a>, f: F) -> ValRs<'f>
     where
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
         let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
         then(path.collect(), |path: Vec<_>| {
-            path::Part::run(path.iter(), cv.1, f)
+            path::Part::update(path.iter(), cv.1, f)
         })
     }
 
-    fn collect<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> Result<Vec<Val>, Error> {
+    fn run<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> Result<Vec<Val>, Error> {
         let init = init.run(cv.clone()).collect::<Result<Vec<_>, _>>()?;
         let mut path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
         path.try_fold(init, |acc, p_opt: PathOptR| {
