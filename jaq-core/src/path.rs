@@ -140,9 +140,10 @@ impl Part<Vec<Val>> {
                         .collect::<Result<_, _>>()?,
                 ))),
                 Val::Obj(o) => Ok(Val::Obj(Rc::new(
-                    o.iter()
-                        .flat_map(|(k, v)| match f(v.clone()).next().transpose() {
-                            Ok(y) => Box::new(y.map(|y| Ok((k.clone(), y))).into_iter()),
+                    rc_unwrap_or_clone(o)
+                        .into_iter()
+                        .flat_map(|(k, v)| match f(v).next().transpose() {
+                            Ok(y) => Box::new(y.map(|y| Ok((k, y))).into_iter()),
                             Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
                         })
                         .collect::<Result<_, _>>()?,
