@@ -133,6 +133,9 @@ fn min_max() {
 fn nth() {
     let fib = "[0,1] | recurse([.[1], add]) | .[0]";
     give(json!(10), &format!("nth(.; {})", fib), json!(55));
+
+    let fib = "[0,1] | recurse([.[1], add])[0]";
+    give(json!(10), &format!("nth(.; {})", fib), json!(55));
 }
 
 #[test]
