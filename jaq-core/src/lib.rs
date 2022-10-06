@@ -96,7 +96,7 @@ impl<'i> Ctx<'i> {
 }
 
 /// Function from a value to a stream of value results.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Filter(crate::filter::Filter);
 
 impl Filter {
