@@ -29,6 +29,8 @@ fn index_access() {
     give(json!([0, 1, 2]), r#".[3]?"#, json!(null));
     gives(json!("asdf"), ".[0]?", []);
 
+    give(json!(1), "[1, 2, 3][.]", json!(2));
+
     gives(
         json!({"a": 1, "b": 2}),
         r#".["b", "a"]"#,
