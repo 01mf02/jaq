@@ -228,7 +228,7 @@ impl Filter {
                     then.run((cv.0.clone(), v))
                 })
             }
-            Self::Path(f, path) => then(path.run(cv, f), |y| Box::new(y.into_iter().map(Ok))),
+            Self::Path(f, path) => path.run(cv, f),
             Self::Assign(path, f) => path.update(cv.clone(), Box::new(move |_| f.run(cv.clone()))),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
@@ -530,8 +530,6 @@ impl Filter {
     }
 }
 
-type PathOptR = Result<(path::Part<Vec<Val>>, path::Opt), Error>;
-
 impl Path<Filter> {
     fn update<'a: 'f, 'f, F>(&'a self, cv: Cv<'a>, f: F) -> ValRs<'f>
     where
@@ -543,13 +541,18 @@ impl Path<Filter> {
         })
     }
 
-    fn run<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> Result<Vec<Val>, Error> {
-        let init = init.run(cv.clone()).collect::<Result<Vec<_>, _>>()?;
-        let mut path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
-        path.try_fold(init, |acc, p_opt: PathOptR| {
-            let (p, opt) = p_opt?;
-            opt.collect(acc.into_iter().flat_map(|x| p.collect(x)))
-        })
+    fn run<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> ValRs {
+        let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
+        let path = match path.collect::<Result<Vec<_>, _>>() {
+            Ok(path) => path,
+            Err(e) => return Box::new(core::iter::once(Err(e))),
+        };
+        let outs = init.run(cv).map(move |i| {
+            path.iter().try_fold(Vec::from([i?]), |acc, (part, opt)| {
+                opt.collect(acc.into_iter().flat_map(|x| part.collect(x)))
+            })
+        });
+        Box::new(outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))))
     }
 }
 
