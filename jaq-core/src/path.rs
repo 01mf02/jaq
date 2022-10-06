@@ -13,6 +13,12 @@ pub enum Part<I> {
     Range(Option<I>, Option<I>),
 }
 
+// This might be included in the Rust standard library:
+// <https://github.com/rust-lang/rust/issues/93610>
+fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
+    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+}
+
 impl Part<Vec<Val>> {
     pub fn collect(&self, current: Val) -> ValRs {
         use core::iter::once;
@@ -30,8 +36,8 @@ impl Part<Vec<Val>> {
                 _ => Box::new(once(Err(Error::Index(current)))),
             },
             Self::Range(None, None) => match current {
-                Val::Arr(a) => Box::new((*a).clone().into_iter().map(Ok)),
-                Val::Obj(o) => Box::new((*o).clone().into_iter().map(|(_k, v)| Ok(v))),
+                Val::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
+                Val::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
                 v => Box::new(once(Err(Error::Iter(v)))),
             },
             Self::Range(from, until) => match current {
@@ -128,7 +134,10 @@ impl Part<Vec<Val>> {
             },
             Self::Range(None, None) => match v {
                 Val::Arr(a) => Ok(Val::Arr(Rc::new(
-                    a.iter().cloned().flat_map(f).collect::<Result<_, _>>()?,
+                    rc_unwrap_or_clone(a)
+                        .into_iter()
+                        .flat_map(f)
+                        .collect::<Result<_, _>>()?,
                 ))),
                 Val::Obj(o) => Ok(Val::Obj(Rc::new(
                     o.iter()
