@@ -66,3 +66,13 @@ fn inputs() {
 fn null_input() {
     golden_test("null_input", &["-nc", r#"{".": .}, {inputs: [inputs]}"#]);
 }
+
+#[test]
+fn raw_input() {
+    golden_test("raw_input", &["-R", "."]);
+}
+
+#[test]
+fn raw_input_slurp() {
+    golden_test("raw_input_slurp", &["-Rs", "."]);
+}

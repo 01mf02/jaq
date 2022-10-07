@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
-use std::io::{Read, Write};
+use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 use std::rc::Rc;
@@ -44,6 +44,13 @@ struct Cli {
     /// Write strings without escaping them with quotes
     #[arg(short, long)]
     raw_output: bool,
+
+    /// Read lines of the input as sequence of strings
+    ///
+    /// When the option `--slurp` is used additionally,
+    /// then the whole input is read into a single string.
+    #[arg(short = 'R', long)]
+    raw_input: bool,
 
     /// Print JSON compactly, omitting whitespace
     #[arg(short, long)]
@@ -134,8 +141,7 @@ fn real_main() -> Result<ExitCode, Error> {
     let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
-        let inputs = read_json(std::io::stdin().lock());
-        let inputs = slurp(cli.slurp, inputs);
+        let inputs = read_input(&cli, std::io::stdin().lock());
         run_and_print(&cli, &filter, ctx, inputs)?
     } else {
         let mut last = None;
@@ -144,8 +150,7 @@ fn real_main() -> Result<ExitCode, Error> {
             let file =
                 std::fs::File::open(file).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let file = std::io::BufReader::new(file);
-            let inputs = read_json(file);
-            let inputs = slurp(cli.slurp, inputs);
+            let inputs = read_input(&cli, file);
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -199,21 +204,28 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     }
 }
 
-fn read_json(read: impl Read) -> impl Iterator<Item = Result<Val, serde_json::Error>> {
-    let deserializer = serde_json::Deserializer::from_reader(read);
-    let iter = deserializer.into_iter::<serde_json::Value>();
-    iter.map(|r| r.map(Val::from))
-}
-
-fn slurp<'a>(
-    slurp: bool,
-    inputs: impl Iterator<Item = Result<Val, serde_json::Error>> + 'a,
-) -> impl Iterator<Item = Result<Val, serde_json::Error>> + 'a {
-    if slurp {
-        let slurped: Result<Vec<_>, _> = inputs.collect();
-        Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
+fn read_input<'a>(
+    cli: &Cli,
+    mut read: impl BufRead + 'a,
+) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
+    if cli.raw_input {
+        if cli.slurp {
+            let mut buffer = String::new();
+            read.read_to_string(&mut buffer).unwrap();
+            Box::new(std::iter::once(Ok(Val::Str(buffer.into()))))
+        } else {
+            Box::new(read.lines().map(|line| Ok(Val::Str(line.unwrap().into()))))
+        }
     } else {
-        Box::new(inputs) as Box<dyn Iterator<Item = _>>
+        let inputs = serde_json::Deserializer::from_reader(read)
+            .into_iter::<serde_json::Value>()
+            .map(|r| r.map(Val::from));
+        if cli.slurp {
+            let slurped: Result<Vec<_>, _> = inputs.collect();
+            Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
+        } else {
+            Box::new(inputs)
+        }
     }
 }
 
