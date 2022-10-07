@@ -258,7 +258,7 @@ checksum = "6c8af84674fe1f223a982c933a0ee1086ac4d4052aa0fb8060c12c6ad838e754"
 
 [[package]]
 name = "jaq"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "ariadne",
  "atty",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "ahash",
  "dyn-clone",
