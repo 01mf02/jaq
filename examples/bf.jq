@@ -3,6 +3,10 @@
 #  Input: a string containing the Brainfuck program
 # Output: a string containing its output
 #
+# Example usage:
+#
+#     jaq -sRrf examples/bf.jq examples/fib.bf
+#
 # Adapted by Michael Färber from <https://github.com/itchyny/brainfuck>
 
 def skip_loop: last(recurse(
@@ -27,6 +31,8 @@ def backward_loop: last(recurse(
 # then update the i-th position with f
 def assign(i; f):
   if i < length then .[i] |= f
+  # this yields different output in jq due to its implementation of `limit`,
+  # where `limit(0; f)` yields the first element of `f` (instead of no elements)
   else . + [limit(i - length; repeat(null)), (null | f)] end;
 
 { input: ., cursor: 0, memory: [], pointer: 0, depth: 0, output: [] } |
