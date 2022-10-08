@@ -44,7 +44,7 @@ def assign(i; f):
     elif $c == "<" then .pointer -= 1 | if .pointer < 0 then error("negative pointer") else . end
     elif $c == "+" then .pointer as $p | .memory |= assign($p; (. + 1) % 256)
     elif $c == "-" then .pointer as $p | .memory |= assign($p; (. + 255) % 256)
-    elif $c == "." then .memory[.pointer] as $m | .output += [$m]
+    elif $c == "." then .output += [.memory[.pointer]]
     elif $c == "," then error(", is not implemented")
     elif $c == "[" then .depth += 1 | if .memory[.pointer] > 0 then . else .saved_depth = .depth | skip_loop end
     elif $c == "]" then .depth -= 1 | .cursor -= 1 | .saved_depth = .depth | backward_loop

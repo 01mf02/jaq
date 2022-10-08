@@ -116,7 +116,7 @@ where
             match op {
                 AssignOp::Assign => Filter::Assign(l, r),
                 AssignOp::Update => Filter::Update(l, r),
-                AssignOp::UpdateWith(op) => Filter::update_math(l, op, r),
+                AssignOp::UpdateWith(op) => Filter::UpdateMath(l, op, r),
             }
         }
         Expr::If(if_thens, else_) => Filter::IfThenElse(

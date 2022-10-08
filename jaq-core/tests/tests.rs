@@ -6,6 +6,14 @@ use common::{give, gives};
 use serde_json::json;
 
 #[test]
+fn update_assign() {
+    let ab = |v| json!({"a": v, "b": 2});
+    gives(ab(1), ".a  = (.a, .b)", [ab(1), ab(2)]);
+    gives(ab(1), ".a += (.a, .b)", [ab(2), ab(3)]);
+    gives(ab(1), ".a |= (.+1, .)", [ab(2)]);
+}
+
+#[test]
 fn cartesian() {
     give(
         json!(0),

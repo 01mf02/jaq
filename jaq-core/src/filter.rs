@@ -47,8 +47,10 @@ pub enum Filter {
     Foreach(Box<Self>, Box<Self>, Box<Self>, Box<Self>),
 
     Path(Box<Self>, Path<Self>),
-    Assign(Box<Self>, Box<Self>),
+
     Update(Box<Self>, Box<Self>),
+    UpdateMath(Box<Self>, MathOp, Box<Self>),
+    Assign(Box<Self>, Box<Self>),
 
     Logic(Box<Self>, bool, Box<Self>),
     Math(Box<Self>, MathOp, Box<Self>),
@@ -193,25 +195,7 @@ impl Filter {
                     .flat_map(move |y| then(y, |y| r.run((cv.0.clone(), y)))),
             ),
             // `l as $x | r`
-            Self::Pipe(l, true, r) => {
-                let mut l = l.run(cv.clone());
-
-                // if we expect at most one element from the left side,
-                // we do not need to clone the input value to run the right side;
-                // this can have a significant impact on performance!
-                if l.size_hint().1 == Some(1) {
-                    if let Some(y) = l.next() {
-                        // the Rust documentation states that
-                        // "a buggy iterator may yield [..] more than the upper bound of elements",
-                        // but so far, it seems that all iterators here are not buggy :)
-                        assert!(l.next().is_none());
-                        return then(y, |y| r.run((cv.0.cons_var(y), cv.1)));
-                    }
-                };
-                Box::new(l.flat_map(move |y| {
-                    then(y, |y| r.run((cv.0.clone().cons_var(y), cv.1.clone())))
-                }))
-            }
+            Self::Pipe(l, true, r) => l.pipe(cv, |cv, y| r.run((cv.0.cons_var(y), cv.1))),
 
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
             Self::Alt(l, r) => {
@@ -229,11 +213,16 @@ impl Filter {
                 })
             }
             Self::Path(f, path) => path.run(cv, f),
-            Self::Assign(path, f) => path.update(cv.clone(), Box::new(move |_| f.run(cv.clone()))),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| f.run((cv.0.clone(), v))),
             ),
+            Self::UpdateMath(path, op, f) => f.pipe(cv, move |cv, y| {
+                path.update(cv, Box::new(move |x| Box::new(once(op.run(x, y.clone())))))
+            }),
+            Self::Assign(path, f) => f.pipe(cv, |cv, y| {
+                path.update(cv, Box::new(move |_| Box::new(once(Ok(y.clone())))))
+            }),
             Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| {
                 then(l, |l| {
                     if l.as_bool() == *stop {
@@ -346,7 +335,7 @@ impl Filter {
             Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
             Self::Array(_) | Self::Object(_) => err,
             Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
-            Self::Assign(..) | Self::Update(..) => err,
+            Self::Update(..) | Self::UpdateMath(..) | Self::Assign(..) => err,
 
             Self::Length | Self::Keys => err,
             Self::Floor | Self::Round | Self::Ceil => err,
@@ -405,6 +394,24 @@ impl Filter {
         }
     }
 
+    fn pipe<'a>(&'a self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
+        let mut l = self.run(cv.clone());
+
+        // if we expect at most one element from the left side,
+        // we do not need to clone the input value to run the right side;
+        // this can have a significant impact on performance!
+        if l.size_hint().1 == Some(1) {
+            if let Some(y) = l.next() {
+                // the Rust documentation states that
+                // "a buggy iterator may yield [..] more than the upper bound of elements",
+                // but so far, it seems that all iterators here are not buggy :)
+                assert!(l.next().is_none());
+                return then(y, |y| f(cv, y));
+            }
+        };
+        Box::new(l.flat_map(move |y| then(y, |y| f(cv.clone(), y))))
+    }
+
     fn cartesian<'a>(&'a self, r: &'a Self, cv: Cv<'a>) -> impl Iterator<Item = (ValR, ValR)> + 'a {
         let l = self.run(cv.clone());
         let r: Vec<_> = r.run(cv).collect();
@@ -459,11 +466,6 @@ impl Filter {
         }
     }
 
-    pub(crate) fn update_math(path: Box<Self>, op: MathOp, f: Box<Self>) -> Self {
-        let math = Self::Math(Box::new(Self::Id), op, f);
-        Self::Update(path, Box::new(math))
-    }
-
     /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
     pub(crate) fn recurse() -> Self {
         // `[]?`
@@ -501,8 +503,9 @@ impl Filter {
                 Self::Foreach(sub(xs), sub(init), sub(f), sub(proj))
             }
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
-            Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),
             Self::Update(path, f) => Self::Update(sub(path), sub(f)),
+            Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),
+            Self::UpdateMath(path, op, f) => Self::UpdateMath(sub(path), op, sub(f)),
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
