@@ -1,6 +1,6 @@
 use crate::filter::Filter;
 use crate::path::{self, Path};
-use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, Fold, KeyVal};
 use jaq_parse::{Error, Spanned};
 
@@ -42,7 +42,7 @@ where
                 Filter::Int(0)
             }
         }
-        Expr::Str(s) => Filter::Str(Rc::new(s)),
+        Expr::Str(s) => Filter::Str(s),
         Expr::Var(v) => match vars.iter().rev().position(|i| *i == v) {
             None => {
                 errs.push(Error::custom(body.1, "undefined variable"));
@@ -55,7 +55,7 @@ where
             let kvs = o.into_iter().map(|kv| match kv {
                 KeyVal::Filter(k, v) => (*get(k, errs), *get(v, errs)),
                 KeyVal::Str(k, v) => {
-                    let k = Filter::Str(Rc::new(k));
+                    let k = Filter::Str(k);
                     let v = match v {
                         None => Filter::Path(
                             Box::new(Filter::Id),

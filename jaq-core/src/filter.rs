@@ -13,7 +13,7 @@ pub enum Filter {
     Id,
     Int(isize),
     Float(f64),
-    Str(Rc<String>),
+    Str(String),
     Array(Option<Box<Self>>),
     Object(Vec<(Self, Self)>),
 
@@ -167,7 +167,7 @@ impl Filter {
             Self::Id => Box::new(once(Ok(cv.1))),
             Self::Int(n) => Box::new(once(Ok(Val::Int(*n)))),
             Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
-            Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::clone(s))))),
+            Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::new(s.clone()))))),
             Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
             Self::Array(Some(f)) => Box::new(once(
                 f.run(cv)
