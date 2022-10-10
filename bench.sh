@@ -31,6 +31,11 @@ echo -n '|' $($TIME bash -c "for n in {1..512}; do $JAQ -n 'empty'; done" 2>&1)
 echo -n '|' $($TIME bash -c "for n in {1..512}; do $JQ  -n 'empty'; done" 2>&1)
 echo    '|'
 
+echo -n '|' '`bf-fib`'
+echo -n '|' $($TIME $JAQ -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null)
+echo -n '|' $($TIME $JQ  -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null)
+echo    '|'
+
 for val in "${BENCHES[@]}"; do
 	echo -n	'|' \`$val\`
 	echo -n '|' $($TIME $JAQ -n "$val | length" 2>&1 > /dev/null)
