@@ -289,6 +289,8 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
+            // if `inner` is true, output values that yield non-empty output;
+            // if `outer` is true, output values that yield     empty output
             Self::Recurse(f, inner, outer) => {
                 let mut vals = Vec::from([Ok(cv.1)]);
                 Box::new(core::iter::from_fn(move || loop {
