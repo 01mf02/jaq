@@ -37,6 +37,7 @@
 //! assert_eq!(out.next(), None);;
 //! ~~~
 #![no_std]
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 extern crate alloc;
