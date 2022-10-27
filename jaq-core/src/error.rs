@@ -5,7 +5,7 @@ use core::fmt;
 /// Errors that can occur during filter execution.
 ///
 /// Each variant shows an example of how it can be produced.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
     /// `inputs` (when given invalid JSON data)

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MathOp {
     /// Addition
     Add,
@@ -53,7 +53,7 @@ impl fmt::Display for MathOp {
 
 /// An operation that orders two values, such as `<`, `<=`, `>`, `>=`, `==`, `!=`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OrdOp {
     /// Less-than (<).
     Lt,
