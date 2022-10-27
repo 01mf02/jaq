@@ -289,12 +289,28 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
-            Self::Recurse(f, inner, outer) => Box::new(Recurse::new(
-                move |v| f.run((cv.0.clone(), v)),
-                cv.1,
-                *inner,
-                *outer,
-            )),
+            Self::Recurse(f, inner, outer) => {
+                let mut vals = Vec::from([Ok(cv.1)]);
+                Box::new(core::iter::from_fn(move || loop {
+                    let v = match vals.pop()? {
+                        Ok(v) => v,
+                        e => return Some(e),
+                    };
+
+                    let mut out: Vec<_> = f.run((cv.0.clone(), v.clone())).collect();
+                    let no_output = out.is_empty();
+
+                    // without reversal, the *last* output value would arrive at the end of `vals`,
+                    // where `pop()` would retrieve it *first*
+                    // but we want `pop()` to get the *first* output value *first*
+                    out.reverse();
+                    vals.append(&mut out);
+
+                    if (*outer && no_output) || (*inner && !no_output) {
+                        return Some(Ok(v));
+                    }
+                }))
+            }
             Self::Reduce(xs, init, f) => {
                 let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
                 for x in xs.run(cv.clone()) {
@@ -570,56 +586,5 @@ impl path::Part<Filter> {
                 Ok(Range(from.transpose()?, until.transpose()?))
             }
         }
-    }
-}
-
-struct Recurse<F> {
-    filter: F,
-    vals: Vec<ValR>,
-    /// output values that yield non-empty output
-    inner: bool,
-    /// output values that yield empty output
-    outer: bool,
-}
-
-impl<F> Recurse<F> {
-    fn new(filter: F, val: Val, inner: bool, outer: bool) -> Self {
-        Self {
-            filter,
-            vals: Vec::from([Ok(val)]),
-            inner,
-            outer,
-        }
-    }
-}
-
-impl<'a, F: Fn(Val) -> ValRs<'a> + Clone> Iterator for Recurse<F> {
-    type Item = ValR;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let v = match self.vals.pop()? {
-                Ok(v) => v,
-                e => return Some(e),
-            };
-
-            let mut out: Vec<_> = self.filter.clone()(v.clone()).collect();
-            let no_output = out.is_empty();
-
-            // without reversal, the *last* output value would arrive at the end of `vals`,
-            // where `pop()` would retrieve it *first*
-            // but we want `pop()` to get the *first* output value *first*
-            out.reverse();
-            self.vals.append(&mut out);
-
-            if (self.outer && no_output) || (self.inner && !no_output) {
-                return Some(Ok(v));
-            }
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let min = if self.outer { self.vals.len() } else { 0 };
-        (min, self.vals.is_empty().then(|| 0))
     }
 }
