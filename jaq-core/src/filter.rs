@@ -289,8 +289,28 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
+            Self::Recurse(f, true, true) => {
+                let mut fns = Vec::from([Box::new(once(Ok(cv.1))) as ValRs]);
+                Box::new(core::iter::from_fn(move || loop {
+                    let mut fn1 = fns.pop()?;
+                    let v = match fn1.next() {
+                        None => continue,
+                        Some(Ok(v)) => v,
+                        e => return e,
+                    };
+                    if fn1.size_hint().1 == Some(0) {
+                        assert!(fn1.next().is_none())
+                    } else {
+                        fns.push(fn1)
+                    };
+
+                    fns.push(f.run((cv.0.clone(), v.clone())));
+                    return Some(Ok(v));
+                }))
+            }
             // if `inner` is true, output values that yield non-empty output;
             // if `outer` is true, output values that yield     empty output
+            // TODO: remove this
             Self::Recurse(f, inner, outer) => {
                 let mut vals = Vec::from([Ok(cv.1)]);
                 Box::new(core::iter::from_fn(move || loop {
