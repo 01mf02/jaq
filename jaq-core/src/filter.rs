@@ -289,79 +289,45 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
-            Self::Recurse(f, true, true) => {
-                let mut fns = Vec::from([Box::new(once(Ok(cv.1))) as ValRs]);
-                Box::new(core::iter::from_fn(move || loop {
-                    let mut fn1 = fns.pop()?;
-                    let v = match fn1.next() {
-                        None => continue,
-                        Some(Ok(v)) => v,
-                        e => return e,
-                    };
-                    if fn1.size_hint().1 == Some(0) {
-                        assert!(fn1.next().is_none())
-                    } else {
-                        fns.push(fn1)
-                    };
-
-                    fns.push(f.run((cv.0.clone(), v.clone())));
-                    return Some(Ok(v));
-                }))
-            }
-            // outer recurse (return only inputs that yield no outputs)
-            Self::Recurse(f, false, true) => {
-                let mut stack = Vec::from([Box::new(once(Ok(cv.1))) as ValRs]);
-                Box::new(core::iter::from_fn(move || {
-                    let mut i = loop {
-                        let mut iter = stack.pop()?;
-                        match iter.next() {
-                            None => continue,
-                            Some(Ok(o)) => {
-                                stack.push(iter);
-                                break o;
-                            }
-                            e => return e,
-                        }
-                    };
-                    loop {
-                        let mut iter = f.run((cv.0.clone(), i.clone()));
-                        match iter.next() {
-                            None => return Some(Ok(i)),
-                            Some(Ok(o)) => {
-                                i = o;
-                                if iter.size_hint().1 == Some(0) {
-                                    assert!(iter.next().is_none())
-                                } else {
-                                    stack.push(iter)
-                                };
-                            }
-                            e => return e,
-                        }
-                    }
-                }))
-            }
             // if `inner` is true, output values that yield non-empty output;
             // if `outer` is true, output values that yield     empty output
-            // TODO: remove this
             Self::Recurse(f, inner, outer) => {
-                let mut vals = Vec::from([Ok(cv.1)]);
+                let mut stack = Vec::from([Box::new(once(Ok(cv.1))) as ValRs]);
                 Box::new(core::iter::from_fn(move || loop {
-                    let v = match vals.pop()? {
-                        Ok(v) => v,
-                        e => return Some(e),
+                    let v = loop {
+                        let mut fn1 = stack.pop()?;
+                        let v = match fn1.next() {
+                            None => continue,
+                            Some(Ok(v)) => v,
+                            e => return e,
+                        };
+                        if fn1.size_hint().1 == Some(0) {
+                            assert!(fn1.next().is_none())
+                        } else {
+                            stack.push(fn1)
+                        };
+                        break v;
                     };
-
-                    let mut out: Vec<_> = f.run((cv.0.clone(), v.clone())).collect();
-                    let no_output = out.is_empty();
-
-                    // without reversal, the *last* output value would arrive at the end of `vals`,
-                    // where `pop()` would retrieve it *first*
-                    // but we want `pop()` to get the *first* output value *first*
-                    out.reverse();
-                    vals.append(&mut out);
-
-                    if (*outer && no_output) || (*inner && !no_output) {
-                        return Some(Ok(v));
+                    let mut iter = f.run((cv.0.clone(), v.clone()));
+                    match (*inner, *outer) {
+                        (true, true) => {
+                            stack.push(iter);
+                            return Some(Ok(v));
+                        }
+                        (true, false) => {
+                            if let Some(o) = iter.next() {
+                                stack.push(Box::new(once(o).chain(iter)));
+                                return Some(Ok(v));
+                            }
+                        }
+                        (false, true) => {
+                            if let Some(o) = iter.next() {
+                                stack.push(Box::new(once(o).chain(iter)));
+                            } else {
+                                return Some(Ok(v));
+                            }
+                        }
+                        _ => (),
                     }
                 }))
             }
