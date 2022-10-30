@@ -292,42 +292,41 @@ impl Filter {
             // if `inner` is true, output values that yield non-empty output;
             // if `outer` is true, output values that yield     empty output
             Self::Recurse(f, inner, outer) => {
-                let mut stack = Vec::from([Box::new(once(Ok(cv.1))) as ValRs]);
+                let mut stack = Vec::from([(Box::new(once(Ok(cv.1))) as ValRs).peekable()]);
                 Box::new(core::iter::from_fn(move || loop {
                     let v = loop {
-                        let mut fn1 = stack.pop()?;
-                        let v = match fn1.next() {
+                        let mut iter = stack.pop()?;
+                        match iter.next() {
                             None => continue,
-                            Some(Ok(v)) => v,
+                            Some(Ok(v)) => {
+                                if iter.peek().is_some() {
+                                    stack.push(iter)
+                                }
+                                break v;
+                            }
                             e => return e,
-                        };
-                        if fn1.size_hint().1 == Some(0) {
-                            assert!(fn1.next().is_none())
-                        } else {
-                            stack.push(fn1)
-                        };
-                        break v;
+                        }
                     };
-                    let mut iter = f.run((cv.0.clone(), v.clone()));
+                    let mut iter = f.run((cv.0.clone(), v.clone())).peekable();
                     match (*inner, *outer) {
                         (true, true) => {
                             stack.push(iter);
                             return Some(Ok(v));
                         }
                         (true, false) => {
-                            if let Some(o) = iter.next() {
-                                stack.push(Box::new(once(o).chain(iter)));
+                            if iter.peek().is_some() {
+                                stack.push(iter);
                                 return Some(Ok(v));
                             }
                         }
                         (false, true) => {
-                            if let Some(o) = iter.next() {
-                                stack.push(Box::new(once(o).chain(iter)));
+                            if iter.peek().is_some() {
+                                stack.push(iter);
                             } else {
                                 return Some(Ok(v));
                             }
                         }
-                        _ => (),
+                        (false, false) => stack.push(iter),
                     }
                 }))
             }
