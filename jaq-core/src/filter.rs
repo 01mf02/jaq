@@ -308,6 +308,38 @@ impl Filter {
                     return Some(Ok(v));
                 }))
             }
+            // outer recurse (return only inputs that yield no outputs)
+            Self::Recurse(f, false, true) => {
+                let mut stack = Vec::from([Box::new(once(Ok(cv.1))) as ValRs]);
+                Box::new(core::iter::from_fn(move || {
+                    let mut i = loop {
+                        let mut iter = stack.pop()?;
+                        match iter.next() {
+                            None => continue,
+                            Some(Ok(o)) => {
+                                stack.push(iter);
+                                break o;
+                            }
+                            e => return e,
+                        }
+                    };
+                    loop {
+                        let mut iter = f.run((cv.0.clone(), i.clone()));
+                        match iter.next() {
+                            None => return Some(Ok(i)),
+                            Some(Ok(o)) => {
+                                i = o;
+                                if iter.size_hint().1 == Some(0) {
+                                    assert!(iter.next().is_none())
+                                } else {
+                                    stack.push(iter)
+                                };
+                            }
+                            e => return e,
+                        }
+                    }
+                }))
+            }
             // if `inner` is true, output values that yield non-empty output;
             // if `outer` is true, output values that yield     empty output
             // TODO: remove this
