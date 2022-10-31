@@ -48,6 +48,7 @@ mod error;
 mod filter;
 mod path;
 mod rc_iter;
+mod rc_lazy_list;
 mod rc_list;
 mod unparse;
 mod val;

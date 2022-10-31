@@ -331,15 +331,32 @@ impl Filter {
                 }))
             }
             Self::Reduce(xs, init, f) => {
-                let mut acc: Vec<ValR> = init.run(cv.clone()).collect();
-                for x in xs.run(cv.clone()) {
-                    let (ctx, ys) = f.fold_step(x, cv.0.clone(), acc);
-                    acc = ys;
-                    if ctx.is_none() {
-                        break;
+                use crate::rc_lazy_list::List;
+                let xs = List::from_iter(xs.run(cv.clone()));
+                let init = init.run(cv.clone());
+                let mut stack = Vec::from([(xs, init.peekable())]);
+                Box::new(core::iter::from_fn(move || loop {
+                    let (mut xs, v) = loop {
+                        let (xs, mut v) = stack.pop()?;
+                        match v.next() {
+                            None => continue,
+                            Some(Ok(i)) => {
+                                if v.peek().is_some() {
+                                    stack.push((xs.clone(), v));
+                                }
+                                break (xs, i);
+                            }
+                            e @ Some(Err(_)) => return e,
+                        }
+                    };
+                    match xs.next() {
+                        Some(Ok(x)) => {
+                            stack.push((xs, f.run((cv.0.clone().cons_var(x), v)).peekable()))
+                        }
+                        Some(Err(e)) => return Some(Err(e)),
+                        None => return Some(Ok(v)),
                     }
-                }
-                Box::new(acc.into_iter())
+                }))
             }
             Self::Foreach(xs, init, f, proj) => {
                 let init: Vec<ValR> = init.run(cv.clone()).collect();
