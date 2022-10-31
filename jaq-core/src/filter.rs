@@ -98,9 +98,9 @@ pub enum Filter {
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
-trait Update<'a>: Fn(Val) -> Box<dyn Iterator<Item = ValR> + 'a> + DynClone {}
+trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
 
-impl<'a, T: Fn(Val) -> Box<dyn Iterator<Item = ValR> + 'a> + Clone> Update<'a> for T {}
+impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
 
