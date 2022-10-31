@@ -353,7 +353,7 @@ impl Filter {
                         Some(Ok(x)) => {
                             stack.push((xs, f.run((cv.0.clone().cons_var(x), v)).peekable()))
                         }
-                        Some(Err(e)) => return Some(Err(e)),
+                        e @ Some(Err(_)) => return e,
                         None => return Some(Ok(v)),
                     }
                 }))
