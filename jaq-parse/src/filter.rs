@@ -120,10 +120,11 @@ pub enum Filter {
     Path(Box<Spanned<Self>>, Path<Self>),
     /// If-then-else
     If(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
-    /// Reduction, e.g. `reduce .[] as $x (0; .+$x)`
-    Reduce(Fold<Box<Spanned<Self>>>),
-    /// Reduction returning intermediate results
-    Foreach(Fold<Box<Spanned<Self>>>, Option<Box<Spanned<Self>>>),
+    /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
+    ///
+    /// The first field indicates whether to yield intermediate results
+    /// (`false` for `reduce` and `true` for `foreach`).
+    Fold(bool, Fold<Box<Spanned<Self>>>),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
     /// Error suppression, e.g. `keys?`
@@ -203,37 +204,23 @@ where
         .map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span))
 }
 
-fn reduce<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+fn fold<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
     let arg = || filter.clone().map(Box::new);
     let args = arg().then_ignore(just(Token::Ctrl(';'))).then(arg());
-    just(Token::Reduce)
-        .ignore_then(arg())
-        .then_ignore(just(Token::As))
-        .then(variable())
-        .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
-        .map(|((xs, x), (init, f))| Fold { xs, x, init, f })
-        .map_with_span(|reduce, span| (Filter::Reduce(reduce), span))
-}
-
-fn foreach<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
-where
-    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
-{
-    let arg = || filter.clone().map(Box::new);
-    let args = arg()
-        .then_ignore(just(Token::Ctrl(';')))
+    let inner = select! {
+        Token::Reduce => false,
+        Token::Foreach => true,
+    };
+    inner
         .then(arg())
-        .then(just(Token::Ctrl(';')).ignore_then(arg()).or_not());
-    just(Token::Foreach)
-        .ignore_then(arg())
         .then_ignore(just(Token::As))
         .then(variable())
         .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
-        .map(|((xs, x), ((init, f), proj))| (Fold { xs, x, init, f }, proj))
-        .map_with_span(|(reduce, proj), span| (Filter::Foreach(reduce, proj), span))
+        .map(|(((inner, xs), x), (init, f))| (inner, Fold { xs, x, init, f }))
+        .map_with_span(|(inner, fold), span| (Filter::Fold(inner, fold), span))
 }
 
 // 'Atoms' are filters that contain no ambiguity
@@ -392,8 +379,7 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     // named operators, such as `reduce` or `if-then-else`
     let named = choice((
         path.map_with_span(|(f, path), span| Filter::path(f, path, span)),
-        reduce(with_comma.clone()),
-        foreach(with_comma.clone()),
+        fold(with_comma.clone()),
         if_then_else(with_comma.clone()),
     ))
     .boxed();

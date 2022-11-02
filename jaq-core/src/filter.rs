@@ -23,28 +23,28 @@ pub enum Filter {
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     IfThenElse(Vec<(Self, Self)>, Box<Self>),
+    /// `reduce` and `foreach`
+    ///
+    /// The first field indicates whether to yield intermediate results
+    /// (`false` for `reduce` and `true` for `foreach`).
+    ///
     /// `reduce xs as $x (init; f)` realises the following filter, where
     /// `xs` is assumed to evaluate to the value results `x0`, `x1`, ..., `xn`:
     /// ~~~ text
-    /// init |
-    /// x0 as $x | f |
-    /// x1 as $x | f |
-    /// ...
-    /// xn as $x | f
+    /// init
+    /// | x0 as $x | f
+    /// | ...
+    /// | xn as $x | f
     /// ~~~
-    Reduce(Box<Self>, Box<Self>, Box<Self>),
-    /// `foreach xs as $x (init; f; proj)` realises the following filter, where
-    /// `xs` is assumed to evaluate to the value results `x0`, `x1`, ..., `xn`:
     ///
+    /// `foreach xs as $x (init; f)` realises the following filter:
     /// ~~~ text
-    /// init |
-    /// x0 as $x | f | (proj,
-    /// x1 as $x | f | (proj,
-    /// ...
-    /// xn as $x | f | (proj,
-    /// empty)...))
+    /// init
+    /// | ., (x0 as $x | f
+    /// | ...
+    /// | ., (xn as $x | f)...)
     /// ~~~
-    Foreach(Box<Self>, Box<Self>, Box<Self>, Box<Self>),
+    Fold(bool, Box<Self>, Box<Self>, Box<Self>),
 
     Path(Box<Self>, Path<Self>),
 
@@ -326,11 +326,13 @@ impl Filter {
                                 return Some(Ok(v));
                             }
                         }
+                        // pathological case, included only for completeness
                         (false, false) => stack.push(iter),
                     }
                 }))
             }
-            Self::Reduce(xs, init, f) => {
+            // if `inner` is true, output intermediate results
+            Self::Fold(inner, xs, init, f) => {
                 use crate::rc_lazy_list::List;
                 let xs = List::from_iter(xs.run(cv.clone()));
                 let init = init.run(cv.clone());
@@ -349,29 +351,25 @@ impl Filter {
                             e @ Some(Err(_)) => return e,
                         }
                     };
+                    if *inner {
+                        return match xs.next() {
+                            Some(Ok(x)) => {
+                                let iter = f.run((cv.0.clone().cons_var(x), v.clone()));
+                                stack.push((xs, iter.peekable()));
+                                Some(Ok(v))
+                            }
+                            e @ Some(Err(_)) => e,
+                            None => Some(Ok(v)),
+                        };
+                    }
                     match xs.next() {
                         Some(Ok(x)) => {
-                            stack.push((xs, f.run((cv.0.clone().cons_var(x), v)).peekable()))
+                            let iter = f.run((cv.0.clone().cons_var(x), v));
+                            stack.push((xs, iter.peekable()))
                         }
                         e @ Some(Err(_)) => return e,
                         None => return Some(Ok(v)),
                     }
-                }))
-            }
-            Self::Foreach(xs, init, f, proj) => {
-                let init: Vec<ValR> = init.run(cv.clone()).collect();
-                let ys = xs.run(cv.clone()).scan((false, init), move |state, x| {
-                    let (stop, acc) = core::mem::take(state);
-                    if stop {
-                        return None;
-                    }
-                    let (ctx, ys) = f.fold_step(x, cv.0.clone(), acc);
-                    *state = (ctx.is_none(), ys.clone());
-                    Some((ys, ctx.unwrap_or_else(|| cv.0.clone())))
-                });
-                Box::new(ys.flat_map(move |(ys, ctx)| {
-                    ys.into_iter()
-                        .flat_map(move |y| then(y, |y| proj.run((ctx.clone(), y))))
                 }))
             }
 
@@ -402,7 +400,7 @@ impl Filter {
             // these are up for grabs to implement :)
             Self::Try(_) | Self::Alt(..) => todo!(),
             Self::First(_) | Self::Last(_) | Self::Limit(..) => todo!(),
-            Self::Reduce(..) | Self::Foreach(..) => todo!(),
+            Self::Fold(..) => todo!(),
 
             Self::Error => Box::new(core::iter::once(Err(Error::Val(cv.1)))),
             Self::Debug => f(cv.1.debug()),
@@ -497,27 +495,6 @@ impl Filter {
         }
     }
 
-    fn fold_step<'a>(&'a self, x: ValR, ctx: Ctx<'a>, acc: Vec<ValR>) -> (Option<Ctx>, Vec<ValR>) {
-        if let Ok(x) = x {
-            let ctx = ctx.cons_var(x);
-            let ys = acc
-                .into_iter()
-                .flat_map(|s| then(s, |s| Box::new(self.run((ctx.clone(), s)))));
-            let ys: Vec<ValR> = ys.collect();
-            // if all outputs of one iteration are errors,
-            // then the final output will never change anymore,
-            // so we can already stop here
-            (ys.iter().any(|y| y.is_ok()).then_some(ctx), ys)
-        } else {
-            // if there is a single x that is an error,
-            // *all* outputs of foreach will be errors too,
-            // so we can abort immediately here,
-            // replacing all previous non-errors by the error x
-            let ys = acc.into_iter().map(|s| s.and_then(|_| x.clone())).collect();
-            (None, ys)
-        }
-    }
-
     /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
     pub(crate) fn recurse() -> Self {
         // `[]?`
@@ -550,10 +527,7 @@ impl Filter {
                     .collect(),
                 sub(else_),
             ),
-            Self::Reduce(xs, init, f) => Self::Reduce(sub(xs), sub(init), sub(f)),
-            Self::Foreach(xs, init, f, proj) => {
-                Self::Foreach(sub(xs), sub(init), sub(f), sub(proj))
-            }
+            Self::Fold(inner, xs, init, f) => Self::Fold(inner, sub(xs), sub(init), sub(f)),
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
             Self::Update(path, f) => Self::Update(sub(path), sub(f)),
             Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),

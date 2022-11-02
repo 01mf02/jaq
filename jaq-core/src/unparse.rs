@@ -91,19 +91,11 @@ where
             let r = Box::new(unparse(fns, args, vars, *r, errs));
             Filter::Pipe(l, true, r)
         }
-        Expr::Reduce(Fold { xs, x, init, f }) => {
+        Expr::Fold(inner, Fold { xs, x, init, f }) => {
             let (xs, init) = (get(*xs, errs), get(*init, errs));
             vars.push(x);
             let f = Box::new(unparse(fns, args, vars, *f, errs));
-            Filter::Reduce(xs, init, f)
-        }
-        Expr::Foreach(Fold { xs, x, init, f }, proj) => {
-            let (xs, init) = (get(*xs, errs), get(*init, errs));
-            vars.push(x);
-            let f = Box::new(unparse(fns, args, vars.clone(), *f, errs));
-            let proj = proj.map(|proj| unparse(fns, args, vars, *proj, errs));
-            let proj = Box::new(proj.unwrap_or(Filter::Id));
-            Filter::Foreach(xs, init, f, proj)
+            Filter::Fold(inner, xs, init, f)
         }
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),
         Expr::Binary(l, BinaryOp::Alt, r) => Filter::Alt(get(*l, errs), get(*r, errs)),
