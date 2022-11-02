@@ -117,7 +117,7 @@ Repeatedly apply a filter to itself and output the intermediate results:
 Lazily fold over inputs and output intermediate results:
 
     $ seq 1000 | jaq -n 'foreach inputs as $x (0; . + $x)'
-    1 3 6 10 15 [...]
+    0 1 3 6 10 15 [...]
 
 
 
@@ -394,6 +394,69 @@ That is, a filter such as `recurse` cannot be defined in jaq:
 
 Note that while `recurse` cannot be defined manually in jaq,
 jaq provides `recurse` as core filter.
+
+
+## Folding
+
+jq and jaq provide filters
+`reduce xs as $x (init; f)` and
+`foreach xs as $x (init; f)`.
+
+In jaq, the output of these filters is defined very simply:
+Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
+`reduce xs as $x (init; f)` evaluates to
+
+~~~
+init
+| x0 as $x | f
+| ...
+| xn as $x | f
+~~~
+
+and `foreach xs as $x (init; f)` evaluates to
+
+~~~ text
+init
+| ., (x0 as $x | f
+| ...
+| ., (xn as $x | f
+)...)
+~~~
+
+This interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
+
+* It deals very naturally with filters that yield multiple outputs.
+* It makes the implementation of `reduce` and `foreach`
+  special cases of the same code, reducing the potential for bugs.
+* It enables stronger properties about the relationship between `reduce` and `foreach`.
+  In particular,
+  the values yielded by `reduce ...` are a subset of
+  the values yielded by `foreach ...` (where `...` refers to `xs as $x (init; f)`).
+  Furthermore,
+  `first(reduce ...)` equals `first(foreach ...)`, and
+  `last(reduce ...)` equals `last(foreach ...)`.
+
+However, this interpretation comes at the cost of compatibility:
+Most notably, the interpretation of `foreach` in jaq
+differs from jq by yielding also the output of `init`.
+For example, `foreach (1, 2, 3) as $x (0; .+$x)` yields
+`   1, 3, 6` in jq and
+`0, 1, 3, 6` in jaq.
+Furthermore, jq provides the filter
+`foreach xs as $x (init; f; proj)` and interprets
+`foreach xs as $x (init; f)` as
+`foreach xs as $x (init; f; .)`, whereas
+jaq provides only
+`foreach xs as $x (init; f)`.
+
+If you need the same behaviour in both jq and jaq,
+including skipping the output of `init`,
+you can replace `foreach xs as $x (init; f; proj)` by:
+
+    (foreach xs as $x ({y: init}; {x: $x, y: (.y | f)}) | select(has("x")) | .x as $x | .y | proj)
+
+Note that it is much easier to simulate jq's behaviour in jaq than the other way.
+This suggests that jaq's behaviour is more general than that of jq.
 
 
 ## Miscellaneous
