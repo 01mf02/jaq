@@ -28,8 +28,10 @@ pub enum Filter {
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
     ///
-    /// `reduce xs as $x (init; f)` realises the following filter, where
-    /// `xs` is assumed to evaluate to the value results `x0`, `x1`, ..., `xn`:
+
+    ///  Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
+    /// `reduce xs as $x (init; f)` evaluates to
+    ///
     /// ~~~ text
     /// init
     /// | x0 as $x | f
@@ -37,7 +39,8 @@ pub enum Filter {
     /// | xn as $x | f
     /// ~~~
     ///
-    /// `foreach xs as $x (init; f)` realises the following filter:
+    /// and `foreach xs as $x (init; f)` evaluates to
+    ///
     /// ~~~ text
     /// init
     /// | ., (x0 as $x | f
