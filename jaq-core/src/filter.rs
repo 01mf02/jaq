@@ -28,7 +28,6 @@ pub enum Filter {
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
     ///
-
     ///  Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
     /// `reduce xs as $x (init; f)` evaluates to
     ///
@@ -341,37 +340,31 @@ impl Filter {
                 let init = init.run(cv.clone());
                 let mut stack = Vec::from([(xs, init.peekable())]);
                 Box::new(core::iter::from_fn(move || loop {
-                    let (mut xs, v) = loop {
-                        let (xs, mut v) = stack.pop()?;
-                        match v.next() {
-                            None => continue,
-                            Some(Ok(i)) => {
-                                if v.peek().is_some() {
-                                    stack.push((xs.clone(), v));
-                                }
-                                break (xs, i);
-                            }
-                            e @ Some(Err(_)) => return e,
-                        }
+                    let (mut xs, mut vs) = stack.pop()?;
+                    let v = match vs.next() {
+                        Some(Ok(v)) => v,
+                        e @ Some(Err(_)) => return e,
+                        None => continue,
                     };
-                    if *inner {
-                        return match xs.next() {
-                            Some(Ok(x)) => {
-                                let iter = f.run((cv.0.clone().cons_var(x), v.clone()));
-                                stack.push((xs, iter.peekable()));
-                                Some(Ok(v))
-                            }
-                            e @ Some(Err(_)) => e,
-                            None => Some(Ok(v)),
-                        };
+
+                    // this `if` avoids growing the stack unnecessarily
+                    if vs.peek().is_some() {
+                        stack.push((xs.clone(), vs));
                     }
-                    match xs.next() {
-                        Some(Ok(x)) => {
-                            let iter = f.run((cv.0.clone().cons_var(x), v));
-                            stack.push((xs, iter.peekable()))
-                        }
+
+                    let x = match xs.next() {
+                        Some(Ok(x)) => x,
                         e @ Some(Err(_)) => return e,
                         None => return Some(Ok(v)),
+                    };
+
+                    if *inner {
+                        // `foreach`
+                        stack.push((xs, f.run((cv.0.clone().cons_var(x), v.clone())).peekable()));
+                        return Some(Ok(v));
+                    } else {
+                        // `reduce`
+                        stack.push((xs, f.run((cv.0.clone().cons_var(x), v)).peekable()))
                     }
                 }))
             }
