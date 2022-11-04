@@ -115,7 +115,7 @@ fn then<'a, T, U: 'a, E: 'a>(
 }
 
 // if `inner` is true, output intermediate results
-fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, f: F) -> ValRs<'a>
+fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, f: F) -> ValRs
 where
     F: Fn(Val, Val) -> ValRs<'a> + 'a,
 {
@@ -150,6 +150,10 @@ where
             stack.push((xs, f(x, v).peekable()))
         }
     }))
+}
+
+fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
+    fold(false, xs, Box::new(core::iter::once(Ok(init))), f)
 }
 
 type Cv<'c> = (Ctx<'c>, Val);
@@ -420,23 +424,16 @@ impl Filter {
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| r.update((cv.0.clone(), v), f.clone())),
             ),
-            Self::Pipe(l, true, r) => {
-                let xs = l.run(cv.clone());
-                let init = Box::new(once(Ok(cv.1)));
-                let f = move |x, v| r.update((cv.0.clone().cons_var(x), v), f.clone());
-                fold(false, xs, init, f)
-            }
+            Self::Pipe(l, true, r) => reduce(l.run(cv.clone()), cv.1, move |x, v| {
+                r.update((cv.0.clone().cons_var(x), v), f.clone())
+            }),
             Self::Comma(l, r) => {
                 let l = l.update((cv.0.clone(), cv.1), f.clone());
                 Box::new(l.flat_map(move |v| then(v, |v| r.update((cv.0.clone(), v), f.clone()))))
             }
-            Self::Ite(if_, then_, else_) => {
-                let xs = if_.run(cv.clone());
-                let init = Box::new(once(Ok(cv.1)));
-                fold(false, xs, init, move |x, v| {
-                    if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
-                })
-            }
+            Self::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
+                if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
+            }),
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
             Self::Recurse(l, true, true) => Box::new(f(cv.1).flat_map(move |v| {
                 then(v, |v| {
