@@ -115,9 +115,9 @@ fn then<'a, T, U: 'a, E: 'a>(
 }
 
 // if `inner` is true, output intermediate results
-fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, ctx: Ctx<'a>, f: F) -> ValRs<'a>
+fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, f: F) -> ValRs<'a>
 where
-    F: Fn(Cv<'a>) -> ValRs<'a> + 'a,
+    F: Fn(Val, Val) -> ValRs<'a> + 'a,
 {
     use crate::rc_lazy_list::List;
     let xs = List::from_iter(xs);
@@ -143,11 +143,11 @@ where
 
         if inner {
             // `foreach`
-            stack.push((xs, f((ctx.clone().cons_var(x), v.clone())).peekable()));
+            stack.push((xs, f(x, v.clone()).peekable()));
             return Some(Ok(v));
         } else {
             // `reduce`
-            stack.push((xs, f((ctx.clone().cons_var(x), v)).peekable()))
+            stack.push((xs, f(x, v).peekable()))
         }
     }))
 }
@@ -374,7 +374,8 @@ impl Filter {
             Self::Fold(inner, xs, init, f) => {
                 let xs = xs.run(cv.clone());
                 let init = init.run(cv.clone());
-                fold(*inner, xs, init, cv.0, |cv| f.run(cv))
+                let f = move |x, v| f.run((cv.0.clone().cons_var(x), v));
+                fold(*inner, xs, init, f)
             }
 
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
@@ -422,12 +423,14 @@ impl Filter {
             Self::Pipe(l, true, r) => {
                 let xs = l.run(cv.clone());
                 let init = Box::new(once(Ok(cv.1)));
-                fold(false, xs, init, cv.0, move |cv| r.update(cv, f.clone()))
+                let f = move |x, v| r.update((cv.0.clone().cons_var(x), v), f.clone());
+                fold(false, xs, init, f)
             }
             Self::Comma(l, r) => {
                 let l = l.update((cv.0.clone(), cv.1), f.clone());
                 Box::new(l.flat_map(move |v| then(v, |v| r.update((cv.0.clone(), v), f.clone()))))
             }
+            // TODO: correct this!
             Self::IfThenElse(if_thens, else_) => {
                 Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |then, v| {
                     then.update((cv.0.clone(), v), f.clone())
