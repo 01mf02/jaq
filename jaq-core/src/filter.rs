@@ -247,11 +247,7 @@ impl Filter {
                     None => r.run(cv),
                 }
             }
-            Self::IfThenElse(if_thens, else_) => {
-                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |then, v| {
-                    then.run((cv.0.clone(), v))
-                })
-            }
+            Self::IfThenElse(if_thens, else_) => Ite(if_thens, else_).run(cv),
             Self::Path(f, path) => path.run(cv, f),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
@@ -430,12 +426,7 @@ impl Filter {
                 let l = l.update((cv.0.clone(), cv.1), f.clone());
                 Box::new(l.flat_map(move |v| then(v, |v| r.update((cv.0.clone(), v), f.clone()))))
             }
-            // TODO: correct this!
-            Self::IfThenElse(if_thens, else_) => {
-                Self::if_then_else(if_thens.iter(), else_, cv.clone(), move |then, v| {
-                    then.update((cv.0.clone(), v), f.clone())
-                })
-            }
+            Self::IfThenElse(if_thens, else_) => Ite(if_thens, else_).update(cv, f),
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
             Self::Recurse(l, true, true) => Box::new(f(cv.1).flat_map(move |v| {
                 then(v, |v| {
@@ -481,26 +472,6 @@ impl Filter {
         } else {
             use itertools::Itertools;
             Box::new(l.into_iter().cartesian_product(r)) as Box<dyn Iterator<Item = _>>
-        }
-    }
-
-    fn if_then_else<'a, I, F>(mut if_thens: I, else_: &'a Self, cv: Cv<'a>, f: F) -> ValRs<'a>
-    where
-        I: Iterator<Item = &'a (Self, Self)> + Clone + 'a,
-        F: Fn(&'a Self, Val) -> ValRs<'a> + 'a + Clone,
-    {
-        if let Some((if_, then_)) = if_thens.next() {
-            Box::new(if_.run(cv.clone()).flat_map(move |v| {
-                then(v, |v| {
-                    if v.as_bool() {
-                        f(then_, cv.1.clone())
-                    } else {
-                        Self::if_then_else(if_thens.clone(), else_, cv.clone(), f.clone())
-                    }
-                })
-            }))
-        } else {
-            f(else_, cv.1)
         }
     }
 
@@ -564,6 +535,44 @@ impl Filter {
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
             Self::Var(_) => self,
             Self::Arg(a) => args[a].clone(),
+        }
+    }
+}
+
+// a slice into an if-then-else
+struct Ite<'a>(&'a [(Filter, Filter)], &'a Filter);
+
+impl<'a> Ite<'a> {
+    fn run(self, cv: Cv<'a>) -> ValRs<'a> {
+        if let [(if_, then_), if_thens @ ..] = self.0 {
+            Box::new(if_.run(cv.clone()).flat_map(move |v| {
+                then(v, |v| {
+                    if v.as_bool() {
+                        then_.run(cv.clone())
+                    } else {
+                        Self(if_thens, self.1).run(cv.clone())
+                    }
+                })
+            }))
+        } else {
+            self.1.run(cv)
+        }
+    }
+
+    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+        if let [(if_, then_), if_thens @ ..] = self.0 {
+            let xs = if_.run(cv.clone());
+            let init = Box::new(core::iter::once(Ok(cv.1)));
+            fold(false, xs, init, move |x, v| {
+                let cv = (cv.0.clone(), v);
+                if x.as_bool() {
+                    then_.update(cv, f.clone())
+                } else {
+                    Self(if_thens, self.1).update(cv, f.clone())
+                }
+            })
+        } else {
+            self.1.update(cv, f)
         }
     }
 }
