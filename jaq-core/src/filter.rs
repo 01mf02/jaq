@@ -22,7 +22,7 @@ pub enum Filter {
     Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
-    IfThenElse(Vec<(Self, Self)>, Box<Self>),
+    Ite(Box<Self>, Box<Self>, Box<Self>),
     /// `reduce` and `foreach`
     ///
     /// The first field indicates whether to yield intermediate results
@@ -247,7 +247,11 @@ impl Filter {
                     None => r.run(cv),
                 }
             }
-            Self::IfThenElse(if_thens, else_) => Ite(if_thens, else_).run(cv),
+            Self::Ite(if_, then_, else_) => Box::new(if_.run(cv.clone()).flat_map(move |v| {
+                then(v, |v| {
+                    if v.as_bool() { then_ } else { else_ }.run(cv.clone())
+                })
+            })),
             Self::Path(f, path) => path.run(cv, f),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
@@ -405,7 +409,7 @@ impl Filter {
             Self::First(_) | Self::Last(_) | Self::Limit(..) => todo!(),
             Self::Fold(..) => todo!(),
 
-            Self::Error => Box::new(core::iter::once(Err(Error::Val(cv.1)))),
+            Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
             Self::Debug => f(cv.1.debug()),
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
@@ -426,7 +430,13 @@ impl Filter {
                 let l = l.update((cv.0.clone(), cv.1), f.clone());
                 Box::new(l.flat_map(move |v| then(v, |v| r.update((cv.0.clone(), v), f.clone()))))
             }
-            Self::IfThenElse(if_thens, else_) => Ite(if_thens, else_).update(cv, f),
+            Self::Ite(if_, then_, else_) => {
+                let xs = if_.run(cv.clone());
+                let init = Box::new(once(Ok(cv.1)));
+                fold(false, xs, init, move |x, v| {
+                    if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
+                })
+            }
             // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
             Self::Recurse(l, true, true) => Box::new(f(cv.1).flat_map(move |v| {
                 then(v, |v| {
@@ -436,7 +446,7 @@ impl Filter {
                 })
             })),
             Self::Recurse(..) => todo!(),
-            Self::Empty => Box::new(core::iter::once(Ok(cv.1))),
+            Self::Empty => Box::new(once(Ok(cv.1))),
 
             Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
             Self::Var(_) => err,
@@ -500,13 +510,7 @@ impl Filter {
             Self::Pipe(l, bind, r) => Self::Pipe(sub(l), bind, sub(r)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
-            Self::IfThenElse(if_thens, else_) => Self::IfThenElse(
-                if_thens
-                    .into_iter()
-                    .map(|(if_, then)| (subst(if_), subst(then)))
-                    .collect(),
-                sub(else_),
-            ),
+            Self::Ite(if_, then_, else_) => Self::Ite(sub(if_), sub(then_), sub(else_)),
             Self::Fold(inner, xs, init, f) => Self::Fold(inner, sub(xs), sub(init), sub(f)),
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
             Self::Update(path, f) => Self::Update(sub(path), sub(f)),
@@ -535,44 +539,6 @@ impl Filter {
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
             Self::Var(_) => self,
             Self::Arg(a) => args[a].clone(),
-        }
-    }
-}
-
-// a slice into an if-then-else
-struct Ite<'a>(&'a [(Filter, Filter)], &'a Filter);
-
-impl<'a> Ite<'a> {
-    fn run(self, cv: Cv<'a>) -> ValRs<'a> {
-        if let [(if_, then_), if_thens @ ..] = self.0 {
-            Box::new(if_.run(cv.clone()).flat_map(move |v| {
-                then(v, |v| {
-                    if v.as_bool() {
-                        then_.run(cv.clone())
-                    } else {
-                        Self(if_thens, self.1).run(cv.clone())
-                    }
-                })
-            }))
-        } else {
-            self.1.run(cv)
-        }
-    }
-
-    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
-        if let [(if_, then_), if_thens @ ..] = self.0 {
-            let xs = if_.run(cv.clone());
-            let init = Box::new(core::iter::once(Ok(cv.1)));
-            fold(false, xs, init, move |x, v| {
-                let cv = (cv.0.clone(), v);
-                if x.as_bool() {
-                    then_.update(cv, f.clone())
-                } else {
-                    Self(if_thens, self.1).update(cv, f.clone())
-                }
-            })
-        } else {
-            self.1.update(cv, f)
         }
     }
 }

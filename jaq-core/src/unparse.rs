@@ -111,13 +111,13 @@ where
                 AssignOp::UpdateWith(op) => Filter::UpdateMath(l, op, r),
             }
         }
-        Expr::If(if_thens, else_) => Filter::IfThenElse(
-            if_thens
-                .into_iter()
-                .map(|(if_, then)| (*get(if_, errs), *get(then, errs)))
-                .collect(),
-            get(*else_, errs),
-        ),
+        Expr::If(mut if_thens, else_) => {
+            let mut f = get(*else_, errs);
+            while let Some((if_, then_)) = if_thens.pop() {
+                f = Box::new(Filter::Ite(get(if_, errs), get(then_, errs), f))
+            }
+            *f
+        }
         Expr::Path(f, path) => {
             let f = get(*f, errs);
             use jaq_parse::path::Part;

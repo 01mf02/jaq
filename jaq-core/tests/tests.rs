@@ -135,6 +135,9 @@ fn if_then_else() {
 
     let f = r#".[] | if .<0 then "n" elif .>0 then "p" else "z" end"#;
     gives(json!([-1, 0, 1]), f, [json!("n"), json!("z"), json!("p")]);
+
+    let f = r#"if .>0, .<0 then 0 elif .>0, .<0 then 1 else 2 end"#;
+    gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
 #[test]
