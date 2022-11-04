@@ -113,7 +113,7 @@ where
         }
         Expr::If(if_thens, else_) => {
             let if_thens = if_thens.into_iter().rev();
-            if_thens.into_iter().rev().fold(*get(*else_, errs), |acc, (if_, then_)| {
+            if_thens.fold(*get(*else_, errs), |acc, (if_, then_)| {
                 Filter::Ite(get(if_, errs), get(then_, errs), Box::new(acc))
             })
         }
