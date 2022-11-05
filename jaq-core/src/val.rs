@@ -276,6 +276,43 @@ impl From<serde_json::Value> for Val {
     }
 }
 
+impl From<json_deserializer::Value<'_>> for Val {
+    fn from(v: json_deserializer::Value) -> Self {
+        use json_deserializer::Value::*;
+        match v {
+            Null => Self::Null,
+            Bool(b) => Self::Bool(b),
+            String(s) => Self::Str(Rc::from(s.to_string())),
+            Array(a) => Self::Arr(Rc::new(a.into_iter().map(|x| x.into()).collect())),
+            Object(o) => Self::Obj(Rc::new(
+                o.into_iter().map(|(k, v)| (Rc::from(k), v.into())).collect(),
+            )),
+            Number(n) => {
+                match n {
+                    json_deserializer::Number::Integer(integer, exponent) => {
+                        let mut integer: isize = lexical::parse(integer).unwrap();
+                        if !exponent.is_empty() {
+                            let exponent: u32 = lexical::parse(exponent).unwrap();
+                            integer = integer.pow(exponent);
+                        }
+                        Val::Int(integer)
+                    },
+                    json_deserializer::Number::Float(fraction, exponent) => {
+                        let integer = fraction.split(|x| *x == b'.').next().unwrap();
+                        let mut integer: f64 = lexical::parse(integer).unwrap();
+                        if !exponent.is_empty() {
+                            let exponent: i32 = lexical::parse(exponent).unwrap();
+                            integer = integer.powi(exponent);
+                        }
+                        Val::Float(integer)
+                    }
+                }
+                
+            },
+        }
+    }
+  }
+
 impl From<Val> for serde_json::Value {
     fn from(v: Val) -> serde_json::Value {
         use serde_json::Value::*;

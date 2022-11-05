@@ -207,7 +207,7 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
 fn read_input<'a>(
     cli: &Cli,
     mut read: impl BufRead + 'a,
-) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
+) -> Box<dyn Iterator<Item = Result<Val, std::io::Error>> + 'a> {
     if cli.raw_input {
         if cli.slurp {
             let mut buffer = String::new();
@@ -217,9 +217,14 @@ fn read_input<'a>(
             Box::new(read.lines().map(|line| Ok(Val::Str(line.unwrap().into()))))
         }
     } else {
-        let inputs = serde_json::Deserializer::from_reader(read)
-            .into_iter::<serde_json::Value>()
-            .map(|r| r.map(Val::from));
+        let inputs = read.lines().map(|line| {
+            let line = line?;
+            let parsed = json_deserializer::parse(line.as_bytes()).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, format!("{}: {}", e, line))
+            })?;
+            Ok(Val::from(parsed))
+        });
+
         if cli.slurp {
             let slurped: Result<Vec<_>, _> = inputs.collect();
             Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
@@ -294,7 +299,7 @@ fn run(
     cli: &Cli,
     filter: &Filter,
     vars: Vec<Val>,
-    iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
+    iter: impl Iterator<Item = Result<Val, std::io::Error>>,
     mut f: impl FnMut(Val) -> std::io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
@@ -358,7 +363,7 @@ fn run_and_print(
     cli: &Cli,
     filter: &Filter,
     vars: Vec<Val>,
-    iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
+    iter: impl Iterator<Item = Result<Val, std::io::Error>>,
 ) -> Result<Option<bool>, Error> {
     let mut stdout = std::io::stdout().lock();
 
