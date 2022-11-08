@@ -123,28 +123,42 @@ Lazily fold over inputs and output intermediate results:
 
 # Performance
 
-The following benchmark compares the performance of jaq and jq 1.6.
-Each command is run via `jq -n '<CMD>'` and `jaq -n '<CMD>'`, respectively.
-Each command except for `empty` is additionally piped through `length`,
-in order not to measure the time needed to print large values.
+The following evaluation consists of several benchmarks that
+allow comparing the performance of jaq and jq.
+The `empty` benchmark runs `n` times the filter `empty` with null input,
+serving to measure the startup time.
+The `bf-fib` benchmark runs a Brainfuck interpreter written in jq,
+interpreting a Brainfuck script that produces `n` Fibonacci numbers.
+The other benchmarks are one-liners that evaluate various filters;
+see [`bench.sh`](bench.sh) for details.
 
-| Command                                                                       | jaq \[s\] | jq \[s\] |
-| ----------------------------------------------------------------------------- | --------: | -------: |
-| `empty` (100 iterations)                                                      |      0.15 |     4.06 |
-| `1000000 \| [range(.)] \| reverse`                                            |      0.05 |     1.26 |
-| `1000000 \| [range(.) \| -.] \| sort`                                         |      0.18 |     1.36 |
-| `1000000 \| [range(.) \| [.]] \| add`                                         |      0.81 |     1.38 |
-| `100000 \| [range(.) \| {(tostring): .}] \| add`                              |      0.21 |     0.33 |
-| `5000 \| [range(.) \| {(tostring): .}] \| add \| .[] += 1`                    |      0.01 |     2.77 |
-| `100000 \| [range(.) \| {(tostring): .}] \| add \| with_entries(.value += 1)` |      0.75 |     1.63 |
-| `1000000 \| [limit(.; repeat("a"))] \| add \| explode \| implode`             |      1.16 |     2.10 |
-| `1000000 \| reduce range(.) as $x ([]; . + [$x + .[-1]])`                     |      1.18 |     1.57 |
-| `16 \| nth(.; 0 \| recurse([., .])) \| flatten`                               |      0.31 |     0.49 |
-| `16 \| nth(.; 0 \| recurse([., .])) \| (.. \| scalars) \|= .+1`               |      0.18 |     1.15 |
-| `100000 \| [range(.) \| tojson] \| join(",") \| "[" + . + "]" \| fromjson`    |      0.15 |     3.04 |
+[jq-cff5336] was used instead of jq 1.6 because it greatly improves performance.
+jq was compiled with disabled assertion checking,
+by adding `-DNDEBUG` to `DEFS` in `Makefile`.
+I generated the benchmark data with `bench.sh target/release/jaq jq`,
+followed by `pandoc -t gfm`.
 
-I generated the benchmark data with `bench.sh`, followed by `pandoc -t gfm`.
+Table: Evaluation results in seconds.
 
+| Benchmark    |       n | jaq-0.9.0 | [jq-cff5336] |
+| ------------ | ------: | --------: | -----------: |
+| empty        |     512 |      0.74 |         1.21 |
+| bf-fib       |      13 |      0.80 |         1.18 |
+| reverse      | 1048576 |      0.06 |         1.00 |
+| sort         | 1048576 |      0.18 |         0.95 |
+| add          | 1048576 |      0.87 |         0.92 |
+| kv           |  131072 |      0.32 |         0.22 |
+| kv-update    |  131072 |      0.33 |         0.56 |
+| kv-entries   |  131072 |      1.09 |         1.12 |
+| ex-implode   | 1048576 |      1.20 |         1.50 |
+| reduce       | 1048576 |      1.40 |         1.18 |
+| tree-flatten |      17 |      0.63 |         0.48 |
+| tree-update  |      17 |      0.38 |         1.65 |
+| to-fromjson  |   65536 |      0.08 |         1.31 |
+
+The results show that jaq is faster than jq on ten out of thirteen benchmarks.
+
+[jq-cff5336]: https://github.com/stedolan/jq/tree/cff5336ec71b6fee396a95bb0e4bea365e0cd1e8
 
 
 # Features
