@@ -1,6 +1,6 @@
 use crate::path::{self, Path};
 use crate::val::{Val, ValR, ValRs};
-use crate::{Ctx, Error};
+use crate::{fold, Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use dyn_clone::DynClone;
@@ -114,46 +114,8 @@ fn then<'a, T, U: 'a, E: 'a>(
         .unwrap_or_else(|e| Box::new(core::iter::once(Err(e))))
 }
 
-// if `inner` is true, output intermediate results
-fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, f: F) -> ValRs<'a>
-where
-    F: Fn(Val, Val) -> ValRs<'a> + 'a,
-{
-    use crate::rc_lazy_list::List;
-    let xs = List::from_iter(xs);
-    let mut stack = Vec::from([(xs, init.peekable())]);
-    Box::new(core::iter::from_fn(move || loop {
-        let (mut xs, mut vs) = stack.pop()?;
-        let v = match vs.next() {
-            Some(Ok(v)) => v,
-            e @ Some(Err(_)) => return e,
-            None => continue,
-        };
-
-        // this `if` avoids growing the stack unnecessarily
-        if vs.peek().is_some() {
-            stack.push((xs.clone(), vs));
-        }
-
-        let x = match xs.next() {
-            Some(Ok(x)) => x,
-            e @ Some(Err(_)) => return e,
-            None => return Some(Ok(v)),
-        };
-
-        if inner {
-            // `foreach`
-            stack.push((xs, f(x, v.clone()).peekable()));
-            return Some(Ok(v));
-        } else {
-            // `reduce`
-            stack.push((xs, f(x, v).peekable()))
-        }
-    }))
-}
-
 fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
-    fold(false, xs, Box::new(core::iter::once(Ok(init))), f)
+    Box::new(fold(false, xs, Box::new(core::iter::once(Ok(init))), f))
 }
 
 type Cv<'c> = (Ctx<'c>, Val);
@@ -379,7 +341,7 @@ impl Filter {
                 let xs = xs.run(cv.clone());
                 let init = init.run(cv.clone());
                 let f = move |x, v| f.run((cv.0.clone().cons_var(x), v));
-                fold(*inner, xs, init, f)
+                Box::new(fold(*inner, xs, init, f))
             }
 
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),

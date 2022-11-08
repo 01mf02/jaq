@@ -46,6 +46,7 @@ extern crate std;
 
 mod error;
 mod filter;
+mod fold;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -60,6 +61,7 @@ pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use fold::fold;
 use parse::{Def, Main};
 use rc_list::RcList;
 use unparse::unparse;
