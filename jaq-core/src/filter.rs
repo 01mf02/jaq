@@ -115,7 +115,7 @@ fn then<'a, T, U: 'a, E: 'a>(
 }
 
 // if `inner` is true, output intermediate results
-fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, f: F) -> ValRs
+fn fold<'a, F>(inner: bool, xs: ValRs<'a>, init: ValRs<'a>, f: F) -> ValRs<'a>
 where
     F: Fn(Val, Val) -> ValRs<'a> + 'a,
 {
