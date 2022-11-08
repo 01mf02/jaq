@@ -111,7 +111,7 @@ where
                 AssignOp::UpdateWith(op) => Filter::UpdateMath(l, op, r),
             }
         }
-        Expr::If(if_thens, else_) => {
+        Expr::Ite(if_thens, else_) => {
             let if_thens = if_thens.into_iter().rev();
             if_thens.fold(*get(*else_, errs), |acc, (if_, then_)| {
                 Filter::Ite(get(if_, errs), get(then_, errs), Box::new(acc))

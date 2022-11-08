@@ -119,7 +119,7 @@ pub enum Filter {
     /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Box<Spanned<Self>>, Path<Self>),
     /// If-then-else
-    If(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
+    Ite(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
     /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
     ///
     /// The first field indicates whether to yield intermediate results
@@ -201,7 +201,7 @@ where
         .chain(elif.then(then).repeated())
         .then(else_)
         .then_ignore(just(Token::End))
-        .map_with_span(|(if_thens, else_), span| (Filter::If(if_thens, else_), span))
+        .map_with_span(|(if_thens, else_), span| (Filter::Ite(if_thens, else_), span))
 }
 
 fn fold<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
