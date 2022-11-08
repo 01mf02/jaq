@@ -315,7 +315,9 @@ You can convert a floating-point number to an integer by
 
 ### NaN and infinity
 
-In jq, `n / 0` yields `nan` (not a number) if `n == 0` and fails otherwise.
+In jq, division by 0 has some surprising properties; for example,
+`0 / 0` yields `nan`, whereas
+`0 as $n | $n / 0` yields an error.
 In jaq, `n / 0` yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
 jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
 
