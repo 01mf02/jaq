@@ -31,8 +31,8 @@ declare -a BENCHES=(
 echo -n '|Benchmark|n'
 for j in $@; do echo -n '|' $j; done
 echo '|'
-echo -n '|-|-'
-for j in $@; do echo -n '|-'; done
+echo -n '|-|-:'
+for j in $@; do echo -n '|-:'; done
 echo '|'
 
 echo -n '|empty|512'
