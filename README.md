@@ -58,8 +58,8 @@ may be too outdated to compile jaq.)
 
 The following command installs jaq:
 
-    $ cargo install jaq
-    $ cargo install --git https://github.com/01mf02/jaq # latest development version
+    $ cargo install --locked jaq
+    $ cargo install --locked --git https://github.com/01mf02/jaq # latest development version
 
 On my system, both commands place the executable at `~/.cargo/bin/jaq`.
 jaq should work on any system supported by Rust.
@@ -124,41 +124,46 @@ Lazily fold over inputs and output intermediate results:
 # Performance
 
 The following evaluation consists of several benchmarks that
-allow comparing the performance of jaq and jq.
+allow comparing the performance of jaq, jq, and [gojq].
 The `empty` benchmark runs `n` times the filter `empty` with null input,
 serving to measure the startup time.
 The `bf-fib` benchmark runs a Brainfuck interpreter written in jq,
 interpreting a Brainfuck script that produces `n` Fibonacci numbers.
-The other benchmarks are one-liners that evaluate various filters;
+The other benchmarks evaluate various filters with `n` as input;
 see [`bench.sh`](bench.sh) for details.
 
-[jq-cff5336] was used instead of jq 1.6 because it greatly improves performance.
-jq was compiled with disabled assertion checking,
+[jq-cff5336] was compiled manually with disabled assertion checking,
 by adding `-DNDEBUG` to `DEFS` in `Makefile`.
-I generated the benchmark data with `bench.sh target/release/jaq jq`,
+I generated the benchmark data with `bench.sh target/release/jaq jq-cff5336 gojq jq`,
 followed by `pandoc -t gfm`.
 
-Table: Evaluation results in seconds.
+Table: Evaluation results in seconds ("N/A" if more than 10 seconds).
 
-| Benchmark    |       n | jaq-0.9.0 | [jq-cff5336] |
-| ------------ | ------: | --------: | -----------: |
-| empty        |     512 |      0.74 |         1.21 |
-| bf-fib       |      13 |      0.80 |         1.18 |
-| reverse      | 1048576 |      0.06 |         1.00 |
-| sort         | 1048576 |      0.18 |         0.95 |
-| add          | 1048576 |      0.87 |         0.92 |
-| kv           |  131072 |      0.32 |         0.22 |
-| kv-update    |  131072 |      0.33 |         0.56 |
-| kv-entries   |  131072 |      1.09 |         1.12 |
-| ex-implode   | 1048576 |      1.20 |         1.50 |
-| reduce       | 1048576 |      1.40 |         1.18 |
-| tree-flatten |      17 |      0.63 |         0.48 |
-| tree-update  |      17 |      0.38 |         1.65 |
-| to-fromjson  |   65536 |      0.08 |         1.31 |
+| Benchmark    |       n | jaq-0.9.0 | jq-cff5336 | gojq-0.12.9 | jq-1.6 |
+| ------------ | ------: | --------: | ---------: | ----------: | -----: |
+| empty        |     512 |      0.83 |       1.25 |        0.96 |    N/A |
+| bf-fib       |      13 |      0.92 |       1.30 |        2.52 |   3.16 |
+| reverse      | 1048576 |      0.08 |       1.09 |        1.16 |   1.54 |
+| sort         | 1048576 |      0.20 |       1.53 |        1.77 |   1.81 |
+| add          | 1048576 |      0.96 |       1.06 |        2.51 |   1.69 |
+| kv           |  131072 |      0.33 |       0.25 |        0.49 |   0.49 |
+| kv-update    |  131072 |      0.38 |       0.67 |         N/A |    N/A |
+| kv-entries   |  131072 |      1.23 |       1.29 |        2.23 |   2.50 |
+| ex-implode   | 1048576 |      1.32 |       1.59 |        1.73 |   2.77 |
+| reduce       | 1048576 |      1.60 |       1.34 |         N/A |   1.92 |
+| tree-flatten |      17 |      0.71 |       0.54 |        0.03 |   1.95 |
+| tree-update  |      17 |      0.47 |       1.43 |        4.58 |   2.73 |
+| to-fromjson  |   65536 |      0.09 |       1.59 |        0.16 |   1.69 |
 
-The results show that jaq is faster than jq on ten out of thirteen benchmarks.
+The results show that jaq is
+faster than jq-cff5336 on ten out of thirteen benchmarks and
+faster than jq 1.6 on *all* benchmarks.
+gojq is faster than jaq only on one benchmark, namely "tree-flatten"
+(due to implementing the filter `flatten` natively instead of by definition).
 
 [jq-cff5336]: https://github.com/stedolan/jq/tree/cff5336ec71b6fee396a95bb0e4bea365e0cd1e8
+[gojq]: https://github.com/itchyny/gojq
+
 
 
 # Features
