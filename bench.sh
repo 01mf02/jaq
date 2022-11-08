@@ -1,10 +1,13 @@
 #!/bin/bash
-
+#
+# Benchmark jq implementations passed as arguments
+#
+# Example usage:
+#
+#     ./bench.sh target/release/jaq jq
+#
 # Make sure that you are running a version of jq newer than 1.6,
 # otherwise this benchmark will likely take a looooooooong time.
-
-: "${JQ:=jq}"
-: "${JAQ:=target/release/jaq}"
 
 TIME='/usr/bin/time -f %U'
 
@@ -25,20 +28,27 @@ declare -a BENCHES=(
 '  65536 | [range(.) | tojson] | join(",") | "[" + . + "]" | fromjson'
 )
 
+echo -n '|Benchmark|n'
+for j in $@; do echo -n '|' $j; done
+echo '|'
+echo -n '|-|-'
+for j in $@; do echo -n '|-'; done
+echo '|'
 
-echo -n '|' '`empty` (512 iterations)'
-echo -n '|' $($TIME bash -c "for n in {1..512}; do $JAQ -n 'empty'; done" 2>&1)
-echo -n '|' $($TIME bash -c "for n in {1..512}; do $JQ  -n 'empty'; done" 2>&1)
+echo -n '|empty|512'
+for j in $@; do echo -n '|' $($TIME bash -c "for n in {1..512}; do $j -n 'empty'; done" 2>&1); done
 echo    '|'
 
-echo -n '|' '`bf-fib`'
-echo -n '|' $($TIME $JAQ -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null)
-echo -n '|' $($TIME $JQ  -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null)
+echo -n '|bf-fib|13'
+for j in $@; do echo -n '|' $($TIME $j -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null); done
 echo    '|'
 
-for val in "${BENCHES[@]}"; do
-	echo -n	'|' \`$val\`
-	echo -n '|' $($TIME $JAQ -n "$val | length" 2>&1 > /dev/null)
-	echo -n '|' $($TIME $JQ  -n "$val | length" 2>&1 > /dev/null)
-	echo    '|'
-done
+while read -r line; do
+  b=`echo $line | $1 -r .name`
+  n=`echo $line | $1 .n`
+  echo -n "|$b|$n"
+  for j in $@; do
+    echo -n '|' $(echo $n | $TIME $j "$(cat examples/$b.jq) | length" 2>&1 > /dev/null)
+  done
+  echo '|'
+done <examples/benches.json

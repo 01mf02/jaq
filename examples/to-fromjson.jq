@@ -1,0 +1,1 @@
+[range(.) | tojson] | join(",") | "[" + . + "]" | fromjson

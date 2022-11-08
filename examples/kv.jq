@@ -1,0 +1,1 @@
+[range(.) | {(tostring): .}] | add
