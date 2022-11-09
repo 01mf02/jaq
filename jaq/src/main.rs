@@ -141,7 +141,7 @@ fn real_main() -> Result<ExitCode, Error> {
     let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
-        let inputs = read_input(&cli, std::io::stdin().lock());
+        let inputs = read_buffered(&cli, std::io::stdin().lock());
         run_and_print(&cli, &filter, ctx, inputs)?
     } else {
         let mut last = None;
@@ -149,8 +149,8 @@ fn real_main() -> Result<ExitCode, Error> {
             let path = std::path::Path::new(file);
             let file =
                 std::fs::File::open(file).map_err(|e| Error::Io(Some(file.to_string()), e))?;
-            let file = std::io::BufReader::new(file);
-            let inputs = read_input(&cli, file);
+            let file = unsafe { memmap::Mmap::map(&file).expect("Error mapping file") };
+            let inputs = read_slice(&cli, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -204,7 +204,7 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     }
 }
 
-fn read_input<'a>(
+fn read_buffered<'a>(
     cli: &Cli,
     mut read: impl BufRead + 'a,
 ) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
@@ -217,15 +217,37 @@ fn read_input<'a>(
             Box::new(read.lines().map(|line| Ok(Val::Str(line.unwrap().into()))))
         }
     } else {
-        let inputs = serde_json::Deserializer::from_reader(read)
-            .into_iter::<serde_json::Value>()
-            .map(|r| r.map(Val::from));
+        convert_values(cli, serde_json::Deserializer::from_reader(read).into_iter())
+    }
+}
+
+fn read_slice<'a>(
+    cli: &Cli,
+    slice: &'a [u8],
+) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
+    if cli.raw_input {
         if cli.slurp {
-            let slurped: Result<Vec<_>, _> = inputs.collect();
-            Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
+            let s = core::str::from_utf8(slice).unwrap();
+            Box::new(std::iter::once(Ok(Val::Str(s.to_string().into()))))
         } else {
-            Box::new(inputs)
+            let read = std::io::BufReader::new(slice);
+            Box::new(read.lines().map(|line| Ok(Val::Str(line.unwrap().into()))))
         }
+    } else {
+        convert_values(cli, serde_json::Deserializer::from_slice(slice).into_iter())
+    }
+}
+
+fn convert_values<'a>(
+    cli: &Cli,
+    iter: impl Iterator<Item = serde_json::Result<serde_json::Value>> + 'a,
+) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
+    let iter = iter.map(|r| r.map(Val::from));
+    if cli.slurp {
+        let slurped: Result<Vec<_>, _> = iter.collect();
+        Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
+    } else {
+        Box::new(iter)
     }
 }
 
