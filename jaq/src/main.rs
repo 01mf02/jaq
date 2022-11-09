@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
-use std::io::{BufRead, Write};
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 use std::rc::Rc;
@@ -141,15 +141,13 @@ fn real_main() -> Result<ExitCode, Error> {
     let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
-        let inputs = read_buffered(&cli, std::io::stdin().lock());
+        let inputs = read_buffered(&cli, io::stdin().lock());
         run_and_print(&cli, &filter, ctx, inputs)?
     } else {
         let mut last = None;
         for file in files {
             let path = std::path::Path::new(file);
-            let file =
-                std::fs::File::open(file).map_err(|e| Error::Io(Some(file.to_string()), e))?;
-            let file = unsafe { memmap::Mmap::map(&file).expect("Error mapping file") };
+            let file = mmap_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let inputs = read_slice(&cli, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
@@ -204,34 +202,38 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     }
 }
 
-fn read_buffered<'a>(
-    cli: &Cli,
-    mut read: impl BufRead + 'a,
-) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
+fn mmap_file(path: &std::path::Path) -> io::Result<memmap::Mmap> {
+    let file = std::fs::File::open(&path)?;
+    unsafe { memmap::Mmap::map(&file) }
+}
+
+fn read_buffered<'a, R>(cli: &Cli, mut read: R) -> impl Iterator<Item = io::Result<Val>> + 'a
+where
+    R: BufRead + 'a,
+{
     if cli.raw_input {
         if cli.slurp {
-            let mut buffer = String::new();
-            read.read_to_string(&mut buffer).unwrap();
-            Box::new(std::iter::once(Ok(Val::Str(buffer.into()))))
+            let mut buf = String::new();
+            let s = read.read_to_string(&mut buf).map(|_| Val::Str(buf.into()));
+            Box::new(std::iter::once(s)) as Box<dyn Iterator<Item = _>>
         } else {
-            Box::new(read.lines().map(|line| Ok(Val::Str(line.unwrap().into()))))
+            Box::new(read.lines().map(|l| l.map(|l| Val::Str(l.into()))))
         }
     } else {
         convert_values(cli, serde_json::Deserializer::from_reader(read).into_iter())
     }
 }
 
-fn read_slice<'a>(
-    cli: &Cli,
-    slice: &'a [u8],
-) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
+fn read_slice<'a>(cli: &Cli, slice: &'a [u8]) -> impl Iterator<Item = io::Result<Val>> + 'a {
     if cli.raw_input {
         if cli.slurp {
-            let s = core::str::from_utf8(slice).unwrap();
-            Box::new(std::iter::once(Ok(Val::Str(s.to_string().into()))))
+            let s = core::str::from_utf8(slice)
+                .map(|s| Val::Str(s.to_string().into()))
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid UTF-8"));
+            Box::new(std::iter::once(s)) as Box<dyn Iterator<Item = _>>
         } else {
-            let read = std::io::BufReader::new(slice);
-            Box::new(read.lines().map(|line| Ok(Val::Str(line.unwrap().into()))))
+            let read = io::BufReader::new(slice);
+            Box::new(read.lines().map(|l| l.map(|l| Val::Str(l.into()))))
         }
     } else {
         convert_values(cli, serde_json::Deserializer::from_slice(slice).into_iter())
@@ -241,8 +243,8 @@ fn read_slice<'a>(
 fn convert_values<'a>(
     cli: &Cli,
     iter: impl Iterator<Item = serde_json::Result<serde_json::Value>> + 'a,
-) -> Box<dyn Iterator<Item = Result<Val, serde_json::Error>> + 'a> {
-    let iter = iter.map(|r| r.map(Val::from));
+) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
+    let iter = iter.map(|r| r.map(Val::from).map_err(io::Error::from));
     if cli.slurp {
         let slurped: Result<Vec<_>, _> = iter.collect();
         Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
@@ -259,9 +261,9 @@ struct ParseError {
 
 #[derive(Debug)]
 enum Error {
-    Io(Option<String>, std::io::Error),
+    Io(Option<String>, io::Error),
     Chumsky(Vec<ParseError>),
-    Serde(String),
+    Parse(String),
     Jaq(jaq_core::Error),
     Persist(tempfile::PersistError),
 }
@@ -287,8 +289,8 @@ impl Termination for Error {
                 }
                 3
             }
-            Self::Serde(e) => {
-                eprintln!("Error: failed to parse JSON: {}", e);
+            Self::Parse(e) => {
+                eprintln!("Error: failed to parse: {}", e);
                 4
             }
             Self::Jaq(e) => {
@@ -300,8 +302,8 @@ impl Termination for Error {
     }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
         Self::Io(None, e)
     }
 }
@@ -316,8 +318,8 @@ fn run(
     cli: &Cli,
     filter: &Filter,
     vars: Vec<Val>,
-    iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
-    mut f: impl FnMut(Val) -> std::io::Result<()>,
+    iter: impl Iterator<Item = io::Result<Val>>,
+    mut f: impl FnMut(Val) -> io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
     let iter = iter.map(|r| r.map_err(|e| e.to_string()));
@@ -331,7 +333,7 @@ fn run(
     let ctx = Ctx::new(vars, &iter);
 
     for item in if cli.null_input { &null } else { &iter } {
-        let input = item.map_err(Error::Serde)?;
+        let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
         for output in filter.run(ctx.clone(), input) {
             let output = output.map_err(Error::Jaq)?;
@@ -347,7 +349,7 @@ fn print(
     color: colored_json::ColorMode,
     val: Val,
     writer: &mut impl Write,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     use colored_json::{ColoredFormatter, CompactFormatter, PrettyFormatter};
     match val {
         Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
@@ -380,9 +382,9 @@ fn run_and_print(
     cli: &Cli,
     filter: &Filter,
     vars: Vec<Val>,
-    iter: impl Iterator<Item = Result<Val, serde_json::Error>>,
+    iter: impl Iterator<Item = io::Result<Val>>,
 ) -> Result<Option<bool>, Error> {
-    let mut stdout = std::io::stdout().lock();
+    let mut stdout = io::stdout().lock();
 
     let color = cli.color_mode();
 
