@@ -142,7 +142,7 @@ fn real_main() -> Result<ExitCode, Error> {
 
     let last = if files.is_empty() {
         let inputs = read_buffered(&cli, io::stdin().lock()).map(|v| v.map(Val::from));
-        run_and_print(&cli, &filter, ctx, inputs)?
+        with_stdout(|out| run(&cli, &filter, ctx, inputs, |v| print(&cli, v, out)))?
     } else {
         let mut last = None;
         for file in files {
@@ -163,7 +163,9 @@ fn real_main() -> Result<ExitCode, Error> {
                 // replace the input file with the temporary file
                 tmp.persist(path).map_err(Error::Persist)?;
             } else {
-                last = run_and_print(&cli, &filter, ctx.clone(), inputs)?;
+                last = with_stdout(|out| {
+                    run(&cli, &filter, ctx.clone(), inputs, |v| print(&cli, v, out))
+                })?;
             }
         }
         last
@@ -373,20 +375,11 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
     Ok(())
 }
 
-fn run_and_print(
-    cli: &Cli,
-    filter: &Filter,
-    vars: Vec<Val>,
-    iter: impl Iterator<Item = io::Result<Val>>,
-) -> Result<Option<bool>, Error> {
+fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Result<T, Error> {
     let mut stdout = io::stdout().lock();
-
-    let last = run(cli, filter, vars, iter, |output| {
-        print(cli, output, &mut stdout)
-    })?;
-
+    let y = f(&mut stdout)?;
     stdout.flush()?;
-    Ok(last)
+    Ok(y)
 }
 
 fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
