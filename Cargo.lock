@@ -258,7 +258,7 @@ checksum = "4217ad341ebadf8d8e724e264f13e593e0648f5b3e94b3896a5df283be015ecc"
 
 [[package]]
 name = "jaq"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "ariadne",
  "atty",
