@@ -12,23 +12,6 @@
 TIME='timeout 10 /usr/bin/time -f %U'
 NA='echo N/A'
 
-# 2^16 =   65536
-# 2^17 =  131072
-# 2^20 = 1048576
-declare -a BENCHES=(
-'1048576 | [range(.)] | reverse'
-'1048576 | [range(.) | -.] | sort'
-'1048576 | [range(.) | [.]] | add'
-' 131072 | [range(.) | {(tostring): .}] | add'
-' 131072 | [range(.) | {(tostring): .}] | add | .[] += 1'
-' 131072 | [range(.) | {(tostring): .}] | add | with_entries(.value += 1)'
-'1048576 | [limit(.; repeat("a"))] | add | explode | implode'
-'1048576 | reduce range(.) as $x ([]; . + [$x + .[-1]])'
-'     17 | nth(.; 0 | recurse([., .])) | flatten'
-'     17 | nth(.; 0 | recurse([., .])) | (.. | scalars) |= .+1'
-'  65536 | [range(.) | tojson] | join(",") | "[" + . + "]" | fromjson'
-)
-
 echo -n '|Benchmark|n'
 for j in $@; do echo -n '|' $j; done
 echo '|'
@@ -57,3 +40,6 @@ while read -r line; do
   done
   echo '|'
 done <examples/benches.json
+# 2^16 =   65536
+# 2^17 =  131072
+# 2^20 = 1048576
