@@ -1,9 +1,9 @@
 use clap::{Parser, ValueEnum};
 use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
+use serde_json::Value;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
-use std::rc::Rc;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -141,14 +141,14 @@ fn real_main() -> Result<ExitCode, Error> {
     let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
-        let inputs = read_buffered(&cli, io::stdin().lock());
+        let inputs = read_buffered(&cli, io::stdin().lock()).map(|v| v.map(Val::from));
         run_and_print(&cli, &filter, ctx, inputs)?
     } else {
         let mut last = None;
         for file in files {
             let path = std::path::Path::new(file);
             let file = mmap_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
-            let inputs = read_slice(&cli, &file);
+            let inputs = read_slice(&cli, &file).map(|v| v.map(Val::from));
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -207,49 +207,50 @@ fn mmap_file(path: &std::path::Path) -> io::Result<memmap::Mmap> {
     unsafe { memmap::Mmap::map(&file) }
 }
 
-fn read_buffered<'a, R>(cli: &Cli, mut read: R) -> impl Iterator<Item = io::Result<Val>> + 'a
+fn read_buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Value>> + 'a>
 where
     R: BufRead + 'a,
 {
     if cli.raw_input {
-        if cli.slurp {
-            let mut buf = String::new();
-            let s = read.read_to_string(&mut buf).map(|_| Val::Str(buf.into()));
-            Box::new(std::iter::once(s)) as Box<dyn Iterator<Item = _>>
-        } else {
-            Box::new(read.lines().map(|l| l.map(|l| Val::Str(l.into()))))
-        }
+        Box::new(raw_input(cli.slurp, read).map(|s| s.map(Value::String)))
     } else {
-        convert_values(cli, serde_json::Deserializer::from_reader(read).into_iter())
+        let vals = serde_json::Deserializer::from_reader(read).into_iter();
+        Box::new(json_input(cli.slurp, vals).map(|r| r.map_err(io::Error::from)))
     }
 }
 
-fn read_slice<'a>(cli: &Cli, slice: &'a [u8]) -> impl Iterator<Item = io::Result<Val>> + 'a {
+fn read_slice<'a>(cli: &Cli, slice: &'a [u8]) -> Box<dyn Iterator<Item = io::Result<Value>> + 'a> {
     if cli.raw_input {
-        if cli.slurp {
-            let s = core::str::from_utf8(slice)
-                .map(|s| Val::Str(s.to_string().into()))
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid UTF-8"));
-            Box::new(std::iter::once(s)) as Box<dyn Iterator<Item = _>>
-        } else {
-            let read = io::BufReader::new(slice);
-            Box::new(read.lines().map(|l| l.map(|l| Val::Str(l.into()))))
-        }
+        let read = io::BufReader::new(slice);
+        Box::new(raw_input(cli.slurp, read).map(|s| s.map(Value::String)))
     } else {
-        convert_values(cli, serde_json::Deserializer::from_slice(slice).into_iter())
+        let vals = serde_json::Deserializer::from_slice(slice).into_iter();
+        Box::new(json_input(cli.slurp, vals).map(|r| r.map_err(io::Error::from)))
     }
 }
 
-fn convert_values<'a>(
-    cli: &Cli,
-    iter: impl Iterator<Item = serde_json::Result<serde_json::Value>> + 'a,
-) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
-    let iter = iter.map(|r| r.map(Val::from).map_err(io::Error::from));
-    if cli.slurp {
-        let slurped: Result<Vec<_>, _> = iter.collect();
-        Box::new(core::iter::once(slurped.map(|v| Val::Arr(Rc::new(v)))))
+fn raw_input<'a, R>(slurp: bool, mut read: R) -> impl Iterator<Item = io::Result<String>> + 'a
+where
+    R: BufRead + 'a,
+{
+    if slurp {
+        let mut buf = String::new();
+        let s = read.read_to_string(&mut buf).map(|_| buf.into());
+        Box::new(std::iter::once(s))
     } else {
-        Box::new(iter)
+        Box::new(read.lines()) as Box<dyn Iterator<Item = _>>
+    }
+}
+
+fn json_input<'a>(
+    slurp: bool,
+    iter: impl Iterator<Item = serde_json::Result<Value>> + 'a,
+) -> impl Iterator<Item = serde_json::Result<Value>> + 'a {
+    if slurp {
+        let slurped: Result<Vec<_>, _> = iter.collect();
+        Box::new(std::iter::once(slurped.map(Value::Array)))
+    } else {
+        Box::new(iter) as Box<dyn Iterator<Item = _>>
     }
 }
 
