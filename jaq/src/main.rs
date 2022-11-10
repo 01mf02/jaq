@@ -156,9 +156,8 @@ fn real_main() -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                let color = cli.color_mode();
                 last = run(&cli, &filter, ctx.clone(), inputs, |output| {
-                    print(&cli, color, output, tmp.as_file_mut())
+                    print(&cli, output, tmp.as_file_mut())
                 })?;
 
                 // replace the input file with the temporary file
@@ -345,12 +344,7 @@ fn run(
     Ok(last)
 }
 
-fn print(
-    cli: &Cli,
-    color: colored_json::ColorMode,
-    val: Val,
-    writer: &mut impl Write,
-) -> io::Result<()> {
+fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
     use colored_json::{ColoredFormatter, CompactFormatter, PrettyFormatter};
     match val {
         Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
@@ -362,13 +356,13 @@ fn print(
                 ColoredFormatter::new(CompactFormatter).write_colored_json(
                     &val.into(),
                     writer,
-                    color,
+                    cli.color_mode(),
                 )
             } else {
                 ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(
                     &val.into(),
                     writer,
-                    color,
+                    cli.color_mode(),
                 )
             }?
         }
@@ -387,10 +381,8 @@ fn run_and_print(
 ) -> Result<Option<bool>, Error> {
     let mut stdout = io::stdout().lock();
 
-    let color = cli.color_mode();
-
     let last = run(cli, filter, vars, iter, |output| {
-        print(cli, color, output, &mut stdout)
+        print(cli, output, &mut stdout)
     })?;
 
     stdout.flush()?;
