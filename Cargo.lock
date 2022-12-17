@@ -268,7 +268,7 @@ dependencies = [
  "env_logger",
  "jaq-core",
  "jaq-std",
- "memmap",
+ "memmap2",
  "mimalloc",
  "serde_json",
  "tempfile",
@@ -331,13 +331,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "memmap"
-version = "0.7.0"
+name = "memmap2"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6585fd95e7bb50d6cc31e20d4cf9afb4e2ba16c5846fc76793f11218da9c475b"
+checksum = "4b182332558b18d807c4ce1ca8ca983b34c3ee32765e47b3f0f69b90355cc1dc"
 dependencies = [
  "libc",
- "winapi",
 ]
 
 [[package]]

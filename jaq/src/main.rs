@@ -203,9 +203,9 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     }
 }
 
-fn mmap_file(path: &std::path::Path) -> io::Result<memmap::Mmap> {
+fn mmap_file(path: &std::path::Path) -> io::Result<memmap2::Mmap> {
     let file = std::fs::File::open(&path)?;
-    unsafe { memmap::Mmap::map(&file) }
+    unsafe { memmap2::Mmap::map(&file) }
 }
 
 fn read_buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Value>> + 'a>
