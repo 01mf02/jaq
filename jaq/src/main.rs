@@ -78,6 +78,18 @@ struct Cli {
     #[arg(long, value_names = &["a", "v"])]
     arg: Vec<String>,
 
+    /// Set variable `$<a>` to array containing the JSON values in file `f`
+    ///
+    /// Unlike jq, this provides the variable *only* in the main filter.
+    #[arg(long, value_names = &["a", "f"])]
+    slurpfile: Vec<String>,
+
+    /// Set variable `$<a>` to string containing the contents of file `f`
+    ///
+    /// Unlike jq, this provides the variable *only* in the main filter.
+    #[arg(long, value_names = &["a", "f"])]
+    rawfile: Vec<String>,
+
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
 }
@@ -119,12 +131,19 @@ fn real_main() -> Result<ExitCode, Error> {
 
     let mut vars = Vec::new();
     let mut ctx = Vec::new();
-    for arg_val in cli.arg.chunks(2) {
-        if let [arg, val] = arg_val {
-            vars.push(arg.clone());
-            ctx.push(Val::Str(val.clone().into()));
-        }
-    }
+
+    bind(&mut vars, &mut ctx, &cli.arg, |v| {
+        Ok(Val::Str(v.to_string().into()))
+    })?;
+    bind(&mut vars, &mut ctx, &cli.slurpfile, |f| {
+        let path = std::path::Path::new(f);
+        let file = mmap_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
+        Ok(Val::Arr(slurp_slice(&file)?.into()))
+    })?;
+    bind(&mut vars, &mut ctx, &cli.rawfile, |f| {
+        let s = std::fs::read_to_string(f).map_err(|e| Error::Io(Some(f.to_string()), e));
+        Ok(Val::Str(s?.into()))
+    })?;
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
@@ -179,6 +198,19 @@ fn real_main() -> Result<ExitCode, Error> {
     })
 }
 
+fn bind<F>(vars: &mut Vec<String>, ctx: &mut Vec<Val>, args: &[String], f: F) -> Result<(), Error>
+where
+    F: Fn(&str) -> Result<Val, Error>,
+{
+    for arg_val in args.chunks(2) {
+        if let [arg, val] = arg_val {
+            vars.push(arg.clone());
+            ctx.push(f(val)?);
+        }
+    }
+    Ok(())
+}
+
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut errs = Vec::new();
     let mut defs = Definitions::core();
@@ -206,6 +238,13 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
 fn mmap_file(path: &std::path::Path) -> io::Result<memmap2::Mmap> {
     let file = std::fs::File::open(&path)?;
     unsafe { memmap2::Mmap::map(&file) }
+}
+
+fn slurp_slice(slice: &[u8]) -> io::Result<Vec<Val>> {
+    serde_json::Deserializer::from_slice(slice)
+        .into_iter::<serde_json::Value>()
+        .map(|v| v.map(Val::from).map_err(io::Error::from))
+        .collect()
 }
 
 fn read_buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Value>> + 'a>
