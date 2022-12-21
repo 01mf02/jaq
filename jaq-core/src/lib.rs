@@ -61,7 +61,7 @@ pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use fold::{fold, recurse};
+use fold::{fold, recurse, then};
 use parse::{Def, Main};
 use rc_list::RcList;
 use unparse::unparse;

@@ -1,6 +1,6 @@
 use crate::path::{self, Path};
 use crate::val::{Val, ValR, ValRs};
-use crate::{fold, recurse, Ctx, Error};
+use crate::{fold, recurse, then, Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use dyn_clone::DynClone;
@@ -105,14 +105,6 @@ trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
 impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
-
-fn then<'a, T, U: 'a, E: 'a>(
-    x: Result<T, E>,
-    f: impl FnOnce(T) -> Box<dyn Iterator<Item = Result<U, E>> + 'a>,
-) -> Box<dyn Iterator<Item = Result<U, E>> + 'a> {
-    x.map(f)
-        .unwrap_or_else(|e| Box::new(core::iter::once(Err(e))))
-}
 
 fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
     Box::new(fold(false, xs, Box::new(core::iter::once(Ok(init))), f))

@@ -1,6 +1,16 @@
+//! Functions on iterators over results.
+
 use alloc::{boxed::Box, vec::Vec};
 
 type Results<'a, T, E> = Box<dyn Iterator<Item = Result<T, E>> + 'a>;
+
+pub fn then<'a, T, U: 'a, E: 'a>(
+    x: Result<T, E>,
+    f: impl FnOnce(T) -> Results<'a, U, E>,
+) -> Results<'a, U, E> {
+    x.map(f)
+        .unwrap_or_else(|e| Box::new(core::iter::once(Err(e))))
+}
 
 // if `inner` is true, output values that yield non-empty output;
 // if `outer` is true, output values that yield     empty output
