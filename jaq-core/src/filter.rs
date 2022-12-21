@@ -1,9 +1,10 @@
 use crate::path::{self, Path};
 use crate::val::{Val, ValR, ValRs};
-use crate::{fold, recurse, then, Ctx, Error};
+use crate::{fold, rc_lazy_list, recurse, then, Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use dyn_clone::DynClone;
+use jaq_parse::filter::FoldType;
 use jaq_parse::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
@@ -23,7 +24,7 @@ pub enum Filter {
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     Ite(Box<Self>, Box<Self>, Box<Self>),
-    /// `reduce` and `foreach`
+    /// `reduce`, `for`, and `foreach`
     ///
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
@@ -38,7 +39,7 @@ pub enum Filter {
     /// | xn as $x | f
     /// ~~~
     ///
-    /// and `foreach xs as $x (init; f)` evaluates to
+    /// and `for xs as $x (init; f)` evaluates to
     ///
     /// ~~~ text
     /// init
@@ -46,7 +47,7 @@ pub enum Filter {
     /// | ...
     /// | ., (xn as $x | f)...)
     /// ~~~
-    Fold(bool, Box<Self>, Box<Self>, Box<Self>),
+    Fold(FoldType, Box<Self>, Box<Self>, Box<Self>),
 
     Path(Box<Self>, Path<Self>),
 
@@ -107,6 +108,7 @@ impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
 
 fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
+    let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(false, xs, Box::new(core::iter::once(Ok(init))), f))
 }
 
@@ -292,11 +294,17 @@ impl Filter {
                 let f = move |v| f.run((cv.0.clone(), v));
                 Box::new(recurse(*inner, *outer, init, f))
             }
-            Self::Fold(inner, xs, init, f) => {
-                let xs = xs.run(cv.clone());
+            Self::Fold(typ, xs, init, f) => {
+                let xs = rc_lazy_list::List::from_iter(xs.run(cv.clone()));
                 let init = init.run(cv.clone());
                 let f = move |x, v| f.run((cv.0.clone().cons_var(x), v));
-                Box::new(fold(*inner, xs, init, f))
+                match typ {
+                    FoldType::Reduce => Box::new(fold(false, xs, init, f)),
+                    FoldType::For => Box::new(fold(true, xs, init, f)),
+                    FoldType::Foreach => Box::new(init.flat_map(move |i| {
+                        fold(true, xs.clone(), Box::new(once(i)), f.clone()).skip(1)
+                    })),
+                }
             }
 
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
@@ -425,7 +433,7 @@ impl Filter {
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
             Self::Ite(if_, then_, else_) => Self::Ite(sub(if_), sub(then_), sub(else_)),
-            Self::Fold(inner, xs, init, f) => Self::Fold(inner, sub(xs), sub(init), sub(f)),
+            Self::Fold(typ, xs, init, f) => Self::Fold(typ, sub(xs), sub(init), sub(f)),
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
             Self::Update(path, f) => Self::Update(sub(path), sub(f)),
             Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),

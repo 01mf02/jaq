@@ -100,6 +100,14 @@ pub struct Fold<F> {
     pub f: F,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug)]
+pub enum FoldType {
+    Reduce,
+    For,
+    Foreach,
+}
+
 /// Function from value to stream of values, such as `.[] | add / length`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
@@ -124,7 +132,7 @@ pub enum Filter {
     ///
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
-    Fold(bool, Fold<Box<Spanned<Self>>>),
+    Fold(FoldType, Fold<Box<Spanned<Self>>>),
     /// Call to another filter, e.g. `map(.+1)`
     Call(String, Vec<Spanned<Self>>),
     /// Error suppression, e.g. `keys?`
@@ -211,8 +219,9 @@ where
     let arg = || filter.clone().map(Box::new);
     let args = arg().then_ignore(just(Token::Ctrl(';'))).then(arg());
     let inner = select! {
-        Token::Reduce => false,
-        Token::Foreach => true,
+        Token::Reduce => FoldType::Reduce,
+        Token::For => FoldType::For,
+        Token::Foreach => FoldType::Foreach,
     };
     inner
         .then(arg())

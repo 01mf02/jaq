@@ -1,5 +1,6 @@
 //! Functions on iterators over results.
 
+use crate::rc_lazy_list::List;
 use alloc::{boxed::Box, vec::Vec};
 
 type Results<'a, T, E> = Box<dyn Iterator<Item = Result<T, E>> + 'a>;
@@ -63,12 +64,10 @@ pub fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
 // if `inner` is true, output intermediate results
 pub fn fold<'a, T: Clone + 'a, E: Clone + 'a>(
     inner: bool,
-    xs: impl Iterator<Item = Result<T, E>> + 'a,
+    xs: List<'a, Result<T, E>>,
     init: Results<'a, T, E>,
     f: impl Fn(T, T) -> Results<'a, T, E> + 'a,
 ) -> impl Iterator<Item = Result<T, E>> + 'a {
-    use crate::rc_lazy_list::List;
-    let xs = List::from_iter(xs);
     let mut stack = Vec::from([(xs, init.peekable())]);
     core::iter::from_fn(move || loop {
         let (mut xs, mut vs) = stack.pop()?;

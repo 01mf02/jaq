@@ -217,6 +217,8 @@ fn reduce() {
 #[test]
 fn foreach() {
     let f = "[foreach .[] as $x (0; .+$x)]";
+    give(json!([1, 2, 3]), f, json!([1, 3, 6]));
+    let f = "[for .[] as $x (0; .+$x)]";
     give(json!([1, 2, 3]), f, json!([0, 1, 3, 6]));
 
     // jq will give only [4, 3, 7, 12] here because
@@ -224,5 +226,7 @@ fn foreach() {
     // input value for the next iteration, whereas
     // jaq keeps all output values as input values
     let f = "[foreach .[] as $x (1; .+$x, .*$x)]";
+    give(json!([3, 4]), f, json!([4, 8, 16, 3, 7, 12]));
+    let f = "[for .[] as $x (1; .+$x, .*$x)]";
     give(json!([3, 4]), f, json!([1, 4, 8, 16, 3, 7, 12]));
 }
