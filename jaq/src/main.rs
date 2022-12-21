@@ -78,17 +78,17 @@ struct Cli {
     #[arg(long, value_names = &["a", "v"])]
     arg: Vec<String>,
 
-    /// Set variable `$<a>` to array containing the JSON values in file `f`
-    ///
-    /// Unlike jq, this provides the variable *only* in the main filter.
-    #[arg(long, value_names = &["a", "f"])]
-    slurpfile: Vec<String>,
-
     /// Set variable `$<a>` to string containing the contents of file `f`
     ///
     /// Unlike jq, this provides the variable *only* in the main filter.
     #[arg(long, value_names = &["a", "f"])]
     rawfile: Vec<String>,
+
+    /// Set variable `$<a>` to array containing the JSON values in file `f`
+    ///
+    /// Unlike jq, this provides the variable *only* in the main filter.
+    #[arg(long, value_names = &["a", "f"])]
+    slurpfile: Vec<String>,
 
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
@@ -202,17 +202,31 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     bind(&mut var_val, &cli.arg, |v| {
         Ok(Val::Str(v.to_string().into()))
     })?;
+    bind(&mut var_val, &cli.rawfile, |f| {
+        let s = std::fs::read_to_string(f).map_err(|e| Error::Io(Some(f.to_string()), e));
+        Ok(Val::Str(s?.into()))
+    })?;
     bind(&mut var_val, &cli.slurpfile, |f| {
         let path = std::path::Path::new(f);
         let file = mmap_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
         Ok(Val::Arr(slurp_slice(&file)?.into()))
     })?;
-    bind(&mut var_val, &cli.rawfile, |f| {
-        let s = std::fs::read_to_string(f).map_err(|e| Error::Io(Some(f.to_string()), e));
-        Ok(Val::Str(s?.into()))
-    })?;
+
+    var_val.push(("ARGS".to_string().into(), args_named(&var_val)));
 
     Ok(var_val)
+}
+
+fn args_named(var_val: &[(String, Val)]) -> Val {
+    use std::rc::Rc;
+    let named = var_val
+        .iter()
+        .map(|(var, val)| (var.to_owned().into(), val.clone()));
+    let named = Val::Obj(Rc::new(named.collect()));
+
+    let args = std::iter::once(("named".to_string().into(), named));
+
+    Val::Obj(Rc::new(args.collect()))
 }
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
