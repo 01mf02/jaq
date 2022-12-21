@@ -100,11 +100,15 @@ pub struct Fold<F> {
     pub f: F,
 }
 
+/// Type of folding filter.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum FoldType {
+    /// return only the final value of fold
     Reduce,
+    /// return initial, intermediate, and final values of fold
     For,
+    /// return intermediate and final values of fold
     Foreach,
 }
 
