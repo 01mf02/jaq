@@ -1,6 +1,7 @@
 use crate::path::{self, Path};
+use crate::results::{fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
-use crate::{fold, rc_lazy_list, recurse, then, Ctx, Error};
+use crate::{rc_lazy_list, Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use dyn_clone::DynClone;
