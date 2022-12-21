@@ -1,6 +1,6 @@
 use crate::path::{self, Path};
 use crate::val::{Val, ValR, ValRs};
-use crate::{fold, Ctx, Error};
+use crate::{fold, recurse, Ctx, Error};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use dyn_clone::DynClone;
@@ -295,47 +295,10 @@ impl Filter {
                     then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
                 }))
             }
-            // if `inner` is true, output values that yield non-empty output;
-            // if `outer` is true, output values that yield     empty output
             Self::Recurse(f, inner, outer) => {
-                let mut stack = Vec::from([(Box::new(once(Ok(cv.1))) as ValRs).peekable()]);
-                Box::new(core::iter::from_fn(move || loop {
-                    let v = loop {
-                        let mut iter = stack.pop()?;
-                        match iter.next() {
-                            None => continue,
-                            Some(Ok(v)) => {
-                                if iter.peek().is_some() {
-                                    stack.push(iter)
-                                }
-                                break v;
-                            }
-                            e => return e,
-                        }
-                    };
-                    let mut iter = f.run((cv.0.clone(), v.clone())).peekable();
-                    match (*inner, *outer) {
-                        (true, true) => {
-                            stack.push(iter);
-                            return Some(Ok(v));
-                        }
-                        (true, false) => {
-                            if iter.peek().is_some() {
-                                stack.push(iter);
-                                return Some(Ok(v));
-                            }
-                        }
-                        (false, true) => {
-                            if iter.peek().is_some() {
-                                stack.push(iter);
-                            } else {
-                                return Some(Ok(v));
-                            }
-                        }
-                        // pathological case, included only for completeness
-                        (false, false) => stack.push(iter),
-                    }
-                }))
+                let init = Box::new(once(Ok(cv.1))) as ValRs;
+                let f = move |v| f.run((cv.0.clone(), v));
+                Box::new(recurse(*inner, *outer, init, f))
             }
             Self::Fold(inner, xs, init, f) => {
                 let xs = xs.run(cv.clone());
