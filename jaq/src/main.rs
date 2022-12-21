@@ -129,21 +129,7 @@ fn real_main() -> Result<ExitCode, Error> {
         .format_target(false)
         .init();
 
-    let mut vars = Vec::new();
-    let mut ctx = Vec::new();
-
-    bind(&mut vars, &mut ctx, &cli.arg, |v| {
-        Ok(Val::Str(v.to_string().into()))
-    })?;
-    bind(&mut vars, &mut ctx, &cli.slurpfile, |f| {
-        let path = std::path::Path::new(f);
-        let file = mmap_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
-        Ok(Val::Arr(slurp_slice(&file)?.into()))
-    })?;
-    bind(&mut vars, &mut ctx, &cli.rawfile, |f| {
-        let s = std::fs::read_to_string(f).map_err(|e| Error::Io(Some(f.to_string()), e));
-        Ok(Val::Str(s?.into()))
-    })?;
+    let (vars, ctx) = binds(&cli)?.into_iter().unzip();
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
@@ -198,17 +184,35 @@ fn real_main() -> Result<ExitCode, Error> {
     })
 }
 
-fn bind<F>(vars: &mut Vec<String>, ctx: &mut Vec<Val>, args: &[String], f: F) -> Result<(), Error>
+fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[String], f: F) -> Result<(), Error>
 where
     F: Fn(&str) -> Result<Val, Error>,
 {
     for arg_val in args.chunks(2) {
         if let [arg, val] = arg_val {
-            vars.push(arg.clone());
-            ctx.push(f(val)?);
+            var_val.push((arg.clone(), f(val)?));
         }
     }
     Ok(())
+}
+
+fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
+    let mut var_val = Vec::new();
+
+    bind(&mut var_val, &cli.arg, |v| {
+        Ok(Val::Str(v.to_string().into()))
+    })?;
+    bind(&mut var_val, &cli.slurpfile, |f| {
+        let path = std::path::Path::new(f);
+        let file = mmap_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
+        Ok(Val::Arr(slurp_slice(&file)?.into()))
+    })?;
+    bind(&mut var_val, &cli.rawfile, |f| {
+        let s = std::fs::read_to_string(f).map_err(|e| Error::Io(Some(f.to_string()), e));
+        Ok(Val::Str(s?.into()))
+    })?;
+
+    Ok(var_val)
 }
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
@@ -275,7 +279,7 @@ where
 {
     if slurp {
         let mut buf = String::new();
-        let s = read.read_to_string(&mut buf).map(|_| buf.into());
+        let s = read.read_to_string(&mut buf).map(|_| buf);
         Box::new(std::iter::once(s))
     } else {
         Box::new(read.lines()) as Box<dyn Iterator<Item = _>>
