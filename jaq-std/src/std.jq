@@ -100,10 +100,12 @@ def flatten(d): d as $d |
 
 # Regular expressions
 def    test(re; flags): captures(re; flags) | length > 0;
+def    scan(re; flags): captures(re; flags) | .[] | .[0].string;
 def   match(re; flags): captures(re; flags) | .[] | .[0] + {captures: .[1:]};
 def capture(re; flags): captures(re; flags) | .[] | map(select(.name) | {(.name): .string}) | add;
 
 def    test(re):    test(re; "");
+def    scan(re):    scan(re; "");
 def   match(re):   match(re; "");
 def capture(re): capture(re; "");
 
