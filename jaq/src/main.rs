@@ -212,7 +212,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         Ok(Val::Arr(slurp_slice(&file)?.into()))
     })?;
 
-    var_val.push(("ARGS".to_string().into(), args_named(&var_val)));
+    var_val.push(("ARGS".to_string(), args_named(&var_val)));
 
     Ok(var_val)
 }
@@ -254,7 +254,7 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
 }
 
 fn mmap_file(path: &std::path::Path) -> io::Result<memmap2::Mmap> {
-    let file = std::fs::File::open(&path)?;
+    let file = std::fs::File::open(path)?;
     unsafe { memmap2::Mmap::map(&file) }
 }
 
