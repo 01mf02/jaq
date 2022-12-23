@@ -255,6 +255,91 @@ impl Val {
             s.split(&**sep).map(|s| val(s.to_string())).collect()
         })
     }
+
+    pub fn captures(&self, re: &Self, flags: &Self) -> Result<Vec<Val>, Error> {
+        let s = self.as_str()?;
+        let flags = Flags::new(flags.as_str()?).map_err(Error::RegexFlag)?;
+        let re = flags.regex(re.as_str()?).unwrap();
+        let matches = re.captures_iter(s).map(|c| {
+            c.iter()
+                .zip(re.capture_names())
+                .filter_map(|(match_, name)| Some(capture(s, match_?, name)))
+                .collect::<Vec<_>>()
+        });
+        let matches = matches.map(|vs| Val::Arr(vs.into()));
+        if flags.g {
+            Ok(matches.collect())
+        } else {
+            Ok(matches.take(1).collect())
+        }
+    }
+}
+
+#[derive(Default)]
+struct Flags {
+    // global search
+    g: bool,
+    // case-insensitive
+    i: bool,
+    // multi-line mode: ^ and $ match begin/end of line
+    m: bool,
+    // single-line mode: allow . to match \n
+    s: bool,
+    // greedy
+    l: bool,
+    // extended mode: ignore whitespace and allow line comments (starting with `#`)
+    x: bool,
+}
+
+impl Flags {
+    fn new(flags: &str) -> Result<Self, char> {
+        let mut out = Self::default();
+        for flag in flags.chars() {
+            match flag {
+                'g' => out.g = true,
+                'i' => out.i = true,
+                'm' => out.m = true,
+                's' => out.s = true,
+                'l' => out.l = true,
+                'x' => out.x = true,
+                'p' => {
+                    out.m = true;
+                    out.s = true;
+                }
+                c => return Err(c),
+            }
+        }
+        Ok(out)
+    }
+
+    fn impact<'a>(&'a self, builder: &'a mut regex::RegexBuilder) -> &mut regex::RegexBuilder {
+        builder
+            .case_insensitive(self.i)
+            .multi_line(self.m)
+            .dot_matches_new_line(self.s)
+            .swap_greed(self.l)
+            .ignore_whitespace(self.x)
+    }
+
+    fn regex(&self, re: &str) -> Result<regex::Regex, regex::Error> {
+        let mut builder = regex::RegexBuilder::new(re);
+        self.impact(&mut builder).build()
+    }
+}
+
+fn capture<'a>(s: &str, m: regex::Match<'a>, name: Option<&'a str>) -> Val {
+    let name = name.map(|n| Val::Str(n.to_string().into()));
+    // convert byte offset to UTF-8 character offset
+    let offset = s.char_indices().position(|(p, _)| p == m.start()).unwrap();
+    let obj = [
+        ("offset", Val::Int(offset as isize)),
+        ("length", Val::Int(m.as_str().chars().count() as isize)),
+        ("string", Val::Str(m.as_str().to_string().into())),
+        ("name", name.unwrap_or(Val::Null)),
+    ];
+    let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
+    let obj = obj.map(|(k, v)| (Rc::new(k.to_string()), v));
+    Val::Obj(Rc::new(obj.collect()))
 }
 
 impl From<serde_json::Value> for Val {

@@ -98,5 +98,14 @@ def flatten(d): d as $d |
     select(.d < 0 or (.x | isarray | not)) | .x
   ];
 
+# Regular expressions
+def    test(re; flags): captures(re; flags) | length > 0;
+def   match(re; flags): captures(re; flags) | .[] | .[0] + {captures: .[1:]};
+def capture(re; flags): captures(re; flags) | .[] | map(select(.name) | {(.name): .string}) | add;
+
+def    test(re):    test(re; "");
+def   match(re):   match(re; "");
+def capture(re): capture(re; "");
+
 # I/O
 def input: first(inputs);

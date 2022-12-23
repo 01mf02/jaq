@@ -80,6 +80,8 @@ pub enum Filter {
     SortBy(Box<Self>),
     Has(Box<Self>),
     Split(Box<Self>),
+    Captures(Box<Self>, Box<Self>),
+
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>, bool, bool),
@@ -151,6 +153,7 @@ impl Filter {
             make_builtin!("has", 1, Self::Has),
             make_builtin!("contains", 1, Self::Contains),
             make_builtin!("split", 1, Self::Split),
+            make_builtin!("captures", 2, Self::Captures),
             make_builtin!("first", 1, Self::First),
             make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, |f| Self::Recurse(f, true, true)),
@@ -270,6 +273,10 @@ impl Filter {
                 f.run(cv.clone())
                     .map(move |sep| Ok(Val::Arr(Rc::new(cv.1.split(&sep?)?)))),
             ),
+            Self::Captures(re, flags) => Box::new(
+                Self::cartesian(flags, re, (cv.0, cv.1.clone()))
+                    .map(move |(flags, re)| Ok(Val::Arr(cv.1.captures(&re?, &flags?)?.into()))),
+            ),
 
             Self::First(f) => Box::new(f.run(cv).take(1)),
             Self::Last(f) => then(f.run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {
@@ -331,7 +338,7 @@ impl Filter {
             Self::AsciiDowncase | Self::AsciiUpcase => err,
             Self::Reverse | Self::Sort | Self::SortBy(_) => err,
             Self::Has(_) | Self::Contains(_) => err,
-            Self::Split(_) => err,
+            Self::Split(_) | Self::Captures(..) => err,
             Self::Inputs | Self::Range(..) => err,
 
             // these are up for grabs to implement :)
@@ -453,6 +460,7 @@ impl Filter {
             Self::Has(f) => Self::Has(sub(f)),
             Self::Contains(f) => Self::Contains(sub(f)),
             Self::Split(f) => Self::Split(sub(f)),
+            Self::Captures(re, flags) => Self::Captures(sub(re), sub(flags)),
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f, inner, outer) => Self::Recurse(sub(f), inner, outer),
