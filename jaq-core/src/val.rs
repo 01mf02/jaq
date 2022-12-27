@@ -260,10 +260,11 @@ impl Val {
         let s = self.as_str()?;
         let flags = Flags::new(flags.as_str()?).map_err(Error::RegexFlag)?;
         let re = flags.regex(re.as_str()?).unwrap();
+        let mut bc = ByteChar::new(s);
         let matches = re.captures_iter(s).map(|c| {
             c.iter()
                 .zip(re.capture_names())
-                .filter_map(|(match_, name)| Some(capture(s, match_?, name)))
+                .filter_map(|(match_, name)| Some(capture(&mut bc, match_?, name)))
                 .collect::<Vec<_>>()
         });
         let matches = matches.map(|vs| Val::Arr(vs.into()));
@@ -327,12 +328,39 @@ impl Flags {
     }
 }
 
-fn capture<'a>(s: &str, m: regex::Match<'a>, name: Option<&'a str>) -> Val {
+struct ByteChar<'a> {
+    prev_byte: usize,
+    prev_char: usize,
+    rest: core::str::CharIndices<'a>,
+}
+
+impl<'a> ByteChar<'a> {
+    fn new(s: &'a str) -> Self {
+        let mut ci = s.char_indices();
+        // skip the first one, because it is already taken into account
+        ci.next();
+        Self {
+            prev_byte: 0,
+            prev_char: 0,
+            rest: ci,
+        }
+    }
+
+    /// Convert byte offset to UTF-8 character offset.
+    fn char_of_byte_offset(&mut self, byte_offset: usize) -> usize {
+        assert!(self.prev_byte <= byte_offset);
+        if self.prev_byte != byte_offset {
+            self.prev_byte = byte_offset;
+            self.prev_char += 1 + self.rest.position(|(p, _)| p == byte_offset).unwrap();
+        }
+        self.prev_char
+    }
+}
+
+fn capture<'a>(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Val {
     let name = name.map(|n| Val::Str(n.to_string().into()));
-    // convert byte offset to UTF-8 character offset
-    let offset = s.char_indices().position(|(p, _)| p == m.start()).unwrap();
     let obj = [
-        ("offset", Val::Int(offset as isize)),
+        ("offset", Val::Int(bc.char_of_byte_offset(m.start()) as isize)),
         ("length", Val::Int(m.as_str().chars().count() as isize)),
         ("string", Val::Str(m.as_str().to_string().into())),
         ("name", name.unwrap_or(Val::Null)),
