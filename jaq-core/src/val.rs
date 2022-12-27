@@ -261,13 +261,19 @@ impl Val {
         let flags = Flags::new(flags.as_str()?).map_err(Error::RegexFlag)?;
         let re = flags.regex(re.as_str()?).unwrap();
         let mut bc = ByteChar::new(s);
-        let matches = re.captures_iter(s).map(|c| {
-            c.iter()
-                .zip(re.capture_names())
-                .filter_map(|(match_, name)| Some(capture(&mut bc, match_?, name)))
-                .collect::<Vec<_>>()
-        });
-        let matches = matches.map(|vs| Val::Arr(vs.into()));
+        let matches = re
+            .captures_iter(s)
+            .filter(|c| {
+                let whole = c.get(0).unwrap();
+                whole.start() < s.len() && !(flags.n && whole.as_str().is_empty())
+            })
+            .map(|c| {
+                c.iter()
+                    .zip(re.capture_names())
+                    .filter_map(|(match_, name)| Some(capture(&mut bc, match_?, name)))
+                    .collect::<Vec<_>>()
+            })
+            .map(|vs| Val::Arr(vs.into()));
         if flags.g {
             Ok(matches.collect())
         } else {
@@ -280,6 +286,8 @@ impl Val {
 struct Flags {
     // global search
     g: bool,
+    // ignore empty matches
+    n: bool,
     // case-insensitive
     i: bool,
     // multi-line mode: ^ and $ match begin/end of line
@@ -298,6 +306,7 @@ impl Flags {
         for flag in flags.chars() {
             match flag {
                 'g' => out.g = true,
+                'n' => out.n = true,
                 'i' => out.i = true,
                 'm' => out.m = true,
                 's' => out.s = true,
@@ -347,7 +356,7 @@ impl<'a> ByteChar<'a> {
     }
 
     /// Convert byte offset to UTF-8 character offset.
-    fn char_of_byte_offset(&mut self, byte_offset: usize) -> usize {
+    fn char_of_byte(&mut self, byte_offset: usize) -> usize {
         assert!(self.prev_byte <= byte_offset);
         if self.prev_byte != byte_offset {
             self.prev_byte = byte_offset;
@@ -360,7 +369,7 @@ impl<'a> ByteChar<'a> {
 fn capture<'a>(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Val {
     let name = name.map(|n| Val::Str(n.to_string().into()));
     let obj = [
-        ("offset", Val::Int(bc.char_of_byte_offset(m.start()) as isize)),
+        ("offset", Val::Int(bc.char_of_byte(m.start()) as isize)),
         ("length", Val::Int(m.as_str().chars().count() as isize)),
         ("string", Val::Str(m.as_str().to_string().into())),
         ("name", name.unwrap_or(Val::Null)),
