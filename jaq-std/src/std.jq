@@ -99,15 +99,38 @@ def flatten(d): d as $d |
   ];
 
 # Regular expressions
+def capture_of_match: map(select(.name) | {(.name): .string}) | add;
+
 def    test(re; flags): captures(re; flags) | length > 0;
 def    scan(re; flags): captures(re; flags) | .[] | .[0].string;
 def   match(re; flags): captures(re; flags) | .[] | .[0] + {captures: .[1:]};
-def capture(re; flags): captures(re; flags) | .[] | map(select(.name) | {(.name): .string}) | add;
+def capture(re; flags): captures(re; flags) | .[] | capture_of_match;
+
+def splits(re; flags): . as $s |
+  foreach captures(re; "g" + flags)[][0], null as $m
+  ( { i: 0 };
+    if $m == null
+    then { s: $s[.i:] }
+    else { s: $s[.i:$m.offset], i: $m.offset + $m.length }
+    end
+  ) | .s;
+def sub(re; f; flags): . as $s |
+  reduce captures(re; flags)[], null as $m
+  ( { i: 0, s: "" };
+    if $m == null
+    then .s += $s[.i:]
+    else .s += $s[.i:$m[0].offset] + ($m | capture_of_match | f) |
+         .i  = ($m[0] | .offset + .length)
+    end
+  ) | .s;
 
 def    test(re):    test(re; "");
 def    scan(re):    scan(re; "");
 def   match(re):   match(re; "");
 def capture(re): capture(re; "");
+def  splits(re):  splits(re; "");
+def  sub(re; f): sub(re; f;  "");
+def gsub(re; f): sub(re; f; "g");
 
 # I/O
 def input: first(inputs);
