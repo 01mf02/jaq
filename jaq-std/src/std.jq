@@ -116,7 +116,6 @@ def    test(re):    test(re; "");
 def    scan(re):    scan(re; "");
 def   match(re):   match(re; "");
 def capture(re): capture(re; "");
-def   split(re):   split(re; "");
 def  splits(re):  splits(re; "");
 def  sub(re; f): sub(re; f;  "");
 def gsub(re; f): sub(re; f; "g");
