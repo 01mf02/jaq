@@ -256,29 +256,45 @@ impl Val {
         })
     }
 
-    pub fn captures(&self, re: &Self, flags: &Self) -> Result<Vec<Val>, Error> {
+    pub fn captures(&self, re: &Self, flags: &Self, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
         let s = self.as_str()?;
         let flags = Flags::new(flags.as_str()?).map_err(Error::RegexFlag)?;
         let re = flags.regex(re.as_str()?).unwrap();
+        let (split, matches) = sm;
+
+        let mut last_byte = 0;
         let mut bc = ByteChar::new(s);
-        let matches = re
-            .captures_iter(s)
-            .filter(|c| {
-                let whole = c.get(0).unwrap();
-                whole.start() < s.len() && !(flags.n && whole.as_str().is_empty())
-            })
-            .map(|c| {
-                c.iter()
-                    .zip(re.capture_names())
-                    .filter_map(|(match_, name)| Some(capture(&mut bc, match_?, name)))
-                    .collect::<Vec<_>>()
-            })
-            .map(|vs| Val::Arr(vs.into()));
-        if flags.g {
-            Ok(matches.collect())
-        } else {
-            Ok(matches.take(1).collect())
+
+        let captures = re.captures_iter(s);
+        let len = re.captures_len();
+
+        let cap = if split { len + 1 } else { 0 } + if matches { len } else { 0 };
+        let mut out = Vec::with_capacity(cap);
+
+        for c in captures {
+            let whole = c.get(0).unwrap();
+            if whole.start() >= s.len() || (flags.n && whole.as_str().is_empty()) {
+                continue;
+            }
+            let vs = c
+                .iter()
+                .zip(re.capture_names())
+                .filter_map(|(match_, name)| Some(capture(&mut bc, match_?, name)));
+            if split {
+                out.push(Val::Str(s[last_byte..whole.start()].to_string().into()));
+                last_byte = whole.end();
+            }
+            if matches {
+                out.push(Val::Arr(vs.collect::<Vec<_>>().into()));
+            }
+            if !flags.g {
+                break;
+            }
         }
+        if split {
+            out.push(Val::Str(s[last_byte..].to_string().into()));
+        }
+        Ok(out)
     }
 }
 

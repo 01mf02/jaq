@@ -101,33 +101,22 @@ def flatten(d): d as $d |
 # Regular expressions
 def capture_of_match: map(select(.name) | {(.name): .string}) | add;
 
-def    test(re; flags): captures(re; flags) | length > 0;
-def    scan(re; flags): captures(re; flags) | .[] | .[0].string;
-def   match(re; flags): captures(re; flags) | .[] | .[0] + {captures: .[1:]};
-def capture(re; flags): captures(re; flags) | .[] | capture_of_match;
+def    test(re; flags): matches(re; flags) | length > 0;
+def    scan(re; flags): matches(re; flags) | .[] | .[0].string;
+def   match(re; flags): matches(re; flags) | .[] | .[0] + {captures: .[1:]};
+def capture(re; flags): matches(re; flags) | .[] | capture_of_match;
 
-def splits(re; flags): . as $s |
-  foreach captures(re; "g" + flags)[][0], null as $m
-  ( { i: 0 };
-    if $m == null
-    then { s: $s[.i:] }
-    else { s: $s[.i:$m.offset], i: $m.offset + $m.length }
-    end
-  ) | .s;
-def sub(re; f; flags): . as $s |
-  reduce captures(re; flags)[], null as $m
-  ( { i: 0, s: "" };
-    if $m == null
-    then .s += $s[.i:]
-    else .s += $s[.i:$m[0].offset] + ($m | capture_of_match | f) |
-         .i  = ($m[0] | .offset + .length)
-    end
-  ) | .s;
+def split (re; flags): split(re; flags + "g");
+def splits(re; flags): split(re; flags)[];
+
+def sub(re; f; flags): reduce split_matches(re; flags)[] as $x
+  (""; . + if $x | isstring then $x else $x | capture_of_match | f end);
 
 def    test(re):    test(re; "");
 def    scan(re):    scan(re; "");
 def   match(re):   match(re; "");
 def capture(re): capture(re; "");
+def   split(re):   split(re; "");
 def  splits(re):  splits(re; "");
 def  sub(re; f): sub(re; f;  "");
 def gsub(re; f): sub(re; f; "g");
