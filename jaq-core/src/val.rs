@@ -264,14 +264,9 @@ impl Val {
 
         let mut last_byte = 0;
         let mut bc = ByteChar::new(s);
+        let mut out = Vec::new();
 
-        let captures = re.captures_iter(s);
-        let len = re.captures_len();
-
-        let cap = if split { len + 1 } else { 0 } + if matches { len } else { 0 };
-        let mut out = Vec::with_capacity(cap);
-
-        for c in captures {
+        for c in re.captures_iter(s) {
             let whole = c.get(0).unwrap();
             if whole.start() >= s.len() || (flags.n && whole.as_str().is_empty()) {
                 continue;
