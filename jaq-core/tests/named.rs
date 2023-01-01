@@ -104,6 +104,35 @@ fn recurse() {
 }
 
 #[test]
+fn regex() {
+    let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;
+    let s = "2012-03-14, 2013-01-01 and 2014-07-05";
+    let f = |f, re, flags| format!("{f}(\"{re}\"; \"{flags}\")");
+
+    let out = json!(["", ", ", " and ", ""]);
+    give(json!(s), &f("split", date, "g"), out);
+
+    let c = |o: usize, s: &str| {
+        json!({
+          "offset": o,
+          "length": s.chars().count(),
+          "string": s
+        })
+    };
+    let d1 = json!([c(00, "2012-03-14"), c(00, "2012"), c(05, "03"), c(08, "14")]);
+    let d2 = json!([c(12, "2013-01-01"), c(12, "2013"), c(17, "01"), c(20, "01")]);
+    let d3 = json!([c(27, "2014-07-05"), c(27, "2014"), c(32, "07"), c(35, "05")]);
+
+    give(json!(s), &f("matches", date, "g"), json!([d1, d2, d3]));
+
+    let out = json!(["", d1, ", ", d2, " and ", d3, ""]);
+    give(json!(s), &f("split_matches", date, "g"), out);
+
+    let out = json!(["", d1, ", 2013-01-01 and 2014-07-05"]);
+    give(json!(s), &f("split_matches", date, ""), out);
+}
+
+#[test]
 fn round() {
     give(json!(1), "round", json!(1));
     give(json!(1.0), "round", json!(1));
