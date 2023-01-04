@@ -166,7 +166,9 @@ fn real_main() -> Result<ExitCode, Error> {
                 })?;
 
                 // replace the input file with the temporary file
+                let perms = std::fs::metadata(path)?.permissions();
                 tmp.persist(path).map_err(Error::Persist)?;
+                std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(|out| {
                     run(&cli, &filter, ctx.clone(), inputs, |v| print(&cli, v, out))
