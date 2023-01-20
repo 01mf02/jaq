@@ -254,6 +254,7 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
 - [x] I/O (`input`)
+- [x] Regular expressions (`test`, `scan`, `match`, `capture`, `splits`, `sub`, `gsub`)
 
 
 ## Advanced features
@@ -263,7 +264,6 @@ jaq currently does *not* aim to support several features of jq, such as:
 - Paths
 - Modules
 - Dates
-- Regular expressions
 - SQL-style operators
 - Streaming
 
