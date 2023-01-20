@@ -22,6 +22,7 @@ chumsky = "0.8.0"
 clap = { version = "4.0.0", features = ["derive"] }
 colored_json = "2.1.0"
 env_logger = { version = "0.9.1", default-features = false }
+hifijson = "0.1.0"
 memmap2 = "0.5.8"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
 serde_json = { version = "1.0.81", features = [ "arbitrary_precision", "preserve_order" ] }

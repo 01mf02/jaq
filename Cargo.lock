@@ -232,6 +232,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hifijson"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8c87cbc0258a6ffc3797b385ba961e0abbccaf153df11732c7cc58150378fac"
+
+[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -275,6 +281,7 @@ dependencies = [
  "clap",
  "colored_json",
  "env_logger",
+ "hifijson",
  "jaq-core",
  "jaq-std",
  "memmap2",
@@ -289,6 +296,7 @@ version = "0.9.0"
 dependencies = [
  "ahash",
  "dyn-clone",
+ "hifijson",
  "indexmap",
  "itertools",
  "jaq-parse",

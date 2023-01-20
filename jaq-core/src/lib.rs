@@ -50,6 +50,7 @@ mod path;
 mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
+mod regex;
 mod results;
 mod unparse;
 mod val;

@@ -46,6 +46,9 @@ pub enum Error {
     SliceAssign(Val),
     /// `0 |= .+1`
     PathExp,
+    /// `"a" | test("(")`
+    Regex(String),
+    /// `"a" | test("."; "b")`
     RegexFlag(char),
 }
 
@@ -72,6 +75,7 @@ impl fmt::Display for Error {
             Self::Int(v) => write!(f, "cannot use {v} as integer"),
             Self::SliceAssign(v) => write!(f, "cannot assign non-array ({v}) to an array slice"),
             Self::PathExp => write!(f, "invalid path expression"),
+            Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
         }
     }

@@ -3,7 +3,7 @@ use crate::results::{fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_parse::filter::FoldType;
 use jaq_parse::{MathOp, OrdOp};
@@ -173,13 +173,11 @@ impl Filter {
             Self::Id => Box::new(once(Ok(cv.1))),
             Self::Int(n) => Box::new(once(Ok(Val::Int(*n)))),
             Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
-            Self::Str(s) => Box::new(once(Ok(Val::Str(Rc::new(s.clone()))))),
+            Self::Str(s) => Box::new(once(Ok(Val::str(s.clone())))),
             Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
-            Self::Array(Some(f)) => Box::new(once(
-                f.run(cv)
-                    .collect::<Result<_, _>>()
-                    .map(|v| Val::Arr(Rc::new(v))),
-            )),
+            Self::Array(Some(f)) => {
+                Box::new(once(f.run(cv).collect::<Result<_, _>>().map(Val::arr)))
+            }
             Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Default::default())))),
             Self::Object(o) => Box::new(
                 o.iter()
@@ -187,9 +185,9 @@ impl Filter {
                     .multi_cartesian_product()
                     .map(|kvs| {
                         kvs.into_iter()
-                            .map(|(k, v)| Ok((k?.str()?, v?)))
+                            .map(|(k, v)| Ok((k?.to_str()?, v?)))
                             .collect::<Result<_, _>>()
-                            .map(|kvs| Val::Obj(Rc::new(kvs)))
+                            .map(Val::obj)
                     }),
             ),
             Self::Try(f) => Box::new(f.run(cv).filter(|y| y.is_ok())),
@@ -250,14 +248,14 @@ impl Filter {
             Self::Debug => Box::new(once(Ok(cv.1.debug()))),
             Self::Inputs => Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse))),
             Self::Length => Box::new(once(cv.1.len())),
-            Self::Keys => Box::new(once(cv.1.keys().map(|a| Val::Arr(Rc::new(a))))),
+            Self::Keys => Box::new(once(cv.1.keys().map(Val::arr))),
             Self::Floor => Box::new(once(cv.1.round(|f| f.floor()))),
             Self::Round => Box::new(once(cv.1.round(|f| f.round()))),
             Self::Ceil => Box::new(once(cv.1.round(|f| f.ceil()))),
             Self::FromJson => Box::new(once(cv.1.from_json())),
-            Self::ToJson => Box::new(once(Ok(Val::Str(Rc::new(cv.1.to_string()))))),
-            Self::Explode => Box::new(once(cv.1.explode().map(|a| Val::Arr(Rc::new(a))))),
-            Self::Implode => Box::new(once(cv.1.implode().map(|s| Val::Str(Rc::new(s))))),
+            Self::ToJson => Box::new(once(Ok(Val::str(cv.1.to_string())))),
+            Self::Explode => Box::new(once(cv.1.explode().map(Val::arr))),
+            Self::Implode => Box::new(once(cv.1.implode().map(Val::str))),
             Self::AsciiDowncase => Box::new(once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))),
             Self::AsciiUpcase => Box::new(once(cv.1.mutate_str(|s| s.make_ascii_uppercase()))),
             Self::Reverse => Box::new(once(cv.1.mutate_arr(|a| a.reverse()))),
@@ -273,13 +271,12 @@ impl Filter {
             ),
             Self::Split(f) => Box::new(
                 f.run(cv.clone())
-                    .map(move |sep| Ok(Val::Arr(Rc::new(cv.1.split(&sep?)?)))),
+                    .map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))),
             ),
-            Self::Matches(re, flags, sm) => {
-                Box::new(Self::cartesian(flags, re, (cv.0, cv.1.clone())).map(
-                    move |(flags, re)| Ok(Val::Arr(cv.1.captures(&re?, &flags?, *sm)?.into())),
-                ))
-            }
+            Self::Matches(re, flags, sm) => Box::new(
+                Self::cartesian(flags, re, (cv.0, cv.1.clone()))
+                    .map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, *sm)?))),
+            ),
 
             Self::First(f) => Box::new(f.run(cv).take(1)),
             Self::Last(f) => then(f.run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {

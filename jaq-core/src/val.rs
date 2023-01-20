@@ -5,6 +5,7 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
+use hifijson::{LexAlloc, Token};
 use jaq_parse::MathOp;
 
 /// JSON value with sharing.
@@ -28,14 +29,17 @@ pub enum Val {
     /// Floating-point number
     Float(f64),
     /// Floating-point number or integer not fitting into `Int`
-    Num(Rc<serde_json::Number>),
+    Num(Rc<String>),
     /// String
     Str(Rc<String>),
     /// Array
     Arr(Rc<Vec<Val>>),
-    /// Order-preserving map
-    Obj(Rc<indexmap::IndexMap<Rc<String>, Val, ahash::RandomState>>),
+    /// Object
+    Obj(Rc<Map<Rc<String>, Val>>),
 }
+
+/// Order-preserving map
+type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 /// A value result.
 pub type ValR = Result<Val, Error>;
@@ -44,6 +48,21 @@ pub type ValR = Result<Val, Error>;
 pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
 impl Val {
+    /// Construct a string value.
+    pub fn str(s: String) -> Self {
+        Self::Str(s.into())
+    }
+
+    /// Construct an array value.
+    pub fn arr(v: Vec<Val>) -> Self {
+        Self::Arr(v.into())
+    }
+
+    /// Construct an object value.
+    pub fn obj(m: Map<Rc<String>, Val>) -> Self {
+        Self::Obj(m.into())
+    }
+
     /// True if the value is neither null nor false.
     pub fn as_bool(&self) -> bool {
         !matches!(self, Val::Null | Val::Bool(false))
@@ -58,7 +77,7 @@ impl Val {
     }
 
     /// If the value is a string, return it, else fail.
-    pub fn str(self) -> Result<Rc<String>, Error> {
+    pub fn to_str(self) -> Result<Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
             _ => Err(Error::Str(self)),
@@ -74,7 +93,7 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    fn arr(self) -> Result<Rc<Vec<Val>>, Error> {
+    fn to_arr(self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Arr(self)),
@@ -87,6 +106,10 @@ impl Val {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Arr(self.clone())),
         }
+    }
+
+    fn from_dec_str(n: &str) -> Self {
+        n.parse().map_or(Self::Null, Self::Float)
     }
 
     /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
@@ -111,7 +134,7 @@ impl Val {
             Self::Null => Ok(Self::Int(0)),
             Self::Bool(_) => Err(Error::Length(self.clone())),
             Self::Int(i) => Ok(Self::Int(i.abs())),
-            Self::Num(n) => Self::from(&**n).len(),
+            Self::Num(n) => Self::from_dec_str(n).len(),
             Self::Float(f) => Ok(Self::Float(f.abs())),
             Self::Str(s) => Ok(Self::Int(s.chars().count() as isize)),
             Self::Arr(a) => Ok(Self::Int(a.len() as isize)),
@@ -126,7 +149,7 @@ impl Val {
         match self {
             Self::Int(_) => Ok(self.clone()),
             Self::Float(x) => Ok(Self::Int(f(*x) as isize)),
-            Self::Num(n) => Self::from(&**n).round(f),
+            Self::Num(n) => Self::from_dec_str(n).round(f),
             _ => Err(Error::Round(self.clone())),
         }
     }
@@ -148,8 +171,8 @@ impl Val {
     /// Fail on values that are neither arrays nor objects.
     pub fn keys(&self) -> Result<Vec<Val>, Error> {
         match self {
-            Self::Arr(a) => Ok((0..a.len() as isize).map(Val::Int).collect()),
-            Self::Obj(o) => Ok(o.keys().map(|k| Val::Str(Rc::clone(k))).collect()),
+            Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
+            Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),
             _ => Err(Error::Keys(self.clone())),
         }
     }
@@ -182,13 +205,12 @@ impl Val {
         }
     }
 
-    /// Convert string to JSON.
+    /// Convert string to a single JSON value.
     ///
     /// Fail on any other value.
     pub fn from_json(&self) -> ValR {
-        let serde = serde_json::from_str::<serde_json::Value>(self.as_str()?)
-            .map_err(|e| Error::FromJson(self.clone(), e.to_string()))?;
-        Ok(Val::from(serde))
+        let mut lexer = hifijson::SliceLexer::new(self.as_str()?.as_bytes());
+        Self::parse_single(&mut lexer).map_err(|e| Error::FromJson(self.clone(), e.to_string()))
     }
 
     /// Convert a string into an array of its Unicode codepoints.
@@ -205,14 +227,14 @@ impl Val {
 
     /// Apply a function to a string.
     pub fn mutate_str(self, f: impl Fn(&mut String)) -> ValR {
-        let mut s = self.str()?;
+        let mut s = self.to_str()?;
         f(Rc::make_mut(&mut s));
         Ok(Self::Str(s))
     }
 
     /// Apply a function to an array.
     pub fn mutate_arr(self, f: impl Fn(&mut Vec<Val>)) -> ValR {
-        let mut a = self.arr()?;
+        let mut a = self.to_arr()?;
         f(Rc::make_mut(&mut a));
         Ok(Self::Arr(a))
     }
@@ -221,7 +243,7 @@ impl Val {
     ///
     /// Fail on any other value.
     pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        let mut a = self.arr()?;
+        let mut a = self.to_arr()?;
         // Some(e) iff an error has previously occurred
         let mut err = None;
         Rc::make_mut(&mut a).sort_by_cached_key(|x| {
@@ -245,21 +267,29 @@ impl Val {
     pub fn split(&self, sep: &Self) -> Result<Vec<Val>, Error> {
         let s = self.as_str()?;
         let sep = sep.as_str()?;
-        let val = |s| Val::Str(Rc::new(s));
         Ok(if sep.is_empty() {
             // Rust's `split` function with an empty separator ("")
             // yields an empty string as first and last result
             // to prevent this, we are using `chars` instead
-            s.chars().map(|s| val(s.to_string())).collect()
+            s.chars().map(|s| Self::str(s.to_string())).collect()
         } else {
-            s.split(&**sep).map(|s| val(s.to_string())).collect()
+            s.split(&**sep).map(|s| Self::str(s.to_string())).collect()
         })
     }
 
-    pub fn captures(&self, re: &Self, flags: &Self, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
+    /// Apply a regular expression to the given input value.
+    ///
+    /// `sm` indicates whether to
+    /// 1. output strings that do *not* match the regex, and
+    /// 2. output the matches.
+    pub fn regex(&self, re: &Self, flags: &Self, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
+        use crate::regex::{ByteChar, Flags, Match};
+
         let s = self.as_str()?;
         let flags = Flags::new(flags.as_str()?).map_err(Error::RegexFlag)?;
-        let re = flags.regex(re.as_str()?).unwrap();
+        let re = flags
+            .regex(re.as_str()?)
+            .map_err(|e| Error::Regex(e.to_string()))?;
         let (split, matches) = sm;
 
         let mut last_byte = 0;
@@ -268,126 +298,95 @@ impl Val {
 
         for c in re.captures_iter(s) {
             let whole = c.get(0).unwrap();
-            if whole.start() >= s.len() || (flags.n && whole.as_str().is_empty()) {
+            if whole.start() >= s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
                 continue;
             }
             let vs = c
                 .iter()
                 .zip(re.capture_names())
-                .filter_map(|(match_, name)| Some(capture(&mut bc, match_?, name)));
+                .filter_map(|(match_, name)| Some(Match::new(&mut bc, match_?, name)))
+                .map(Val::from);
             if split {
-                out.push(Val::Str(s[last_byte..whole.start()].to_string().into()));
+                out.push(Val::str(s[last_byte..whole.start()].to_string()));
                 last_byte = whole.end();
             }
             if matches {
-                out.push(Val::Arr(vs.collect::<Vec<_>>().into()));
+                out.push(Val::arr(vs.collect()));
             }
-            if !flags.g {
+            if !flags.global() {
                 break;
             }
         }
         if split {
-            out.push(Val::Str(s[last_byte..].to_string().into()));
+            out.push(Val::str(s[last_byte..].to_string()));
         }
         Ok(out)
     }
-}
 
-#[derive(Default)]
-struct Flags {
-    // global search
-    g: bool,
-    // ignore empty matches
-    n: bool,
-    // case-insensitive
-    i: bool,
-    // multi-line mode: ^ and $ match begin/end of line
-    m: bool,
-    // single-line mode: allow . to match \n
-    s: bool,
-    // greedy
-    l: bool,
-    // extended mode: ignore whitespace and allow line comments (starting with `#`)
-    x: bool,
-}
-
-impl Flags {
-    fn new(flags: &str) -> Result<Self, char> {
-        let mut out = Self::default();
-        for flag in flags.chars() {
-            match flag {
-                'g' => out.g = true,
-                'n' => out.n = true,
-                'i' => out.i = true,
-                'm' => out.m = true,
-                's' => out.s = true,
-                'l' => out.l = true,
-                'x' => out.x = true,
-                'p' => {
-                    out.m = true;
-                    out.s = true;
+    /// Parse at least one JSON value, given an initial token and a lexer.
+    ///
+    /// If the underlying lexer reads input fallibly (for example `IterLexer`),
+    /// the error returned by this function might be misleading.
+    /// In that case, always check whether the lexer contains an error.
+    pub fn from_token(lexer: &mut impl LexAlloc, token: Token) -> Result<Self, hifijson::Error> {
+        use hifijson::Error;
+        match token {
+            Token::Null => Ok(Val::Null),
+            Token::True => Ok(Val::Bool(true)),
+            Token::False => Ok(Val::Bool(false)),
+            Token::DigitOrMinus => {
+                let (num, parts) = lexer.num_string()?;
+                // if we are dealing with an integer ...
+                if parts.dot.is_none() && parts.exp.is_none() {
+                    // ... that fits into an isize
+                    if let Ok(i) = num.parse() {
+                        return Ok(Self::Int(i));
+                    }
                 }
-                c => return Err(c),
+                Ok(Val::Num(Rc::new(num.to_string())))
             }
-        }
-        Ok(out)
-    }
+            Token::Quote => Ok(Val::str(lexer.str_string()?.to_string())),
+            Token::LSquare => Ok(Val::arr({
+                let mut arr = Vec::new();
+                lexer.seq(Token::RSquare, |lexer, token| {
+                    arr.push(Self::from_token(lexer, token)?);
+                    Ok::<_, hifijson::Error>(())
+                })?;
+                arr
+            })),
+            Token::LCurly => Ok(Val::obj({
+                let mut obj: Map<_, _> = Default::default();
+                lexer.seq(Token::RCurly, |lexer, token| {
+                    token.equals_or(Token::Quote, Error::ExpectedString)?;
+                    let key = lexer.str_string()?;
 
-    fn impact<'a>(&'a self, builder: &'a mut regex::RegexBuilder) -> &mut regex::RegexBuilder {
-        builder
-            .case_insensitive(self.i)
-            .multi_line(self.m)
-            .dot_matches_new_line(self.s)
-            .swap_greed(self.l)
-            .ignore_whitespace(self.x)
-    }
+                    let colon = lexer.ws_token().filter(|t| *t == Token::Colon);
+                    colon.ok_or(Error::ExpectedColon)?;
 
-    fn regex(&self, re: &str) -> Result<regex::Regex, regex::Error> {
-        let mut builder = regex::RegexBuilder::new(re);
-        self.impact(&mut builder).build()
-    }
-}
-
-struct ByteChar<'a> {
-    prev_byte: usize,
-    prev_char: usize,
-    rest: core::str::CharIndices<'a>,
-}
-
-impl<'a> ByteChar<'a> {
-    fn new(s: &'a str) -> Self {
-        let mut ci = s.char_indices();
-        // skip the first one, because it is already taken into account
-        ci.next();
-        Self {
-            prev_byte: 0,
-            prev_char: 0,
-            rest: ci,
+                    let token = lexer.ws_token().ok_or(Error::ExpectedValue)?;
+                    let value = Self::from_token(lexer, token)?;
+                    obj.insert(Rc::new(key.to_string()), value);
+                    Ok::<_, Error>(())
+                })?;
+                obj
+            })),
+            token => Err(Error::Token(token)),
         }
     }
 
-    /// Convert byte offset to UTF-8 character offset.
-    fn char_of_byte(&mut self, byte_offset: usize) -> usize {
-        assert!(self.prev_byte <= byte_offset);
-        if self.prev_byte != byte_offset {
-            self.prev_byte = byte_offset;
-            self.prev_char += 1 + self.rest.position(|(p, _)| p == byte_offset).unwrap();
+    /// Parse a single JSON value.
+    ///
+    /// The same warning as for `from_token` applies here.
+    fn parse_single(lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
+        use hifijson::Error;
+        let token = lexer.ws_token().ok_or(Error::ExpectedValue)?;
+        let v = Self::from_token(lexer, token)?;
+        lexer.eat_whitespace();
+        match lexer.peek_next() {
+            None => Ok(v),
+            Some(_) => Err(Error::ExpectedEof),
         }
-        self.prev_char
     }
-}
-
-fn capture<'a>(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Val {
-    let name = name.map(|n| Val::Str(n.to_string().into()));
-    let obj = [
-        ("offset", Val::Int(bc.char_of_byte(m.start()) as isize)),
-        ("length", Val::Int(m.as_str().chars().count() as isize)),
-        ("string", Val::Str(m.as_str().to_string().into())),
-        ("name", name.unwrap_or(Val::Null)),
-    ];
-    let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
-    let obj = obj.map(|(k, v)| (Rc::new(k.to_string()), v));
-    Val::Obj(Rc::new(obj.collect()))
 }
 
 impl From<serde_json::Value> for Val {
@@ -399,25 +398,24 @@ impl From<serde_json::Value> for Val {
             Number(n) => n
                 .to_string()
                 .parse()
-                .map_or_else(|_| Self::Num(Rc::new(n)), Self::Int),
-            String(s) => Self::Str(Rc::new(s)),
-            Array(a) => Self::Arr(Rc::new(a.into_iter().map(|x| x.into()).collect())),
-            Object(o) => Self::Obj(Rc::new(
-                o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect(),
-            )),
+                .map_or_else(|_| Self::Num(Rc::new(n.to_string())), Self::Int),
+            String(s) => Self::str(s),
+            Array(a) => Self::arr(a.into_iter().map(|x| x.into()).collect()),
+            Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
         }
     }
 }
 
 impl From<Val> for serde_json::Value {
     fn from(v: Val) -> serde_json::Value {
+        use core::str::FromStr;
         use serde_json::Value::*;
         match v {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
             Val::Int(i) => Number(i.into()),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
-            Val::Num(n) => Number((*n).clone()),
+            Val::Num(n) => Number(serde_json::Number::from_str(&n).unwrap()),
             Val::Str(s) => String((*s).clone()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             Val::Obj(o) => Object(
@@ -429,11 +427,19 @@ impl From<Val> for serde_json::Value {
     }
 }
 
-impl From<&serde_json::Number> for Val {
-    fn from(n: &serde_json::Number) -> Self {
-        n.to_string().parse().map_or(Self::Null, Self::Float)
+impl From<crate::regex::Match> for Val {
+    fn from(m: crate::regex::Match) -> Self {
+        let obj = [
+            ("offset", Val::Int(m.offset as isize)),
+            ("length", Val::Int(m.length as isize)),
+            ("string", Val::str(m.string)),
+            ("name", m.name.map(Val::str).unwrap_or(Val::Null)),
+        ];
+        let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
+        Val::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
     }
 }
+
 
 impl core::ops::Add for Val {
     type Output = ValR;
@@ -445,8 +451,8 @@ impl core::ops::Add for Val {
             (Int(x), Int(y)) => Ok(Int(x + y)),
             (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i as f64)),
             (Float(x), Float(y)) => Ok(Float(x + y)),
-            (Num(n), r) => Self::from(&*n) + r,
-            (l, Num(n)) => l + Self::from(&*n),
+            (Num(n), r) => Self::from_dec_str(&n) + r,
+            (l, Num(n)) => l + Self::from_dec_str(&n),
             (Str(mut l), Str(r)) => {
                 Rc::make_mut(&mut l).push_str(&r);
                 Ok(Str(l))
@@ -474,8 +480,8 @@ impl core::ops::Sub for Val {
             (Float(f), Int(i)) => Ok(Float(f - i as f64)),
             (Int(i), Float(f)) => Ok(Float(i as f64 - f)),
             (Float(x), Float(y)) => Ok(Float(x - y)),
-            (Num(n), r) => Self::from(&*n) - r,
-            (l, Num(n)) => l - Self::from(&*n),
+            (Num(n), r) => Self::from_dec_str(&n) - r,
+            (l, Num(n)) => l - Self::from_dec_str(&n),
             (l, r) => Err(Error::MathOp(l, MathOp::Sub, r)),
         }
     }
@@ -489,8 +495,8 @@ impl core::ops::Mul for Val {
             (Int(x), Int(y)) => Ok(Int(x * y)),
             (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
-            (Num(n), r) => Self::from(&*n) * r,
-            (l, Num(n)) => l * Self::from(&*n),
+            (Num(n), r) => Self::from_dec_str(&n) * r,
+            (l, Num(n)) => l * Self::from_dec_str(&n),
             (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
         }
     }
@@ -505,8 +511,8 @@ impl core::ops::Div for Val {
             (Float(f), Int(i)) => Ok(Float(f / i as f64)),
             (Int(i), Float(f)) => Ok(Float(i as f64 / f)),
             (Float(x), Float(y)) => Ok(Float(x / y)),
-            (Num(n), r) => Self::from(&*n) / r,
-            (l, Num(n)) => l / Self::from(&*n),
+            (Num(n), r) => Self::from_dec_str(&n) / r,
+            (l, Num(n)) => l / Self::from_dec_str(&n),
             (l, r) => Err(Error::MathOp(l, MathOp::Div, r)),
         }
     }
@@ -530,7 +536,7 @@ impl core::ops::Neg for Val {
         match self {
             Int(x) => Ok(Int(-x)),
             Float(x) => Ok(Float(-x)),
-            Num(n) => -Self::from(&*n),
+            Num(n) => -Self::from_dec_str(&n),
             x => Err(Error::Neg(x)),
         }
     }
@@ -547,8 +553,8 @@ impl PartialEq for Val {
             }
             (Self::Float(x), Self::Float(y)) => float_eq(x, y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
-            (Self::Num(n), y) => &Self::from(&**n) == y,
-            (x, Self::Num(n)) => x == &Self::from(&**n),
+            (Self::Num(n), y) => &Self::from_dec_str(n) == y,
+            (x, Self::Num(n)) => x == &Self::from_dec_str(n),
             (Self::Str(x), Self::Str(y)) => x == y,
             (Self::Arr(x), Self::Arr(y)) => x == y,
             (Self::Obj(x), Self::Obj(y)) => x == y,
@@ -576,8 +582,8 @@ impl Ord for Val {
             (Self::Float(f), Self::Int(i)) => float_cmp(f, &(*i as f64)),
             (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
-            (Self::Num(n), y) => Self::from(&**n).cmp(y),
-            (x, Self::Num(n)) => x.cmp(&Self::from(&**n)),
+            (Self::Num(n), y) => Self::from_dec_str(n).cmp(y),
+            (x, Self::Num(n)) => x.cmp(&Self::from_dec_str(n)),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
