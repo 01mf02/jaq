@@ -389,6 +389,7 @@ impl Val {
     }
 }
 
+#[cfg(feature = "serde_json")]
 impl From<serde_json::Value> for Val {
     fn from(v: serde_json::Value) -> Self {
         use serde_json::Value::*;
@@ -406,6 +407,7 @@ impl From<serde_json::Value> for Val {
     }
 }
 
+#[cfg(feature = "serde_json")]
 impl From<Val> for serde_json::Value {
     fn from(v: Val) -> serde_json::Value {
         use core::str::FromStr;
