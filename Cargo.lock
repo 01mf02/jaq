@@ -233,9 +233,9 @@ dependencies = [
 
 [[package]]
 name = "hifijson"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8c87cbc0258a6ffc3797b385ba961e0abbccaf153df11732c7cc58150378fac"
+checksum = "85ef6b41c333e6dd2a4aaa59125a19b633cd17e7aaf372b2260809777bcdef4a"
 
 [[package]]
 name = "indexmap"

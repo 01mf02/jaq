@@ -267,8 +267,7 @@ fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
     let mut lexer = hifijson::SliceLexer::new(slice);
     core::iter::from_fn(move || {
         use hifijson::token::Lex;
-        let token = lexer.ws_token()?;
-        Some(Val::from_token(&mut lexer, token).map_err(invalid_data))
+        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(invalid_data))
     })
 }
 
@@ -276,8 +275,7 @@ fn json_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val
     let mut lexer = hifijson::IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
         use hifijson::token::Lex;
-        let token = lexer.ws_token()?;
-        let v = Val::from_token(&mut lexer, token);
+        let v = Val::parse(lexer.ws_token()?, &mut lexer);
         Some(v.map_err(|e| core::mem::take(&mut lexer.error).unwrap_or_else(|| invalid_data(e))))
     })
 }

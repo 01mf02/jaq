@@ -210,7 +210,10 @@ impl Val {
     /// Fail on any other value.
     pub fn from_json(&self) -> ValR {
         let mut lexer = hifijson::SliceLexer::new(self.as_str()?.as_bytes());
-        Self::parse_single(&mut lexer).map_err(|e| Error::FromJson(self.clone(), e.to_string()))
+        use hifijson::token::Lex;
+        lexer
+            .exactly_one(Self::parse)
+            .map_err(|e| Error::FromJson(self.clone(), e.to_string()))
     }
 
     /// Convert a string into an array of its Unicode codepoints.
@@ -328,8 +331,8 @@ impl Val {
     /// If the underlying lexer reads input fallibly (for example `IterLexer`),
     /// the error returned by this function might be misleading.
     /// In that case, always check whether the lexer contains an error.
-    pub fn from_token(lexer: &mut impl LexAlloc, token: Token) -> Result<Self, hifijson::Error> {
-        use hifijson::Error;
+    pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
+        use hifijson::{token, Error};
         match token {
             Token::Null => Ok(Val::Null),
             Token::True => Ok(Val::Bool(true)),
@@ -348,43 +351,26 @@ impl Val {
             Token::Quote => Ok(Val::str(lexer.str_string()?.to_string())),
             Token::LSquare => Ok(Val::arr({
                 let mut arr = Vec::new();
-                lexer.seq(Token::RSquare, |lexer, token| {
-                    arr.push(Self::from_token(lexer, token)?);
+                lexer.seq(Token::RSquare, |token, lexer| {
+                    arr.push(Self::parse(token, lexer)?);
                     Ok::<_, hifijson::Error>(())
                 })?;
                 arr
             })),
             Token::LCurly => Ok(Val::obj({
                 let mut obj: Map<_, _> = Default::default();
-                lexer.seq(Token::RCurly, |lexer, token| {
-                    token.equals_or(Token::Quote, Error::ExpectedString)?;
-                    let key = lexer.str_string()?;
+                lexer.seq(Token::RCurly, |token, lexer| {
+                    let key =
+                        lexer.str_colon(token, |lexer| lexer.str_string().map_err(Error::Str))?;
 
-                    let colon = lexer.ws_token().filter(|t| *t == Token::Colon);
-                    colon.ok_or(Error::ExpectedColon)?;
-
-                    let token = lexer.ws_token().ok_or(Error::ExpectedValue)?;
-                    let value = Self::from_token(lexer, token)?;
+                    let token = lexer.ws_token().ok_or(token::Expect::Value)?;
+                    let value = Self::parse(token, lexer)?;
                     obj.insert(Rc::new(key.to_string()), value);
                     Ok::<_, Error>(())
                 })?;
                 obj
             })),
-            token => Err(Error::Token(token)),
-        }
-    }
-
-    /// Parse a single JSON value.
-    ///
-    /// The same warning as for `from_token` applies here.
-    fn parse_single(lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
-        use hifijson::Error;
-        let token = lexer.ws_token().ok_or(Error::ExpectedValue)?;
-        let v = Self::from_token(lexer, token)?;
-        lexer.eat_whitespace();
-        match lexer.peek_next() {
-            None => Ok(v),
-            Some(_) => Err(Error::ExpectedEof),
+            _ => Err(token::Expect::Value)?,
         }
     }
 }
@@ -441,7 +427,6 @@ impl From<crate::regex::Match> for Val {
         Val::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
     }
 }
-
 
 impl core::ops::Add for Val {
     type Output = ValR;
