@@ -85,6 +85,7 @@ pub enum Filter {
     First(Box<Self>),
     Last(Box<Self>),
     Recurse(Box<Self>, bool, bool),
+    Walk(Box<Self>),
     Contains(Box<Self>),
     Limit(Box<Self>, Box<Self>),
     /// `range(min; max)` returns all integers `n` with `min <= n < max`.
@@ -161,6 +162,7 @@ impl Filter {
             make_builtin!("recurse", 1, |f| Self::Recurse(f, true, true)),
             make_builtin!("recurse_inner", 1, |f| Self::Recurse(f, true, false)),
             make_builtin!("recurse_outer", 1, |f| Self::Recurse(f, false, true)),
+            make_builtin!("walk", 1, Self::Walk),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
         ])
@@ -302,6 +304,7 @@ impl Filter {
                 let f = move |v| f.run((cv.0.clone(), v));
                 Box::new(recurse(*inner, *outer, init, f))
             }
+            Self::Walk(f) => cv.1.walk(&|v| f.run((cv.0.clone(), v))),
             Self::Fold(typ, xs, init, f) => {
                 let xs = rc_lazy_list::List::from_iter(xs.run(cv.clone()));
                 let init = init.run(cv.clone());
@@ -376,6 +379,7 @@ impl Filter {
                 })
             })),
             Self::Recurse(..) => todo!(),
+            Self::Walk(_) => err,
             Self::Empty => Box::new(once(Ok(cv.1))),
 
             Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
@@ -464,6 +468,7 @@ impl Filter {
             Self::First(f) => Self::First(sub(f)),
             Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f, inner, outer) => Self::Recurse(sub(f), inner, outer),
+            Self::Walk(f) => Self::Walk(sub(f)),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
 

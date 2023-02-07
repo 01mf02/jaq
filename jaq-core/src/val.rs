@@ -47,6 +47,12 @@ pub type ValR = Result<Val, Error>;
 /// A stream of value results.
 pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
+// This might be included in the Rust standard library:
+// <https://github.com/rust-lang/rust/issues/93610>
+pub(crate) fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
+    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+}
+
 impl Val {
     /// Construct a string value.
     pub fn str(s: String) -> Self {
@@ -180,12 +186,32 @@ impl Val {
     /// Return the elements of an array or the values of an object (omitting its keys).
     ///
     /// Fail on any other value.
-    pub fn iter(&self) -> Result<Box<dyn Iterator<Item = Val> + '_>, Error> {
+    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Val>>, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new(a.iter().cloned())),
-            Self::Obj(o) => Ok(Box::new(o.values().cloned())),
-            _ => Err(Error::Iter(self.clone())),
+            Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
+            Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
+            _ => Err(Error::Iter(self)),
         }
+    }
+
+    pub(crate) fn try_map<I: Iterator<Item = ValR>>(self, f: impl Fn(Val) -> I) -> ValR {
+        Ok(match self {
+            Self::Arr(a) => {
+                let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
+                Val::arr(iter.collect::<Result<_, _>>()?)
+            }
+            Self::Obj(o) => {
+                let iter = rc_unwrap_or_clone(o).into_iter();
+                let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
+                Val::obj(iter.collect::<Result<_, _>>()?)
+            }
+            v => v,
+        })
+    }
+
+    /// Recursively apply a function to each value.
+    pub fn walk<'a>(self, f: &impl Fn(Val) -> ValRs<'a>) -> ValRs<'a> {
+        crate::results::then(self.try_map(|v| v.walk(f)), f)
     }
 
     /// `a` contains `b` iff either

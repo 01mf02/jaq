@@ -1,3 +1,4 @@
+use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
 use crate::Error;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
@@ -11,12 +12,6 @@ pub enum Part<I> {
     Index(I),
     /// if both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
-}
-
-// This might be included in the Rust standard library:
-// <https://github.com/rust-lang/rust/issues/93610>
-fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
-    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
 impl Part<Vec<Val>> {
@@ -35,11 +30,7 @@ impl Part<Vec<Val>> {
                 })),
                 _ => Box::new(once(Err(Error::Index(current)))),
             },
-            Self::Range(None, None) => match current {
-                Val::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
-                Val::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
-                v => Box::new(once(Err(Error::Iter(v)))),
-            },
+            Self::Range(None, None) => then(current.into_iter(), |iter| Box::new(iter.map(Ok))),
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
                     let len = a.len();
@@ -84,7 +75,6 @@ impl Part<Vec<Val>> {
         F: Fn(Val) -> I,
         I: Iterator<Item = ValR>,
     {
-        use core::iter::once;
         use Opt::{Essential, Optional};
         match self {
             Self::Index(indices) => match v {
@@ -132,23 +122,9 @@ impl Part<Vec<Val>> {
                 }
                 _ => opt.fail(v, Error::Index),
             },
-            Self::Range(None, None) => match v {
-                Val::Arr(a) => Ok(Val::Arr(Rc::new(
-                    rc_unwrap_or_clone(a)
-                        .into_iter()
-                        .flat_map(f)
-                        .collect::<Result<_, _>>()?,
-                ))),
-                Val::Obj(o) => Ok(Val::Obj(Rc::new(
-                    rc_unwrap_or_clone(o)
-                        .into_iter()
-                        .flat_map(|(k, v)| match f(v).next().transpose() {
-                            Ok(y) => Box::new(y.map(|y| Ok((k, y))).into_iter()),
-                            Err(e) => Box::new(once(Err(e))) as Box<dyn Iterator<Item = _>>,
-                        })
-                        .collect::<Result<_, _>>()?,
-                ))),
-                _ => opt.fail(v, Error::Iter),
+            Self::Range(None, None) => match v.try_map(&f)? {
+                y @ (Val::Arr(_) | Val::Obj(_)) => Ok(y),
+                v => opt.fail(v, Error::Iter),
             },
             Self::Range(from, until) => match v {
                 Val::Arr(ref mut a) => {

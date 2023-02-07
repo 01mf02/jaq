@@ -160,3 +160,12 @@ fn split() {
         json!(["", "c", "cd", ""]),
     );
 }
+
+#[test]
+fn walk() {
+    give(
+        json!([[4, 1, 7], [8, 5, 2], [3, 6, 9]]),
+        r#"walk(if . < [] then . else sort end)"#,
+        json!([[1, 4, 7], [2, 5, 8], [3, 6, 9]]),
+    );
+}
