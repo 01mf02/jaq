@@ -49,7 +49,7 @@ pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
 
 // This might be included in the Rust standard library:
 // <https://github.com/rust-lang/rust/issues/93610>
-pub(crate) fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
+fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
