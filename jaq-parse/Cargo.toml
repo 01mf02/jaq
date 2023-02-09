@@ -14,5 +14,5 @@ categories = ["parser-implementations"]
 default = ["serde"]
 
 [dependencies]
-chumsky = "0.8.0"
+chumsky = { version = "0.9.0", default-features = false }
 serde = { version = "1.0.137", features = ["derive"], optional = true }

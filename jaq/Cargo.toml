@@ -18,7 +18,7 @@ jaq-core = { version = "0.9.0", path = "../jaq-core" }
 jaq-std  = { version = "0.9.0", path = "../jaq-std" }
 ariadne = "0.1.5"
 atty = "0.2"
-chumsky = "0.8.0"
+chumsky = { version = "0.9.0", default-features = false }
 clap = { version = "4.0.0", features = ["derive"] }
 colored_json = "2.1.0"
 env_logger = { version = "0.9.1", default-features = false }
