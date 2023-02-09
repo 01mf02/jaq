@@ -99,7 +99,7 @@ def flatten(d): d as $d |
   ];
 
 # Regular expressions
-def capture_of_match: map(select(.name) | { (.name): .string} ) | add;
+def capture_of_match: map(select(.name) | { (.name): .string} ) | add + {};
 
 def    test(re; flags): matches(re; flags) | length > 0;
 def    scan(re; flags): matches(re; flags)[] | .[0].string;
