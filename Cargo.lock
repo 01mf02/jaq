@@ -426,8 +426,7 @@ dependencies = [
 [[package]]
 name = "regex-syntax"
 version = "0.6.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
+source = "git+https://github.com/01mf02/regex?rev=dc2cb2e#dc2cb2e3eb6360f8ea4714bdc3bd085a047d38e6"
 
 [[package]]
 name = "remove_dir_all"

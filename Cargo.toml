@@ -8,3 +8,6 @@ members = [
 
 [profile.release]
 codegen-units = 1
+
+[patch.crates-io]
+regex-syntax = { git = 'https://github.com/01mf02/regex', rev = "dc2cb2e" }
