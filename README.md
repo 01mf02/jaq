@@ -438,13 +438,29 @@ and `foreach xs as $x (init; f)` evaluates to
 
 ~~~ text
 init
+| x0 as $x | f | (.,
+| ...
+| xn as $x | f | (.,
+empty)...)
+~~~
+
+Additionally, jaq provides the filter `for xs as $x (init; f)` that evaluates to
+
+~~~ text
+init
 | ., (x0 as $x | f
 | ...
 | ., (xn as $x | f
 )...)
 ~~~
 
-This interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
+The difference between `foreach` and `for` is that
+`for` yields the output of `init`, whereas `foreach` omits it.
+For example,
+`foreach (1, 2, 3) as $x (0; .+$x)` yields `1, 3, 6`, whereas
+`for (1, 2, 3) as $x (0; .+$x)` yields `0, 1, 3, 6`.
+
+The interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
 
 * It deals very naturally with filters that yield multiple outputs.
   In contrast, jq discriminates outputs of `f`,
@@ -453,9 +469,8 @@ This interpretation of `reduce`/`foreach` in jaq has the following advantages ov
   <details><summary>Example</summary>
   `foreach (5, 10) as $x (1; .+$x, -.)` yields
   `6, -1, 9, 1` in jq, whereas it yields
-  `1, 6, 16, -6, -1, 9, 1` in jaq.
-  Apart from the leading `1` (see below), we can see that
-  both jq and jaq yield the values `6` and `-1`
+  `6, 16, -6, -1, 9, 1` in jaq.
+  We can see that both jq and jaq yield the values `6` and `-1`
   resulting from the first iteration (where `$x` is 5), namely
   `1 | 5 as $x | (.+$x, -.)`.
   However, jq performs the second iteration (where `$x` is 10)
@@ -469,35 +484,27 @@ This interpretation of `reduce`/`foreach` in jaq has the following advantages ov
   </details>
 * It makes the implementation of `reduce` and `foreach`
   special cases of the same code, reducing the potential for bugs.
-* It enables stronger properties about the relationship between `reduce` and `foreach`.
-  In particular,
-  the values yielded by `reduce ...` are a subset of
-  the values yielded by `foreach ...` (where `...` refers to `xs as $x (init; f)`).
-  Furthermore,
-  `first(reduce ...)` equals `first(foreach ...)`, and
-  `last(reduce ...)` equals `last(foreach ...)`.
 
-However, this interpretation comes at the cost of compatibility:
-Most notably, the interpretation of `foreach` in jaq
-differs from jq by yielding also the output of `init`.
-For example, `foreach (1, 2, 3) as $x (0; .+$x)` yields
-`   1, 3, 6` in jq and
-`0, 1, 3, 6` in jaq.
+Compared to `foreach ...`, the filter `for ...`
+(where `...` refers to `xs as $x (init; f)`)
+has a stronger relationship with `reduce`.
+In particular,
+the values yielded by `reduce ...` are a subset of
+the values yielded by `for ...`.
+This does not hold if you replace `for` by `foreach`.
+<details>
+As an example, if we set `...` to `empty as $x (0; .+$x)`, then
+`foreach ...` yields no value, whereas
+`for ...` and `reduce ...` yield `0`.
+</details>
+
 Furthermore, jq provides the filter
-`foreach xs as $x (init; f; proj)` and interprets
-`foreach xs as $x (init; f)` as
+`foreach xs as $x (init; f; proj)` (`foreach/3`) and interprets
+`foreach xs as $x (init; f)` (`foreach/2`) as
 `foreach xs as $x (init; f; .)`, whereas
-jaq provides only
-`foreach xs as $x (init; f)`.
-
-If you need the same behaviour in both jq and jaq,
-including skipping the output of `init`,
-you can replace `foreach xs as $x (init; f; proj)` by:
-
-    (foreach xs as $x ({y: init}; {x: $x, y: (.y | f)}) | select(has("x")) | .x as $x | .y | proj)
-
-Note that it is much easier to simulate jq's behaviour in jaq than the other way.
-This suggests that jaq's behaviour is more general than that of jq.
+jaq does *not* provide `foreach/3` because
+it requires completely separate logic from `foreach/2` and `reduce`
+in both the parser and the interpreter.
 
 
 ## Miscellaneous
