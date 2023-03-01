@@ -219,15 +219,11 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
 }
 
 fn args_named(var_val: &[(String, Val)]) -> Val {
-    use std::rc::Rc;
     let named = var_val
         .iter()
         .map(|(var, val)| (var.to_owned().into(), val.clone()));
-    let named = Val::Obj(Rc::new(named.collect()));
-
-    let args = std::iter::once(("named".to_string().into(), named));
-
-    Val::Obj(Rc::new(args.collect()))
+    let args = std::iter::once(("named".to_string().into(), Val::obj(named.collect())));
+    Val::obj(args.collect())
 }
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
