@@ -21,7 +21,7 @@ atty = "0.2"
 chumsky = { version = "0.9.0", default-features = false }
 clap = { version = "4.0.0", features = ["derive"] }
 colored_json = "3.0.1"
-env_logger = { version = "0.9.1", default-features = false }
+env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
 memmap2 = "0.5.8"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
