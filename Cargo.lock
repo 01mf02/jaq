@@ -240,7 +240,7 @@ checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
 
 [[package]]
 name = "jaq"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ariadne",
  "atty",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "ahash",
  "dyn-clone",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-parse"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "chumsky",
  "serde",
@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bincode",
  "jaq-core",
@@ -417,7 +417,7 @@ dependencies = [
 [[package]]
 name = "regex-syntax"
 version = "0.6.28"
-source = "git+https://github.com/01mf02/regex?rev=dc2cb2e#dc2cb2e3eb6360f8ea4714bdc3bd085a047d38e6"
+source = "git+https://github.com/01mf02/regex?rev=90eebbd#90eebbdb9396ca10510130327073a3d596674d04"
 
 [[package]]
 name = "remove_dir_all"
