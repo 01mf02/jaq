@@ -117,7 +117,7 @@ Repeatedly apply a filter to itself and output the intermediate results:
 Lazily fold over inputs and output intermediate results:
 
     $ seq 1000 | jaq -n 'foreach inputs as $x (0; . + $x)'
-    0 1 3 6 10 15 [...]
+    1 3 6 10 15 [...]
 
 
 
