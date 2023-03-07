@@ -139,7 +139,7 @@ Repeatedly apply a filter to itself and output the intermediate results:
 Lazily fold over inputs and output intermediate results:
 
     $ seq 1000 | jaq -n 'foreach inputs as $x (0; . + $x)'
-    0 1 3 6 10 15 [...]
+    1 3 6 10 15 [...]
 
 
 
@@ -437,6 +437,29 @@ That is, a filter such as `recurse` cannot be defined in jaq:
 
 Note that while `recurse` cannot be defined manually in jaq,
 jaq provides `recurse` as core filter.
+
+
+## Arguments
+
+Like jq, jaq allows to define arguments via the command line,
+in particular by the options `--arg`, `--rawfile`, `--slurpfile`.
+This binds variables to values, and
+for every variable `$x` bound to `v` this way,
+`$ARGS.named` contains an entry with key `x` and value `v`.
+For example:
+
+~~~
+$ jaq -n --arg x 1 --arg y 2 '$x, $y, $ARGS.named'
+"1"
+"2"
+{
+  "x": "1",
+  "y": "2"
+}
+~~~
+
+However, unlike jq, jaq currently exposes these variables *only* in the main filter,
+not in any definitions.
 
 
 ## Folding
