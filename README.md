@@ -232,6 +232,7 @@ Here is an overview that summarises:
 - [x] Array filters (`reverse`, `sort`, `sort_by(-.)`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
+- [x] Recursion (`walk`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
 - [ ] More string filters (`startswith`, `ltrimstr`, ...)
 - [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
