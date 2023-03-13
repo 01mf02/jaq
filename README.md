@@ -430,7 +430,11 @@ Like jq, jaq allows for the definition of filters, such as:
 
     def map(f): [.[] | f];
 
-However, unlike in jq, such filters in jaq cannot refer to themselves.
+Arguments can also be passed *by value*, such as:
+
+    def cartesian($f; $g): [$f, $g];
+
+However, unlike in jq, filters in jaq cannot refer to themselves.
 Furthermore, jaq does not support nested filters.
 That is, a filter such as `recurse` cannot be defined in jaq:
 
