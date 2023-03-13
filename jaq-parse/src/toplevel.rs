@@ -12,23 +12,55 @@ pub struct Def {
     /// Name of the filter, e.g. `map`
     pub name: String,
     /// Arguments of the filter, e.g. `["f"]`
-    pub args: Vec<String>,
+    pub args: Vec<Arg>,
     /// Body of the filter, e.g. `[.[] | f`.
     pub body: Spanned<Filter>,
+}
+
+/// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug)]
+pub struct Arg {
+    name: String,
+    var: bool,
+}
+
+impl Arg {
+    /// If the argument is a variable, return its name without leading "$", otherwise `None`.
+    pub fn get_var(&self) -> Option<&str> {
+        self.var.then(|| &*self.name)
+    }
+
+    /// Return the full name of the argument, including leading "$" for variables.
+    pub fn get_name(&self) -> String {
+        use alloc::borrow::ToOwned;
+        if self.var {
+            "$".to_owned() + &self.name
+        } else {
+            self.name.clone()
+        }
+    }
 }
 
 /// (Potentially empty) sequence of definitions, followed by a filter.
 pub type Main = (Vec<Def>, Spanned<Filter>);
 
+/// Parser for a single definition.
 fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
     });
 
+    let arg = filter_map(|span, tok| match tok {
+        Token::Ident(name) => Ok(Arg { name, var: false }),
+        Token::Var(name) => Ok(Arg { name, var: true }),
+        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
+    });
+
     just(Token::Def)
         .ignore_then(ident.labelled("filter name"))
-        .then(args(ident).labelled("filter args"))
+        .then(args(arg).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
         .then(filter())
         .then_ignore(just(Token::Ctrl(';')))

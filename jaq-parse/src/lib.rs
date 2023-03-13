@@ -15,7 +15,7 @@ mod toplevel;
 pub use ops::{MathOp, OrdOp};
 use path::Path;
 use token::Token;
-pub use toplevel::{defs, main, Def, Main};
+pub use toplevel::{defs, main, Arg, Def, Main};
 
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;

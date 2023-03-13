@@ -2,9 +2,34 @@ use crate::filter::Filter;
 use crate::path::{self, Path};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, Fold, KeyVal};
-use jaq_parse::{Error, Spanned};
+use jaq_parse::{Arg, Error, Spanned};
 
-pub fn unparse<F>(
+pub fn def<F>(fns: &F, args: &[Arg], body: Spanned<Expr>, errs: &mut Vec<Error>) -> Filter
+where
+    F: Fn(&(String, usize)) -> Option<Filter>,
+{
+    let mut vars_names = Vec::new();
+    // indices of arguments that are variables
+    // example: if we have the arguments $f; g; $h; i,
+    // then the variable indices will be [0, 2]
+    let mut vars_idxs = Vec::new();
+    let args = args.iter().enumerate().map(|(i, arg)| {
+        if let Some(v) = arg.get_var() {
+            vars_idxs.push(i);
+            vars_names.push(v.into());
+        };
+        arg.get_name()
+    });
+    let mut f = filter(fns, &args.collect::<Vec<_>>(), vars_names, body, errs);
+    // here, we revert the order, because leftmost variable arguments are bound first, which means
+    // they will appear *outermost* in the filter, thus have to be added *last* to the filter
+    for idx in vars_idxs.into_iter().rev() {
+        f = Filter::Pipe(Box::new(Filter::Arg(idx)), true, Box::new(f));
+    }
+    f
+}
+
+pub fn filter<F>(
     fns: &F,
     args: &[String],
     mut vars: Vec<String>,
@@ -14,7 +39,7 @@ pub fn unparse<F>(
 where
     F: Fn(&(String, usize)) -> Option<Filter>,
 {
-    let get = |f, errs: &mut _| Box::new(unparse(fns, args, vars.clone(), f, errs));
+    let get = |f, errs: &mut _| Box::new(filter(fns, args, vars.clone(), f, errs));
     let mut call = |name, args: Vec<Spanned<Expr>>| {
         let fun = fns(&(name, args.len())).unwrap_or_else(|| {
             errs.push(Error::custom(body.1.clone(), "could not find function"));
@@ -88,13 +113,13 @@ where
         Expr::Binary(l, BinaryOp::Pipe(Some(v)), r) => {
             let l = get(*l, errs);
             vars.push(v);
-            let r = Box::new(unparse(fns, args, vars, *r, errs));
+            let r = Box::new(filter(fns, args, vars, *r, errs));
             Filter::Pipe(l, true, r)
         }
         Expr::Fold(typ, Fold { xs, x, init, f }) => {
             let (xs, init) = (get(*xs, errs), get(*init, errs));
             vars.push(x);
-            let f = Box::new(unparse(fns, args, vars, *f, errs));
+            let f = Box::new(filter(fns, args, vars, *f, errs));
             Filter::Fold(typ, xs, init, f)
         }
         Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, errs), get(*r, errs)),

@@ -64,7 +64,6 @@ pub use val::{Val, ValR};
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use parse::{Def, Main};
 use rc_list::RcList;
-use unparse::unparse;
 
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
@@ -128,7 +127,7 @@ impl Definitions {
     ///
     /// Errors that might occur include undefined variables, for example.
     pub fn insert(&mut self, def: Def, errs: &mut Vec<parse::Error>) {
-        let f = unparse(&self.get(), &def.args, Vec::new(), def.body, errs);
+        let f = unparse::def(&self.get(), &def.args, def.body, errs);
         self.0.insert((def.name, def.args.len()), f);
     }
 
@@ -140,7 +139,7 @@ impl Definitions {
         errs: &mut Vec<parse::Error>,
     ) -> Filter {
         defs.into_iter().for_each(|def| self.insert(def, errs));
-        Filter(unparse(&self.get(), &[], vars, body, errs))
+        Filter(unparse::filter(&self.get(), &[], vars, body, errs))
     }
 
     /// Obtain filters by name and arity.

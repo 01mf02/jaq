@@ -187,6 +187,12 @@ fn vars() {
 
     let f = r#". as $x | ("y" as $y | "z") | $x"#;
     give(json!("x"), f, json!("x"));
+
+    let out = || json!([[1, 4], [1, 5], [2, 4], [2, 5]]);
+    let f = "def f($a; b; $c; d): [$a+b, $c+d]; [f((1, 2); 0; (3, 4); 1)]";
+    give(json!(null), f, out());
+    let f = "def f($a; b; $c; d): [$a+b, $c+d]; 0 as $a | 1 as $b | [f((1, 2); $a; (3, 4); $b)]";
+    give(json!(null), f, out());
 }
 
 #[test]
