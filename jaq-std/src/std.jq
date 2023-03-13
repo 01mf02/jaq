@@ -92,7 +92,7 @@ def in(xs)    : . as $x | xs | has     ($x);
 def inside(xs): . as $x | xs | contains($x);
 
 def flatten: [recurse(arrays | .[]) | select(isarray | not)];
-def flatten(d): d as $d |
+def flatten($d):
   [ { d: $d, x: . } |
     recurse(select(.d >= 0 and (.x | isarray)) | { d: .d - 1, x: .x[] }) |
     select(.d < 0 or (.x | isarray | not)) | .x
