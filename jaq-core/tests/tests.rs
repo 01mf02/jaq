@@ -182,6 +182,9 @@ fn vars() {
     let f = r#"def g(f): "z" as $z | f | .+$z; "x" as $x | g("y" as $y | $x+$y)"#;
     give(json!(null), f, json!("xyz"));
 
+    let f = r#"def g(f): "a" as $a | "b" as $b | $a + $b + f; "c" as $c | g($c)"#;
+    give(json!(null), f, json!("abc"));
+
     let f = r#". as $x | ("y" as $y | "z") | $x"#;
     give(json!("x"), f, json!("x"));
 }
