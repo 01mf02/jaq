@@ -290,6 +290,21 @@ impl Val {
         err.map_or(Ok(Val::Arr(a)), Err)
     }
 
+    /// Group an array by the given function.
+    ///
+    /// Fail on any other value.
+    pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        let a = self.sort_by(&f)?.to_arr()?;
+        Ok(Val::Arr(Rc::new(
+            a.group_by(|x, y| {
+                f(x.clone()).filter_map(|v| v.ok()).collect::<Vec<_>>()
+                    == f(y.clone()).filter_map(|v| v.ok()).collect::<Vec<_>>()
+            })
+            .map(|v| Val::Arr(Rc::new(v.to_vec())))
+            .collect::<Vec<_>>(),
+        )))
+    }
+
     /// Split a string by a given separator string.
     ///
     /// Fail if any of the two given values is not a string.
