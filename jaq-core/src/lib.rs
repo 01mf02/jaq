@@ -39,7 +39,6 @@
 #![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
-#![feature(slice_group_by)]
 
 extern crate alloc;
 #[cfg(feature = "std")]

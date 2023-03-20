@@ -6,6 +6,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
 use hifijson::{LexAlloc, Token};
+use itertools::Itertools;
 use jaq_parse::MathOp;
 
 /// JSON value with sharing.
@@ -294,15 +295,18 @@ impl Val {
     ///
     /// Fail on any other value.
     pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        let a = self.sort_by(&f)?.to_arr()?;
-        Ok(Val::Arr(Rc::new(
-            a.group_by(|x, y| {
-                f(x.clone()).filter_map(|v| v.ok()).collect::<Vec<_>>()
-                    == f(y.clone()).filter_map(|v| v.ok()).collect::<Vec<_>>()
-            })
-            .map(|v| Val::Arr(Rc::new(v.to_vec())))
-            .collect::<Vec<_>>(),
-        )))
+        let mut a = self.sort_by(&f)?.to_arr()?;
+        Ok(Val::Arr(
+            Rc::make_mut(&mut a)
+                .into_iter()
+                .group_by(|x| f((*x).clone()).collect::<Result<Vec<Val>, _>>().unwrap())
+                .into_iter()
+                .map(|(_key, group)| {
+                    Val::Arr(group.map(|v| (*v).clone()).collect::<Vec<Val>>().into())
+                })
+                .collect::<Vec<Val>>()
+                .into(),
+        ))
     }
 
     /// Split a string by a given separator string.
