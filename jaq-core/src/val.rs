@@ -1,8 +1,9 @@
 //! JSON values with reference-counted sharing.
 
 use crate::Error;
+use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
 use hifijson::{LexAlloc, Token};
@@ -297,7 +298,7 @@ impl Val {
     pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
         let mut a = self.sort_by(&f)?.to_arr()?;
         let mut err = None;
-        let mut precalculated_keys = Rc::make_mut(&mut a)
+        let precalculated_keys = Rc::make_mut(&mut a)
             .into_iter()
             .map(|x| {
                 if err.is_some() {
@@ -312,16 +313,18 @@ impl Val {
                 }
             })
             .collect::<Vec<(&mut Val, Vec<Val>)>>();
-        precalculated_keys.sort_by_cached_key(|(_, f_out)| f_out.clone());
         err.map_or(
             Ok(Val::Arr(
                 precalculated_keys
                     .into_iter()
-                    .group_by(|(_, f_out)| f_out.clone())
-                    .into_iter()
-                    .map(|(_key, group)| {
-                        Val::Arr(group.map(|v| (*v.0).clone()).collect::<Vec<Val>>().into())
+                    .fold(BTreeMap::<&Val, Vec<Val>>::new(), |mut acc, mut item| {
+                        acc.entry(item.0)
+                            .and_modify(|x| x.append(&mut item.1))
+                            .or_insert(item.1);
+                        acc
                     })
+                    .into_values()
+                    .map(|group| Val::Arr(group.into()))
                     .collect::<Vec<Val>>()
                     .into(),
             )),
