@@ -296,17 +296,37 @@ impl Val {
     /// Fail on any other value.
     pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
         let mut a = self.sort_by(&f)?.to_arr()?;
-        Ok(Val::Arr(
-            Rc::make_mut(&mut a)
-                .into_iter()
-                .group_by(|x| f((*x).clone()).collect::<Result<Vec<Val>, _>>().unwrap())
-                .into_iter()
-                .map(|(_key, group)| {
-                    Val::Arr(group.map(|v| (*v).clone()).collect::<Vec<Val>>().into())
-                })
-                .collect::<Vec<Val>>()
-                .into(),
-        ))
+        let mut err = None;
+        let mut precalculated_keys = Rc::make_mut(&mut a)
+            .into_iter()
+            .map(|x| {
+                if err.is_some() {
+                    return (x, Vec::new());
+                };
+                match f(x.clone()).collect() {
+                    Ok(y) => (x, y),
+                    Err(e) => {
+                        err = Some(e);
+                        (x, Vec::new())
+                    }
+                }
+            })
+            .collect::<Vec<(&mut Val, Vec<Val>)>>();
+        precalculated_keys.sort_by_cached_key(|(_, f_out)| f_out.clone());
+        err.map_or(
+            Ok(Val::Arr(
+                precalculated_keys
+                    .into_iter()
+                    .group_by(|(_, f_out)| f_out.clone())
+                    .into_iter()
+                    .map(|(_key, group)| {
+                        Val::Arr(group.map(|v| (*v.0).clone()).collect::<Vec<Val>>().into())
+                    })
+                    .collect::<Vec<Val>>()
+                    .into(),
+            )),
+            Err,
+        )
     }
 
     /// Split a string by a given separator string.
