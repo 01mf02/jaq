@@ -80,6 +80,13 @@ def   to_entries: [keys[] as $k | { key: $k, value: .[$k] }];
 def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;
 
+# Paths
+def paths: { x: ., p: [] } | recurse
+  (if .x < [] then empty
+   else (.x | keys[]) as $k | .x |= .[$k] | .p += [$k]
+   end
+  ) | .p | select(. != []);
+
 # Predicates
 def isempty(g): first((g | false), true);
 def all(g; cond): isempty(g | cond and empty);
