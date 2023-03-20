@@ -32,6 +32,16 @@ fn first_last() {
 }
 
 #[test]
+fn group_by() {
+    gives(json!([]), "group_by(.)", [json!([])]);
+    gives(
+        json!([{"key":1, "value": "foo"},{"key":2, "value":"bar"},{"key":1,"value":"baz"}]),
+        "group_by(.key)",
+        [json!([[{"key":1,"value":"foo"}, {"key":1,"value":"baz"}],[{"key":2,"value":"bar"}]])],
+    );
+}
+
+#[test]
 fn has() {
     give(json!(null), "has(0)", json!(false));
 
