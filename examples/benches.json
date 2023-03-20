@@ -8,4 +8,5 @@
 {"name": "reduce"      , "n": 1048576}
 {"name": "tree-flatten", "n":      17}
 {"name": "tree-update" , "n":      17}
+{"name": "tree-paths"  , "n":      17}
 {"name": "to-fromjson" , "n":   65536}
