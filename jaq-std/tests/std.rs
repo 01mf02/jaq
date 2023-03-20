@@ -139,6 +139,17 @@ fn nth() {
 }
 
 #[test]
+fn paths() {
+    let f = "[paths]";
+    give(json!(1), f, json!([]));
+    give(json!(null), f, json!([]));
+    give(json!([1, 2]), f, json!([[0], [1]]));
+
+    let out = json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]]);
+    give(json!({"a": [1, [2]], "b": {"c": 3}}), f, out);
+}
+
+#[test]
 fn range_reverse() {
     give(json!(null), "[range(1, 2)]", json!([0, 0, 1]));
 
