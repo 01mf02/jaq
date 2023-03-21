@@ -6,6 +6,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
 use hifijson::{LexAlloc, Token};
+use itertools::Itertools;
 use jaq_parse::MathOp;
 
 /// JSON value with sharing.
@@ -288,6 +289,44 @@ impl Val {
             }
         });
         err.map_or(Ok(Val::Arr(a)), Err)
+    }
+
+    /// Group an array by the given function.
+    ///
+    /// Fail on any other value.
+    pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        let mut a = self.sort_by(&f)?.to_arr()?;
+        let mut err = None;
+        let mut precalculated_keys = Rc::make_mut(&mut a)
+            .into_iter()
+            .map(|x| {
+                if err.is_some() {
+                    return (Vec::new(), x);
+                };
+                match f(x.clone()).collect() {
+                    Ok(f_out) => (f_out, x),
+                    Err(e) => {
+                        err = Some(e);
+                        (Vec::new(), x)
+                    }
+                }
+            })
+            .collect::<Vec<(Vec<Val>, &mut Val)>>();
+        precalculated_keys.sort_by_cached_key(|(f_out, _)| f_out.clone());
+        err.map_or(
+            Ok(Val::Arr(
+                precalculated_keys
+                    .into_iter()
+                    .group_by(|(f_out, _)| f_out.clone())
+                    .into_iter()
+                    .map(|(_key, group)| {
+                        Val::arr(group.map(|v| (*v.1).clone()).collect::<Vec<Val>>())
+                    })
+                    .collect::<Vec<Val>>()
+                    .into(),
+            )),
+            Err,
+        )
     }
 
     /// Split a string by a given separator string.
