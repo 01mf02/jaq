@@ -6,7 +6,6 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
 use hifijson::{LexAlloc, Token};
-use itertools::Itertools;
 use jaq_parse::MathOp;
 
 /// JSON value with sharing.
@@ -269,6 +268,24 @@ impl Val {
         Ok(Self::Arr(a))
     }
 
+    /// Apply the function to the value if there is no error,
+    /// set error if the function application yielded an error.
+    ///
+    /// This is useful if we have to run a function in a context
+    /// where we cannot fail immediately.
+    fn run_if_ok<'a>(self, err: &mut Option<Error>, f: &impl Fn(Val) -> ValRs<'a>) -> Vec<Val> {
+        if err.is_some() {
+            return Vec::new();
+        };
+        match f(self).collect() {
+            Ok(y) => y,
+            Err(e) => {
+                *err = Some(e);
+                Vec::new()
+            }
+        }
+    }
+
     /// Sort array by the given function.
     ///
     /// Fail on any other value.
@@ -276,18 +293,7 @@ impl Val {
         let mut a = self.to_arr()?;
         // Some(e) iff an error has previously occurred
         let mut err = None;
-        Rc::make_mut(&mut a).sort_by_cached_key(|x| {
-            if err.is_some() {
-                return Vec::new();
-            };
-            match f(x.clone()).collect() {
-                Ok(y) => y,
-                Err(e) => {
-                    err = Some(e);
-                    Vec::new()
-                }
-            }
-        });
+        Rc::make_mut(&mut a).sort_by_cached_key(|x| x.clone().run_if_ok(&mut err, &f));
         err.map_or(Ok(Val::Arr(a)), Err)
     }
 
@@ -295,38 +301,25 @@ impl Val {
     ///
     /// Fail on any other value.
     pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        let mut a = self.sort_by(&f)?.to_arr()?;
         let mut err = None;
-        let mut precalculated_keys = Rc::make_mut(&mut a)
+        let mut yx = rc_unwrap_or_clone(self.to_arr()?)
             .into_iter()
-            .map(|x| {
-                if err.is_some() {
-                    return (Vec::new(), x);
-                };
-                match f(x.clone()).collect() {
-                    Ok(f_out) => (f_out, x),
-                    Err(e) => {
-                        err = Some(e);
-                        (Vec::new(), x)
-                    }
-                }
-            })
-            .collect::<Vec<(Vec<Val>, &mut Val)>>();
-        precalculated_keys.sort_by_cached_key(|(f_out, _)| f_out.clone());
-        err.map_or(
-            Ok(Val::Arr(
-                precalculated_keys
-                    .into_iter()
-                    .group_by(|(f_out, _)| f_out.clone())
-                    .into_iter()
-                    .map(|(_key, group)| {
-                        Val::arr(group.map(|v| (*v.1).clone()).collect::<Vec<Val>>())
-                    })
-                    .collect::<Vec<Val>>()
-                    .into(),
-            )),
-            Err,
-        )
+            .map(|x| (x.clone().run_if_ok(&mut err, &f), x))
+            .collect::<Vec<(Vec<Val>, Val)>>();
+        if let Some(err) = err {
+            return Err(err);
+        }
+
+        yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
+
+        use itertools::Itertools;
+        let grouped = yx
+            .into_iter()
+            .group_by(|(y, _)| y.clone())
+            .into_iter()
+            .map(|(_y, yxs)| Val::arr(yxs.map(|(_y, x)| x).collect()))
+            .collect();
+        Ok(Val::arr(grouped))
     }
 
     /// Split a string by a given separator string.
