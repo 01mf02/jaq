@@ -527,8 +527,7 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
 }
 
 fn run_test(test: jaq_core::parse::test::Test<String>) -> Result<(Val, Val), Error> {
-    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
-    let inputs = RcIter::new(null);
+    let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(Vec::new(), &inputs);
 
     let filter = parse(&test.filter, Vec::new())?;
@@ -541,7 +540,7 @@ fn run_test(test: jaq_core::parse::test::Test<String>) -> Result<(Val, Val), Err
     };
     let input = json(test.input)?;
     let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Vec<_>, _> = filter.run(ctx.clone(), input).collect();
+    let obtain: Result<Vec<_>, _> = filter.run(ctx, input).collect();
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
 }
 
