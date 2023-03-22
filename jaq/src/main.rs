@@ -89,6 +89,10 @@ struct Cli {
     #[arg(long, value_names = &["a", "f"])]
     slurpfile: Vec<String>,
 
+    /// Run tests from a file
+    #[arg(long, value_name = "FILE")]
+    run_tests: Option<PathBuf>,
+
     /// Filter to execute, followed by list of input files
     args: Vec<String>,
 }
@@ -127,6 +131,10 @@ fn real_main() -> Result<ExitCode, Error> {
         // omit name of module that emitted log message
         .format_target(false)
         .init();
+
+    if let Some(test_file) = &cli.run_tests {
+        return Ok(run_tests(std::fs::File::open(test_file)?));
+    }
 
     let (vars, ctx) = binds(&cli)?.into_iter().unzip();
 
@@ -516,4 +524,49 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
     };
 
     report.with_config(config).finish()
+}
+
+fn run_test(test: jaq_core::parse::test::Test<String>) -> Result<(Val, Val), Error> {
+    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
+    let inputs = RcIter::new(null);
+    let ctx = Ctx::new(Vec::new(), &inputs);
+
+    let filter = parse(&test.filter, Vec::new())?;
+
+    use hifijson::token::Lex;
+    let json = |s: String| {
+        hifijson::SliceLexer::new(s.as_bytes())
+            .exactly_one(Val::parse)
+            .map_err(invalid_data)
+    };
+    let input = json(test.input)?;
+    let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
+    let obtain: Result<Vec<_>, _> = filter.run(ctx.clone(), input).collect();
+    Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
+}
+
+fn run_tests(file: std::fs::File) -> ExitCode {
+    let lines = io::BufReader::new(file).lines().map(|l| l.unwrap());
+    let tests = jaq_core::parse::test::Parser::new(lines);
+
+    let (mut passed, mut total) = (0, 0);
+    for test in tests {
+        println!("Testing {}", test.filter);
+        match run_test(test) {
+            Err(e) => eprintln!("{:?}", e),
+            Ok((expect, obtain)) if expect != obtain => {
+                eprintln!("expected {expect}, obtained {obtain}",);
+            }
+            Ok(_) => passed += 1,
+        }
+        total += 1;
+    }
+
+    println!("{passed} out of {total} tests passed");
+
+    if total > passed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
