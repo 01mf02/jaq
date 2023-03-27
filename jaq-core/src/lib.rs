@@ -73,13 +73,15 @@ pub struct Ctx<'i> {
     /// variable bindings
     vars: RcList<Val>,
     inputs: &'i Inputs<'i>,
+    defs: &'i [filter::Filter],
 }
 
 impl<'i> Ctx<'i> {
     /// Construct a context.
     pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'i Inputs<'i>) -> Self {
         let vars = vars.into_iter().fold(RcList::Nil, |acc, v| acc.cons(v));
-        Self { vars, inputs }
+        let defs = &[];
+        Self { vars, inputs, defs }
     }
 
     /// Add a new variable binding.
@@ -87,6 +89,7 @@ impl<'i> Ctx<'i> {
         Self {
             vars: self.vars.cons(x),
             inputs: self.inputs,
+            defs: self.defs,
         }
     }
 
@@ -94,6 +97,7 @@ impl<'i> Ctx<'i> {
         Self {
             vars: self.vars.skip(n).clone(),
             inputs: self.inputs,
+            defs: self.defs,
         }
     }
 }

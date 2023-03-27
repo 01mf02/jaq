@@ -102,6 +102,7 @@ pub enum Filter {
     SkipCtx(usize, Box<Self>),
     Var(usize),
     Arg(usize),
+    Call(usize),
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
@@ -324,6 +325,7 @@ impl Filter {
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.vars.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
+            Self::Call(f) => cv.0.defs[*f].run(cv),
         }
     }
 
@@ -388,6 +390,7 @@ impl Filter {
             Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
             Self::Var(_) => err,
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
+            Self::Call(id) => cv.0.defs[*id].update(cv, f),
         }
     }
 
@@ -477,7 +480,7 @@ impl Filter {
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
 
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
-            Self::Var(_) => self,
+            Self::Var(_) | Self::Call(_) => self,
             Self::Arg(a) => args[a].clone(),
         }
     }
