@@ -13,6 +13,8 @@ pub struct Def {
     pub name: String,
     /// Arguments of the filter, e.g. `["f"]`
     pub args: Vec<Arg>,
+    /// Definitions at the top of the filter
+    pub defs: Vec<Self>,
     /// Body of the filter, e.g. `[.[] | f`.
     pub body: Spanned<Filter>,
 }
@@ -46,7 +48,10 @@ impl Arg {
 pub type Main = (Vec<Def>, Spanned<Filter>);
 
 /// Parser for a single definition.
-fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
+fn def<P>(def: P) -> impl Parser<Token, Def, Error = Simple<Token>> + Clone
+where
+    P: Parser<Token, Def, Error = Simple<Token>> + Clone,
+{
     let ident = filter_map(|span, tok| match tok {
         Token::Ident(ident) => Ok(ident),
         _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
@@ -62,15 +67,21 @@ fn def() -> impl Parser<Token, Def, Error = Simple<Token>> + Clone {
         .ignore_then(ident.labelled("filter name"))
         .then(args(arg).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
+        .then(def.repeated().collect())
         .then(filter())
         .then_ignore(just(Token::Ctrl(';')))
-        .map(|((name, args), body)| Def { name, args, body })
+        .map(|(((name, args), defs), body)| Def {
+            name,
+            args,
+            defs,
+            body,
+        })
         .labelled("definition")
 }
 
 /// Parser for a sequence of definitions.
 pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
-    def().repeated().collect()
+    recursive(|df| def(df)).repeated().collect()
 }
 
 /// Parser for a (potentially empty) sequence of definitions, followed by a filter.
