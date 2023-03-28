@@ -434,9 +434,14 @@ impl Filter {
         Filter::Recurse(Box::new(path), true, true)
     }
 
-    pub fn subst(self, args: &[Self]) -> Self {
-        let subst = |f: Self| f.subst(args);
+    pub fn subst<V, A>(self, vars: usize, fv: &V, fa: &A) -> Self
+    where
+        V: Fn(usize, usize) -> usize,
+        A: Fn(usize, usize) -> Self,
+    {
+        let subst = |f: Self| f.subst(vars, fv, fa);
         let sub = |f: Box<Self>| Box::new(subst(*f));
+        let bind_sub = |f: Box<Self>| Box::new(f.subst(vars + 1, fv, fa));
 
         match self {
             Self::Id => self,
@@ -447,11 +452,12 @@ impl Filter {
             }
             Self::Try(f) => Self::Try(sub(f)),
             Self::Neg(f) => Self::Neg(sub(f)),
-            Self::Pipe(l, bind, r) => Self::Pipe(sub(l), bind, sub(r)),
+            Self::Pipe(l, false, r) => Self::Pipe(sub(l), false, sub(r)),
+            Self::Pipe(l, true, r) => Self::Pipe(sub(l), true, bind_sub(r)),
+            Self::Fold(typ, xs, init, f) => Self::Fold(typ, sub(xs), sub(init), bind_sub(f)),
             Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
             Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
             Self::Ite(if_, then_, else_) => Self::Ite(sub(if_), sub(then_), sub(else_)),
-            Self::Fold(typ, xs, init, f) => Self::Fold(typ, sub(xs), sub(init), sub(f)),
             Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
             Self::Update(path, f) => Self::Update(sub(path), sub(f)),
             Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),
@@ -478,10 +484,11 @@ impl Filter {
             Self::Walk(f) => Self::Walk(sub(f)),
             Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
-
+            // TODO: remove this!
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
-            Self::Var(_) | Self::Call(_) => self,
-            Self::Arg(a) => args[a].clone(),
+            Self::Call(_) => self,
+            Self::Var(v) => Self::Var(fv(vars, v)),
+            Self::Arg(a) => fa(vars, a),
         }
     }
 }
