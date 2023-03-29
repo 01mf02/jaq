@@ -325,7 +325,7 @@ impl Filter {
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.vars.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
-            Self::Call(f) => cv.0.defs[*f].run(cv),
+            Self::Call(f) => Box::new(crate::LazyIter::new(|| cv.0.defs[*f].run(cv))),
         }
     }
 
