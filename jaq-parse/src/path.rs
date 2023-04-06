@@ -89,6 +89,15 @@ where
         .collect()
 }
 
+impl<I> Part<I> {
+    pub fn map<J>(self, mut f: impl FnMut(I) -> J) -> Part<J> {
+        match self {
+            Self::Index(i) => Part::Index(f(i)),
+            Self::Range(l, h) => Part::Range(l.map(&mut f), h.map(f)),
+        }
+    }
+}
+
 impl Opt {
     /// If `self` is optional, return `x`, else fail with `f(x)`.
     pub fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
