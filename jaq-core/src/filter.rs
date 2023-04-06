@@ -384,7 +384,7 @@ impl Filter {
     /// `p.update(cv, f)` returns the output of `v | p |= f`
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
         use core::iter::once;
-        let err = Box::new(core::iter::once(Err(Error::PathExp)));
+        let err = Box::new(once(Err(Error::PathExp)));
         match self {
             Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
             Self::Array(_) | Self::Object(_) => err,
@@ -446,9 +446,9 @@ impl Filter {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
-            
+
             Self::Custom(CustomFilter { update: Some(update), .. }) => (update)(cv.clone(), f.clone()),
-            Self::Custom(CustomFilter { update: None, .. }) => err,
+            Self::Custom(CustomFilter { update: None, .. }) => Box::new(once(Err(Error::NonUpdatable))),
         }
     }
 
