@@ -162,8 +162,8 @@ impl Definitions {
     }
     
     /// Import a custom, Rust-defined filter.
-    pub fn insert_custom(&mut self, name: &str, arity: usize, filter: filter::CustomFilter) {
-        self.0.insert((name.to_string(), arity), filter::Filter::Custom(filter));
+    pub fn insert_custom(&mut self, name: &str, filter: filter::CustomFilter) {
+        self.0.insert((name.to_string(), filter.arity()), filter::Filter::Custom(filter));
     }
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.

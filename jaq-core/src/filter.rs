@@ -114,16 +114,20 @@ pub enum Filter {
     Custom(CustomFilter),
 }
 
+pub type FilterArgs<'a> = Box<dyn Iterator<Item = ValRs<'a>> + 'a>;
+
 /// Custom filter.
 #[derive(Clone)]
 pub struct CustomFilter {
-    run: Arc<dyn for<'a> Fn(Cv<'a>) -> ValRs<'a>>,
-    update: Option<Arc<dyn for<'a> Fn(Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
+    args: Vec<Filter>,
+    run: Arc<dyn for<'a> Fn(FilterArgs<'a>, Cv<'a>) -> ValRs<'a>>,
+    update: Option<Arc<dyn for<'a> Fn(FilterArgs<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
 }
 
 impl Debug for CustomFilter {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("CustomFilter")
+            .field("arity", &self.args.len())
             .field("run", &"{fn}")
             .field("update", &match &self.update {
                 Some(_) => "Some({fn})",
@@ -134,18 +138,31 @@ impl Debug for CustomFilter {
 }
 
 impl CustomFilter {
-    pub fn new(run: impl for<'a> Fn(Cv<'a>) -> ValRs<'a> + 'static) -> Self {
+    /// The arity (number of arguments) of the filter.
+    pub fn arity(&self) -> usize {
+        self.args.len()
+    }
+
+    /// Create a new custom filter from a function.
+    pub fn new(
+        arity: usize,
+        run: impl for<'a> Fn(FilterArgs<'a>, Cv<'a>) -> ValRs<'a> + 'static,
+    ) -> Self {
         Self {
+            args: (0..arity).map(|n| Filter::Arg(n)).collect(),
             run: Arc::new(run),
             update: None,
         }
     }
 
+    /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
     pub fn with_update(
-        run: impl for<'a> Fn(Cv<'a>) -> ValRs<'a> + 'static,
-        update: impl for<'a> Fn(Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
+        arity: usize,
+        run: impl for<'a> Fn(FilterArgs<'a>, Cv<'a>) -> ValRs<'a> + 'static,
+        update: impl for<'a> Fn(FilterArgs<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
     ) -> Self {
         Self {
+            args: (0..arity).map(|n| Filter::Arg(n)).collect(),
             run: Arc::new(run),
             update: Some(Arc::new(update)),
         }
@@ -376,8 +393,11 @@ impl Filter {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
-            
-            Self::Custom(CustomFilter { run, .. }) => (run)(cv.clone()),
+
+            Self::Custom(CustomFilter { args, run, .. }) => {
+                let acv = cv.clone();
+                (run)(Box::new(args.iter().map(move |a| a.run(acv.clone()))), cv.clone())
+            },
         }
     }
 
@@ -447,7 +467,10 @@ impl Filter {
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Custom(CustomFilter { update: Some(update), .. }) => (update)(cv.clone(), f.clone()),
+            Self::Custom(CustomFilter { args, update: Some(update), .. }) => {
+                let acv = cv.clone();
+                (update)(Box::new(args.iter().map(move |a| a.run(acv.clone()))), cv.clone(), f.clone())
+            },
             Self::Custom(CustomFilter { update: None, .. }) => Box::new(once(Err(Error::NonUpdatable))),
         }
     }

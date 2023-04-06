@@ -34,18 +34,17 @@ fn arity0_source_only() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "natzero",
-        0,
-        CustomFilter::new(|_cv| Box::new(once(Ok(Val::Int(0))))),
+        CustomFilter::new(0, |_, _cv| Box::new(once(Ok(Val::Int(0))))),
     );
     defs.insert_custom(
         "nattwenty",
-        0,
-        CustomFilter::new(|_cv| Box::new(once(Ok(Val::Int(20))))),
+        CustomFilter::new(0, |_, _cv| Box::new(once(Ok(Val::Int(20))))),
     );
     defs.insert_custom(
         "hello",
-        0,
-        CustomFilter::new(|_cv| Box::new(once(Ok(Val::Str(Rc::new("world".into())))))),
+        CustomFilter::new(0, |_, _cv| {
+            Box::new(once(Ok(Val::Str(Rc::new("world".into())))))
+        }),
     );
 
     yields(&defs, Value::Null, "natzero", [json!(0)], None);
@@ -58,8 +57,7 @@ fn arity0_and_sink() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "str_rev",
-        0,
-        CustomFilter::new(|(_, val)| {
+        CustomFilter::new(0, |_, (_, val)| {
             Box::new(once(
                 val.to_str().map(|s| Val::str(s.chars().rev().join(""))),
             ))
@@ -75,8 +73,7 @@ fn non_updatable() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "nupd",
-        0,
-        CustomFilter::new(|(_, val)| Box::new(once(Ok(val)))),
+        CustomFilter::new(0, |_, (_, val)| Box::new(once(Ok(val)))),
     );
 
     yields(&defs, json!("hello"), "nupd", [json!("hello")], None);
@@ -94,13 +91,37 @@ fn arity0_and_update() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "with_length",
-        0,
         CustomFilter::with_update(
-            |(_, val)| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
-            |(_, val), _| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
+            0,
+            |_, (_, val)| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
+            |_, (_, val), _| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
         ),
     );
 
     yields(&defs, json!("hello"), "with_length", [json!(5)], None);
     yields(&defs, json!("hello"), "with_length |= .", [json!(5)], None);
+}
+
+#[test]
+fn arity1() {
+    let mut defs = Definitions::core();
+    defs.insert_custom(
+        "iflonger",
+        CustomFilter::new(1, |mut args, (ctx, val)| {
+            let arg = match args.next().unwrap().next() {
+                Some(Ok(val)) => val,
+                Some(err @ Err(_)) => return Box::new(once(err)),
+                None => return Box::new(once(Err(Error::NoValue))),
+            };
+
+            Box::new(once(
+                val.to_str()
+                    .and_then(|s| arg.as_int().map(|n| (s, n as usize)))
+                    .map(|(s, n)| if s.len() > n { Val::Str(s) } else { Val::Null }),
+            ))
+        }),
+    );
+
+    yields(&defs, json!("hello"), "iflonger(8)", [Value::Null], None);
+    yields(&defs, json!("helloworld"), "iflonger(8)", [json!("helloworld")], None);
 }
