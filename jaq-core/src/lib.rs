@@ -75,42 +75,63 @@ pub struct Ctx<'i> {
     /// variable bindings
     vars: RcList<Val>,
     inputs: &'i Inputs<'i>,
-    defs: &'i [filter::Filter],
+    recs: &'i [(usize, filter::Filter)],
 }
 
 impl<'i> Ctx<'i> {
     /// Construct a context.
     pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'i Inputs<'i>) -> Self {
         let vars = vars.into_iter().fold(RcList::Nil, |acc, v| acc.cons(v));
-        let defs = &[];
-        Self { vars, inputs, defs }
+        let recs = &[];
+        Self { vars, inputs, recs }
     }
 
     /// Add a new variable binding.
-    pub fn cons_var(self, x: Val) -> Self {
-        Self {
-            vars: self.vars.cons(x),
-            inputs: self.inputs,
-            defs: self.defs,
-        }
+    pub fn cons_var(mut self, x: Val) -> Self {
+        self.vars = self.vars.cons(x);
+        self
     }
 
     fn skip_vars(&self, n: usize) -> Self {
         Self {
             vars: self.vars.skip(n).clone(),
             inputs: self.inputs,
-            defs: self.defs,
+            recs: self.recs,
         }
+    }
+
+    /// Obtain and remove the `save` most recent variable bindings,
+    /// then remove additional `skip` most recent bindings,
+    /// finally add the original `save` bindings.
+    ///
+    /// This seemingly complicated behaviour stems from
+    /// calls to recursive filters with `save` variable arguments.
+    /// To call such a filter, we have to first produce the
+    /// argument values and save them in the context.
+    /// Next, we have to remove `skip` variables that might have been bound
+    /// by the last call to the recursive filter.
+    /// Finally, we add the `save` arguments to the context again,
+    /// so that the recursive filter can start again with the same context length.
+    fn save_skip_vars(mut self, save: usize, skip: usize) -> Self {
+        self.vars = if save == 0 {
+            self.vars.skip(skip).clone()
+        } else {
+            let (saved, rest) = self.vars.pop_many(save);
+            let saved = saved.into_iter().rev().cloned();
+            rest.skip(skip).clone().cons_many(saved)
+        };
+        self
     }
 }
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Default, Clone)]
-pub struct Filter(crate::filter::Filter);
+pub struct Filter(filter::Filter, Vec<(usize, filter::Filter)>);
 
 impl Filter {
     /// Apply the filter to the given value and return stream of results.
-    pub fn run<'a>(&'a self, ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
+    pub fn run<'a>(&'a self, mut ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
+        ctx.recs = &self.1;
         self.0.run((ctx, val))
     }
 }
@@ -145,7 +166,8 @@ impl Definitions {
         errs: &mut Vec<parse::Error>,
     ) -> Filter {
         defs.into_iter().for_each(|def| self.insert(def, errs));
-        Filter(unparse::filter(&self.get(), &[], vars, body, errs))
+        let recs = Vec::new();
+        Filter(unparse::filter(&self.get(), &[], vars, body, errs), recs)
     }
 
     /// Obtain filters by name and arity.

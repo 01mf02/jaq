@@ -99,10 +99,14 @@ pub enum Filter {
     /// ~~~
     Range(Box<Self>, Box<Self>),
 
+    // TODO: remove this as soon as recursive filters are supported
     SkipCtx(usize, Box<Self>),
     Var(usize),
     Arg(usize),
-    Call(usize),
+    Call {
+        skip: usize,
+        id: usize,
+    },
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
@@ -325,7 +329,10 @@ impl Filter {
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.vars.get(*v).unwrap().clone()))),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
-            Self::Call(f) => Box::new(crate::LazyIter::new(|| cv.0.defs[*f].run(cv))),
+            Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
+                let (save, rec) = &cv.0.recs[*id];
+                rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
+            })),
         }
     }
 
@@ -390,10 +397,17 @@ impl Filter {
             Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
             Self::Var(_) => err,
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
-            Self::Call(id) => cv.0.defs[*id].update(cv, f),
+            Self::Call { skip, id } => {
+                let (save, rec) = &cv.0.recs[*id];
+                rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
+            }
         }
     }
 
+    /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
+    ///
+    /// This has a special optimisation for the case where only a single `v` is returned.
+    /// In that case, we can consume `cv` instead of cloning it.
     fn pipe<'a>(&'a self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
         let mut l = self.run(cv.clone());
 
@@ -486,7 +500,7 @@ impl Filter {
             Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
             // TODO: remove this!
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
-            Self::Call(_) => self,
+            Self::Call { .. } => self,
             Self::Var(v) => Self::Var(fv(vars, v)),
             Self::Arg(a) => fa(vars, a),
         }

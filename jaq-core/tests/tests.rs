@@ -179,6 +179,8 @@ fn vars() {
     give(json!(1), ".+1 as $x | . + $x", json!(3));
     give(json!(1), ". as $x | (2 as $y | 3) | $x", json!(1));
 
+    give(json!(1), "def g(f): f; . as $x | g($x)", json!(1));
+
     let f = r#"def g(f): "z" as $z | f | .+$z; "x" as $x | g("y" as $y | $x+$y)"#;
     give(json!(null), f, json!("xyz"));
 

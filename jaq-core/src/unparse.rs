@@ -110,7 +110,7 @@ impl Ctx {
                     }
                     // call to a parent function, i.e. recursion
                     else if t.name == name && t.args.is_empty() {
-                        return Filter::Call(t.id);
+                        return Filter::Call { skip: 0, id: t.id };
                     }
 
                     vars += t.vars().count();
