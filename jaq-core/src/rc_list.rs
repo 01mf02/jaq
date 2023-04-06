@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 #[derive(Clone, Debug)]
 pub enum RcList<T> {
     Nil,
@@ -15,8 +17,13 @@ impl<T> RcList<T> {
         Self::Nil
     }
 
+    /// Append a new element to the beginning of the list.
     pub fn cons(self, x: T) -> Self {
         Self::Cons(x, alloc::rc::Rc::new(self))
+    }
+
+    pub fn cons_many(self, iter: impl IntoIterator<Item = T>) -> Self {
+        iter.into_iter().fold(self, |acc, x| acc.cons(x))
     }
 
     pub fn get(&self, mut n: usize) -> Option<&T> {
@@ -32,14 +39,36 @@ impl<T> RcList<T> {
         None
     }
 
+    fn pop(&self) -> Option<(&T, &Self)> {
+        match self {
+            Self::Cons(x, xs) => Some((x, xs)),
+            Self::Nil => None,
+        }
+    }
+
+    pub fn pop_many(&self, mut n: usize) -> (Vec<&T>, &Self) {
+        let mut out = Vec::with_capacity(n);
+
+        let mut ctx = self;
+        for _ in 0..n {
+            match self.pop() {
+                Some((x, xs)) => {
+                    out.push(x);
+                    ctx = xs
+                }
+                None => return (out, &Self::Nil),
+            }
+        }
+        (out, ctx)
+    }
+
     pub fn skip(&self, mut n: usize) -> &Self {
         let mut ctx = self;
-        while n > 0 {
+        for _ in 0..n {
             match ctx {
                 Self::Cons(_, xs) => ctx = xs,
                 Self::Nil => return &Self::Nil,
             }
-            n -= 1;
         }
         ctx
     }
