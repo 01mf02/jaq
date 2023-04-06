@@ -28,10 +28,6 @@ pub struct Arg {
 }
 
 impl Arg {
-    pub fn new_var(name: String) -> Self {
-        Self { name, var: true }
-    }
-
     /// If the argument is a variable, return its name without leading "$", otherwise `None`.
     pub fn get_var(&self) -> Option<&str> {
         self.var.then(|| &*self.name)
@@ -41,6 +37,7 @@ impl Arg {
         (!self.var).then(|| &*self.name)
     }
 
+    // TODO: remove this?
     /// Return the full name of the argument, including leading "$" for variables.
     pub fn get_name(&self) -> String {
         use alloc::borrow::ToOwned;
