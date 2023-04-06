@@ -69,3 +69,38 @@ fn arity0_and_sink() {
     yields(&defs, json!("hello"), "str_rev", [json!("olleh")], None);
     yields(&defs, json!(""), "str_rev", [json!("")], None);
 }
+
+#[test]
+fn non_updatable() {
+    let mut defs = Definitions::core();
+    defs.insert_custom(
+        "nupd",
+        0,
+        CustomFilter::new(|(_, val)| Box::new(once(Ok(val)))),
+    );
+
+    yields(&defs, json!("hello"), "nupd", [json!("hello")], None);
+    yields(
+        &defs,
+        json!("hello"),
+        "nupd |= .",
+        [],
+        Some(Error::NonUpdatable),
+    );
+}
+
+#[test]
+fn arity0_and_update() {
+    let mut defs = Definitions::core();
+    defs.insert_custom(
+        "with_length",
+        0,
+        CustomFilter::with_update(
+            |(_, val)| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
+            |(_, val), _| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
+        ),
+    );
+
+    yields(&defs, json!("hello"), "with_length", [json!(5)], None);
+    yields(&defs, json!("hello"), "with_length |= .", [json!(5)], None);
+}
