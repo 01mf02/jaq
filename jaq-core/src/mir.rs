@@ -1,4 +1,11 @@
 //! Mid-level Intermediate Representation of definitions and filters.
+//!
+//! This is quite close to the output of parsing,
+//! but replaces names by unique integers.
+//! This makes the subsequent transformation step ,
+//! That way, the subsequent transformation step(s)
+//! always succeed and do not have to fight with shadowing.
+//! But most importantly, this allows us to record recursive calls.
 
 use crate::parse;
 use crate::path::{self, Path};
