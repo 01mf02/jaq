@@ -78,12 +78,21 @@ impl prec_climb::Op for BinaryOp {
 /// consists of two elements, namely `(.): 1` and `b: 2`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
-pub enum KeyVal {
+pub enum KeyVal<T> {
     /// Both key and value are proper filters, e.g. `{(.+1): .+2}`
-    Filter(Spanned<Filter>, Spanned<Filter>),
+    Filter(T, T),
     /// Key is a string, and value is an optional filter, e.g. `{a: 1, b}`
     /// (this is equivalent to `{("a"): 1, ("b"): .b}`)
-    Str(String, Option<Spanned<Filter>>),
+    Str(String, Option<T>),
+}
+
+impl<F> KeyVal<F> {
+    pub fn map<G>(self, mut f: impl FnMut(F) -> G) -> KeyVal<G> {
+        match self {
+            Self::Filter(k, v) => KeyVal::Filter(f(k), f(v)),
+            Self::Str(k, v) => KeyVal::Str(k, v.map(f)),
+        }
+    }
 }
 
 /// Common information for folding filters (such as `reduce` and `foreach`)
@@ -102,7 +111,7 @@ pub struct Fold<F> {
 
 /// Type of folding filter.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum FoldType {
     /// return only the final value of fold
     Reduce,
@@ -115,20 +124,24 @@ pub enum FoldType {
 /// Function from value to stream of values, such as `.[] | add / length`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
-pub enum Filter {
-    /// Identity, i.e. `.`
-    Id,
+pub enum Filter<C = String, V = String, Num = String> {
+    /// Call to another filter, e.g. `map(.+1)`
+    Call(C, Vec<Spanned<Self>>),
+    /// Variable, such as $x (without leading '$')
+    Var(V),
+
     /// Integer or floating-point number.
-    Num(String),
+    Num(Num),
     /// String
     Str(String),
-    /// Variable, such as $x (without leading '$')
-    Var(String),
     /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
     /// Object, specifying its key-value pairs
-    Object(Vec<KeyVal>),
+    Object(Vec<KeyVal<Spanned<Self>>>),
     /// Path such as `.`, `.a`, `.[][]."b"`
+
+    /// Identity, i.e. `.`
+    Id,
     Path(Box<Spanned<Self>>, Path<Self>),
     /// If-then-else
     Ite(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
@@ -137,8 +150,6 @@ pub enum Filter {
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
     Fold(FoldType, Fold<Box<Spanned<Self>>>),
-    /// Call to another filter, e.g. `map(.+1)`
-    Call(String, Vec<Spanned<Self>>),
     /// Error suppression, e.g. `keys?`
     Try(Box<Spanned<Self>>),
     /// Negation

@@ -28,9 +28,17 @@ pub struct Arg {
 }
 
 impl Arg {
+    pub fn new_var(name: String) -> Self {
+        Self { name, var: true }
+    }
+
     /// If the argument is a variable, return its name without leading "$", otherwise `None`.
     pub fn get_var(&self) -> Option<&str> {
         self.var.then(|| &*self.name)
+    }
+
+    pub fn get_arg(&self) -> Option<&str> {
+        (!self.var).then(|| &*self.name)
     }
 
     /// Return the full name of the argument, including leading "$" for variables.
