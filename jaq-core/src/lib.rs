@@ -47,6 +47,7 @@ extern crate std;
 mod error;
 mod filter;
 mod lazy_iter;
+mod mir;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
