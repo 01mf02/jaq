@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::sync::Arc;
+
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
@@ -107,6 +110,27 @@ pub enum Filter {
         skip: usize,
         id: usize,
     },
+
+    Custom(CustomFilter),
+}
+
+/// Custom filter.
+#[derive(Clone)]
+pub struct CustomFilter {
+    run: Arc<dyn for<'a> Fn(Cv<'a>) -> ValRs<'a>>,
+    update: Option<Arc<dyn for<'a> Fn(Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
+}
+
+impl Debug for CustomFilter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CustomFilter")
+            .field("run", &"{fn}")
+            .field("update", &match &self.update {
+                Some(_) => "Some({fn})",
+                None => "None",
+            })
+            .finish()
+    }
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
@@ -333,6 +357,8 @@ impl Filter {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
+            
+            Self::Custom(CustomFilter { run, .. }) => (run)(cv.clone()),
         }
     }
 
@@ -401,6 +427,9 @@ impl Filter {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
+            
+            Self::Custom(CustomFilter { update: Some(update), .. }) => (update)(cv.clone(), f.clone()),
+            Self::Custom(CustomFilter { update: None, .. }) => err,
         }
     }
 
@@ -503,6 +532,7 @@ impl Filter {
             Self::Call { .. } => self,
             Self::Var(v) => Self::Var(fv(vars, v)),
             Self::Arg(a) => fa(vars, a),
+            Self::Custom(_) => self,
         }
     }
 }
