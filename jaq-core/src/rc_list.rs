@@ -46,7 +46,7 @@ impl<T> RcList<T> {
         }
     }
 
-    pub fn pop_many(&self, mut n: usize) -> (Vec<&T>, &Self) {
+    pub fn pop_many(&self, n: usize) -> (Vec<&T>, &Self) {
         let mut out = Vec::with_capacity(n);
 
         let mut ctx = self;
@@ -62,7 +62,7 @@ impl<T> RcList<T> {
         (out, ctx)
     }
 
-    pub fn skip(&self, mut n: usize) -> &Self {
+    pub fn skip(&self, n: usize) -> &Self {
         let mut ctx = self;
         for _ in 0..n {
             match ctx {
