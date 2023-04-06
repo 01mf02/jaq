@@ -1,5 +1,5 @@
-use std::fmt::Debug;
-use std::sync::Arc;
+use core::fmt::Debug;
+use alloc::sync::Arc;
 
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then};
@@ -133,9 +133,28 @@ impl Debug for CustomFilter {
     }
 }
 
+impl CustomFilter {
+    pub fn new(run: impl for<'a> Fn(Cv<'a>) -> ValRs<'a> + 'static) -> Self {
+        Self {
+            run: Arc::new(run),
+            update: None,
+        }
+    }
+
+    pub fn with_update(
+        run: impl for<'a> Fn(Cv<'a>) -> ValRs<'a> + 'static,
+        update: impl for<'a> Fn(Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
+    ) -> Self {
+        Self {
+            run: Arc::new(run),
+            update: Some(Arc::new(update)),
+        }
+    }
+}
+
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
-trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
+pub trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
 
 impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
@@ -146,7 +165,7 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
     Box::new(fold(false, xs, Box::new(core::iter::once(Ok(init))), f))
 }
 
-type Cv<'c> = (Ctx<'c>, Val);
+pub type Cv<'c> = (Ctx<'c>, Val);
 
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
