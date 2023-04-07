@@ -1,6 +1,9 @@
 //! Tests for custom filters.
 
-use std::{iter::once, rc::Rc};
+use std::{
+    iter::{once, repeat},
+    rc::Rc,
+};
 
 use itertools::Itertools;
 use jaq_core::{parse, Ctx, CustomFilter, Definitions, Error, RcIter, Val};
@@ -218,6 +221,40 @@ fn arity12() {
         Value::Null,
         "sillysum(6; 13; 15; 8; 10; 12; 20; 16; 20; 3; 17; 8)",
         [json!(148)],
+        None,
+    );
+}
+
+#[test]
+fn iterator() {
+    let mut defs = Definitions::core();
+    defs.insert_custom(
+        "randnums",
+        CustomFilter::new(1, |args, (ctx, val)| {
+            let amount = match args[0].run((ctx.clone(), val.clone())).next() {
+                Some(Ok(Val::Int(n))) => n,
+                Some(Ok(v)) => {
+                    return Box::new(once(Err(Error::Custom(format!(
+                        "expected int but got {v:?}"
+                    )))))
+                }
+                Some(Err(e)) => return Box::new(once(Err(e))),
+                None => {
+                    return Box::new(once(Err(Error::Custom(
+                        "value expected but none found".into(),
+                    ))))
+                }
+            };
+
+            Box::new(repeat(42).take(amount as usize).map(|n| Ok(Val::Int(n))))
+        }),
+    );
+
+    yields(
+        &defs,
+        Value::Null,
+        "randnums(3)",
+        [json!(42), json!(42), json!(42)],
         None,
     );
 }
