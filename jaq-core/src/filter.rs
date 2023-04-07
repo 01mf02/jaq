@@ -1,3 +1,6 @@
+use core::fmt::Debug;
+use alloc::sync::Arc;
+
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
@@ -107,11 +110,66 @@ pub enum Filter {
         skip: usize,
         id: usize,
     },
+
+    Custom(CustomFilter),
+}
+
+/// Custom filter.
+#[derive(Clone)]
+pub struct CustomFilter {
+    args: Vec<Filter>,
+    run: Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a>>,
+    update: Option<Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
+}
+
+impl Debug for CustomFilter {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("CustomFilter")
+            .field("arity", &self.args.len())
+            .field("run", &"{fn}")
+            .field("update", &match &self.update {
+                Some(_) => "Some({fn})",
+                None => "None",
+            })
+            .finish()
+    }
+}
+
+impl CustomFilter {
+    /// The arity (number of arguments) of the filter.
+    pub fn arity(&self) -> usize {
+        self.args.len()
+    }
+
+    /// Create a new custom filter from a function.
+    pub fn new(
+        arity: usize,
+        run: impl for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a> + 'static,
+    ) -> Self {
+        Self {
+            args: (0..arity).map(|n| Filter::Arg(n)).collect(),
+            run: Arc::new(run),
+            update: None,
+        }
+    }
+
+    /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
+    pub fn with_update(
+        arity: usize,
+        run: impl for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a> + 'static,
+        update: impl for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
+    ) -> Self {
+        Self {
+            args: (0..arity).map(|n| Filter::Arg(n)).collect(),
+            run: Arc::new(run),
+            update: Some(Arc::new(update)),
+        }
+    }
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
-trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
+pub trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
 
 impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
@@ -122,7 +180,7 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
     Box::new(fold(false, xs, Box::new(core::iter::once(Ok(init))), f))
 }
 
-type Cv<'c> = (Ctx<'c>, Val);
+pub type Cv<'c> = (Ctx<'c>, Val);
 
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
@@ -333,13 +391,17 @@ impl Filter {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
+
+            Self::Custom(CustomFilter { args, run, .. }) => {
+                (run)(args, cv.clone())
+            },
         }
     }
 
     /// `p.update(cv, f)` returns the output of `v | p |= f`
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
         use core::iter::once;
-        let err = Box::new(core::iter::once(Err(Error::PathExp)));
+        let err = Box::new(once(Err(Error::PathExp)));
         match self {
             Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
             Self::Array(_) | Self::Object(_) => err,
@@ -401,6 +463,11 @@ impl Filter {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
+
+            Self::Custom(CustomFilter { args, update: Some(update), .. }) => {
+                (update)(args, cv.clone(), f.clone())
+            },
+            Self::Custom(CustomFilter { update: None, .. }) => Box::new(once(Err(Error::NonUpdatable))),
         }
     }
 
@@ -503,6 +570,13 @@ impl Filter {
             Self::Call { .. } => self,
             Self::Var(v) => Self::Var(fv(vars, v)),
             Self::Arg(a) => fa(vars, a),
+            Self::Custom(CustomFilter { args, run, update }) => {
+                Self::Custom(CustomFilter {
+                    args: args.into_iter().map(|f| *sub(Box::new(f))).collect(),
+                    run,
+                    update,
+                })
+            }
         }
     }
 }

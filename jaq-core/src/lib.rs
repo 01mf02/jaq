@@ -60,10 +60,11 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
+pub use filter::CustomFilter;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::{String, ToString}, vec::Vec};
 use lazy_iter::LazyIter;
 use parse::{Def, Main};
 use rc_list::RcList;
@@ -141,6 +142,7 @@ impl Filter {
 ///
 /// For example, if we define a filter `def map(f): [.[] | f]`,
 /// then the definitions will associate `map/1` to its definition.
+#[derive(Debug, Default, Clone)]
 pub struct Definitions(BTreeMap<(String, usize), filter::Filter>);
 
 impl Definitions {
@@ -157,6 +159,11 @@ impl Definitions {
     pub fn insert(&mut self, def: Def, errs: &mut Vec<parse::Error>) {
         let f = unparse::def(&self.get(), &def.args, def.body, errs);
         self.0.insert((def.name, def.args.len()), f);
+    }
+    
+    /// Import a custom, Rust-defined filter.
+    pub fn insert_custom(&mut self, name: &str, filter: filter::CustomFilter) {
+        self.0.insert((name.to_string(), filter.arity()), filter::Filter::Custom(filter));
     }
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.

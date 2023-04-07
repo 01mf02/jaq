@@ -50,6 +50,10 @@ pub enum Error {
     Regex(String),
     /// `"a" | test("."; "b")`
     RegexFlag(char),
+    /// custom filter without update
+    NonUpdatable,
+    /// arbitrary errors for custom filters
+    Custom(String),
 }
 
 impl fmt::Display for Error {
@@ -77,6 +81,8 @@ impl fmt::Display for Error {
             Self::PathExp => write!(f, "invalid path expression"),
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
+            Self::NonUpdatable => write!(f, "custom filter doesn't implement update"),
+            Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }
 }
