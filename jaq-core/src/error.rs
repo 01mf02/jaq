@@ -52,8 +52,8 @@ pub enum Error {
     RegexFlag(char),
     /// custom filter without update
     NonUpdatable,
-    /// when no value is where one is expected
-    NoValue,
+    /// arbitrary errors for custom filters
+    Custom(String),
 }
 
 impl fmt::Display for Error {
@@ -82,7 +82,7 @@ impl fmt::Display for Error {
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
             Self::NonUpdatable => write!(f, "custom filter doesn't implement update"),
-            Self::NoValue => write!(f, "no value but one was expected"),
+            Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }
 }

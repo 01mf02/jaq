@@ -111,7 +111,11 @@ fn arity1() {
             let arg = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => v,
                 Some(Err(e)) => return Box::new(once(Err(e))),
-                None => return Box::new(once(Err(Error::NoValue))),
+                None => {
+                    return Box::new(once(Err(Error::Custom(
+                        "value expected but none found".into(),
+                    ))))
+                }
             };
 
             Box::new(once(
@@ -138,7 +142,11 @@ fn arity2() {
                     Err(e) => return Box::new(once(Err(e))),
                 },
                 Some(Err(e)) => return Box::new(once(Err(e))),
-                None => return Box::new(once(Err(Error::NoValue))),
+                None => {
+                    return Box::new(once(Err(Error::Custom(
+                        "value expected but none found".into(),
+                    ))))
+                }
             };
             let max = match args[1].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => match v.as_int() {
@@ -146,18 +154,37 @@ fn arity2() {
                     Err(e) => return Box::new(once(Err(e))),
                 },
                 Some(Err(e)) => return Box::new(once(Err(e))),
-                None => return Box::new(once(Err(Error::NoValue))),
+                None => {
+                    return Box::new(once(Err(Error::Custom(
+                        "value expected but none found".into(),
+                    ))))
+                }
             };
 
-            Box::new(once(
-                val.to_str()
-                    .map(|s| if s.len() >= min && s.len() <= max { Val::Str(s) } else { Val::Null }),
-            ))
+            Box::new(once(val.to_str().map(|s| {
+                if s.len() >= min && s.len() <= max {
+                    Val::Str(s)
+                } else {
+                    Val::Null
+                }
+            })))
         }),
     );
 
-    yields(&defs, json!("hello"), "ifwithin(7; 11)", [Value::Null], None);
-    yields(&defs, json!("hello"), "ifwithin(3; 8)", [json!("hello")], None);
+    yields(
+        &defs,
+        json!("hello"),
+        "ifwithin(7; 11)",
+        [Value::Null],
+        None,
+    );
+    yields(
+        &defs,
+        json!("hello"),
+        "ifwithin(3; 8)",
+        [json!("hello")],
+        None,
+    );
 }
 
 #[test]
@@ -174,7 +201,11 @@ fn arity12() {
                         Err(e) => return Box::new(once(Err(e))),
                     },
                     Some(Err(e)) => return Box::new(once(Err(e))),
-                    None => return Box::new(once(Err(Error::NoValue))),
+                    None => {
+                        return Box::new(once(Err(Error::Custom(
+                            "value expected but none found".into(),
+                        ))))
+                    }
                 };
             }
 
@@ -182,5 +213,11 @@ fn arity12() {
         }),
     );
 
-    yields(&defs, Value::Null, "sillysum(6; 13; 15; 8; 10; 12; 20; 16; 20; 3; 17; 8)", [json!(148)], None);
+    yields(
+        &defs,
+        Value::Null,
+        "sillysum(6; 13; 15; 8; 10; 12; 20; 16; 20; 3; 17; 8)",
+        [json!(148)],
+        None,
+    );
 }
