@@ -108,7 +108,6 @@ fn arity1() {
     defs.insert_custom(
         "iflonger",
         CustomFilter::new(1, |args, (ctx, val)| {
-            dbg!(args);
             let arg = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => v,
                 Some(Err(e)) => return Box::new(once(Err(e))),
@@ -125,4 +124,63 @@ fn arity1() {
 
     yields(&defs, json!("hello"), "iflonger(6)", [Value::Null], None);
     yields(&defs, json!("hello"), "iflonger(3)", [json!("hello")], None);
+}
+
+#[test]
+fn arity2() {
+    let mut defs = Definitions::core();
+    defs.insert_custom(
+        "ifwithin",
+        CustomFilter::new(2, |args, (ctx, val)| {
+            let min = match args[0].run((ctx.clone(), val.clone())).next() {
+                Some(Ok(v)) => match v.as_int() {
+                    Ok(n) => n as usize,
+                    Err(e) => return Box::new(once(Err(e))),
+                },
+                Some(Err(e)) => return Box::new(once(Err(e))),
+                None => return Box::new(once(Err(Error::NoValue))),
+            };
+            let max = match args[1].run((ctx.clone(), val.clone())).next() {
+                Some(Ok(v)) => match v.as_int() {
+                    Ok(n) => n as usize,
+                    Err(e) => return Box::new(once(Err(e))),
+                },
+                Some(Err(e)) => return Box::new(once(Err(e))),
+                None => return Box::new(once(Err(Error::NoValue))),
+            };
+
+            Box::new(once(
+                val.to_str()
+                    .map(|s| if s.len() >= min && s.len() <= max { Val::Str(s) } else { Val::Null }),
+            ))
+        }),
+    );
+
+    yields(&defs, json!("hello"), "ifwithin(7, 11)", [Value::Null], None);
+    yields(&defs, json!("hello"), "ifwithin(3, 8)", [json!("hello")], None);
+}
+
+#[test]
+fn arity12() {
+    let mut defs = Definitions::core();
+    defs.insert_custom(
+        "sillysum",
+        CustomFilter::new(12, |args, (ctx, val)| {
+            let mut nums = Vec::with_capacity(args.len());
+            for arg in args {
+                match arg.run((ctx.clone(), val.clone())).next() {
+                    Some(Ok(v)) => match v.as_int() {
+                        Ok(n) => nums.push(n),
+                        Err(e) => return Box::new(once(Err(e))),
+                    },
+                    Some(Err(e)) => return Box::new(once(Err(e))),
+                    None => return Box::new(once(Err(Error::NoValue))),
+                };
+            }
+
+            Box::new(once(Ok(Val::Int(nums.into_iter().sum()))))
+        }),
+    );
+
+    yields(&defs, Value::Null, "sillysum(6, 13, 15, 8, 10, 12, 20, 16, 20, 3, 17, 8)", [json!(101)], None);
 }
