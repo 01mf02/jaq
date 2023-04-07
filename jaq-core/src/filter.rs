@@ -114,14 +114,12 @@ pub enum Filter {
     Custom(CustomFilter),
 }
 
-pub type FilterArgs<'a> = Box<dyn Iterator<Item = ValRs<'a>> + 'a>;
-
 /// Custom filter.
 #[derive(Clone)]
 pub struct CustomFilter {
     args: Vec<Filter>,
-    run: Arc<dyn for<'a> Fn(FilterArgs<'a>, Cv<'a>) -> ValRs<'a>>,
-    update: Option<Arc<dyn for<'a> Fn(FilterArgs<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
+    run: Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a>>,
+    update: Option<Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
 }
 
 impl Debug for CustomFilter {
@@ -146,7 +144,7 @@ impl CustomFilter {
     /// Create a new custom filter from a function.
     pub fn new(
         arity: usize,
-        run: impl for<'a> Fn(FilterArgs<'a>, Cv<'a>) -> ValRs<'a> + 'static,
+        run: impl for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a> + 'static,
     ) -> Self {
         Self {
             args: (0..arity).map(|n| Filter::Arg(n)).collect(),
@@ -158,8 +156,8 @@ impl CustomFilter {
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
     pub fn with_update(
         arity: usize,
-        run: impl for<'a> Fn(FilterArgs<'a>, Cv<'a>) -> ValRs<'a> + 'static,
-        update: impl for<'a> Fn(FilterArgs<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
+        run: impl for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a> + 'static,
+        update: impl for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
     ) -> Self {
         Self {
             args: (0..arity).map(|n| Filter::Arg(n)).collect(),
@@ -395,8 +393,7 @@ impl Filter {
             })),
 
             Self::Custom(CustomFilter { args, run, .. }) => {
-                let acv = cv.clone();
-                (run)(Box::new(args.iter().map(move |a| a.run(acv.clone()))), cv.clone())
+                (run)(args, cv.clone())
             },
         }
     }
@@ -468,8 +465,7 @@ impl Filter {
             }
 
             Self::Custom(CustomFilter { args, update: Some(update), .. }) => {
-                let acv = cv.clone();
-                (update)(Box::new(args.iter().map(move |a| a.run(acv.clone()))), cv.clone(), f.clone())
+                (update)(args, cv.clone(), f.clone())
             },
             Self::Custom(CustomFilter { update: None, .. }) => Box::new(once(Err(Error::NonUpdatable))),
         }
@@ -574,7 +570,13 @@ impl Filter {
             Self::Call { .. } => self,
             Self::Var(v) => Self::Var(fv(vars, v)),
             Self::Arg(a) => fa(vars, a),
-            Self::Custom(_) => self,
+            Self::Custom(CustomFilter { args, run, update }) => {
+                Self::Custom(CustomFilter {
+                    args: args.into_iter().map(|f| *sub(Box::new(f))).collect(),
+                    run,
+                    update,
+                })
+            }
         }
     }
 }

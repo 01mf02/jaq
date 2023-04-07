@@ -107,10 +107,11 @@ fn arity1() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "iflonger",
-        CustomFilter::new(1, |mut args, (ctx, val)| {
-            let arg = match args.next().unwrap().next() {
-                Some(Ok(val)) => val,
-                Some(err @ Err(_)) => return Box::new(once(err)),
+        CustomFilter::new(1, |args, (ctx, val)| {
+            dbg!(args);
+            let arg = match args[0].run((ctx.clone(), val.clone())).next() {
+                Some(Ok(v)) => v,
+                Some(Err(e)) => return Box::new(once(Err(e))),
                 None => return Box::new(once(Err(Error::NoValue))),
             };
 
@@ -122,6 +123,6 @@ fn arity1() {
         }),
     );
 
-    yields(&defs, json!("hello"), "iflonger(8)", [Value::Null], None);
-    yields(&defs, json!("helloworld"), "iflonger(8)", [json!("helloworld")], None);
+    yields(&defs, json!("hello"), "iflonger(6)", [Value::Null], None);
+    yields(&defs, json!("hello"), "iflonger(3)", [json!("hello")], None);
 }
