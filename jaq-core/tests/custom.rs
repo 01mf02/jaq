@@ -156,8 +156,8 @@ fn arity2() {
         }),
     );
 
-    yields(&defs, json!("hello"), "ifwithin(7, 11)", [Value::Null], None);
-    yields(&defs, json!("hello"), "ifwithin(3, 8)", [json!("hello")], None);
+    yields(&defs, json!("hello"), "ifwithin(7; 11)", [Value::Null], None);
+    yields(&defs, json!("hello"), "ifwithin(3; 8)", [json!("hello")], None);
 }
 
 #[test]
@@ -182,5 +182,5 @@ fn arity12() {
         }),
     );
 
-    yields(&defs, Value::Null, "sillysum(6, 13, 15, 8, 10, 12, 20, 16, 20, 3, 17, 8)", [json!(101)], None);
+    yields(&defs, Value::Null, "sillysum(6; 13; 15; 8; 10; 12; 20; 16; 20; 3; 17; 8)", [json!(148)], None);
 }
