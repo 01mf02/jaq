@@ -114,15 +114,51 @@ pub enum Filter {
     Custom(CustomFilter, Vec<Filter>),
 }
 
-const CORE: [(&str, usize, CustomFilter); 1] = [
-    ("empty", 0, CustomFilter::new(|_, cv| Box::new(core::iter::empty()))),
+type RunPtr = for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>;
+type UpdatePtr = for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
+
+fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
+    Box::new(core::iter::once(x))
+}
+
+const CORE: [(&str, usize, RunPtr); 18] = [
+    ("empty", 0, |_, cv| Box::new(core::iter::empty())),
+    ("inputs", 0, |_, cv| {
+        Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
+    }),
+    ("error", 0, |_, cv| box_once(Err(Error::Val(cv.1)))),
+    ("debug", 0, |_, cv| box_once(Ok(cv.1.debug()))),
+    ("length", 0, |_, cv| box_once(cv.1.len())),
+    ("keys", 0, |_, cv| box_once(cv.1.keys().map(Val::arr))),
+    ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
+    ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
+    ("ceil", 0, |_, cv| box_once(cv.1.round(|f| f.ceil()))),
+    ("fromjson", 0, |_, cv| box_once(cv.1.from_json())),
+    ("tojson", 0, |_, cv| {
+        box_once(Ok(Val::str(cv.1.to_string())))
+    }),
+    ("explode", 0, |_, cv| box_once(cv.1.explode().map(Val::arr))),
+    ("implode", 0, |_, cv| box_once(cv.1.implode().map(Val::str))),
+    ("ascii_downcase", 0, |_, cv| {
+        box_once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
+    }),
+    ("ascii_upcase", 0, |_, cv| {
+        box_once(cv.1.mutate_str(|s| s.make_ascii_uppercase()))
+    }),
+    ("reverse", 0, |_, cv| {
+        box_once(cv.1.mutate_arr(|a| a.reverse()))
+    }),
+    ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
+    ("sort_by", 1, |args, cv| {
+        box_once(cv.1.sort_by(|v| args[0].run((cv.0.clone(), v))))
+    }),
 ];
 
 /// Custom filter.
 #[derive(Clone)]
 pub struct CustomFilter {
-    run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
-    update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
+    run: RunPtr,
+    update: UpdatePtr,
 }
 
 impl Debug for CustomFilter {
@@ -133,17 +169,14 @@ impl Debug for CustomFilter {
 
 impl CustomFilter {
     /// Create a new custom filter from a function.
-    pub const fn new(run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
+    pub const fn new(run: RunPtr) -> Self {
         Self::with_update(run, |_, _, _| {
             Box::new(core::iter::once(Err(Error::PathExp)))
         })
     }
 
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
-    pub const fn with_update(
-        run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
-        update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
-    ) -> Self {
+    pub const fn with_update(run: RunPtr, update: UpdatePtr) -> Self {
         Self { run, update }
     }
 }
