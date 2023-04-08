@@ -118,9 +118,8 @@ pub enum Filter {
 #[derive(Clone)]
 pub struct CustomFilter {
     args: Vec<Filter>,
-    run: Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a>>,
-    update:
-        Option<Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
+    run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
+    update: Option<for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>,
 }
 
 impl Debug for CustomFilter {
@@ -146,13 +145,10 @@ impl CustomFilter {
     }
 
     /// Create a new custom filter from a function.
-    pub fn new(
-        arity: usize,
-        run: impl for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a> + 'static,
-    ) -> Self {
+    pub fn new(arity: usize, run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
         Self {
             args: (0..arity).map(|n| Filter::Arg(n)).collect(),
-            run: Arc::new(run),
+            run,
             update: None,
         }
     }
@@ -160,13 +156,13 @@ impl CustomFilter {
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
     pub fn with_update(
         arity: usize,
-        run: impl for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a> + 'static,
-        update: impl for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a> + 'static,
+        run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
+        update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
     ) -> Self {
         Self {
             args: (0..arity).map(|n| Filter::Arg(n)).collect(),
-            run: Arc::new(run),
-            update: Some(Arc::new(update)),
+            run,
+            update: Some(update),
         }
     }
 }
