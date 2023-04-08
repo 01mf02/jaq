@@ -85,7 +85,7 @@ fn non_updatable() {
         json!("hello"),
         "nupd |= .",
         [],
-        Some(Error::NonUpdatable),
+        Some(Error::PathExp),
     );
 }
 

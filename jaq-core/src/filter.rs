@@ -119,21 +119,15 @@ pub enum Filter {
 pub struct CustomFilter {
     args: Vec<Filter>,
     run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
-    update: Option<for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>,
+    update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
 }
 
 impl Debug for CustomFilter {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("CustomFilter")
             .field("arity", &self.args.len())
             .field("run", &"{fn}")
-            .field(
-                "update",
-                &match &self.update {
-                    Some(_) => "Some({fn})",
-                    None => "None",
-                },
-            )
+            .field("update", &"{fn}")
             .finish()
     }
 }
@@ -149,7 +143,7 @@ impl CustomFilter {
         Self {
             args: (0..arity).map(|n| Filter::Arg(n)).collect(),
             run,
-            update: None,
+            update: |_, _, _| Box::new(core::iter::once(Err(Error::PathExp))),
         }
     }
 
@@ -162,7 +156,7 @@ impl CustomFilter {
         Self {
             args: (0..arity).map(|n| Filter::Arg(n)).collect(),
             run,
-            update: Some(update),
+            update,
         }
     }
 }
@@ -392,7 +386,7 @@ impl Filter {
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
-            Self::Custom(CustomFilter { args, run, .. }) => (run)(args, cv.clone()),
+            Self::Custom(CustomFilter { args, run, .. }) => (run)(args, cv),
         }
     }
 
@@ -462,14 +456,7 @@ impl Filter {
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Custom(CustomFilter {
-                args,
-                update: Some(update),
-                ..
-            }) => (update)(args, cv.clone(), f.clone()),
-            Self::Custom(CustomFilter { update: None, .. }) => {
-                Box::new(once(Err(Error::PathExp)))
-            }
+            Self::Custom(CustomFilter { args, update, .. }) => (update)(args, cv, f),
         }
     }
 
