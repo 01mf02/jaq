@@ -1,5 +1,5 @@
-use core::fmt::Debug;
 use alloc::sync::Arc;
+use core::fmt::Debug;
 
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then};
@@ -119,7 +119,8 @@ pub enum Filter {
 pub struct CustomFilter {
     args: Vec<Filter>,
     run: Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>) -> ValRs<'a>>,
-    update: Option<Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
+    update:
+        Option<Arc<dyn for<'a> Fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>>>,
 }
 
 impl Debug for CustomFilter {
@@ -127,10 +128,13 @@ impl Debug for CustomFilter {
         f.debug_struct("CustomFilter")
             .field("arity", &self.args.len())
             .field("run", &"{fn}")
-            .field("update", &match &self.update {
-                Some(_) => "Some({fn})",
-                None => "None",
-            })
+            .field(
+                "update",
+                &match &self.update {
+                    Some(_) => "Some({fn})",
+                    None => "None",
+                },
+            )
             .finish()
     }
 }
@@ -392,9 +396,7 @@ impl Filter {
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
-            Self::Custom(CustomFilter { args, run, .. }) => {
-                (run)(args, cv.clone())
-            },
+            Self::Custom(CustomFilter { args, run, .. }) => (run)(args, cv.clone()),
         }
     }
 
@@ -464,10 +466,14 @@ impl Filter {
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Custom(CustomFilter { args, update: Some(update), .. }) => {
-                (update)(args, cv.clone(), f.clone())
-            },
-            Self::Custom(CustomFilter { update: None, .. }) => Box::new(once(Err(Error::NonUpdatable))),
+            Self::Custom(CustomFilter {
+                args,
+                update: Some(update),
+                ..
+            }) => (update)(args, cv.clone(), f.clone()),
+            Self::Custom(CustomFilter { update: None, .. }) => {
+                Box::new(once(Err(Error::NonUpdatable)))
+            }
         }
     }
 
@@ -570,13 +576,11 @@ impl Filter {
             Self::Call { .. } => self,
             Self::Var(v) => Self::Var(fv(vars, v)),
             Self::Arg(a) => fa(vars, a),
-            Self::Custom(CustomFilter { args, run, update }) => {
-                Self::Custom(CustomFilter {
-                    args: args.into_iter().map(|f| *sub(Box::new(f))).collect(),
-                    run,
-                    update,
-                })
-            }
+            Self::Custom(CustomFilter { args, run, update }) => Self::Custom(CustomFilter {
+                args: args.into_iter().map(|f| *sub(Box::new(f))).collect(),
+                run,
+                update,
+            }),
         }
     }
 }
