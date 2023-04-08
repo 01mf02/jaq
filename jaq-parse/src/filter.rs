@@ -77,7 +77,7 @@ impl prec_climb::Op for BinaryOp {
 /// For example, the object construction filter `{(.): 1, b: 2}`
 /// consists of two elements, namely `(.): 1` and `b: 2`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum KeyVal<T> {
     /// Both key and value are proper filters, e.g. `{(.+1): .+2}`
     Filter(T, T),
@@ -97,7 +97,7 @@ impl<F> KeyVal<F> {
 
 /// Common information for folding filters (such as `reduce` and `foreach`)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Fold<F> {
     /// Generator
     pub xs: F,
@@ -123,7 +123,7 @@ pub enum FoldType {
 
 /// Function from value to stream of values, such as `.[] | add / length`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Filter<C = String, V = String, Num = String> {
     /// Call to another filter, e.g. `map(.+1)`
     Call(C, Vec<Spanned<Self>>),

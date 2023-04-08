@@ -13,7 +13,7 @@ use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use parse::filter::{AssignOp, BinaryOp, Filter as Expr, Fold, KeyVal};
 use parse::{Arg, Error, Spanned};
 
-type FilterId = usize;
+pub type FilterId = usize;
 type VarIdx = usize;
 type ArgIdx = usize;
 
@@ -22,12 +22,14 @@ type Arity = usize;
 type NameArityMap = BTreeMap<String, BTreeMap<Arity, (Filter, Vec<FilterId>)>>;
 */
 
-enum Call {
+#[derive(Clone)]
+pub enum Call {
     Def(FilterId),
     Arg(ArgIdx),
 }
 
-enum Num {
+#[derive(Clone)]
+pub enum Num {
     Float(f64),
     Int(isize),
 }
@@ -42,15 +44,16 @@ impl Num {
     }
 }
 
-struct Defs(Vec<Def>);
+pub struct Defs(Vec<Def>);
 
-type Filter = parse::filter::Filter<Call, VarIdx, Num>;
+pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 
 struct Def {
     name: String,
     args: Vec<Arg>,
     children: Vec<FilterId>,
     ancestors: Vec<FilterId>,
+    recursive: bool,
     body: Spanned<Filter>,
 }
 
@@ -65,9 +68,23 @@ impl Defs {
         self.0[id].ancestors.iter().copied().chain(once(id))
     }
 
-    fn args(&self, id: FilterId) -> impl Iterator<Item = &Arg> + '_ {
+    pub fn args(&self, id: FilterId) -> impl Iterator<Item = &Arg> + '_ {
         self.ancestors_and_me(id)
             .flat_map(|aid| self.0[aid].args.iter())
+    }
+
+    pub fn vars(&self, id: FilterId) -> impl Iterator<Item = &str> + '_ {
+        self.args(id).filter_map(|a| a.get_var())
+    }
+
+    /// Return the filter IDs of those recursive filters that can be called from the current ID.
+    pub fn recs(&self, id: FilterId) -> impl Iterator<Item = FilterId> + '_ {
+        let ancestors = self.0[id].ancestors.iter();
+        ancestors
+            .flat_map(|aid| self.0[*aid].children.iter())
+            .copied()
+            .filter(|cid| self.0[*cid].recursive)
+            .take_while(move |cid| *cid <= id)
     }
 
     fn def(&mut self, mut ancestors: Vec<FilterId>, def: parse::Def, ctx: &mut Ctx) {
@@ -77,6 +94,8 @@ impl Defs {
             args: def.args,
             children: Vec::new(),
             ancestors: ancestors.clone(),
+            // TODO: at the end, set all filters i with ctx.recursive[i] to defs[i].recursive
+            recursive: false,
             // for recursion, we want to be able to refer to the filter even before we know
             // what is its body, which is why we insert a bogus body for now
             // that we replace later by the real body
