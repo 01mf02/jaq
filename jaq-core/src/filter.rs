@@ -63,7 +63,6 @@ pub enum Filter {
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
-    GroupBy(Box<Self>),
     Has(Box<Self>),
     Split(Box<Self>),
     Matches(Box<Self>, Box<Self>, (bool, bool)),
@@ -103,7 +102,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 15] = [
+const CORE: [(&str, usize, RunPtr); 16] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -131,6 +130,9 @@ const CORE: [(&str, usize, RunPtr); 15] = [
     ("sort_by", 1, |args, cv| {
         box_once(cv.1.sort_by(|v| args[0].run((cv.0.clone(), v))))
     }),
+    ("group_by", 1, |args, cv| {
+        box_once(cv.1.group_by(|v| args[0].run((cv.0.clone(), v))))
+    })
 ];
 
 const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
@@ -222,7 +224,6 @@ impl Filter {
             ((name.to_string(), *arity), Self::Custom(f, args))
         });
         let others = [
-            make_builtin!("group_by", 1, Self::GroupBy),
             make_builtin!("has", 1, Self::Has),
             make_builtin!("contains", 1, Self::Contains),
             make_builtin!("split", 1, Self::Split),
@@ -318,7 +319,6 @@ impl Filter {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
 
-            Self::GroupBy(f) => Box::new(once(cv.1.group_by(|v| f.run((cv.0.clone(), v))))),
             Self::Has(f) => Box::new(
                 f.run(cv.clone())
                     .map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))),
@@ -396,7 +396,6 @@ impl Filter {
             Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
             Self::Update(..) | Self::UpdateMath(..) | Self::Assign(..) => err,
 
-            Self::GroupBy(_) => err,
             Self::Has(_) | Self::Contains(_) => err,
             Self::Split(_) | Self::Matches(..) => err,
             Self::Range(..) => err,
@@ -523,7 +522,6 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::GroupBy(f) => Self::GroupBy(sub(f)),
             Self::Has(f) => Self::Has(sub(f)),
             Self::Contains(f) => Self::Contains(sub(f)),
             Self::Split(f) => Self::Split(sub(f)),
