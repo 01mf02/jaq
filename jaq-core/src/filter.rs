@@ -468,7 +468,7 @@ impl Filter {
                 ..
             }) => (update)(args, cv.clone(), f.clone()),
             Self::Custom(CustomFilter { update: None, .. }) => {
-                Box::new(once(Err(Error::NonUpdatable)))
+                Box::new(once(Err(Error::PathExp)))
             }
         }
     }
