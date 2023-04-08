@@ -63,24 +63,6 @@ pub enum Filter {
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
-    Empty,
-    Error,
-    Debug,
-    Inputs,
-    Length,
-    Floor,
-    Round,
-    Ceil,
-    FromJson,
-    ToJson,
-    Keys,
-    Explode,
-    Implode,
-    AsciiDowncase,
-    AsciiUpcase,
-    Reverse,
-    Sort,
-    SortBy(Box<Self>),
     GroupBy(Box<Self>),
     Has(Box<Self>),
     Split(Box<Self>),
@@ -121,13 +103,10 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 18] = [
-    ("empty", 0, |_, cv| Box::new(core::iter::empty())),
+const CORE: [(&str, usize, RunPtr); 15] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
-    ("error", 0, |_, cv| box_once(Err(Error::Val(cv.1)))),
-    ("debug", 0, |_, cv| box_once(Ok(cv.1.debug()))),
     ("length", 0, |_, cv| box_once(cv.1.len())),
     ("keys", 0, |_, cv| box_once(cv.1.keys().map(Val::arr))),
     ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
@@ -152,6 +131,27 @@ const CORE: [(&str, usize, RunPtr); 18] = [
     ("sort_by", 1, |args, cv| {
         box_once(cv.1.sort_by(|v| args[0].run((cv.0.clone(), v))))
     }),
+];
+
+const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
+    (
+        "empty",
+        0,
+        |_, cv| Box::new(core::iter::empty()),
+        |_, cv, _| box_once(Ok(cv.1)),
+    ),
+    (
+        "error",
+        0,
+        |_, cv| box_once(Err(Error::Val(cv.1))),
+        |_, cv, _| box_once(Err(Error::Val(cv.1))),
+    ),
+    (
+        "debug",
+        0,
+        |_, cv| box_once(Ok(cv.1.debug())),
+        |_, cv, f| f(cv.1.debug()),
+    ),
 ];
 
 /// Custom filter.
@@ -210,25 +210,18 @@ impl Filter {
                 (($name.to_string(), 2), $cons(arg(0), arg(1)))
             };
         }
-        Vec::from([
-            make_builtin!("empty", 0, Self::Empty),
-            make_builtin!("error", 0, Self::Error),
-            make_builtin!("debug", 0, Self::Debug),
-            make_builtin!("inputs", 0, Self::Inputs),
-            make_builtin!("length", 0, Self::Length),
-            make_builtin!("keys", 0, Self::Keys),
-            make_builtin!("floor", 0, Self::Floor),
-            make_builtin!("round", 0, Self::Round),
-            make_builtin!("ceil", 0, Self::Ceil),
-            make_builtin!("fromjson", 0, Self::FromJson),
-            make_builtin!("tojson", 0, Self::ToJson),
-            make_builtin!("explode", 0, Self::Explode),
-            make_builtin!("implode", 0, Self::Implode),
-            make_builtin!("ascii_downcase", 0, Self::AsciiDowncase),
-            make_builtin!("ascii_upcase", 0, Self::AsciiUpcase),
-            make_builtin!("reverse", 0, Self::Reverse),
-            make_builtin!("sort", 0, Self::Sort),
-            make_builtin!("sort_by", 1, Self::SortBy),
+        // TODO: make this more compact
+        let cores = CORE.iter().map(|(name, arity, f)| {
+            let args = (0..*arity).map(|n| Filter::Arg(n)).collect();
+            let f = CustomFilter::new(*f);
+            ((name.to_string(), *arity), Self::Custom(f, args))
+        });
+        let core_update = CORE_UPDATE.iter().map(|(name, arity, run, update)| {
+            let args = (0..*arity).map(|n| Filter::Arg(n)).collect();
+            let f = CustomFilter::with_update(*run, *update);
+            ((name.to_string(), *arity), Self::Custom(f, args))
+        });
+        let others = [
             make_builtin!("group_by", 1, Self::GroupBy),
             make_builtin!("has", 1, Self::Has),
             make_builtin!("contains", 1, Self::Contains),
@@ -244,7 +237,8 @@ impl Filter {
             make_builtin!("walk", 1, Self::Walk),
             make_builtin!("limit", 2, Self::Limit),
             make_builtin!("range", 2, Self::Range),
-        ])
+        ];
+        cores.chain(core_update).chain(others).collect()
     }
 
     pub fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
@@ -324,24 +318,6 @@ impl Filter {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
 
-            Self::Empty => Box::new(core::iter::empty()),
-            Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
-            Self::Debug => Box::new(once(Ok(cv.1.debug()))),
-            Self::Inputs => Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse))),
-            Self::Length => Box::new(once(cv.1.len())),
-            Self::Keys => Box::new(once(cv.1.keys().map(Val::arr))),
-            Self::Floor => Box::new(once(cv.1.round(|f| f.floor()))),
-            Self::Round => Box::new(once(cv.1.round(|f| f.round()))),
-            Self::Ceil => Box::new(once(cv.1.round(|f| f.ceil()))),
-            Self::FromJson => Box::new(once(cv.1.from_json())),
-            Self::ToJson => Box::new(once(Ok(Val::str(cv.1.to_string())))),
-            Self::Explode => Box::new(once(cv.1.explode().map(Val::arr))),
-            Self::Implode => Box::new(once(cv.1.implode().map(Val::str))),
-            Self::AsciiDowncase => Box::new(once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))),
-            Self::AsciiUpcase => Box::new(once(cv.1.mutate_str(|s| s.make_ascii_uppercase()))),
-            Self::Reverse => Box::new(once(cv.1.mutate_arr(|a| a.reverse()))),
-            Self::Sort => Box::new(once(cv.1.mutate_arr(|a| a.sort()))),
-            Self::SortBy(f) => Box::new(once(cv.1.sort_by(|v| f.run((cv.0.clone(), v))))),
             Self::GroupBy(f) => Box::new(once(cv.1.group_by(|v| f.run((cv.0.clone(), v))))),
             Self::Has(f) => Box::new(
                 f.run(cv.clone())
@@ -420,23 +396,16 @@ impl Filter {
             Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
             Self::Update(..) | Self::UpdateMath(..) | Self::Assign(..) => err,
 
-            Self::Length | Self::Keys => err,
-            Self::Floor | Self::Round | Self::Ceil => err,
-            Self::FromJson | Self::ToJson => err,
-            Self::Explode | Self::Implode => err,
-            Self::AsciiDowncase | Self::AsciiUpcase => err,
-            Self::Reverse | Self::Sort | Self::SortBy(_) | Self::GroupBy(_) => err,
+            Self::GroupBy(_) => err,
             Self::Has(_) | Self::Contains(_) => err,
             Self::Split(_) | Self::Matches(..) => err,
-            Self::Inputs | Self::Range(..) => err,
+            Self::Range(..) => err,
 
             // these are up for grabs to implement :)
             Self::Try(_) | Self::Alt(..) => todo!(),
             Self::First(_) | Self::Last(_) | Self::Limit(..) => todo!(),
             Self::Fold(..) => todo!(),
 
-            Self::Error => Box::new(once(Err(Error::Val(cv.1)))),
-            Self::Debug => f(cv.1.debug()),
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
                 (cv.0.clone(), cv.1),
@@ -466,7 +435,6 @@ impl Filter {
             })),
             Self::Recurse(..) => todo!(),
             Self::Walk(_) => err,
-            Self::Empty => Box::new(once(Ok(cv.1))),
 
             Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
             Self::Var(_) => err,
@@ -555,14 +523,6 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Empty | Self::Error | Self::Debug | Self::Inputs => self,
-            Self::Length | Self::Keys => self,
-            Self::Floor | Self::Round | Self::Ceil => self,
-            Self::FromJson | Self::ToJson => self,
-            Self::Explode | Self::Implode => self,
-            Self::AsciiDowncase | Self::AsciiUpcase => self,
-            Self::Reverse | Self::Sort => self,
-            Self::SortBy(f) => Self::SortBy(sub(f)),
             Self::GroupBy(f) => Self::GroupBy(sub(f)),
             Self::Has(f) => Self::Has(sub(f)),
             Self::Contains(f) => Self::Contains(sub(f)),
