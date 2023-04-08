@@ -64,7 +64,11 @@ pub use filter::CustomFilter;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
-use alloc::{collections::BTreeMap, string::{String, ToString}, vec::Vec};
+use alloc::{
+    collections::BTreeMap,
+    string::{String, ToString},
+    vec::Vec,
+};
 use lazy_iter::LazyIter;
 use parse::{Def, Main};
 use rc_list::RcList;
@@ -160,10 +164,13 @@ impl Definitions {
         let f = unparse::def(&self.get(), &def.args, def.body, errs);
         self.0.insert((def.name, def.args.len()), f);
     }
-    
+
     /// Import a custom, Rust-defined filter.
     pub fn insert_custom(&mut self, name: &str, filter: filter::CustomFilter) {
-        self.0.insert((name.to_string(), filter.arity()), filter::Filter::Custom(filter));
+        self.0.insert(
+            (name.to_string(), filter.arity()),
+            filter::Filter::Custom(filter),
+        );
     }
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
