@@ -114,6 +114,10 @@ pub enum Filter {
     Custom(CustomFilter, Vec<Filter>),
 }
 
+const CORE: [(&str, usize, CustomFilter); 1] = [
+    ("empty", 0, CustomFilter::new(|_, cv| Box::new(core::iter::empty()))),
+];
+
 /// Custom filter.
 #[derive(Clone)]
 pub struct CustomFilter {
@@ -129,14 +133,14 @@ impl Debug for CustomFilter {
 
 impl CustomFilter {
     /// Create a new custom filter from a function.
-    pub fn new(run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
+    pub const fn new(run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
         Self::with_update(run, |_, _, _| {
             Box::new(core::iter::once(Err(Error::PathExp)))
         })
     }
 
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
-    pub fn with_update(
+    pub const fn with_update(
         run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
         update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
     ) -> Self {
