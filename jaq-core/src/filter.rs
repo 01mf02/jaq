@@ -132,7 +132,7 @@ const CORE: [(&str, usize, RunPtr); 16] = [
     }),
     ("group_by", 1, |args, cv| {
         box_once(cv.1.group_by(|v| args[0].run((cv.0.clone(), v))))
-    })
+    }),
 ];
 
 const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
@@ -172,9 +172,7 @@ impl Debug for CustomFilter {
 impl CustomFilter {
     /// Create a new custom filter from a function.
     pub const fn new(run: RunPtr) -> Self {
-        Self::with_update(run, |_, _, _| {
-            Box::new(core::iter::once(Err(Error::PathExp)))
-        })
+        Self::with_update(run, |_, _, _| box_once(Err(Error::PathExp)))
     }
 
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
@@ -246,15 +244,13 @@ impl Filter {
         use core::iter::once;
         use itertools::Itertools;
         match self {
-            Self::Id => Box::new(once(Ok(cv.1))),
-            Self::Int(n) => Box::new(once(Ok(Val::Int(*n)))),
-            Self::Float(x) => Box::new(once(Ok(Val::Float(*x)))),
-            Self::Str(s) => Box::new(once(Ok(Val::str(s.clone())))),
-            Self::Array(None) => Box::new(once(Ok(Val::Arr(Default::default())))),
-            Self::Array(Some(f)) => {
-                Box::new(once(f.run(cv).collect::<Result<_, _>>().map(Val::arr)))
-            }
-            Self::Object(o) if o.is_empty() => Box::new(once(Ok(Val::Obj(Default::default())))),
+            Self::Id => box_once(Ok(cv.1)),
+            Self::Int(n) => box_once(Ok(Val::Int(*n))),
+            Self::Float(x) => box_once(Ok(Val::Float(*x))),
+            Self::Str(s) => box_once(Ok(Val::str(s.clone()))),
+            Self::Array(None) => box_once(Ok(Val::Arr(Default::default()))),
+            Self::Array(Some(f)) => box_once(f.run(cv).collect::<Result<_, _>>().map(Val::arr)),
+            Self::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Self::Object(o) => Box::new(
                 o.iter()
                     .map(|(kf, vf)| Self::cartesian(kf, vf, cv.clone()).collect::<Vec<_>>())
