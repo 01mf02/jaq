@@ -111,48 +111,36 @@ pub enum Filter {
         id: usize,
     },
 
-    Custom(CustomFilter),
+    Custom(CustomFilter, Vec<Filter>),
 }
 
 /// Custom filter.
 #[derive(Clone)]
 pub struct CustomFilter {
-    args: Vec<Filter>,
     run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
     update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
 }
 
 impl Debug for CustomFilter {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        f.debug_struct("CustomFilter")
-            .field("arity", &self.args.len())
-            .field("run", &"{fn}")
-            .field("update", &"{fn}")
-            .finish()
+        f.debug_struct("CustomFilter").finish()
     }
 }
 
 impl CustomFilter {
-    /// The arity (number of arguments) of the filter.
-    pub fn arity(&self) -> usize {
-        self.args.len()
-    }
-
     /// Create a new custom filter from a function.
-    pub fn new(arity: usize, run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
-        Self::with_update(arity, run, |_, _, _| {
+    pub fn new(run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
+        Self::with_update(run, |_, _, _| {
             Box::new(core::iter::once(Err(Error::PathExp)))
         })
     }
 
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
     pub fn with_update(
-        arity: usize,
         run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
         update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
     ) -> Self {
-        let args = (0..arity).map(|n| Filter::Arg(n)).collect();
-        Self { args, run, update }
+        Self { run, update }
     }
 }
 
@@ -381,7 +369,7 @@ impl Filter {
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
-            Self::Custom(CustomFilter { args, run, .. }) => (run)(args, cv),
+            Self::Custom(CustomFilter { run, .. }, args) => (run)(args, cv),
         }
     }
 
@@ -451,7 +439,7 @@ impl Filter {
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Custom(CustomFilter { args, update, .. }) => (update)(args, cv, f),
+            Self::Custom(CustomFilter { update, .. }, args) => (update)(args, cv, f),
         }
     }
 
@@ -554,11 +542,7 @@ impl Filter {
             Self::Call { .. } => self,
             Self::Var(v) => Self::Var(fv(vars, v)),
             Self::Arg(a) => fa(vars, a),
-            Self::Custom(CustomFilter { args, run, update }) => Self::Custom(CustomFilter {
-                args: args.into_iter().map(|f| *sub(Box::new(f))).collect(),
-                run,
-                update,
-            }),
+            Self::Custom(f, args) => Self::Custom(f, args.into_iter().map(subst).collect()),
         }
     }
 }

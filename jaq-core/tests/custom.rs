@@ -1,11 +1,7 @@
 //! Tests for custom filters.
 
-use std::{
-    iter::{once, repeat},
-    rc::Rc,
-};
+use std::{iter::once, rc::Rc};
 
-use itertools::Itertools;
 use jaq_core::{parse, Ctx, CustomFilter, Definitions, Error, RcIter, Val};
 use serde_json::{json, Value};
 
@@ -37,17 +33,18 @@ fn arity0_source_only() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "natzero",
-        CustomFilter::new(0, |_, _cv| Box::new(once(Ok(Val::Int(0))))),
+        0,
+        CustomFilter::new(|_, _cv| Box::new(once(Ok(Val::Int(0))))),
     );
     defs.insert_custom(
         "nattwenty",
-        CustomFilter::new(0, |_, _cv| Box::new(once(Ok(Val::Int(20))))),
+        0,
+        CustomFilter::new(|_, _cv| Box::new(once(Ok(Val::Int(20))))),
     );
     defs.insert_custom(
         "hello",
-        CustomFilter::new(0, |_, _cv| {
-            Box::new(once(Ok(Val::Str(Rc::new("world".into())))))
-        }),
+        0,
+        CustomFilter::new(|_, _cv| Box::new(once(Ok(Val::Str(Rc::new("world".into())))))),
     );
 
     yields(&defs, Value::Null, "natzero", [json!(0)], None);
@@ -60,9 +57,10 @@ fn arity0_and_sink() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "str_rev",
-        CustomFilter::new(0, |_, (_, val)| {
+        0,
+        CustomFilter::new(|_, cv| {
             Box::new(once(
-                val.to_str().map(|s| Val::str(s.chars().rev().join(""))),
+                cv.1.to_str().map(|s| Val::str(s.chars().rev().collect())),
             ))
         }),
     );
@@ -76,7 +74,8 @@ fn non_updatable() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "nupd",
-        CustomFilter::new(0, |_, (_, val)| Box::new(once(Ok(val)))),
+        0,
+        CustomFilter::new(|_, cv| Box::new(once(Ok(cv.1)))),
     );
 
     yields(&defs, json!("hello"), "nupd", [json!("hello")], None);
@@ -88,10 +87,10 @@ fn arity0_and_update() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "with_length",
+        0,
         CustomFilter::with_update(
-            0,
-            |_, (_, val)| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
-            |_, (_, val), _| Box::new(once(val.to_str().map(|s| Val::from(json!(s.len()))))),
+            |_, cv| Box::new(once(cv.1.to_str().map(|s| Val::from(json!(s.len()))))),
+            |_, cv, _| Box::new(once(cv.1.to_str().map(|s| Val::from(json!(s.len()))))),
         ),
     );
 
@@ -104,7 +103,8 @@ fn arity1() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "iflonger",
-        CustomFilter::new(1, |args, (ctx, val)| {
+        1,
+        CustomFilter::new(|args, (ctx, val)| {
             let arg = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => v,
                 Some(Err(e)) => return Box::new(once(Err(e))),
@@ -132,7 +132,8 @@ fn arity2() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "ifwithin",
-        CustomFilter::new(2, |args, (ctx, val)| {
+        2,
+        CustomFilter::new(|args, (ctx, val)| {
             let min = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => match v.as_int() {
                     Ok(n) => n as usize,
@@ -189,7 +190,8 @@ fn arity12() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "sillysum",
-        CustomFilter::new(12, |args, (ctx, val)| {
+        12,
+        CustomFilter::new(|args, (ctx, val)| {
             let mut nums = Vec::with_capacity(args.len());
             for arg in args {
                 match arg.run((ctx.clone(), val.clone())).next() {
@@ -224,7 +226,8 @@ fn iterator() {
     let mut defs = Definitions::core();
     defs.insert_custom(
         "randnums",
-        CustomFilter::new(1, |args, (ctx, val)| {
+        1,
+        CustomFilter::new(|args, (ctx, val)| {
             let amount = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(Val::Int(n))) => n,
                 Some(Ok(v)) => {
@@ -239,7 +242,7 @@ fn iterator() {
                     ))))
                 }
             };
-
+            use core::iter::repeat;
             Box::new(repeat(42).take(amount as usize).map(|n| Ok(Val::Int(n))))
         }),
     );
