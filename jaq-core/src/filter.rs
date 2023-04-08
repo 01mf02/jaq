@@ -140,11 +140,9 @@ impl CustomFilter {
 
     /// Create a new custom filter from a function.
     pub fn new(arity: usize, run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>) -> Self {
-        Self {
-            args: (0..arity).map(|n| Filter::Arg(n)).collect(),
-            run,
-            update: |_, _, _| Box::new(core::iter::once(Err(Error::PathExp))),
-        }
+        Self::with_update(arity, run, |_, _, _| {
+            Box::new(core::iter::once(Err(Error::PathExp)))
+        })
     }
 
     /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
@@ -153,11 +151,8 @@ impl CustomFilter {
         run: for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>,
         update: for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>,
     ) -> Self {
-        Self {
-            args: (0..arity).map(|n| Filter::Arg(n)).collect(),
-            run,
-            update,
-        }
+        let args = (0..arity).map(|n| Filter::Arg(n)).collect();
+        Self { args, run, update }
     }
 }
 

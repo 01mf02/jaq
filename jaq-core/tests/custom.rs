@@ -80,13 +80,7 @@ fn non_updatable() {
     );
 
     yields(&defs, json!("hello"), "nupd", [json!("hello")], None);
-    yields(
-        &defs,
-        json!("hello"),
-        "nupd |= .",
-        [],
-        Some(Error::PathExp),
-    );
+    yields(&defs, json!("hello"), "nupd |= .", [], Some(Error::PathExp));
 }
 
 #[test]
