@@ -26,6 +26,7 @@ type NameArityMap = BTreeMap<String, BTreeMap<Arity, (Filter, Vec<FilterId>)>>;
 pub enum Call {
     Def(FilterId),
     Arg(ArgIdx),
+    Native(crate::filter::CustomFilter),
 }
 
 #[derive(Clone)]
@@ -44,7 +45,7 @@ impl Num {
     }
 }
 
-pub struct Defs(Vec<Def>);
+pub struct Defs(Vec<Def>, Vec<((String, usize), crate::CustomFilter)>);
 
 pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 
@@ -179,6 +180,9 @@ impl Defs {
                     }
                 }
 
+                if let Some((_, native)) = self.1.iter().find(|((name_, arity), _)| *name_ == name && *arity == args.len()) {
+                    return (Filter::Call(Call::Native(native.clone()), args), filter.1);
+                }
                 let error = "could not find function";
                 ctx.errs.push(Error::custom(filter.1.clone(), error));
                 Filter::Id

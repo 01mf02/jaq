@@ -67,6 +67,10 @@ impl Ctx {
 
         match f.0 {
             Expr::Var(v) => Filter::Var(self.vars - view.vars[v]),
+            Expr::Call(mir::Call::Native(n), args) => {
+                let args = args.into_iter().map(|a| *get(a, self));
+                Filter::Custom(n, args.collect())
+            }
             Expr::Call(mir::Call::Arg(a), args) => {
                 assert!(args.is_empty());
                 let (f, id, view) = self.args[view.args[a]].clone();
