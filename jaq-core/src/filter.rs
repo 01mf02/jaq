@@ -63,25 +63,10 @@ pub enum Filter {
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
-    Has(Box<Self>),
-    Split(Box<Self>),
     Matches(Box<Self>, Box<Self>, (bool, bool)),
 
-    First(Box<Self>),
-    Last(Box<Self>),
     Recurse(Box<Self>, bool, bool),
     Walk(Box<Self>),
-    Contains(Box<Self>),
-    Limit(Box<Self>, Box<Self>),
-    /// `range(min; max)` returns all integers `n` with `min <= n < max`.
-    ///
-    /// This implements a ~10x faster version of:
-    /// ~~~ text
-    /// range(min; max):
-    ///   min as $min | max as $max | $min | select(. < $max) |
-    ///   recurse(.+1 | select(. < $max))
-    /// ~~~
-    Range(Box<Self>, Box<Self>),
 
     // TODO: remove this as soon as recursive filters are supported
     SkipCtx(usize, Box<Self>),
@@ -102,7 +87,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 16] = [
+const CORE: [(&str, usize, RunPtr); 23] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -133,6 +118,47 @@ const CORE: [(&str, usize, RunPtr); 16] = [
     ("group_by", 1, |args, cv| {
         box_once(cv.1.group_by(|v| args[0].run((cv.0.clone(), v))))
     }),
+    ("has", 1, |args, cv| {
+        let keys = args[0].run(cv.clone());
+        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))))
+    }),
+    ("contains", 1, |args, cv| {
+        let vals = args[0].run(cv.clone());
+        Box::new(vals.map(move |y| Ok(Val::Bool(cv.1.contains(&y?)))))
+    }),
+    ("split", 1, |args, cv| {
+        let seps = args[0].run(cv.clone());
+        Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
+    }),
+    ("first", 1, |args, cv| Box::new(args[0].run(cv).take(1))),
+    ("last", 1, |args, cv| {
+        then(args[0].run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {
+            Box::new(y.map(Ok).into_iter())
+        })
+    }),
+    ("limit", 2, |args, cv| {
+        let n = args[0].run(cv.clone()).map(|n| n?.as_int());
+        Box::new(n.flat_map(move |n| {
+            then(n, |n| {
+                Box::new(args[1].run(cv.clone()).take(core::cmp::max(0, n) as usize))
+            })
+        }))
+    }),
+    /// `range(min; max)` returns all integers `n` with `min <= n < max`.
+    ///
+    /// This implements a ~10x faster version of:
+    /// ~~~ text
+    /// range(min; max):
+    ///   min as $min | max as $max | $min | select(. < $max) |
+    ///   recurse(.+1 | select(. < $max))
+    /// ~~~
+    ("range", 2, |args, cv| {
+        let prod = Filter::cartesian(&args[0], &args[1], cv);
+        let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
+        Box::new(ranges.flat_map(|range| {
+            then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
+        }))
+    })
 ];
 
 const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
@@ -222,20 +248,13 @@ impl Filter {
             ((name.to_string(), *arity), Self::Custom(f, args))
         });
         let others = [
-            make_builtin!("has", 1, Self::Has),
-            make_builtin!("contains", 1, Self::Contains),
-            make_builtin!("split", 1, Self::Split),
             make_builtin!("matches", 2, |r, f| Self::Matches(r, f, (false, true))),
             make_builtin!("split_matches", 2, |r, f| Self::Matches(r, f, (true, true))),
             make_builtin!("split", 2, |r, f| Self::Matches(r, f, (true, false))),
-            make_builtin!("first", 1, Self::First),
-            make_builtin!("last", 1, Self::Last),
             make_builtin!("recurse", 1, |f| Self::Recurse(f, true, true)),
             make_builtin!("recurse_inner", 1, |f| Self::Recurse(f, true, false)),
             make_builtin!("recurse_outer", 1, |f| Self::Recurse(f, false, true)),
             make_builtin!("walk", 1, Self::Walk),
-            make_builtin!("limit", 2, Self::Limit),
-            make_builtin!("range", 2, Self::Range),
         ];
         cores.chain(core_update).chain(others).collect()
     }
@@ -315,42 +334,11 @@ impl Filter {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
 
-            Self::Has(f) => Box::new(
-                f.run(cv.clone())
-                    .map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))),
-            ),
-            Self::Contains(f) => Box::new(
-                f.run(cv.clone())
-                    .map(move |y| Ok(Val::Bool(cv.1.contains(&y?)))),
-            ),
-            Self::Split(f) => Box::new(
-                f.run(cv.clone())
-                    .map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))),
-            ),
             Self::Matches(re, flags, sm) => Box::new(
                 Self::cartesian(flags, re, (cv.0, cv.1.clone()))
                     .map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, *sm)?))),
             ),
 
-            Self::First(f) => Box::new(f.run(cv).take(1)),
-            Self::Last(f) => then(f.run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {
-                Box::new(y.map(Ok).into_iter())
-            }),
-            Self::Limit(n, f) => {
-                let n = n.run(cv.clone()).map(|n| n?.as_int());
-                Box::new(n.flat_map(move |n| {
-                    then(n, |n| {
-                        Box::new(f.run(cv.clone()).take(core::cmp::max(0, n) as usize))
-                    })
-                }))
-            }
-            Self::Range(from, until) => {
-                let prod = Self::cartesian(from, until, cv);
-                let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
-                Box::new(ranges.flat_map(|range| {
-                    then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
-                }))
-            }
             Self::Recurse(f, inner, outer) => {
                 let init = Box::new(once(Ok(cv.1))) as ValRs;
                 let f = move |v| f.run((cv.0.clone(), v));
@@ -392,13 +380,10 @@ impl Filter {
             Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
             Self::Update(..) | Self::UpdateMath(..) | Self::Assign(..) => err,
 
-            Self::Has(_) | Self::Contains(_) => err,
-            Self::Split(_) | Self::Matches(..) => err,
-            Self::Range(..) => err,
+            Self::Matches(..) => err,
 
             // these are up for grabs to implement :)
             Self::Try(_) | Self::Alt(..) => todo!(),
-            Self::First(_) | Self::Last(_) | Self::Limit(..) => todo!(),
             Self::Fold(..) => todo!(),
 
             Self::Id => f(cv.1),
@@ -518,16 +503,9 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Has(f) => Self::Has(sub(f)),
-            Self::Contains(f) => Self::Contains(sub(f)),
-            Self::Split(f) => Self::Split(sub(f)),
             Self::Matches(re, flags, sm) => Self::Matches(sub(re), sub(flags), sm),
-            Self::First(f) => Self::First(sub(f)),
-            Self::Last(f) => Self::Last(sub(f)),
             Self::Recurse(f, inner, outer) => Self::Recurse(sub(f), inner, outer),
             Self::Walk(f) => Self::Walk(sub(f)),
-            Self::Limit(n, f) => Self::Limit(sub(n), sub(f)),
-            Self::Range(lower, upper) => Self::Range(sub(lower), sub(upper)),
             // TODO: remove this!
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
             Self::Call { .. } => self,
