@@ -152,10 +152,9 @@ const CORE: [(&str, usize, RunPtr); 23] = [
     ("range", 2, |args, cv| {
         let prod = Filter::cartesian(&args[0], &args[1], cv);
         let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
-        Box::new(ranges.flat_map(|range| {
-            then(range, |(l, u)| Box::new((l..u).map(|i| Ok(Val::Int(i)))))
-        }))
-    })
+        let f = |(l, u)| (l..u).map(|i| Ok(Val::Int(i)));
+        Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
+    }),
 ];
 
 const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
