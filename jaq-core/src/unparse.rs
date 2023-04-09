@@ -1,6 +1,6 @@
 use crate::filter::Filter;
 use crate::path::{self, Path};
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Filter as Expr, Fold, KeyVal};
 use jaq_parse::{Arg, Error, Spanned};
 

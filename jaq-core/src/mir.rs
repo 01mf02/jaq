@@ -9,7 +9,7 @@
 
 use crate::parse;
 use crate::path::{self, Path};
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use parse::filter::{AssignOp, BinaryOp, Filter as Expr, Fold, KeyVal};
 use parse::{Arg, Error, Spanned};
 
@@ -180,7 +180,10 @@ impl Defs {
                     }
                 }
 
-                if let Some((_, native)) = self.1.iter().find(|((name_, arity), _)| *name_ == name && *arity == args.len()) {
+                let mut natives = self.1.iter();
+                if let Some((_, native)) =
+                    natives.find(|((name_, arity), _)| *name_ == name && *arity == args.len())
+                {
                     return (Filter::Call(Call::Native(native.clone()), args), filter.1);
                 }
                 let error = "could not find function";
