@@ -48,13 +48,13 @@ pub struct Defs(Vec<Def>);
 
 pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 
-struct Def {
+pub struct Def {
     name: String,
-    args: Vec<Arg>,
-    children: Vec<FilterId>,
+    pub args: Vec<Arg>,
+    pub children: Vec<FilterId>,
     ancestors: Vec<FilterId>,
-    recursive: bool,
-    body: Spanned<Filter>,
+    pub recursive: bool,
+    pub body: Spanned<Filter>,
 }
 
 struct Ctx {
@@ -63,6 +63,24 @@ struct Ctx {
 }
 
 impl Defs {
+    pub fn get(&self, id: FilterId) -> &Def {
+        &self.0[id]
+    }
+
+    pub fn last_common_ancestor(&self, id1: FilterId, id2: FilterId) -> FilterId {
+        let mut a1 = self.ancestors_and_me(id1);
+        let mut a2 = self.ancestors_and_me(id2);
+        let mut last = 0;
+        while let (Some(a1), Some(a2)) = (a1.next(), a2.next()) {
+            if a1 == a2 {
+                last = a1
+            } else {
+                break;
+            }
+        }
+        last
+    }
+
     fn ancestors_and_me(&self, id: FilterId) -> impl Iterator<Item = FilterId> + '_ {
         use core::iter::once;
         self.0[id].ancestors.iter().copied().chain(once(id))

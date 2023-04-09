@@ -7,6 +7,7 @@ use jaq_parse::{Arg, Error, Spanned};
 
 #[derive(Clone)]
 struct View {
+    /// indices of variables in the execution context that are currently visible
     vars: Vec<usize>,
     args: Vec<usize>,
     recs: Vec<usize>,
@@ -22,15 +23,37 @@ impl View {
     }
 }
 
+type Arity = usize;
+
 struct Ctx {
     /// number of variables in the execution context at the current point
     vars: usize,
+    /// non-variable arguments, earliest bound first
     args: Vec<(Spanned<mir::Filter>, FilterId, View)>,
     /// list of recursively defined filters with their arity (only variable arguments)
-    recs: Vec<(usize, mir::Filter)>,
+    /// and the number of bound variables (including variable arguments) that must be in the context at the time of calling
+    recs: Vec<(Arity, usize, Filter)>,
 }
 
 impl Ctx {
+    fn def(&mut self, id: FilterId, view: View, defs: &mir::Defs) -> Filter {
+        let def = defs.get(id);
+
+        for rec_id in def.children.iter().filter(|cid| defs.get(**cid).recursive) {
+            let mut view = view.clone();
+            let rec = defs.get(*rec_id);
+            let args = rec.args.len();
+            view.vars.extend(self.vars..self.vars + args);
+            self.vars += args;
+            view.recs.push(self.recs.len());
+            let f = self.def(*rec_id, view, defs);
+            self.recs.push((args, self.vars, f));
+            self.vars -= args;
+        }
+
+        self.filter(def.body.clone(), id, view, defs)
+    }
+
     // TODO: operate on borrowed filter
     fn filter(
         &mut self,
@@ -50,25 +73,55 @@ impl Ctx {
                 self.filter(f, id, view, defs)
             }
             Expr::Call(mir::Call::Def(did), args) => {
-                let last_common = todo!();
-                let new_view = view.clone();
-                new_view.truncate(last_common, defs);
+                let dargs = &defs.get(did).args;
+                // indices of variable and non-variable arguments in args
+                let (var_args, arg_args): (Vec<_>, Vec<_>) =
+                    (0..args.len()).partition(|i| dargs[*i].get_var().is_some());
+
+                let var_args: Vec<_> = var_args
+                    .into_iter()
+                    .map(|i| {
+                        let arg = self.filter(args[i].clone(), id, view.clone(), defs);
+                        self.vars += 1;
+                        // TODO: increase view.vars? probably not ...
+                        arg
+                    })
+                    .collect();
 
                 // recursion!
-                if let Some(rec_idx) = defs.recs(id).position(|rid| rid == did) {
+                let out = if let Some(rec_idx) = defs.recs(id).position(|rid| rid == did) {
+                    // arguments bound in the called filter and its ancestors
                     let rvars = defs.args(did).filter(|a| a.get_var().is_some()).count();
+                    let (_, vars_len, _) = self.recs[view.recs[rec_idx]];
                     Filter::Call {
                         id: view.recs[rec_idx],
-                        skip: self.vars - rvars,
+                        skip: self.vars - vars_len,
                     }
                 } else {
-                    todo!()
-                }
-            }
+                    let last_common = defs.last_common_ancestor(id, did);
+                    let mut new_view = view.clone();
+                    new_view.truncate(last_common, defs);
 
-            // TODO: move down with the other binary operators
-            Expr::Binary(l, BinaryOp::Pipe(None), r) => {
-                Filter::Pipe(get(*l, self), false, get(*r, self))
+                    for i in &arg_args {
+                        new_view.args.push(self.args.len());
+                        self.args.push((args[*i].clone(), id, view.clone()));
+                    }
+
+                    self.def(did, new_view, defs)
+                };
+
+                // here, we revert the order, because leftmost variable arguments are bound first, which means
+                // they will appear *outermost* in the filter, thus have to be added *last* to the filter
+
+                self.vars -= var_args.len();
+                let filter = var_args.into_iter().rev().fold(out, |acc, arg| {
+                    Filter::Pipe(Box::new(arg), true, Box::new(acc))
+                });
+
+                self.args.truncate(self.args.len() - arg_args.len());
+                // TODO: assert that we are back to the original args len!
+
+                filter
             }
 
             // variable-binding operators
@@ -120,6 +173,9 @@ impl Ctx {
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
             Expr::Recurse => Filter::recurse(),
 
+            Expr::Binary(l, BinaryOp::Pipe(None), r) => {
+                Filter::Pipe(get(*l, self), false, get(*r, self))
+            }
             Expr::Binary(l, BinaryOp::Comma, r) => Filter::Comma(get(*l, self), get(*r, self)),
             Expr::Binary(l, BinaryOp::Alt, r) => Filter::Alt(get(*l, self), get(*r, self)),
             Expr::Binary(l, BinaryOp::Or, r) => Filter::Logic(get(*l, self), true, get(*r, self)),
@@ -156,9 +212,5 @@ impl Ctx {
                 Filter::Path(f, Path(path.collect()))
             }
         }
-    }
-
-    fn def(&mut self, id: FilterId, view: View, defs: &mir::Defs) -> Filter {
-        todo!()
     }
 }
