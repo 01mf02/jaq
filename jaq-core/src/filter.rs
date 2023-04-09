@@ -1,6 +1,3 @@
-use alloc::sync::Arc;
-use core::fmt::Debug;
-
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
@@ -144,14 +141,14 @@ const CORE: [(&str, usize, RunPtr); 23] = [
             })
         }))
     }),
-    /// `range(min; max)` returns all integers `n` with `min <= n < max`.
-    ///
-    /// This implements a ~10x faster version of:
-    /// ~~~ text
-    /// range(min; max):
-    ///   min as $min | max as $max | $min | select(. < $max) |
-    ///   recurse(.+1 | select(. < $max))
-    /// ~~~
+    // `range(min; max)` returns all integers `n` with `min <= n < max`.
+    //
+    // This implements a ~10x faster version of:
+    // ~~~ text
+    // range(min; max):
+    //   min as $min | max as $max | $min | select(. < $max) |
+    //   recurse(.+1 | select(. < $max))
+    // ~~~
     ("range", 2, |args, cv| {
         let prod = Filter::cartesian(&args[0], &args[1], cv);
         let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
@@ -189,7 +186,7 @@ pub struct CustomFilter {
     update: UpdatePtr,
 }
 
-impl Debug for CustomFilter {
+impl core::fmt::Debug for CustomFilter {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("CustomFilter").finish()
     }
