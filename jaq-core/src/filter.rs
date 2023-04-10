@@ -135,11 +135,8 @@ const CORE: [(&str, usize, RunPtr); 23] = [
     }),
     ("limit", 2, |args, cv| {
         let n = args[0].run(cv.clone()).map(|n| n?.as_int());
-        Box::new(n.flat_map(move |n| {
-            then(n, |n| {
-                Box::new(args[1].run(cv.clone()).take(core::cmp::max(0, n) as usize))
-            })
-        }))
+        let f = move |n| args[1].run(cv.clone()).take(core::cmp::max(0, n) as usize);
+        Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(n)))))
     }),
     // `range(min; max)` returns all integers `n` with `min <= n < max`.
     //
