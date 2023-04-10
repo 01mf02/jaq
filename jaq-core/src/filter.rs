@@ -231,7 +231,7 @@ dyn_clone::clone_trait_object!(<'a> Update<'a>);
 
 fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
     let xs = rc_lazy_list::List::from_iter(xs);
-    Box::new(fold(false, xs, Box::new(core::iter::once(Ok(init))), f))
+    Box::new(fold(false, xs, box_once(Ok(init)), f))
 }
 
 pub type Cv<'c> = (Ctx<'c>, Val);
@@ -306,15 +306,15 @@ impl Filter {
                 Box::new(move |v| f.run((cv.0.clone(), v))),
             ),
             Self::UpdateMath(path, op, f) => f.pipe(cv, move |cv, y| {
-                path.update(cv, Box::new(move |x| Box::new(once(op.run(x, y.clone())))))
+                path.update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
             Self::Assign(path, f) => f.pipe(cv, |cv, y| {
-                path.update(cv, Box::new(move |_| Box::new(once(Ok(y.clone())))))
+                path.update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
             Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| {
                 then(l, |l| {
                     if l.as_bool() == *stop {
-                        Box::new(once(Ok(Val::Bool(*stop))))
+                        box_once(Ok(Val::Bool(*stop)))
                     } else {
                         Box::new(r.run(cv.clone()).map(|r| Ok(Val::Bool(r?.as_bool()))))
                     }
@@ -334,15 +334,17 @@ impl Filter {
                 match typ {
                     FoldType::Reduce => Box::new(fold(false, xs, init, f)),
                     FoldType::For => Box::new(fold(true, xs, init, f)),
-                    FoldType::Foreach => Box::new(init.flat_map(move |i| {
-                        fold(true, xs.clone(), Box::new(once(i)), f.clone()).skip(1)
-                    })),
+                    FoldType::Foreach => {
+                        Box::new(init.flat_map(move |i| {
+                            fold(true, xs.clone(), box_once(i), f.clone()).skip(1)
+                        }))
+                    }
                 }
             }
             Self::Recurse(f) => f.recurse1(true, true, cv),
 
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
-            Self::Var(v) => Box::new(once(Ok(cv.0.vars.get(*v).unwrap().clone()))),
+            Self::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
             Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
             Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
                 let (save, rec) = &cv.0.recs[*id];
@@ -356,7 +358,7 @@ impl Filter {
     /// `p.update(cv, f)` returns the output of `v | p |= f`
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
         use core::iter::once;
-        let err = Box::new(once(Err(Error::PathExp)));
+        let err = box_once(Err(Error::PathExp));
         match self {
             Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
             Self::Array(_) | Self::Object(_) => err,
@@ -522,7 +524,7 @@ impl Path<Filter> {
         let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
         let path = match path.collect::<Result<Vec<_>, _>>() {
             Ok(path) => path,
-            Err(e) => return Box::new(core::iter::once(Err(e))),
+            Err(e) => return box_once(Err(e)),
         };
         let outs = init.run(cv).map(move |i| {
             path.iter().try_fold(Vec::from([i?]), |acc, (part, opt)| {
