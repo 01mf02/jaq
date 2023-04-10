@@ -60,10 +60,7 @@ pub enum Filter {
     Math(Box<Self>, MathOp, Box<Self>),
     Ord(Box<Self>, OrdOp, Box<Self>),
 
-    Matches(Box<Self>, Box<Self>, (bool, bool)),
-
-    Recurse(Box<Self>, bool, bool),
-    Walk(Box<Self>),
+    Recurse(Box<Self>),
 
     // TODO: remove this as soon as recursive filters are supported
     SkipCtx(usize, Box<Self>),
@@ -84,7 +81,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 23] = [
+const CORE: [(&str, usize, RunPtr); 29] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -127,6 +124,18 @@ const CORE: [(&str, usize, RunPtr); 23] = [
         let seps = args[0].run(cv.clone());
         Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
     }),
+    ("matches", 2, |args, cv| {
+        args[0].regex(&args[1], false, true, cv)
+    }),
+    ("split_matches", 2, |args, cv| {
+        args[0].regex(&args[1], true, true, cv)
+    }),
+    ("split", 2, |args, cv| {
+        args[0].regex(&args[1], true, false, cv)
+    }),
+    ("walk", 1, |args, cv| {
+        cv.1.walk(&|v| args[0].run((cv.0.clone(), v)))
+    }),
     ("first", 1, |args, cv| Box::new(args[0].run(cv).take(1))),
     ("last", 1, |args, cv| {
         then(args[0].run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {
@@ -152,9 +161,15 @@ const CORE: [(&str, usize, RunPtr); 23] = [
         let f = |(l, u)| (l..u).map(|i| Ok(Val::Int(i)));
         Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
     }),
+    ("recurse_inner", 1, |args, cv| {
+        args[0].recurse1(true, false, cv)
+    }),
+    ("recurse_outer", 1, |args, cv| {
+        args[0].recurse1(false, true, cv)
+    }),
 ];
 
-const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
+const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 4] = [
     (
         "empty",
         0,
@@ -172,6 +187,12 @@ const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 3] = [
         0,
         |_, cv| box_once(Ok(cv.1.debug())),
         |_, cv, f| f(cv.1.debug()),
+    ),
+    (
+        "recurse",
+        1,
+        |args, cv| args[0].recurse1(true, true, cv),
+        |args, cv, f| args[0].recurse_update(cv, f),
     ),
 ];
 
@@ -217,18 +238,6 @@ pub type Cv<'c> = (Ctx<'c>, Val);
 
 impl Filter {
     pub(crate) fn core() -> Vec<((String, usize), Self)> {
-        let arg = |v| Box::new(Self::Arg(v));
-        macro_rules! make_builtin {
-            ($name: expr, 0, $cons: expr) => {
-                (($name.to_string(), 0), $cons)
-            };
-            ($name: expr, 1, $cons: expr) => {
-                (($name.to_string(), 1), $cons(arg(0)))
-            };
-            ($name: expr, 2, $cons: expr) => {
-                (($name.to_string(), 2), $cons(arg(0), arg(1)))
-            };
-        }
         // TODO: make this more compact
         let cores = CORE.iter().map(|(name, arity, f)| {
             let args = (0..*arity).map(|n| Filter::Arg(n)).collect();
@@ -240,16 +249,7 @@ impl Filter {
             let f = CustomFilter::with_update(*run, *update);
             ((name.to_string(), *arity), Self::Custom(f, args))
         });
-        let others = [
-            make_builtin!("matches", 2, |r, f| Self::Matches(r, f, (false, true))),
-            make_builtin!("split_matches", 2, |r, f| Self::Matches(r, f, (true, true))),
-            make_builtin!("split", 2, |r, f| Self::Matches(r, f, (true, false))),
-            make_builtin!("recurse", 1, |f| Self::Recurse(f, true, true)),
-            make_builtin!("recurse_inner", 1, |f| Self::Recurse(f, true, false)),
-            make_builtin!("recurse_outer", 1, |f| Self::Recurse(f, false, true)),
-            make_builtin!("walk", 1, Self::Walk),
-        ];
-        cores.chain(core_update).chain(others).collect()
+        cores.chain(core_update).collect()
     }
 
     pub fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
@@ -327,17 +327,6 @@ impl Filter {
                 Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
 
-            Self::Matches(re, flags, sm) => Box::new(
-                Self::cartesian(flags, re, (cv.0, cv.1.clone()))
-                    .map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, *sm)?))),
-            ),
-
-            Self::Recurse(f, inner, outer) => {
-                let init = Box::new(once(Ok(cv.1))) as ValRs;
-                let f = move |v| f.run((cv.0.clone(), v));
-                Box::new(recurse(*inner, *outer, init, f))
-            }
-            Self::Walk(f) => cv.1.walk(&|v| f.run((cv.0.clone(), v))),
             Self::Fold(typ, xs, init, f) => {
                 let xs = rc_lazy_list::List::from_iter(xs.run(cv.clone()));
                 let init = init.run(cv.clone());
@@ -350,6 +339,7 @@ impl Filter {
                     })),
                 }
             }
+            Self::Recurse(f) => f.recurse1(true, true, cv),
 
             Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
             Self::Var(v) => Box::new(once(Ok(cv.0.vars.get(*v).unwrap().clone()))),
@@ -372,8 +362,6 @@ impl Filter {
             Self::Array(_) | Self::Object(_) => err,
             Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
             Self::Update(..) | Self::UpdateMath(..) | Self::Assign(..) => err,
-
-            Self::Matches(..) => err,
 
             // these are up for grabs to implement :)
             Self::Try(_) | Self::Alt(..) => todo!(),
@@ -398,16 +386,7 @@ impl Filter {
             Self::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
             }),
-            // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
-            Self::Recurse(l, true, true) => Box::new(f(cv.1).flat_map(move |v| {
-                then(v, |v| {
-                    let (c, f) = (cv.0.clone(), f.clone());
-                    let rec = move |v| self.update((c.clone(), v), f.clone());
-                    l.update((cv.0.clone(), v), Box::new(rec))
-                })
-            })),
-            Self::Recurse(..) => todo!(),
-            Self::Walk(_) => err,
+            Self::Recurse(l) => l.recurse_update(cv, f),
 
             Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
             Self::Var(_) => err,
@@ -462,7 +441,28 @@ impl Filter {
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?`
         let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
-        Filter::Recurse(Box::new(path), true, true)
+        Filter::Recurse(Box::new(path))
+    }
+
+    fn recurse1<'a>(&'a self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
+        let f = move |v| self.run((cv.0.clone(), v));
+        Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
+    }
+
+    fn recurse_update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
+        // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
+        Box::new(f(cv.1).flat_map(move |v| {
+            then(v, |v| {
+                let (c, f) = (cv.0.clone(), f.clone());
+                let rec = move |v| self.recurse_update((c.clone(), v), f.clone());
+                self.update((cv.0.clone(), v), Box::new(rec))
+            })
+        }))
+    }
+
+    fn regex<'a>(&'a self, flags: &'a Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
+        let flags_re = Self::cartesian(flags, self, (cv.0, cv.1.clone()));
+        Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
     }
 
     pub fn subst<V, A>(self, vars: usize, fv: &V, fa: &A) -> Self
@@ -496,9 +496,7 @@ impl Filter {
             Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
             Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
             Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Matches(re, flags, sm) => Self::Matches(sub(re), sub(flags), sm),
-            Self::Recurse(f, inner, outer) => Self::Recurse(sub(f), inner, outer),
-            Self::Walk(f) => Self::Walk(sub(f)),
+            Self::Recurse(f) => Self::Recurse(sub(f)),
             // TODO: remove this!
             Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
             Self::Call { .. } => self,
