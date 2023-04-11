@@ -137,7 +137,8 @@ impl Defs {
     fn arg_position(&self, id: FilterId, name: &str) -> Option<usize> {
         let args: Vec<_> = self.0[id].args.iter().filter_map(|a| a.get_arg()).collect();
         let i = args.into_iter().rposition(|arg| arg == name)?;
-        let ancestor_args = self.0[id].ancestors.iter().flat_map(|aid| self.0[*aid].args.iter());
+        let ancestors = self.0[id].ancestors.iter();
+        let ancestor_args = ancestors.flat_map(|aid| self.0[*aid].args.iter());
         Some(i + ancestor_args.filter(|a| a.get_arg().is_some()).count())
     }
 
@@ -146,7 +147,8 @@ impl Defs {
             errs: std::mem::take(errs),
             recs: Vec::new(),
         };
-        self.def(Vec::from([0]), def, &mut ctx);
+        let root_id = 0;
+        self.def(Vec::from([root_id]), def, &mut ctx);
         for rec_idx in ctx.recs {
             self.0[rec_idx].recursive = true;
         }
@@ -248,11 +250,12 @@ impl Defs {
                 if let Some((_, _, native)) =
                     natives.find(|(name_, arity, _)| *name_ == name && *arity == args.len())
                 {
-                    return (Filter::Call(Call::Native(native.clone()), args), filter.1);
+                    Filter::Call(Call::Native(native.clone()), args)
+                } else {
+                    let error = "could not find function";
+                    ctx.errs.push(Error::custom(filter.1.clone(), error));
+                    Filter::Id
                 }
-                let error = "could not find function";
-                ctx.errs.push(Error::custom(filter.1.clone(), error));
-                Filter::Id
             }
             Expr::Var(v) => {
                 let local_vars = vars.iter().map(|v| &**v);
