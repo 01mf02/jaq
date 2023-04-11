@@ -159,7 +159,7 @@ impl Defs {
             args: def.args,
             children: Vec::new(),
             ancestors: ancestors.clone(),
-            // TODO: at the end, set all filters i with ctx.recursive[i] to defs[i].recursive
+            // after MIR creation, we have to set all filters i with ctx.recursive[i] to defs[i].recursive
             recursive: false,
             // for recursion, we want to be able to refer to the filter even before we know
             // what is its body, which is why we insert a bogus body for now
@@ -213,7 +213,6 @@ impl Defs {
                             //std::dbg!(&child.args);
                             if child.args.iter().any(|a| a.get_arg().is_some()) {
                                 let error = "attempting to recursively call filter with non-variable argument";
-                                //std::dbg!("error");
                                 ctx.errs.push(Error::custom(filter.1.clone(), error));
                             }
 
