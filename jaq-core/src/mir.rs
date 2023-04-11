@@ -130,6 +130,17 @@ impl Defs {
         outside.chain(inside)
     }
 
+    /// Retrieve the position of an argument of a filter, relative to all its ancestors.
+    ///
+    /// This does not try to find arguments of ancestors,
+    /// but it will offset the index of the argument by the ancestor arguments.
+    fn arg_position(&self, id: FilterId, name: &str) -> Option<usize> {
+        let args: Vec<_> = self.0[id].args.iter().filter_map(|a| a.get_arg()).collect();
+        let i = args.into_iter().rposition(|arg| arg == name)?;
+        let ancestor_args = self.0[id].ancestors.iter().flat_map(|aid| self.0[*aid].args.iter());
+        Some(i + ancestor_args.filter(|a| a.get_arg().is_some()).count())
+    }
+
     pub fn root_def(&mut self, def: parse::Def, errs: &mut Vec<Error>) {
         let mut ctx = Ctx {
             errs: std::mem::take(errs),
@@ -228,9 +239,7 @@ impl Defs {
                     }
 
                     // calls to arguments
-                    let ancestor_args = self.0[*ancestor].args.iter();
-                    let ancestor_args: Vec<_> = ancestor_args.filter_map(|a| a.get_arg()).collect();
-                    if let Some(i) = ancestor_args.into_iter().rposition(|arg| arg == name) {
+                    if let Some(i) = self.arg_position(*ancestor, &name) {
                         return (Filter::Call(Call::Arg(i), args), filter.1);
                     }
                 }
