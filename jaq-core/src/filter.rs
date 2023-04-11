@@ -62,10 +62,7 @@ pub enum Filter {
 
     Recurse(Box<Self>),
 
-    // TODO: remove this as soon as recursive filters are supported
-    SkipCtx(usize, Box<Self>),
     Var(usize),
-    Arg(usize),
     Call {
         skip: usize,
         id: usize,
@@ -130,7 +127,7 @@ const CORE: [(&str, usize, RunPtr); 29] = [
     ("split_matches", 2, |args, cv| {
         args[0].regex(&args[1], true, true, cv)
     }),
-    ("split", 2, |args, cv| {
+    ("split_", 2, |args, cv| {
         args[0].regex(&args[1], true, false, cv)
     }),
     ("walk", 1, |args, cv| {
@@ -173,7 +170,7 @@ const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 4] = [
     (
         "empty",
         0,
-        |_, cv| Box::new(core::iter::empty()),
+        |_, _| Box::new(core::iter::empty()),
         |_, cv, _| box_once(Ok(cv.1)),
     ),
     (
@@ -195,6 +192,21 @@ const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 4] = [
         |args, cv, f| args[0].recurse_update(cv, f),
     ),
 ];
+
+pub fn natives() -> impl Iterator<Item = (String, usize, CustomFilter)> {
+    // TODO: make this more compact
+    let cores = CORE
+        .iter()
+        .map(|(name, arity, f)| (name.to_string(), *arity, CustomFilter::new(*f)));
+    let core_update = CORE_UPDATE.iter().map(|(name, arity, run, update)| {
+        (
+            name.to_string(),
+            *arity,
+            CustomFilter::with_update(*run, *update),
+        )
+    });
+    cores.chain(core_update)
+}
 
 /// Custom filter.
 #[derive(Clone)]
@@ -237,21 +249,6 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
 pub type Cv<'c> = (Ctx<'c>, Val);
 
 impl Filter {
-    pub(crate) fn core() -> Vec<((String, usize), Self)> {
-        // TODO: make this more compact
-        let cores = CORE.iter().map(|(name, arity, f)| {
-            let args = (0..*arity).map(|n| Filter::Arg(n)).collect();
-            let f = CustomFilter::new(*f);
-            ((name.to_string(), *arity), Self::Custom(f, args))
-        });
-        let core_update = CORE_UPDATE.iter().map(|(name, arity, run, update)| {
-            let args = (0..*arity).map(|n| Filter::Arg(n)).collect();
-            let f = CustomFilter::with_update(*run, *update);
-            ((name.to_string(), *arity), Self::Custom(f, args))
-        });
-        cores.chain(core_update).collect()
-    }
-
     pub fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::once;
         use itertools::Itertools;
@@ -343,9 +340,7 @@ impl Filter {
             }
             Self::Recurse(f) => f.recurse1(true, true, cv),
 
-            Self::SkipCtx(n, f) => f.run((cv.0.skip_vars(*n), cv.1)),
             Self::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
-            Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
             Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
@@ -357,7 +352,6 @@ impl Filter {
 
     /// `p.update(cv, f)` returns the output of `v | p |= f`
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
-        use core::iter::once;
         let err = box_once(Err(Error::PathExp));
         match self {
             Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
@@ -390,9 +384,7 @@ impl Filter {
             }),
             Self::Recurse(l) => l.recurse_update(cv, f),
 
-            Self::SkipCtx(n, l) => l.update((cv.0.skip_vars(*n), cv.1), f),
             Self::Var(_) => err,
-            Self::Arg(_) => panic!("BUG: unsubstituted argument encountered"),
             Self::Call { skip, id } => {
                 let (save, rec) = &cv.0.recs[*id];
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
@@ -465,47 +457,6 @@ impl Filter {
     fn regex<'a>(&'a self, flags: &'a Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
         let flags_re = Self::cartesian(flags, self, (cv.0, cv.1.clone()));
         Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
-    }
-
-    pub fn subst<V, A>(self, vars: usize, fv: &V, fa: &A) -> Self
-    where
-        V: Fn(usize, usize) -> usize,
-        A: Fn(usize, usize) -> Self,
-    {
-        let subst = |f: Self| f.subst(vars, fv, fa);
-        let sub = |f: Box<Self>| Box::new(subst(*f));
-        let bind_sub = |f: Box<Self>| Box::new(f.subst(vars + 1, fv, fa));
-
-        match self {
-            Self::Id => self,
-            Self::Int(_) | Self::Float(_) | Self::Str(_) => self,
-            Self::Array(f) => Self::Array(f.map(sub)),
-            Self::Object(kvs) => {
-                Self::Object(kvs.into_iter().map(|(k, v)| (subst(k), subst(v))).collect())
-            }
-            Self::Try(f) => Self::Try(sub(f)),
-            Self::Neg(f) => Self::Neg(sub(f)),
-            Self::Pipe(l, false, r) => Self::Pipe(sub(l), false, sub(r)),
-            Self::Pipe(l, true, r) => Self::Pipe(sub(l), true, bind_sub(r)),
-            Self::Fold(typ, xs, init, f) => Self::Fold(typ, sub(xs), sub(init), bind_sub(f)),
-            Self::Comma(l, r) => Self::Comma(sub(l), sub(r)),
-            Self::Alt(l, r) => Self::Alt(sub(l), sub(r)),
-            Self::Ite(if_, then_, else_) => Self::Ite(sub(if_), sub(then_), sub(else_)),
-            Self::Path(f, path) => Self::Path(sub(f), path.map(subst)),
-            Self::Update(path, f) => Self::Update(sub(path), sub(f)),
-            Self::Assign(path, f) => Self::Assign(sub(path), sub(f)),
-            Self::UpdateMath(path, op, f) => Self::UpdateMath(sub(path), op, sub(f)),
-            Self::Logic(l, stop, r) => Self::Logic(sub(l), stop, sub(r)),
-            Self::Math(l, op, r) => Self::Math(sub(l), op, sub(r)),
-            Self::Ord(l, op, r) => Self::Ord(sub(l), op, sub(r)),
-            Self::Recurse(f) => Self::Recurse(sub(f)),
-            // TODO: remove this!
-            Self::SkipCtx(drop, f) => Self::SkipCtx(drop, sub(f)),
-            Self::Call { .. } => self,
-            Self::Var(v) => Self::Var(fv(vars, v)),
-            Self::Arg(a) => fa(vars, a),
-            Self::Custom(f, args) => Self::Custom(f, args.into_iter().map(subst).collect()),
-        }
     }
 }
 

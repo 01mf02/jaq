@@ -19,12 +19,13 @@
 //! // start out only from core filters,
 //! // which do not include filters in the standard library
 //! // such as `map`, `select` etc.
-//! let defs = Definitions::core();
+//! let mut defs = Definitions::new(Vec::new());
+//! defs.insert_core();
 //!
 //! // parse the filter in the context of the given definitions
 //! let mut errs = Vec::new();
 //! let f = parse::parse(&filter, parse::main()).0.unwrap();
-//! let f = defs.finish(f, Vec::new(), &mut errs);
+//! let f = defs.finish(f, &mut errs);
 //! assert_eq!(errs, Vec::new());
 //!
 //! let inputs = RcIter::new(core::iter::empty());
@@ -55,7 +56,6 @@ mod rc_lazy_list;
 mod rc_list;
 mod regex;
 mod results;
-mod unparse;
 mod val;
 
 pub use jaq_parse as parse;
@@ -66,7 +66,6 @@ pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
 use alloc::{
-    collections::BTreeMap,
     string::{String, ToString},
     vec::Vec,
 };
@@ -97,14 +96,6 @@ impl<'i> Ctx<'i> {
     pub fn cons_var(mut self, x: Val) -> Self {
         self.vars = self.vars.cons(x);
         self
-    }
-
-    fn skip_vars(&self, n: usize) -> Self {
-        Self {
-            vars: self.vars.skip(n).clone(),
-            inputs: self.inputs,
-            recs: self.recs,
-        }
     }
 
     /// Obtain and remove the `save` most recent variable bindings,
@@ -147,46 +138,53 @@ impl Filter {
 ///
 /// For example, if we define a filter `def map(f): [.[] | f]`,
 /// then the definitions will associate `map/1` to its definition.
-#[derive(Debug, Default, Clone)]
-pub struct Definitions(BTreeMap<(String, usize), filter::Filter>);
+pub struct Definitions(mir::Defs);
 
 impl Definitions {
+    pub fn new(vars: Vec<String>) -> Self {
+        Self(mir::Defs::new(vars))
+    }
+
     /// Start out with only core filters, such as `length`, `keys`, ...
     ///
     /// Does not import filters from the standard library, such as `map`.
-    pub fn core() -> Self {
-        Self(filter::Filter::core().into_iter().collect())
+    pub fn insert_core(&mut self) {
+        self.insert_natives(filter::natives())
     }
 
-    /// Import a parsed definition, such as obtained from the standard library.
+    pub fn insert_natives(
+        &mut self,
+        natives: impl IntoIterator<Item = (String, usize, filter::CustomFilter)>,
+    ) {
+        natives
+            .into_iter()
+            .for_each(|(name, arity, f)| self.0.insert_fn(name, arity, f))
+    }
+
+    /// Import parsed definitions, such as obtained from the standard library.
     ///
     /// Errors that might occur include undefined variables, for example.
-    pub fn insert(&mut self, def: Def, errs: &mut Vec<parse::Error>) {
-        let f = unparse::def(&self.get(), &def.args, def.body, errs);
-        self.0.insert((def.name, def.args.len()), f);
+    pub fn insert_defs(
+        &mut self,
+        defs: impl IntoIterator<Item = Def>,
+        errs: &mut Vec<parse::Error>,
+    ) {
+        defs.into_iter().for_each(|def| self.0.root_def(def, errs));
     }
 
     /// Import a custom, Rust-defined filter.
     pub fn insert_custom(&mut self, name: &str, arity: usize, filter: filter::CustomFilter) {
-        let args = (0..arity).map(|n| filter::Filter::Arg(n)).collect();
-        let f = filter::Filter::Custom(filter, args);
-        self.0.insert((name.to_string(), arity), f);
+        self.0.insert_fn(name.to_string(), arity, filter);
     }
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn finish(
-        mut self,
-        (defs, body): Main,
-        vars: Vec<String>,
-        errs: &mut Vec<parse::Error>,
-    ) -> Filter {
-        defs.into_iter().for_each(|def| self.insert(def, errs));
-        let recs = Vec::new();
-        Filter(unparse::filter(&self.get(), &[], vars, body, errs), recs)
-    }
-
-    /// Obtain filters by name and arity.
-    fn get(&self) -> impl Fn(&(String, usize)) -> Option<filter::Filter> + '_ {
-        |fun| self.0.get(fun).cloned()
+    pub fn finish(mut self, (defs, body): Main, errs: &mut Vec<parse::Error>) -> Filter {
+        self.insert_defs(defs, errs);
+        self.0.root_filter(body, errs);
+        if !errs.is_empty() {
+            return Filter(filter::Filter::Id, Vec::new());
+        }
+        let (f, recs) = lir::root_def(&self.0);
+        Filter(f, recs)
     }
 }

@@ -235,16 +235,15 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 }
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
+    let mut defs = Definitions::new(vars);
+    defs.insert_core();
     let mut errs = Vec::new();
-    let mut defs = Definitions::core();
-    jaq_std::std()
-        .into_iter()
-        .for_each(|def| defs.insert(def, &mut errs));
+    defs.insert_defs(jaq_std::std(), &mut errs);
     assert!(errs.is_empty());
 
     let (main, mut errs) = jaq_core::parse::parse(filter_str, jaq_core::parse::main());
 
-    let filter = main.map(|main| defs.finish(main, vars, &mut errs));
+    let filter = main.map(|main| defs.finish(main, &mut errs));
     if errs.is_empty() {
         Ok(filter.unwrap())
     } else {

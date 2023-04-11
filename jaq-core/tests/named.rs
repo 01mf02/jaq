@@ -120,7 +120,7 @@ fn regex() {
     let f = |f, re, flags| format!("{f}(\"{re}\"; \"{flags}\")");
 
     let out = json!(["", ", ", " and ", ""]);
-    give(json!(s), &f("split", date, "g"), out);
+    give(json!(s), &f("split_", date, "g"), out);
 
     let c = |o: usize, s: &str| {
         json!({
