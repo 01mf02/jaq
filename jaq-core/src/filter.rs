@@ -68,7 +68,7 @@ pub enum Filter {
         id: usize,
     },
 
-    Custom(CustomFilter, Vec<Filter>),
+    Native(Native, Vec<Filter>),
 }
 
 type RunPtr = for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>;
@@ -193,35 +193,31 @@ const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 4] = [
     ),
 ];
 
-pub fn natives() -> impl Iterator<Item = (String, usize, CustomFilter)> {
+pub fn natives() -> impl Iterator<Item = (String, usize, Native)> {
     // TODO: make this more compact
     let cores = CORE
         .iter()
-        .map(|(name, arity, f)| (name.to_string(), *arity, CustomFilter::new(*f)));
+        .map(|(name, arity, f)| (name.to_string(), *arity, Native::new(*f)));
     let core_update = CORE_UPDATE.iter().map(|(name, arity, run, update)| {
-        (
-            name.to_string(),
-            *arity,
-            CustomFilter::with_update(*run, *update),
-        )
+        (name.to_string(), *arity, Native::with_update(*run, *update))
     });
     cores.chain(core_update)
 }
 
-/// Custom filter.
+/// A filter whose behaviour is specified by function pointers.
 #[derive(Clone)]
-pub struct CustomFilter {
+pub struct Native {
     run: RunPtr,
     update: UpdatePtr,
 }
 
-impl core::fmt::Debug for CustomFilter {
+impl core::fmt::Debug for Native {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        f.debug_struct("CustomFilter").finish()
+        f.debug_struct("Native").finish()
     }
 }
 
-impl CustomFilter {
+impl Native {
     /// Create a new custom filter from a function.
     pub const fn new(run: RunPtr) -> Self {
         Self::with_update(run, |_, _, _| box_once(Err(Error::PathExp)))
@@ -346,7 +342,7 @@ impl Filter {
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
-            Self::Custom(CustomFilter { run, .. }, args) => (run)(args, cv),
+            Self::Native(Native { run, .. }, args) => (run)(args, cv),
         }
     }
 
@@ -390,7 +386,7 @@ impl Filter {
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Custom(CustomFilter { update, .. }, args) => (update)(args, cv, f),
+            Self::Native(Native { update, .. }, args) => (update)(args, cv, f),
         }
     }
 

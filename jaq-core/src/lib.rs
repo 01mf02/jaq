@@ -61,7 +61,6 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
-pub use filter::CustomFilter;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
@@ -154,7 +153,7 @@ impl Definitions {
 
     pub fn insert_natives(
         &mut self,
-        natives: impl IntoIterator<Item = (String, usize, filter::CustomFilter)>,
+        natives: impl IntoIterator<Item = (String, usize, filter::Native)>,
     ) {
         natives
             .into_iter()
@@ -173,7 +172,7 @@ impl Definitions {
     }
 
     /// Import a custom, Rust-defined filter.
-    pub fn insert_custom(&mut self, name: &str, arity: usize, filter: filter::CustomFilter) {
+    pub fn insert_custom(&mut self, name: &str, arity: usize, filter: filter::Native) {
         self.0.insert_fn(name.to_string(), arity, filter);
     }
 

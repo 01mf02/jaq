@@ -25,7 +25,7 @@ type NameArityMap = BTreeMap<String, BTreeMap<Arity, (Filter, Vec<FilterId>)>>;
 pub enum Call {
     Def(FilterId),
     Arg(ArgIdx),
-    Native(crate::filter::CustomFilter),
+    Native(crate::filter::Native),
 }
 
 #[derive(Debug, Clone)]
@@ -45,7 +45,7 @@ impl Num {
 }
 
 #[derive(Debug, Default)]
-pub struct Defs(Vec<Def>, Vec<((String, usize), crate::CustomFilter)>);
+pub struct Defs(Vec<Def>, Vec<(String, usize, crate::filter::Native)>);
 
 pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 
@@ -82,8 +82,8 @@ impl Defs {
         &self.0[id]
     }
 
-    pub fn insert_fn(&mut self, name: String, arity: usize, f: crate::CustomFilter) {
-        self.1.push(((name, arity), f))
+    pub fn insert_fn(&mut self, name: String, arity: usize, f: crate::filter::Native) {
+        self.1.push((name, arity, f))
     }
 
     pub fn last_common_ancestor(&self, id1: FilterId, id2: FilterId) -> FilterId {
@@ -237,8 +237,8 @@ impl Defs {
                 }
 
                 let mut natives = self.1.iter();
-                if let Some((_, native)) =
-                    natives.find(|((name_, arity), _)| *name_ == name && *arity == args.len())
+                if let Some((_, _, native)) =
+                    natives.find(|(name_, arity, _)| *name_ == name && *arity == args.len())
                 {
                     return (Filter::Call(Call::Native(native.clone()), args), filter.1);
                 }

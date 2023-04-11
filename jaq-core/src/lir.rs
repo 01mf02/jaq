@@ -109,7 +109,7 @@ impl Ctx {
             Expr::Var(v) => Filter::Var(self.vars - view.vars[v] - 1),
             Expr::Call(mir::Call::Native(n), args) => {
                 let args = args.into_iter().map(|a| *get(a, self));
-                Filter::Custom(n, args.collect())
+                Filter::Native(n, args.collect())
             }
             Expr::Call(mir::Call::Arg(a), args) => {
                 std::dbg!("arg call");
