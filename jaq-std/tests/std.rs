@@ -83,43 +83,30 @@ fn inside() {
     give(json!({"foo": 12, "bar": [{"barp": 15}]}), f, json!(false));
 }
 
-#[test]
-fn isfinite() {
-    give(json!(0), "isfinite", json!(true));
-    give(json!(1), "isfinite", json!(true));
-    give(json!(0), "nan | isfinite", json!(true));
-    give(json!(0), "infinite | isfinite", json!(false));
-    give(json!(0), "-infinite | isfinite", json!(false));
-    give(json!(""), "isfinite", json!(false));
-}
+yields!(isfinite_true, "all((0, 1, nan); isfinite)", true);
+yields!(
+    isfinite_false,
+    "any((infinite, -infinite, []); isfinite)",
+    false
+);
 
-#[test]
-fn isnormal() {
-    give(json!(0), "isnormal", json!(false));
-    give(json!(1), "isnormal", json!(true));
-    give(json!(0), "nan | isnormal", json!(false));
-    give(json!(0), "infinite | isnormal", json!(false));
-    give(json!(0), "-infinite | isnormal", json!(false));
-    give(json!(""), "isnormal", json!(false));
-}
+yields!(isnormal_true, "1 | isnormal", true);
+yields!(
+    isnormal_false,
+    "any(0, nan, infinite, -infinite, []; isnormal)",
+    false
+);
 
-#[test]
-fn join() {
-    give(json!([]), r#"join(" ")"#, json!(null));
-    give(
-        json!(["Hello", "world"]),
-        r#"join(" ")"#,
-        json!("Hello world"),
-    );
+yields!(join_empty, r#"[] | join(" ")"#, json!(null));
+yields!(
+    join_strs,
+    r#"["Hello", "world"] | join(" ")"#,
+    "Hello world"
+);
+// 2 + 1 + 3 + 1 + 4 + 1 + 5
+yields!(join_nums, r#"[2, 3, 4, 5] | join(1)"#, 17);
 
-    // 2 + 1 + 3 + 1 + 4 + 1 + 5
-    give(json!([2, 3, 4, 5]), "join(1)", json!(17));
-}
-
-#[test]
-fn map() {
-    give(json!([1, 2]), "map(.+1)", json!([2, 3]));
-}
+yields!(map, "[1, 2] | map(.+1)", [2, 3]);
 
 #[test]
 fn min_max() {
