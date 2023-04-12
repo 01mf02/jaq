@@ -83,9 +83,7 @@ def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;
 
 # Paths
-def paths: { x: ., p: [] } |
-  recurse((.x | keys?)[] as $k | .x |= .[$k] | .p += [$k]) |
-  .p | select(. != []);
+def paths: def rec: [(keys?)[] as $k | [$k], [$k] + (.[$k] | rec[])]; rec[];
 
 # Predicates
 def isempty(g): first((g | false), true);
