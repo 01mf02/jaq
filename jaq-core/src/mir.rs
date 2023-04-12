@@ -51,7 +51,7 @@ pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 
 #[derive(Debug)]
 pub struct Def {
-    name: String,
+    pub name: String,
     pub args: Vec<Arg>,
     pub children: Vec<FilterId>,
     ancestors: Vec<FilterId>,
