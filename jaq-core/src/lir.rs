@@ -62,8 +62,8 @@ pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
 
 impl Ctx {
     fn def(&mut self, id: FilterId, mut view: View, defs: &mir::Defs) -> Filter {
-        //std::dbg!((id, &view));
         let def = defs.get(id);
+        //std::dbg!("processing def", (&def.name, id, &view));
 
         let var_args = def.args.iter().filter(|a| a.get_var().is_some()).count();
         view.vars.extend(self.vars..self.vars + var_args);
@@ -71,7 +71,7 @@ impl Ctx {
 
         let view_vars_len = view.vars.len();
         for rec_id in def.children.iter().filter(|cid| defs.get(**cid).recursive) {
-            // std::dbg!(rec_id);
+            //std::dbg!("processing recursive child", rec_id);
             let rec = defs.get(*rec_id);
             assert!(rec.args.iter().all(|a| a.get_var().is_some()));
             let new_rec_idx = self.recs.len();
@@ -84,7 +84,8 @@ impl Ctx {
         }
         assert_eq!(view.vars.len(), view_vars_len);
 
-        // std::dbg!("rec defs done for", id, &view);
+        //std::dbg!("rec defs done for", id, &view);
+        //std::dbg!("now for the body of the definition", &def.body);
 
         let out = self.filter(def.body.clone(), id, view, defs);
         self.vars -= var_args;
@@ -138,10 +139,12 @@ impl Ctx {
                     .collect();
                 self.vars -= var_args.len();
 
-                //  std::dbg!(id, defs.recs(id).collect::<Vec<_>>());
+                let accessible_recs = defs.recs(id).collect::<Vec<_>>();
+                assert_eq!(accessible_recs.len(), view.recs.len());
+                //std::dbg!(id, accessible_recs);
                 // recursion!
                 let out = if let Some(rec_idx) = defs.recs(id).position(|rid| rid == did) {
-                    //  std::dbg!("call a recursive filter!");
+                    //std::dbg!("call a recursive filter!", did);
                     //  std::dbg!(&self.recs);
                     //  std::dbg!(&view.recs);
                     // arguments bound in the called filter and its ancestors
