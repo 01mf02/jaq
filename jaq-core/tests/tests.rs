@@ -197,19 +197,16 @@ fn vars() {
     give(json!(null), f, out());
 }
 
-#[test]
-fn redefine() {
-    let f = "def a: 1; def b: a; def a: 2; [a, b]";
-    give(json!(0), f, json!([2, 1]));
-}
+yields!(shadow_funs, "def a: 1; def b: a; def a: 2; a + b", 3);
+yields!(shadow_vars, "1 as $x | 2 as $x | $x", 2);
+// arguments from the right are stronger than from the left
+yields!(shadow_args, "def f(g; g): g; f(1; 2)", 2);
 
-#[test]
-fn shadow() {
-    // arguments from the right are stronger than from the left
-    give(json!(0), "def f(g; g): g; f(1; 2)", json!(2));
+yields!(id_var, "def f($a): $a; f(0)", 0);
+yields!(id_arg, "def f( a):  a; f(0)", 0);
+yields!(args_mixed, "def f(a; $b): a + $b; 1 as $a | f($a; 2)", 3);
 
-    give(json!(0), "1 as $x | 2 as $x | $x", json!(2));
-}
+yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
 
 #[test]
 fn reduce() {
@@ -225,19 +222,27 @@ fn reduce() {
     give(json!(1), &f, json!(11));
 }
 
-#[test]
-fn foreach() {
-    let f = "[foreach .[] as $x (0; .+$x)]";
-    give(json!([1, 2, 3]), f, json!([1, 3, 6]));
-    let f = "[for .[] as $x (0; .+$x)]";
-    give(json!([1, 2, 3]), f, json!([0, 1, 3, 6]));
+yields!(
+    foreach_cumulative_sum,
+    "[1, 2, 3] | [foreach .[] as $x (0; .+$x)]",
+    [1, 3, 6]
+);
+yields!(
+    for_cumulative_sum,
+    "[1, 2, 3] | [for .[] as $x (0; .+$x)]",
+    [0, 1, 3, 6]
+);
 
-    // jq will give only [4, 3, 7, 12] here because
-    // it keeps only the *last* output value as
-    // input value for the next iteration, whereas
-    // jaq keeps all output values as input values
-    let f = "[foreach .[] as $x (1; .+$x, .*$x)]";
-    give(json!([3, 4]), f, json!([4, 8, 16, 3, 7, 12]));
-    let f = "[for .[] as $x (1; .+$x, .*$x)]";
-    give(json!([3, 4]), f, json!([1, 4, 8, 16, 3, 7, 12]));
-}
+// jq will give only [4, 3, 7, 12] here because
+// it keeps only the *last* output value as input value for the next iteration, whereas
+// jaq keeps all output values as input values
+yields!(
+    foreach_many_outputs,
+    "[foreach (3,4) as $x (1; .+$x, .*$x)]",
+    [4, 8, 16, 3, 7, 12]
+);
+yields!(
+    for_many_outputs,
+    "[for (3,4) as $x (1; .+$x, .*$x)]",
+    [1, 4, 8, 16, 3, 7, 12]
+);
