@@ -100,6 +100,7 @@ def inside(xs): . as $x | xs | contains($x);
 def walk(f): def rec: (.[]? |= rec) | f; rec;
 
 def flatten: [recurse(arrays | .[]) | select(isarray | not)];
+#def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) | add else . end;
 def flatten($d):
   [ { d: $d, x: . } |
     recurse(select(.d >= 0 and (.x | isarray)) | { d: .d - 1, x: .x[] }) |
