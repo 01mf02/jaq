@@ -230,6 +230,21 @@ fn typ() {
 }
 
 #[test]
+fn walk() {
+    give(
+        json!([[4, 1, 7], [8, 5, 2], [3, 6, 9]]),
+        r#"walk(if . < [] then . else sort end)"#,
+        json!([[1, 4, 7], [2, 5, 8], [3, 6, 9]]),
+    );
+
+    give(
+        json!({"a": {"b": 1, "c": 2}}),
+        r#"walk(if . < {} then . + 1 else . + {"l": length} end)"#,
+        json!({"a": {"b": 2, "c": 3, "l": 2}, "l": 1}),
+    );
+}
+
+#[test]
 fn while_until() {
     give(
         json!(1),

@@ -209,11 +209,6 @@ impl Val {
         })
     }
 
-    /// Recursively apply a function to each value.
-    pub fn walk<'a>(self, f: &impl Fn(Val) -> ValRs<'a>) -> ValRs<'a> {
-        crate::results::then(self.try_map(|v| v.walk(f)), f)
-    }
-
     /// `a` contains `b` iff either
     /// * the string `b` is a substring of `a`,
     /// * every element in the array `b` is contained in some element of the array `a`,

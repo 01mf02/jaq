@@ -98,6 +98,9 @@ def any: any(.[]; .);
 def in(xs)    : . as $x | xs | has     ($x);
 def inside(xs): . as $x | xs | contains($x);
 
+# Walking
+def walk(f): def rec: (.[]? |= rec) | f; rec;
+
 def flatten: [recurse(arrays | .[]) | select(isarray | not)];
 def flatten($d):
   [ { d: $d, x: . } |

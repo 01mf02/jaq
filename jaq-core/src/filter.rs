@@ -78,7 +78,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 29] = [
+const CORE: [(&str, usize, RunPtr); 28] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -129,9 +129,6 @@ const CORE: [(&str, usize, RunPtr); 29] = [
     }),
     ("split_", 2, |args, cv| {
         args[0].regex(&args[1], true, false, cv)
-    }),
-    ("walk", 1, |args, cv| {
-        cv.1.walk(&|v| args[0].run((cv.0.clone(), v)))
     }),
     ("first", 1, |args, cv| Box::new(args[0].run(cv).take(1))),
     ("last", 1, |args, cv| {
