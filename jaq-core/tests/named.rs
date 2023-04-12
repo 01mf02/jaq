@@ -113,15 +113,28 @@ fn recurse() {
     gives(json!(1), "recurse(if . < 3 then .+1 else empty end)", y);
 }
 
-const PATHS_RECURSE: &str = "def paths: { x: ., p: [] } |
+const RECURSE_PATHS: &str = "def paths:
+  { x: ., p: [] } |
   recurse((.x | keys?)[] as $k | .x |= .[$k] | .p += [$k]) |
   .p | if . == [] then empty else . end;";
 
 yields!(
     recurse_paths,
-    &(PATHS_RECURSE.to_owned() + "{a: [1, [2]], b: {c: 3}} | [paths]"),
+    &(RECURSE_PATHS.to_owned() + "{a: [1, [2]], b: {c: 3}} | [paths]"),
     json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
 );
+
+const RECURSE_FLATTEN: &str = "def flatten($d):
+  [ { d: $d, x: . } |
+    recurse(if .d >= 0 and ([] <= .x and .x < {}) then { d: .d - 1, x: .x[] } else empty end) |
+    if .d < 0 or (.x < [] or {} <= .x) then .x else empty end
+  ];";
+
+yields!(
+    recurse_flatten,
+    &(RECURSE_FLATTEN.to_owned() + "[[[1], 2], 3] | flatten(1)"),
+    json!([[1],2,3]));
+
 
 #[test]
 fn regex() {
