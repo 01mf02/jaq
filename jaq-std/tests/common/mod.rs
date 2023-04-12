@@ -35,3 +35,13 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let out: Vec<_> = f.run(Ctx::new([], &inputs), to(x)).collect();
     assert_eq!(out, expected);
 }
+
+#[macro_export]
+macro_rules! yields {
+    ($func_name:ident, $filter:expr, $output: expr) => {
+        #[test]
+        fn $func_name() {
+            give(json!(null), $filter, json!($output))
+        }
+    };
+}

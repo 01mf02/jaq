@@ -138,16 +138,14 @@ fn nth() {
     give(json!(10), &format!("nth(.; {})", fib), json!(55));
 }
 
-#[test]
-fn paths() {
-    let f = "[paths]";
-    give(json!(1), f, json!([]));
-    give(json!(null), f, json!([]));
-    give(json!([1, 2]), f, json!([[0], [1]]));
-
-    let out = json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]]);
-    give(json!({"a": [1, [2]], "b": {"c": 3}}), f, out);
-}
+yields!(paths_num, "1 | [paths]", json!([]));
+yields!(paths_null, "null | [paths]", json!([]));
+yields!(paths_arr, "[1, 2] | [paths]", [[0], [1]]);
+yields!(
+    paths_arr_obj,
+    "{a: [1, [2]], b: {c: 3}} | [paths]",
+    json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
+);
 
 #[test]
 fn range_reverse() {
