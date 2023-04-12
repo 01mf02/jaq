@@ -112,7 +112,7 @@ impl Ctx {
                 Filter::Native(n, args.collect())
             }
             Expr::Call(mir::Call::Arg(a), args) => {
-                std::dbg!("arg call");
+                //std::dbg!("arg call");
                 assert!(args.is_empty());
                 let (f, id, view) = self.args[view.args[a]].clone();
                 self.filter(f, id, view, defs)
