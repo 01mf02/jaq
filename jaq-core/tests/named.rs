@@ -133,8 +133,8 @@ const RECURSE_FLATTEN: &str = "def flatten($d):
 yields!(
     recurse_flatten,
     &(RECURSE_FLATTEN.to_owned() + "[[[1], 2], 3] | flatten(1)"),
-    json!([[1],2,3]));
-
+    json!([[1], 2, 3])
+);
 
 #[test]
 fn regex() {
