@@ -237,7 +237,7 @@ Here is an overview that summarises:
 ## Definitions
 
 - [x] Basic definitions (`def map(f): [.[] | f];`)
-- [ ] Recursive definitions (`def r: r; r`)
+- [x] Recursive definitions (`def r: r; r`)
 
 
 ## Core filters
@@ -434,14 +434,43 @@ Arguments can also be passed *by value*, such as:
 
     def cartesian($f; $g): [$f, $g];
 
-However, unlike in jq, filters in jaq cannot refer to themselves.
-Furthermore, jaq does not support nested filters.
-That is, a filter such as `recurse` cannot be defined in jaq:
+Filter definitions can be nested and recursive, i.e. refer to themselves.
+That is, a filter such as `recurse` can be defined in jaq:
 
     def recurse(f): def r: ., (f | r); r;
 
-Note that while `recurse` cannot be defined manually in jaq,
-jaq provides `recurse` as core filter.
+However, note that unlike jq, jaq does not optimise tail calls.
+Therefore, using the above definition of `recurse`, e.g. by `last(recurse(.))`,
+grows the stack in jaq (leading to a stack overflow), while it does not in jq.
+As a remedy, jaq provides `recurse` as core filter,
+which tries to avoid growing the stack if possible.
+
+Compared to jq, jaq imposes an important syntactic restriction on recursive filters,
+namely that *recursive filters may only have variable arguments*.
+That is, in jaq, we cannot define a filter like:
+
+    def f(a): a, f(1+a);
+
+Recursive filters with non-variable arguments can yield surprising effects;
+for example, a call `f(0)` builds up calls of the shape `f(1+(..(1+0)...))`,
+which leads to exponential execution times.
+
+Recursive filters with non-variable arguments can
+very frequently be alternatively implemented by either:
+
+* A nested filter: for example, instead of
+  `def walk(f): (.[]? |= walk(f)) | f;`, you can use
+  `def walk(f): def rec: (.[]? |= rec) | f; rec;`.
+* A filter with variable arguments: for example, instead of
+  `def f(a): a, f(1+a);`, you can equally well write
+  `def f($a): $a, f(1+$a);`.
+* A filter with `recurse`: for example, you may write
+  `def f(a): a | recurse(1+.);`.
+  If you expect your filter to recurse deeply,
+  it is advised to implement it using `recurse`,
+  because jaq has an optimised implementation of `recurse`.
+
+All of these options are supported by jaq.
 
 
 ## Arguments
