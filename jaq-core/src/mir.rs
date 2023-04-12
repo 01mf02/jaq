@@ -144,7 +144,7 @@ impl Defs {
 
     pub fn root_def(&mut self, def: parse::Def, errs: &mut Vec<Error>) {
         let mut ctx = Ctx {
-            errs: std::mem::take(errs),
+            errs: core::mem::take(errs),
             recs: Vec::new(),
         };
         let root_id = 0;
@@ -157,7 +157,7 @@ impl Defs {
 
     pub fn root_filter(&mut self, filter: Spanned<parse::filter::Filter>, errs: &mut Vec<Error>) {
         let mut ctx = Ctx {
-            errs: std::mem::take(errs),
+            errs: core::mem::take(errs),
             recs: Vec::new(),
         };
         let root_id = 0;
