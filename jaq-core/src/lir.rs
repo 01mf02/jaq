@@ -102,9 +102,9 @@ impl Ctx {
         let get = |f, ctx: &mut Self| Box::new(ctx.filter(f, id, view.clone(), defs));
         use mir::Filter as Expr;
 
-        std::dbg!(self.vars);
-        std::dbg!(&view.vars);
-        std::dbg!(&f.0);
+        //std::dbg!(self.vars);
+        //std::dbg!(&view.vars);
+        //std::dbg!(&f.0);
         match f.0 {
             Expr::Var(v) => Filter::Var(self.vars - view.vars[v] - 1),
             Expr::Call(mir::Call::Native(n), args) => {
@@ -129,7 +129,7 @@ impl Ctx {
                 let var_args: Vec<_> = var_args
                     .into_iter()
                     .map(|i| {
-                        std::dbg!(&view, self.vars);
+                        //std::dbg!(&view, self.vars);
                         let arg = self.filter(args[i].clone(), id, view.clone(), defs);
                         self.vars += 1;
                         // TODO: increase view.vars? probably not ...
