@@ -113,6 +113,16 @@ fn recurse() {
     gives(json!(1), "recurse(if . < 3 then .+1 else empty end)", y);
 }
 
+const PATHS_RECURSE: &str = "def paths: { x: ., p: [] } |
+  recurse((.x | keys?)[] as $k | .x |= .[$k] | .p += [$k]) |
+  .p | if . == [] then empty else . end;";
+
+yields!(
+    recurse_paths,
+    &(PATHS_RECURSE.to_owned() + "{a: [1, [2]], b: {c: 3}} | [paths]"),
+    json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
+);
+
 #[test]
 fn regex() {
     let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;
