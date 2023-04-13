@@ -196,9 +196,10 @@ impl Ctx {
                     //  std::dbg!(&view.recs);
                     // arguments bound in the called filter and its ancestors
                     let vars_len = self.recs[rec_idx].vars_len;
+                    //std::dbg!(var_args.len(), self.vars, vars_len);
                     Filter::Call {
                         id: rec_idx,
-                        skip: var_args.len() + self.vars - vars_len,
+                        skip: self.vars - vars_len,
                     }
                 } else {
                     self.nonrec_call(id, did, &view, nonvar_args, defs)
