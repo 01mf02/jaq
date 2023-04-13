@@ -170,7 +170,6 @@ impl Ctx {
             }
             Expr::Call(mir::Call::Def(did), args) => {
                 let args_len = self.args.len();
-                let dargs = &defs.get(did).args;
                 let (var_arg_idxs, nonvar_arg_idxs) = defs.get(did).var_nonvar_arg_idxs();
                 let var_args = var_arg_idxs.iter().map(|i| args[*i].clone());
                 let nonvar_args = nonvar_arg_idxs.iter().map(|i| args[*i].clone());
