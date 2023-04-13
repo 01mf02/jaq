@@ -23,6 +23,7 @@ impl View {
         self.recs.iter().find(|ridx| recs[**ridx].id == id).copied()
     }
 
+    /// Keep only the variables and arguments bound in the given definition.
     fn truncate(&mut self, id: DefId, defs: &mir::Defs) {
         let vars = defs.vars(id).count();
         let args = defs.args(id).count() - vars;
@@ -110,6 +111,31 @@ impl Ctx {
         out
     }
 
+    fn nonrec_call(
+        &mut self,
+        caller: DefId,
+        callee: DefId,
+        view: &View,
+        nonvar_args: impl Iterator<Item = MirFilter>,
+        defs: &mir::Defs,
+    ) -> Filter {
+        let last_common = defs.smallest_common_ancestor(caller, callee);
+        let mut new_view = view.clone();
+        new_view.truncate(last_common, defs);
+        // we ban all recursive filters from the view that come "after"
+        // the filter that we are calling
+        // this relies on the property that filter IDs preserve order of definition
+        new_view.recs.retain(|ridx| self.recs[*ridx].id < callee);
+        //std::dbg!(&view, &new_view);
+
+        for arg in nonvar_args {
+            new_view.args.push(self.args.len());
+            self.args.push((arg, caller, view.clone()));
+        }
+
+        self.def(callee, new_view, defs)
+    }
+
     /// Convert a MIR filter contained in a definition `id` to a LIR filter.
     // TODO: operate on borrowed filter
     // the problem here is that for calls to arguments,
@@ -177,25 +203,7 @@ impl Ctx {
                         skip: var_args.len() + self.vars - vars_len,
                     }
                 } else {
-                    let last_common = defs.last_common_ancestor(id, did);
-                    let mut new_view = view.clone();
-                    new_view.truncate(last_common, defs);
-                    // we ban all recursive filters from the view that come "after"
-                    // the filter that we are calling
-                    // this relies on the property that filter IDs preserve order of definition
-                    new_view.recs = new_view
-                        .recs
-                        .into_iter()
-                        .take_while(|ridx| self.recs[*ridx].id < did)
-                        .collect();
-                    //std::dbg!(&view, &new_view);
-
-                    for arg in nonvar_args {
-                        new_view.args.push(self.args.len());
-                        self.args.push((arg, id, view.clone()));
-                    }
-
-                    self.def(did, new_view, defs)
+                    self.nonrec_call(id, did, &view, nonvar_args, defs)
                 };
 
                 // here, we revert the order, because leftmost variable arguments are bound first, which means
@@ -222,7 +230,6 @@ impl Ctx {
                 let r = Box::new(self.filter(*r, id, view, defs));
                 self.vars -= 1;
 
-                //let r = self.bind(view, |ctx, view| Box::new(ctx.filter(*r, id, view, defs)));
                 Filter::Pipe(l, true, r)
             }
             Expr::Fold(typ, Fold { xs, init, f, .. }) => {

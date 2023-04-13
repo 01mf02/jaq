@@ -101,7 +101,7 @@ impl Defs {
         self.1.push((name, arity, f))
     }
 
-    pub fn last_common_ancestor(&self, id1: DefId, id2: DefId) -> DefId {
+    pub fn smallest_common_ancestor(&self, id1: DefId, id2: DefId) -> DefId {
         let mut a1 = self.ancestors_and_me(id1);
         let mut a2 = self.ancestors_and_me(id2);
         let mut last = 0;
