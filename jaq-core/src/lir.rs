@@ -5,12 +5,10 @@
 //! `assert!` your way around here and watch your step.
 
 use crate::filter::Filter;
-use crate::mir::{self, DefId};
+use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Fold, KeyVal};
-
-type MirFilter = jaq_parse::Spanned<mir::Filter>;
 
 #[derive(Debug, Clone, Default)]
 struct View {
@@ -143,17 +141,14 @@ impl Ctx {
             Expr::Call(mir::Call::Def(did), args) => {
                 let args_len = self.args.len();
                 let dargs = &defs.get(did).args;
-                // indices of variable and non-variable arguments in args
-                // example: if we have the arguments $f; g; $h; i,
-                // then the variable indices will be [0, 2]
-                let (var_args, arg_args): (Vec<_>, Vec<_>) =
-                    (0..args.len()).partition(|i| dargs[*i].get_var().is_some());
+                let (var_arg_idxs, nonvar_arg_idxs) = defs.get(did).var_nonvar_arg_idxs();
+                let var_args = var_arg_idxs.iter().map(|i| args[*i].clone());
+                let nonvar_args = nonvar_arg_idxs.iter().map(|i| args[*i].clone());
 
                 let var_args: Vec<_> = var_args
-                    .into_iter()
-                    .map(|i| {
+                    .map(|a| {
                         //std::dbg!(&view, self.vars);
-                        let arg = self.filter(args[i].clone(), id, view.clone(), defs);
+                        let arg = self.filter(a, id, view.clone(), defs);
                         self.vars += 1;
                         // TODO: increase view.vars? probably not ...
                         arg
@@ -193,9 +188,9 @@ impl Ctx {
                         .collect();
                     //std::dbg!(&view, &new_view);
 
-                    for i in &arg_args {
+                    for arg in nonvar_args {
                         new_view.args.push(self.args.len());
-                        self.args.push((args[*i].clone(), id, view.clone()));
+                        self.args.push((arg, id, view.clone()));
                     }
 
                     self.def(did, new_view, defs)
@@ -209,7 +204,7 @@ impl Ctx {
                 });
 
                 // std::dbg!("return from filter construction");
-                self.args.truncate(self.args.len() - arg_args.len());
+                self.args.truncate(self.args.len() - nonvar_arg_idxs.len());
                 // we must be back to the original args len here
                 assert_eq!(self.args.len(), args_len);
 

@@ -12,6 +12,9 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use parse::filter::{BinaryOp, Filter as Expr, Fold};
 use parse::{Arg, Error, Spanned};
 
+type HirFilter = Spanned<parse::filter::Filter>;
+pub type MirFilter = Spanned<Filter>;
+
 pub type DefId = usize;
 type VarIdx = usize;
 type ArgIdx = usize;
@@ -57,6 +60,17 @@ pub struct Def {
 impl Def {
     pub fn arity(&self) -> usize {
         self.args.len()
+    }
+
+    /// Return the indices of variable and nonvariable arguments of the definition.
+    ///
+    /// Example: if we have the arguments $f; g; $h; i, then we obtain
+    /// the variable indices [0, 2] and
+    /// the nonvariable indices [1, 3].
+    ///
+    /// Does not consider ancestors.
+    pub fn var_nonvar_arg_idxs(&self) -> (Vec<usize>, Vec<usize>) {
+        (0..self.args.len()).partition(|i| self.args[*i].get_var().is_some())
     }
 }
 
@@ -140,7 +154,7 @@ impl Defs {
         *errs = ctx.errs;
     }
 
-    pub fn root_filter(&mut self, filter: Spanned<parse::filter::Filter>, errs: &mut Vec<Error>) {
+    pub fn root_filter(&mut self, filter: HirFilter, errs: &mut Vec<Error>) {
         let mut ctx = Ctx {
             errs: core::mem::take(errs),
             recs: Vec::new(),
@@ -177,17 +191,11 @@ impl Defs {
         self.0[id].body = self.filter(id, Vec::new(), def.body, ctx);
     }
 
-    fn filter(
-        &self,
-        id: DefId,
-        mut vars: Vec<String>,
-        filter: Spanned<parse::filter::Filter>,
-        ctx: &mut Ctx,
-    ) -> Spanned<Filter> {
+    fn filter(&self, id: DefId, mut vars: Vec<String>, f: HirFilter, ctx: &mut Ctx) -> MirFilter {
         let with_vars = |f, vars, ctx: &mut _| Box::new(self.filter(id, vars, f, ctx));
         let get = |f, ctx: &mut _| with_vars(f, vars.clone(), ctx);
 
-        let result = match filter.0 {
+        let result = match f.0 {
             Expr::Call(name, args) => {
                 //std::dbg!(&name, &args);
                 let args: Vec<_> = args.into_iter().map(|arg| *get(arg, ctx)).collect();
@@ -211,13 +219,13 @@ impl Defs {
                             //std::dbg!(&child.args);
                             if child.args.iter().any(|a| a.get_arg().is_some()) {
                                 let error = "attempting to recursively call filter with non-variable argument";
-                                ctx.errs.push(Error::custom(filter.1.clone(), error));
+                                ctx.errs.push(Error::custom(f.1.clone(), error));
                             }
 
                             ctx.recs.push(*child_idx);
                         }
 
-                        return (Filter::Call(Call::Def(*child_idx), args), filter.1);
+                        return (Filter::Call(Call::Def(*child_idx), args), f.1);
                     }
 
                     // we cannot call arguments with arguments (no higher-order!)
@@ -227,7 +235,7 @@ impl Defs {
 
                     // calls to arguments
                     if let Some(i) = self.arg_position(*ancestor, &name) {
-                        return (Filter::Call(Call::Arg(i), args), filter.1);
+                        return (Filter::Call(Call::Arg(i), args), f.1);
                     }
                 }
 
@@ -238,7 +246,7 @@ impl Defs {
                     Filter::Call(Call::Native(native.clone()), args)
                 } else {
                     let error = "could not find function";
-                    ctx.errs.push(Error::custom(filter.1.clone(), error));
+                    ctx.errs.push(Error::custom(f.1.clone(), error));
                     Filter::Id
                 }
             }
@@ -248,7 +256,7 @@ impl Defs {
                 let vars: Vec<_> = arg_vars.chain(local_vars).collect();
                 Filter::Var(vars.iter().rposition(|i| *i == v).unwrap_or_else(|| {
                     ctx.errs
-                        .push(Error::custom(filter.1.clone(), "undefined variable"));
+                        .push(Error::custom(f.1.clone(), "undefined variable"));
                     0
                 }))
             }
@@ -270,7 +278,7 @@ impl Defs {
                     Num::Float(_) => "cannot interpret as floating-point number",
                     Num::Int(_) => "cannot interpret as machine-size integer",
                 };
-                ctx.errs.push(Error::custom(filter.1.clone(), err));
+                ctx.errs.push(Error::custom(f.1.clone(), err));
                 n
             })),
             Expr::Str(s) => Filter::Str(s),
@@ -297,6 +305,6 @@ impl Defs {
                 Filter::Path(f, path.collect())
             }
         };
-        (result, filter.1)
+        (result, f.1)
     }
 }
