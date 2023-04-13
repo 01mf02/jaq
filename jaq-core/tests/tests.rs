@@ -203,6 +203,12 @@ yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
 
 yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
 
+yields!(
+    rec_two_var_args,
+    "def f($a; $b): [$a, $b], f($a+1; $b+1); [limit(3; f(0; 1))]",
+    [[0, 1], [1, 2], [2, 3]]
+);
+
 const ACKERMANN: &str = "def ack($m; $n):
   if $m == 0 then $n + 1
   elif $n == 0 then ack($m-1; 1)
