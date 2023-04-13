@@ -19,6 +19,10 @@ struct View {
 }
 
 impl View {
+    fn find_rec(&self, id: DefId, recs: &[Rec]) -> Option<usize> {
+        self.recs.iter().find(|ridx| recs[**ridx].id == id).copied()
+    }
+
     fn truncate(&mut self, id: DefId, defs: &mir::Defs) {
         let vars = defs.vars(id).count();
         let args = defs.args(id).count() - vars;
@@ -162,16 +166,14 @@ impl Ctx {
                     view.recs.iter().map(|ridx| self.recs[*ridx].id)
                 ));
                 // recursion!
-                let out = if let Some(rec_idx) =
-                    view.recs.iter().find(|ridx| self.recs[**ridx].id == did)
-                {
+                let out = if let Some(rec_idx) = view.find_rec(did, &self.recs) {
                     //std::dbg!("call a recursive filter!", did);
                     //  std::dbg!(&self.recs);
                     //  std::dbg!(&view.recs);
                     // arguments bound in the called filter and its ancestors
-                    let vars_len = self.recs[*rec_idx].vars_len;
+                    let vars_len = self.recs[rec_idx].vars_len;
                     Filter::Call {
-                        id: *rec_idx,
+                        id: rec_idx,
                         skip: var_args.len() + self.vars - vars_len,
                     }
                 } else {
