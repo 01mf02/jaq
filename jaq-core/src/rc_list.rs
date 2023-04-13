@@ -91,7 +91,6 @@ fn test() {
     let l = RcList::new().cons(2).cons(1).cons(0);
     eq(&l, vec![0, 1, 2]);
 
-
     let (popped, rest) = l.pop_many(2);
     assert_eq!(popped, vec![&0, &1]);
     eq(rest, vec![2]);

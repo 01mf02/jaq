@@ -132,8 +132,9 @@ impl Defs {
     /// This does not try to find arguments of ancestors,
     /// but it will offset the index of the argument by the ancestor arguments.
     fn nonvar_arg_position(&self, id: DefId, name: &str) -> Option<usize> {
-        let args: Vec<_> = self.0[id].args.iter().filter_map(|a| a.get_nonvar()).collect();
-        let i = args.into_iter().rposition(|arg| arg == name)?;
+        let args = self.0[id].args.iter();
+        let nonvar_args: Vec<_> = args.filter_map(|a| a.get_nonvar()).collect();
+        let i = nonvar_args.into_iter().rposition(|arg| arg == name)?;
         let ancestors = self.0[id].ancestors.iter();
         let ancestor_args = ancestors.flat_map(|aid| self.0[*aid].args.iter());
         Some(i + ancestor_args.filter(|a| !a.is_var()).count())
