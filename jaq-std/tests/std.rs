@@ -50,18 +50,18 @@ fn flatten() {
     give(a0(), "flatten", json!(a2()));
     let f = "[flatten(0, 1, 2, 3)]";
     give(a0(), f, json!([a0(), a1(), a2(), a2()]));
-
-    give(
-        json!([[[0], 1], 2, [3, [4]]]),
-        "flatten",
-        json!([0, 1, 2, 3, 4]),
-    );
-
-    // here, we diverge from jq, which returns just 1
-    give(json!({"a": 1}), "flatten", json!([{"a": 1}]));
-    // jq gives an error here
-    give(json!(0), "flatten", json!([0]));
 }
+
+yields!(
+    flatten_deep,
+    "[[[0], 1], 2, [3, [4]]] | flatten",
+    [0, 1, 2, 3, 4]
+);
+
+// here, we diverge from jq, which returns just 1
+yields!(flatten_obj, "{a: 1} | flatten", json!([{"a": 1}]));
+// jq gives an error here
+yields!(flatten_num, "0 | flatten", [0]);
 
 #[test]
 fn inside() {
