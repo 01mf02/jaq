@@ -42,7 +42,7 @@ struct Ctx {
 }
 
 pub struct Rec {
-    arity: Arity,
+    id: FilterId,
     vars_len: usize,
     filter: Filter,
 }
@@ -54,7 +54,8 @@ pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
     let mut ctx = Ctx::default();
     let view = View::default();
     let f = ctx.def(root_id, view, defs);
-    let recs = ctx.recs.into_iter().map(|rec| (rec.arity, rec.filter));
+    let recs = ctx.recs.into_iter();
+    let recs = recs.map(|rec| (defs.get(rec.id).arity(), rec.filter));
     (f, recs.collect())
 }
 
@@ -76,7 +77,7 @@ impl Ctx {
             view.recs.push(new_rec_idx);
             // put in a bogus filter that we replace later
             self.recs.push(Rec {
-                arity: rec.args.len(),
+                id: *rec_id,
                 vars_len: self.vars,
                 filter: Filter::Id,
             });

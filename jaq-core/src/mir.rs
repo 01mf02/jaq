@@ -59,6 +59,12 @@ pub struct Def {
     pub body: Spanned<Filter>,
 }
 
+impl Def {
+    pub fn arity(&self) -> usize {
+        self.args.len()
+    }
+}
+
 pub struct Ctx {
     errs: Vec<Error>,
     recs: Vec<FilterId>,
