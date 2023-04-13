@@ -183,7 +183,9 @@ impl Definitions {
         if !errs.is_empty() {
             return Filter(filter::Filter::Id, Vec::new());
         }
+        //std::dbg!("before LIR");
         let (f, recs) = lir::root_def(&self.0);
+        //std::dbg!("after LIR");
         Filter(f, recs)
     }
 }
