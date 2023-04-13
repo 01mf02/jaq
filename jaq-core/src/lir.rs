@@ -17,13 +17,10 @@ impl View {
     fn truncate(&mut self, id: FilterId, defs: &mir::Defs) {
         let vars = defs.vars(id).count();
         let args = defs.args(id).count() - vars;
-        let recs = defs.recs(id).count();
         assert!(vars <= self.vars.len());
         assert!(args <= self.args.len());
-        assert!(recs <= self.recs.len());
         self.vars.truncate(vars);
         self.args.truncate(args);
-        self.recs.truncate(recs);
     }
 }
 
@@ -57,6 +54,15 @@ pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
     let recs = ctx.recs.into_iter();
     let recs = recs.map(|rec| (defs.get(rec.id).arity(), rec.filter));
     (f, recs.collect())
+}
+
+// this has to be fulfilled for the IDs of the filters in any `view.recs`
+fn sorted_and_unique<T: Ord + core::hash::Hash + Clone>(iter: impl Iterator<Item = T>) -> bool {
+    use itertools::Itertools;
+    let v: Vec<_> = iter.collect();
+    let mut sorted = v.clone();
+    sorted.sort();
+    v.iter().all_unique() && v == sorted
 }
 
 impl Ctx {
@@ -118,6 +124,14 @@ impl Ctx {
             Expr::Call(mir::Call::Arg(a), args) => {
                 //std::dbg!("arg call");
                 assert!(args.is_empty());
+                assert!(sorted_and_unique(view.args.iter()));
+                // all accessible arguments are in the context
+                assert!(view.args.iter().all(|aidx| *aidx < self.args.len()));
+                // only actual arguments are accessible
+                assert_eq!(
+                    view.args.len(),
+                    defs.args(id).filter(|a| a.get_arg().is_some()).count()
+                );
                 let (f, id, view) = self.args[view.args[a]].clone();
                 self.filter(f, id, view, defs)
             }
@@ -142,24 +156,36 @@ impl Ctx {
                     .collect();
                 self.vars -= var_args.len();
 
-                let accessible_recs = defs.recs(id).collect::<Vec<_>>();
-                assert_eq!(accessible_recs.len(), view.recs.len());
-                //std::dbg!(id, accessible_recs);
+                //std::dbg!(id);
+
+                assert!(sorted_and_unique(
+                    view.recs.iter().map(|ridx| self.recs[*ridx].id)
+                ));
                 // recursion!
-                let out = if let Some(rec_idx) = defs.recs(id).position(|rid| rid == did) {
+                let out = if let Some(rec_idx) =
+                    view.recs.iter().find(|ridx| self.recs[**ridx].id == did)
+                {
                     //std::dbg!("call a recursive filter!", did);
                     //  std::dbg!(&self.recs);
                     //  std::dbg!(&view.recs);
                     // arguments bound in the called filter and its ancestors
-                    let vars_len = self.recs[view.recs[rec_idx]].vars_len;
+                    let vars_len = self.recs[*rec_idx].vars_len;
                     Filter::Call {
-                        id: view.recs[rec_idx],
+                        id: *rec_idx,
                         skip: var_args.len() + self.vars - vars_len,
                     }
                 } else {
                     let last_common = defs.last_common_ancestor(id, did);
                     let mut new_view = view.clone();
                     new_view.truncate(last_common, defs);
+                    // we ban all recursive filters from the view that come "after"
+                    // the filter that we are calling
+                    // this relies on the property that filter IDs preserve order of definition
+                    new_view.recs = new_view
+                        .recs
+                        .into_iter()
+                        .take_while(|ridx| self.recs[*ridx].id < did)
+                        .collect();
                     //std::dbg!(&view, &new_view);
 
                     for i in &arg_args {

@@ -120,22 +120,6 @@ impl Defs {
         self.args(id).filter_map(|a| a.get_var())
     }
 
-    /// Return the filter IDs of those recursive filters that can be called from the current ID.
-    pub fn recs(&self, id: FilterId) -> impl Iterator<Item = FilterId> + '_ {
-        let ancestors = self.0[id].ancestors.iter();
-        let outside = ancestors
-            .flat_map(|aid| self.0[*aid].children.iter())
-            .copied()
-            .filter(|cid| self.0[*cid].recursive)
-            .take_while(move |cid| *cid <= id);
-        let inside = self.0[id]
-            .children
-            .iter()
-            .copied()
-            .filter(|cid| self.0[*cid].recursive);
-        outside.chain(inside)
-    }
-
     /// Retrieve the position of an argument of a filter, relative to all its ancestors.
     ///
     /// This does not try to find arguments of ancestors,
