@@ -12,18 +12,13 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use parse::filter::{BinaryOp, Filter as Expr, Fold};
 use parse::{Arg, Error, Spanned};
 
-pub type FilterId = usize;
+pub type DefId = usize;
 type VarIdx = usize;
 type ArgIdx = usize;
 
-/*
-type Arity = usize;
-type NameArityMap = BTreeMap<String, BTreeMap<Arity, (Filter, Vec<FilterId>)>>;
-*/
-
 #[derive(Debug, Clone)]
 pub enum Call {
-    Def(FilterId),
+    Def(DefId),
     Arg(ArgIdx),
     Native(crate::filter::Native),
 }
@@ -53,8 +48,8 @@ pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 pub struct Def {
     pub name: String,
     pub args: Vec<Arg>,
-    pub children: Vec<FilterId>,
-    ancestors: Vec<FilterId>,
+    pub children: Vec<DefId>,
+    ancestors: Vec<DefId>,
     pub recursive: bool,
     pub body: Spanned<Filter>,
 }
@@ -67,7 +62,7 @@ impl Def {
 
 pub struct Ctx {
     errs: Vec<Error>,
-    recs: Vec<FilterId>,
+    recs: Vec<DefId>,
 }
 
 impl Defs {
@@ -84,7 +79,7 @@ impl Defs {
         Self(Vec::from([root]), Vec::new())
     }
 
-    pub fn get(&self, id: FilterId) -> &Def {
+    pub fn get(&self, id: DefId) -> &Def {
         &self.0[id]
     }
 
@@ -92,7 +87,7 @@ impl Defs {
         self.1.push((name, arity, f))
     }
 
-    pub fn last_common_ancestor(&self, id1: FilterId, id2: FilterId) -> FilterId {
+    pub fn last_common_ancestor(&self, id1: DefId, id2: DefId) -> DefId {
         let mut a1 = self.ancestors_and_me(id1);
         let mut a2 = self.ancestors_and_me(id2);
         let mut last = 0;
@@ -106,17 +101,17 @@ impl Defs {
         last
     }
 
-    fn ancestors_and_me(&self, id: FilterId) -> impl Iterator<Item = FilterId> + '_ {
+    fn ancestors_and_me(&self, id: DefId) -> impl Iterator<Item = DefId> + '_ {
         use core::iter::once;
         self.0[id].ancestors.iter().copied().chain(once(id))
     }
 
-    pub fn args(&self, id: FilterId) -> impl Iterator<Item = &Arg> + '_ {
+    pub fn args(&self, id: DefId) -> impl Iterator<Item = &Arg> + '_ {
         self.ancestors_and_me(id)
             .flat_map(|aid| self.0[aid].args.iter())
     }
 
-    pub fn vars(&self, id: FilterId) -> impl Iterator<Item = &str> + '_ {
+    pub fn vars(&self, id: DefId) -> impl Iterator<Item = &str> + '_ {
         self.args(id).filter_map(|a| a.get_var())
     }
 
@@ -124,7 +119,7 @@ impl Defs {
     ///
     /// This does not try to find arguments of ancestors,
     /// but it will offset the index of the argument by the ancestor arguments.
-    fn arg_position(&self, id: FilterId, name: &str) -> Option<usize> {
+    fn arg_position(&self, id: DefId, name: &str) -> Option<usize> {
         let args: Vec<_> = self.0[id].args.iter().filter_map(|a| a.get_arg()).collect();
         let i = args.into_iter().rposition(|arg| arg == name)?;
         let ancestors = self.0[id].ancestors.iter();
@@ -155,7 +150,7 @@ impl Defs {
         *errs = ctx.errs;
     }
 
-    fn def(&mut self, mut ancestors: Vec<FilterId>, def: parse::Def, ctx: &mut Ctx) {
+    fn def(&mut self, mut ancestors: Vec<DefId>, def: parse::Def, ctx: &mut Ctx) {
         let id = self.0.len();
         self.0.push(Def {
             name: def.name,
@@ -184,7 +179,7 @@ impl Defs {
 
     fn filter(
         &self,
-        id: FilterId,
+        id: DefId,
         mut vars: Vec<String>,
         filter: Spanned<parse::filter::Filter>,
         ctx: &mut Ctx,

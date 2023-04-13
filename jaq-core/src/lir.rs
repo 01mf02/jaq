@@ -1,9 +1,16 @@
+//! Low-level Intermediate Representation of filters.
+//!
+//! Welcome to the machine room. Be careful to wear safety equipment.
+//! The invariants in this module can be difficult to preserve.
+//! `assert!` your way around here and watch your step.
+
 use crate::filter::Filter;
-use crate::mir::{self, FilterId};
+use crate::mir::{self, DefId};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_parse::filter::{AssignOp, BinaryOp, Fold, KeyVal};
-use jaq_parse::Spanned;
+
+type MirFilter = jaq_parse::Spanned<mir::Filter>;
 
 #[derive(Debug, Clone, Default)]
 struct View {
@@ -14,7 +21,7 @@ struct View {
 }
 
 impl View {
-    fn truncate(&mut self, id: FilterId, defs: &mir::Defs) {
+    fn truncate(&mut self, id: DefId, defs: &mir::Defs) {
         let vars = defs.vars(id).count();
         let args = defs.args(id).count() - vars;
         assert!(vars <= self.vars.len());
@@ -31,7 +38,7 @@ struct Ctx {
     /// number of variables in the execution context at the current point
     vars: usize,
     /// non-variable arguments, earliest bound first
-    args: Vec<(Spanned<mir::Filter>, FilterId, View)>,
+    args: Vec<(MirFilter, DefId, View)>,
     /// list of recursively defined filters with their arity (only variable arguments)
     /// and the number of bound variables (including variable arguments)
     /// that must be in the context at the time of calling
@@ -39,7 +46,7 @@ struct Ctx {
 }
 
 pub struct Rec {
-    id: FilterId,
+    id: DefId,
     vars_len: usize,
     filter: Filter,
 }
@@ -66,7 +73,7 @@ fn sorted_and_unique<T: Ord + core::hash::Hash + Clone>(iter: impl Iterator<Item
 }
 
 impl Ctx {
-    fn def(&mut self, id: FilterId, mut view: View, defs: &mir::Defs) -> Filter {
+    fn def(&mut self, id: DefId, mut view: View, defs: &mir::Defs) -> Filter {
         let def = defs.get(id);
         //std::dbg!("processing def", (&def.name, id, &view));
 
@@ -101,14 +108,12 @@ impl Ctx {
         out
     }
 
+    /// Convert a MIR filter contained in a definition `id` to a LIR filter.
     // TODO: operate on borrowed filter
-    fn filter(
-        &mut self,
-        f: Spanned<mir::Filter>,
-        id: FilterId,
-        mut view: View,
-        defs: &mir::Defs,
-    ) -> Filter {
+    // the problem here is that for calls to arguments,
+    // we need to access self.args, but we cannot pass the filter contained to it
+    // to this function, because it mutably borrows self
+    fn filter(&mut self, f: MirFilter, id: DefId, mut view: View, defs: &mir::Defs) -> Filter {
         let get = |f, ctx: &mut Self| Box::new(ctx.filter(f, id, view.clone(), defs));
         use mir::Filter as Expr;
 
