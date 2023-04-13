@@ -101,29 +101,30 @@ fn precedence() {
     give(json!(null), "2 * 3 + 1", json!(7));
 }
 
+yields!(
+    obj_trailing_comma,
+    "{a:1, b:2, c:3,}",
+    json!({"a": 1, "b": 2, "c": 3})
+);
+yields!(
+    obj_complex_key,
+    r#""c" | {a: 1, "b": 2, (.): 3}"#,
+    json!({"a": 1, "b": 2, "c": 3})
+);
+yields!(obj_proj, "{a: 1, b: 2} | {a,}", json!({"a": 1}));
+yields!(
+    obj_proj_set,
+    "{a: 1, b: 2} | {a, c: 3}",
+    json!({"a": 1, "c": 3})
+);
+
 #[test]
-fn object() {
+fn object_multikey() {
     gives(
         json!(null),
         r#"{("a", "b"): 1}"#,
         [json!({"a": 1}), json!({"b": 1})],
     );
-    give(
-        json!(null),
-        "{a:1, b:2, c:3,}",
-        json!({"a": 1, "b": 2, "c": 3}),
-    );
-    give(
-        json!("c"),
-        r#"{a: 1, "b": 2, (.): 3}"#,
-        json!({"a": 1, "b": 2, "c": 3}),
-    );
-    give(
-        json!({"a": 1, "b": 2}),
-        "{a, c: 3}",
-        json!({"a": 1, "c": 3}),
-    );
-    give(json!({"a": 1, "b": 2}), "{a,}", json!({"a": 1}));
 }
 
 #[test]
