@@ -208,6 +208,8 @@ yields!(args_mixed, "def f(a; $b): a + $b; 1 as $a | f($a; 2)", 3);
 
 yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
 
+yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
+
 #[test]
 fn reduce() {
     let f = "reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)";
