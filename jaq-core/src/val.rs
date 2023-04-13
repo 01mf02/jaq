@@ -99,7 +99,7 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    fn to_arr(self) -> Result<Rc<Vec<Val>>, Error> {
+    fn into_arr(self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Arr(self)),
@@ -186,7 +186,7 @@ impl Val {
     /// Return the elements of an array or the values of an object (omitting its keys).
     ///
     /// Fail on any other value.
-    pub fn into_iter(self) -> Result<Box<dyn Iterator<Item = Val>>, Error> {
+    pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
@@ -258,7 +258,7 @@ impl Val {
 
     /// Apply a function to an array.
     pub fn mutate_arr(self, f: impl Fn(&mut Vec<Val>)) -> ValR {
-        let mut a = self.to_arr()?;
+        let mut a = self.into_arr()?;
         f(Rc::make_mut(&mut a));
         Ok(Self::Arr(a))
     }
@@ -285,7 +285,7 @@ impl Val {
     ///
     /// Fail on any other value.
     pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        let mut a = self.to_arr()?;
+        let mut a = self.into_arr()?;
         // Some(e) iff an error has previously occurred
         let mut err = None;
         Rc::make_mut(&mut a).sort_by_cached_key(|x| x.clone().run_if_ok(&mut err, &f));
@@ -297,7 +297,7 @@ impl Val {
     /// Fail on any other value.
     pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
         let mut err = None;
-        let mut yx = rc_unwrap_or_clone(self.to_arr()?)
+        let mut yx = rc_unwrap_or_clone(self.into_arr()?)
             .into_iter()
             .map(|x| (x.clone().run_if_ok(&mut err, &f), x))
             .collect::<Vec<(Vec<Val>, Val)>>();

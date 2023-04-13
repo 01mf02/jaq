@@ -28,9 +28,7 @@ impl<S: core::ops::Deref<Target = str>, I: Iterator<Item = S>> Iterator for Pars
     fn next(&mut self) -> Option<Self::Item> {
         let lines = &mut self.0;
         Some(Test {
-            filter: lines
-                .skip_while(|l| l.is_empty() || l.starts_with("#"))
-                .next()?,
+            filter: lines.find(|l| !(l.is_empty() || l.starts_with('#')))?,
             input: lines.next()?,
             output: lines.take_while(|l| !l.is_empty()).collect(),
         })

@@ -28,28 +28,24 @@ pub struct Arg {
 }
 
 impl Arg {
-    pub fn make_var(name: String) -> Self {
+    /// Create a variable argument with given name (without leading "$").
+    pub fn new_var(name: String) -> Self {
         Self { name, var: true }
+    }
+
+    /// True if the argument is a variable.
+    pub fn is_var(&self) -> bool {
+        self.var
     }
 
     /// If the argument is a variable, return its name without leading "$", otherwise `None`.
     pub fn get_var(&self) -> Option<&str> {
-        self.var.then(|| &*self.name)
+        self.var.then_some(&*self.name)
     }
 
-    pub fn get_arg(&self) -> Option<&str> {
-        (!self.var).then(|| &*self.name)
-    }
-
-    // TODO: remove this?
-    /// Return the full name of the argument, including leading "$" for variables.
-    pub fn get_name(&self) -> String {
-        use alloc::borrow::ToOwned;
-        if self.var {
-            "$".to_owned() + &self.name
-        } else {
-            self.name.clone()
-        }
+    /// If the argument is not a variable, return its name, otherwise `None`.
+    pub fn get_nonvar(&self) -> Option<&str> {
+        (!self.var).then_some(&*self.name)
     }
 }
 
@@ -90,7 +86,7 @@ where
 
 /// Parser for a sequence of definitions.
 pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
-    recursive(|df| def(df)).repeated().collect()
+    recursive(def).repeated().collect()
 }
 
 /// Parser for a (potentially empty) sequence of definitions, followed by a filter.

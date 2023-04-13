@@ -87,6 +87,7 @@ pub enum KeyVal<T> {
 }
 
 impl<F> KeyVal<F> {
+    /// Apply a function to the contained filters.
     pub fn map<G>(self, mut f: impl FnMut(F) -> G) -> KeyVal<G> {
         match self {
             Self::Filter(k, v) => KeyVal::Filter(f(k), f(v)),
@@ -138,10 +139,10 @@ pub enum Filter<C = String, V = String, Num = String> {
     Array(Option<Box<Spanned<Self>>>),
     /// Object, specifying its key-value pairs
     Object(Vec<KeyVal<Spanned<Self>>>),
-    /// Path such as `.`, `.a`, `.[][]."b"`
 
     /// Identity, i.e. `.`
     Id,
+    /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Box<Spanned<Self>>, Path<Self>),
     /// If-then-else
     Ite(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),

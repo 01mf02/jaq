@@ -140,6 +140,7 @@ impl Filter {
 pub struct Definitions(mir::Defs);
 
 impl Definitions {
+    /// Create new definitions that have access to global variables of the given names.
     pub fn new(vars: Vec<String>) -> Self {
         Self(mir::Defs::new(vars))
     }
@@ -151,6 +152,7 @@ impl Definitions {
         self.insert_natives(filter::natives())
     }
 
+    /// Add native filters with given names and arities.
     pub fn insert_natives(
         &mut self,
         natives: impl IntoIterator<Item = (String, usize, filter::Native)>,

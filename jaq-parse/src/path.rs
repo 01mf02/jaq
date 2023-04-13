@@ -90,6 +90,7 @@ where
 }
 
 impl<I> Part<I> {
+    /// Apply a function to the contained indices.
     pub fn map<J>(self, mut f: impl FnMut(I) -> J) -> Part<J> {
         match self {
             Self::Index(i) => Part::Index(f(i)),

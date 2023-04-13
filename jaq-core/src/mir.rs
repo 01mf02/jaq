@@ -70,7 +70,7 @@ impl Def {
     ///
     /// Does not consider ancestors.
     pub fn var_nonvar_arg_idxs(&self) -> (Vec<usize>, Vec<usize>) {
-        (0..self.args.len()).partition(|i| self.args[*i].get_var().is_some())
+        (0..self.args.len()).partition(|i| self.args[*i].is_var())
     }
 }
 
@@ -84,7 +84,7 @@ impl Defs {
         use alloc::string::ToString;
         let root = Def {
             name: "".to_string(),
-            args: vars.into_iter().map(Arg::make_var).collect(),
+            args: vars.into_iter().map(Arg::new_var).collect(),
             children: Vec::new(),
             ancestors: Vec::new(),
             recursive: false,
@@ -115,30 +115,28 @@ impl Defs {
         last
     }
 
+    /// Return the IDs of the ancestors of a definition and itself.
     fn ancestors_and_me(&self, id: DefId) -> impl Iterator<Item = DefId> + '_ {
         use core::iter::once;
         self.0[id].ancestors.iter().copied().chain(once(id))
     }
 
+    /// Return all arguments bound in a definition and its ancestors.
     pub fn args(&self, id: DefId) -> impl Iterator<Item = &Arg> + '_ {
         self.ancestors_and_me(id)
             .flat_map(|aid| self.0[aid].args.iter())
-    }
-
-    pub fn vars(&self, id: DefId) -> impl Iterator<Item = &str> + '_ {
-        self.args(id).filter_map(|a| a.get_var())
     }
 
     /// Retrieve the position of an argument of a filter, relative to all its ancestors.
     ///
     /// This does not try to find arguments of ancestors,
     /// but it will offset the index of the argument by the ancestor arguments.
-    fn arg_position(&self, id: DefId, name: &str) -> Option<usize> {
-        let args: Vec<_> = self.0[id].args.iter().filter_map(|a| a.get_arg()).collect();
+    fn nonvar_arg_position(&self, id: DefId, name: &str) -> Option<usize> {
+        let args: Vec<_> = self.0[id].args.iter().filter_map(|a| a.get_nonvar()).collect();
         let i = args.into_iter().rposition(|arg| arg == name)?;
         let ancestors = self.0[id].ancestors.iter();
         let ancestor_args = ancestors.flat_map(|aid| self.0[*aid].args.iter());
-        Some(i + ancestor_args.filter(|a| a.get_arg().is_some()).count())
+        Some(i + ancestor_args.filter(|a| !a.is_var()).count())
     }
 
     pub fn root_def(&mut self, def: parse::Def, errs: &mut Vec<Error>) {
@@ -217,7 +215,7 @@ impl Defs {
                         if ancestors.iter().any(|aid| aid == child_idx) {
                             //std::dbg!("recursion!");
                             //std::dbg!(&child.args);
-                            if child.args.iter().any(|a| a.get_arg().is_some()) {
+                            if child.args.iter().any(|a| !a.is_var()) {
                                 let error = "attempting to recursively call filter with non-variable argument";
                                 ctx.errs.push(Error::custom(f.1.clone(), error));
                             }
@@ -233,8 +231,8 @@ impl Defs {
                         continue;
                     }
 
-                    // calls to arguments
-                    if let Some(i) = self.arg_position(*ancestor, &name) {
+                    // calls to nonvariable arguments
+                    if let Some(i) = self.nonvar_arg_position(*ancestor, &name) {
                         return (Filter::Call(Call::Arg(i), args), f.1);
                     }
                 }

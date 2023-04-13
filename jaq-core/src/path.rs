@@ -30,7 +30,7 @@ impl Part<Vec<Val>> {
                 })),
                 _ => Box::new(once(Err(Error::Index(current)))),
             },
-            Self::Range(None, None) => then(current.into_iter(), |iter| Box::new(iter.map(Ok))),
+            Self::Range(None, None) => then(current.try_into_iter(), |iter| Box::new(iter.map(Ok))),
             Self::Range(from, until) => match current {
                 Val::Arr(a) => {
                     let len = a.len();

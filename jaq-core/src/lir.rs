@@ -25,12 +25,11 @@ impl View {
 
     /// Keep only the variables and arguments bound in the given definition.
     fn truncate(&mut self, id: DefId, defs: &mir::Defs) {
-        let vars = defs.vars(id).count();
-        let args = defs.args(id).count() - vars;
-        assert!(vars <= self.vars.len());
-        assert!(args <= self.args.len());
-        self.vars.truncate(vars);
-        self.args.truncate(args);
+        let (vars, args): (Vec<_>, Vec<_>) = defs.args(id).partition(|a| a.is_var());
+        assert!(vars.len() <= self.vars.len());
+        assert!(args.len() <= self.args.len());
+        self.vars.truncate(vars.len());
+        self.args.truncate(args.len());
     }
 }
 
@@ -80,7 +79,7 @@ impl Ctx {
         let def = defs.get(id);
         //std::dbg!("processing def", (&def.name, id, &view));
 
-        let var_args = def.args.iter().filter(|a| a.get_var().is_some()).count();
+        let var_args = def.args.iter().filter(|a| a.is_var()).count();
         view.vars.extend(self.vars..self.vars + var_args);
         self.vars += var_args;
 
@@ -88,7 +87,7 @@ impl Ctx {
         for rec_id in def.children.iter().filter(|cid| defs.get(**cid).recursive) {
             //std::dbg!("processing recursive child", rec_id);
             let rec = defs.get(*rec_id);
-            assert!(rec.args.iter().all(|a| a.get_var().is_some()));
+            assert!(rec.args.iter().all(|a| a.is_var()));
             let new_rec_idx = self.recs.len();
             view.recs.push(new_rec_idx);
             // put in a bogus filter that we replace later
@@ -163,7 +162,7 @@ impl Ctx {
                 // only actual arguments are accessible
                 assert_eq!(
                     view.args.len(),
-                    defs.args(id).filter(|a| a.get_arg().is_some()).count()
+                    defs.args(id).filter(|a| !a.is_var()).count()
                 );
                 let (f, id, view) = self.args[view.args[a]].clone();
                 self.filter(f, id, view, defs)
