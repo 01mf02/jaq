@@ -187,7 +187,7 @@ impl Definitions {
         }
         //std::dbg!("before LIR");
         let (f, recs) = lir::root_def(&self.0);
-        //std::dbg!("after LIR");
+        //std::dbg!("after LIR", &f, &recs);
         Filter(f, recs)
     }
 }

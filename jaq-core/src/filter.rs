@@ -336,6 +336,7 @@ impl Filter {
             Self::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
             Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
                 let (save, rec) = &cv.0.recs[*id];
+                //std::dbg!(save, skip, &cv.0.vars, &cv.0.clone().save_skip_vars(*save, *skip).vars);
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
