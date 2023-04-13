@@ -203,6 +203,14 @@ yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
 
 yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
 
+const ACKERMANN: &str = "def ack($m; $n):
+  if $m == 0 then $n + 1
+  elif $n == 0 then ack($m-1; 1)
+  else ack($m-1; ack($m; $n-1))
+  end;";
+
+yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 4)"), 125);
+
 #[test]
 fn reduce() {
     let f = "reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)";
