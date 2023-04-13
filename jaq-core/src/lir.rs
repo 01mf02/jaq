@@ -38,16 +38,14 @@ struct Ctx {
     /// list of recursively defined filters with their arity (only variable arguments)
     /// and the number of bound variables (including variable arguments)
     /// that must be in the context at the time of calling
-    recs: Vec<(Arity, usize, Filter)>,
+    recs: Vec<Rec>,
 }
 
-/*
 pub struct Rec {
     arity: Arity,
     vars_len: usize,
     filter: Filter,
 }
-*/
 
 pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
     //std::dbg!(defs);
@@ -56,7 +54,7 @@ pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
     let mut ctx = Ctx::default();
     let view = View::default();
     let f = ctx.def(root_id, view, defs);
-    let recs = ctx.recs.into_iter().map(|(arity, _, rec)| (arity, rec));
+    let recs = ctx.recs.into_iter().map(|rec| (rec.arity, rec.filter));
     (f, recs.collect())
 }
 
@@ -77,10 +75,14 @@ impl Ctx {
             let new_rec_idx = self.recs.len();
             view.recs.push(new_rec_idx);
             // put in a bogus filter that we replace later
-            self.recs.push((rec.args.len(), self.vars, Filter::Id));
+            self.recs.push(Rec {
+                arity: rec.args.len(),
+                vars_len: self.vars,
+                filter: Filter::Id,
+            });
             // std::dbg!(&self.recs);
             let f = self.def(*rec_id, view.clone(), defs);
-            self.recs[new_rec_idx].2 = f;
+            self.recs[new_rec_idx].filter = f;
         }
         assert_eq!(view.vars.len(), view_vars_len);
 
@@ -148,7 +150,7 @@ impl Ctx {
                     //  std::dbg!(&self.recs);
                     //  std::dbg!(&view.recs);
                     // arguments bound in the called filter and its ancestors
-                    let (_, vars_len, _) = self.recs[view.recs[rec_idx]];
+                    let vars_len = self.recs[view.recs[rec_idx]].vars_len;
                     Filter::Call {
                         id: view.recs[rec_idx],
                         skip: var_args.len() + self.vars - vars_len,
