@@ -13,18 +13,9 @@ fn update_assign() {
     gives(ab(1), ".a |= (.+1, .)", [ab(2)]);
 }
 
-#[test]
-fn cartesian() {
-    give(
-        json!(0),
-        "[{a: (1,2), b: (3,4)}]",
-        json!([{"a": 1, "b": 3}, {"a": 1, "b": 4}, {"a": 2, "b": 3}, {"a": 2, "b": 4}]),
-    );
-
-    // here, jaq diverges from jq, which returns [3,6,4,8]!
-    // idem for other arithmetic operations
-    give(json!(0), "[(1,2) * (3,4)]", json!([3, 4, 6, 8]));
-}
+// here, jaq diverges from jq, which returns [3,6,4,8]!
+// idem for other arithmetic operations
+yields!(cartesian_arith, "[(1,2) * (3,4)]", [3, 4, 6, 8]);
 
 #[test]
 fn add() {
@@ -117,15 +108,16 @@ yields!(
     "{a: 1, b: 2} | {a, c: 3}",
     json!({"a": 1, "c": 3})
 );
-
-#[test]
-fn object_multikey() {
-    gives(
-        json!(null),
-        r#"{("a", "b"): 1}"#,
-        [json!({"a": 1}), json!({"b": 1})],
-    );
-}
+yields!(
+    obj_multi_keys,
+    r#"[{("a", "b"): 1}]"#,
+    json!([{"a": 1}, {"b": 1}])
+);
+yields!(
+    obj_multi_vals,
+    "[{a: (1,2), b: (3,4)}]",
+    json!([{"a": 1, "b": 3}, {"a": 1, "b": 4}, {"a": 2, "b": 3}, {"a": 2, "b": 4}])
+);
 
 #[test]
 fn if_then_else() {
