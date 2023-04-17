@@ -240,7 +240,7 @@ checksum = "453ad9f582a441959e5f0d088b02ce04cfe8d51a8eaf077f12ac6d3e94164ca6"
 
 [[package]]
 name = "jaq"
-version = "0.10.0"
+version = "1.0.0-alpha"
 dependencies = [
  "ariadne",
  "atty",
@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "0.10.0"
+version = "1.0.0-alpha"
 dependencies = [
  "ahash",
  "dyn-clone",
@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-parse"
-version = "0.10.0"
+version = "1.0.0-alpha"
 dependencies = [
  "chumsky",
  "serde",
@@ -283,7 +283,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "0.10.0"
+version = "1.0.0-alpha"
 dependencies = [
  "bincode",
  "jaq-core",
