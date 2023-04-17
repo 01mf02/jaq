@@ -254,7 +254,6 @@ Here is an overview that summarises:
 - [x] Array filters (`reverse`, `sort`, `sort_by(-.)`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
-- [x] Recursion (`walk`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
 - [ ] More string filters (`startswith`, `ltrimstr`, ...)
 - [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
@@ -276,6 +275,7 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`)
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
+- [x] Recursion (`walk`)
 - [x] I/O (`input`)
 - [x] Regular expressions (`test`, `scan`, `match`, `capture`, `splits`, `sub`, `gsub`)
 
@@ -491,9 +491,6 @@ $ jaq -n --arg x 1 --arg y 2 '$x, $y, $ARGS.named'
   "y": "2"
 }
 ~~~
-
-However, unlike jq, jaq currently exposes these variables *only* in the main filter,
-not in any definitions.
 
 
 ## Folding

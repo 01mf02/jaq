@@ -72,20 +72,14 @@ struct Cli {
     from_file: Option<PathBuf>,
 
     /// Set variable `$<a>` to string "<v>"
-    ///
-    /// Unlike jq, this provides the variable *only* in the main filter.
     #[arg(long, value_names = &["a", "v"])]
     arg: Vec<String>,
 
     /// Set variable `$<a>` to string containing the contents of file `f`
-    ///
-    /// Unlike jq, this provides the variable *only* in the main filter.
     #[arg(long, value_names = &["a", "f"])]
     rawfile: Vec<String>,
 
     /// Set variable `$<a>` to array containing the JSON values in file `f`
-    ///
-    /// Unlike jq, this provides the variable *only* in the main filter.
     #[arg(long, value_names = &["a", "f"])]
     slurpfile: Vec<String>,
 
