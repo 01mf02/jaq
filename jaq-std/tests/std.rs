@@ -120,6 +120,16 @@ fn min_max() {
     give(json!([]), "max", json!(null));
     give(json!([1, 4, 2]), "min", json!(1));
     give(json!([1, 4, 2]), "max", json!(4));
+    give(
+        json!([{"a": {"b": {"c": 1}}}, {"a": {"b": {"c": 4}}}, {"a": {"b": {"c": 2}}}]),
+        "min_by(.a.b.c)",
+        json!({"a": {"b": {"c": 1}}}),
+    );
+    give(
+        json!([{"a": {"b": {"c": 1}}}, {"a": {"b": {"c": 4}}}, {"a": {"b": {"c": 2}}}]),
+        "max_by(.a.b.c)",
+        json!({"a": {"b": {"c": 4}}}),
+    );
 }
 
 #[test]

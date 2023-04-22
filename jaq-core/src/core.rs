@@ -54,6 +54,12 @@ const CORE_RUN: [(&str, usize, RunPtr); 33] = [
     ("group_by", 1, |args, cv| {
         box_once(cv.1.group_by(|v| args[0].run((cv.0.clone(), v))))
     }),
+    ("min_by", 1, |args, cv| {
+        box_once(cv.1.min_by(|v| args[0].run((cv.0.clone(), v))))
+    }),
+    ("max_by", 1, |args, cv| {
+        box_once(cv.1.max_by(|v| args[0].run((cv.0.clone(), v))))
+    }),
     ("has", 1, |args, cv| {
         let keys = args[0].run(cv.clone());
         Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))))

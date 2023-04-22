@@ -1,6 +1,8 @@
 {"name": "reverse"     , "n": 1048576}
 {"name": "sort"        , "n": 1048576}
 {"name": "group-by"    , "n": 1048576}
+{"name": "min"         , "n": 1048576}
+{"name": "max"         , "n": 1048576}
 {"name": "add"         , "n": 1048576}
 {"name": "kv"          , "n":  131072}
 {"name": "kv-update"   , "n":  131072}
