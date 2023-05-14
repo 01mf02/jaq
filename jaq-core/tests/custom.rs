@@ -2,7 +2,7 @@
 
 use std::{iter::once, rc::Rc};
 
-use jaq_core::{parse, Ctx, CustomFilter, Definitions, Error, RcIter, Val};
+use jaq_core::{parse, Ctx, Native, Definitions, Error, RcIter, Val};
 use serde_json::{json, Value};
 
 pub fn yields<const N: usize>(
@@ -15,7 +15,7 @@ pub fn yields<const N: usize>(
     let f = parse::parse(&f, parse::main()).0.unwrap();
 
     let mut errs = Vec::new();
-    let f = defs.clone().finish(f, Vec::new(), &mut errs);
+    let f = defs.clone().finish(f, &mut errs);
     assert_eq!(errs, Vec::new());
 
     let to = |v| Val::from(v);
@@ -30,21 +30,21 @@ pub fn yields<const N: usize>(
 
 #[test]
 fn arity0_source_only() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "natzero",
         0,
-        CustomFilter::new(|_, _cv| Box::new(once(Ok(Val::Int(0))))),
+        Native::new(|_, _cv| Box::new(once(Ok(Val::Int(0))))),
     );
     defs.insert_custom(
         "nattwenty",
         0,
-        CustomFilter::new(|_, _cv| Box::new(once(Ok(Val::Int(20))))),
+        Native::new(|_, _cv| Box::new(once(Ok(Val::Int(20))))),
     );
     defs.insert_custom(
         "hello",
         0,
-        CustomFilter::new(|_, _cv| Box::new(once(Ok(Val::Str(Rc::new("world".into())))))),
+        Native::new(|_, _cv| Box::new(once(Ok(Val::Str(Rc::new("world".into())))))),
     );
 
     yields(&defs, Value::Null, "natzero", [json!(0)], None);
@@ -54,11 +54,11 @@ fn arity0_source_only() {
 
 #[test]
 fn arity0_and_sink() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "str_rev",
         0,
-        CustomFilter::new(|_, cv| {
+        Native::new(|_, cv| {
             Box::new(once(
                 cv.1.to_str().map(|s| Val::str(s.chars().rev().collect())),
             ))
@@ -71,11 +71,11 @@ fn arity0_and_sink() {
 
 #[test]
 fn non_updatable() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "nupd",
         0,
-        CustomFilter::new(|_, cv| Box::new(once(Ok(cv.1)))),
+        Native::new(|_, cv| Box::new(once(Ok(cv.1)))),
     );
 
     yields(&defs, json!("hello"), "nupd", [json!("hello")], None);
@@ -84,11 +84,11 @@ fn non_updatable() {
 
 #[test]
 fn arity0_and_update() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "with_length",
         0,
-        CustomFilter::with_update(
+        Native::with_update(
             |_, cv| Box::new(once(cv.1.to_str().map(|s| Val::from(json!(s.len()))))),
             |_, cv, _| Box::new(once(cv.1.to_str().map(|s| Val::from(json!(s.len()))))),
         ),
@@ -100,11 +100,11 @@ fn arity0_and_update() {
 
 #[test]
 fn arity1() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "iflonger",
         1,
-        CustomFilter::new(|args, (ctx, val)| {
+        Native::new(|args, (ctx, val)| {
             let arg = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => v,
                 Some(Err(e)) => return Box::new(once(Err(e))),
@@ -129,11 +129,11 @@ fn arity1() {
 
 #[test]
 fn arity2() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "ifwithin",
         2,
-        CustomFilter::new(|args, (ctx, val)| {
+        Native::new(|args, (ctx, val)| {
             let min = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(v)) => match v.as_int() {
                     Ok(n) => n as usize,
@@ -187,11 +187,11 @@ fn arity2() {
 
 #[test]
 fn arity12() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "sillysum",
         12,
-        CustomFilter::new(|args, (ctx, val)| {
+        Native::new(|args, (ctx, val)| {
             let mut nums = Vec::with_capacity(args.len());
             for arg in args {
                 match arg.run((ctx.clone(), val.clone())).next() {
@@ -223,11 +223,11 @@ fn arity12() {
 
 #[test]
 fn iterator() {
-    let mut defs = Definitions::core();
+    let mut defs = Definitions::default();
     defs.insert_custom(
         "randnums",
         1,
-        CustomFilter::new(|args, (ctx, val)| {
+        Native::new(|args, (ctx, val)| {
             let amount = match args[0].run((ctx.clone(), val.clone())).next() {
                 Some(Ok(Val::Int(n))) => n,
                 Some(Ok(v)) => {
