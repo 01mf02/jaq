@@ -61,6 +61,7 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
+pub use filter::Native;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
