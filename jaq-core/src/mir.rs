@@ -2,7 +2,6 @@
 //!
 //! This is quite close to the output of parsing,
 //! but replaces names by unique integers.
-//! This makes the subsequent transformation step ,
 //! That way, the subsequent transformation step(s)
 //! always succeed and do not have to fight with shadowing.
 //! But most importantly, this allows us to record recursive calls.
@@ -42,12 +41,12 @@ impl Num {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Defs(Vec<Def>, Vec<(String, usize, crate::filter::Native)>);
 
 pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Def {
     pub name: String,
     pub args: Vec<Arg>,

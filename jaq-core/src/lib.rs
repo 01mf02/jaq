@@ -137,6 +137,7 @@ impl Filter {
 ///
 /// For example, if we define a filter `def map(f): [.[] | f]`,
 /// then the definitions will associate `map/1` to its definition.
+#[derive(Debug, Clone)]
 pub struct Definitions(mir::Defs);
 
 impl Definitions {

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// A definition, such as `def map(f): [.[] | f];`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Def {
     /// Name of the filter, e.g. `map`
     pub name: String,
@@ -21,7 +21,7 @@ pub struct Def {
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Arg {
     name: String,
     var: bool,
