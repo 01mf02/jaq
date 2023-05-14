@@ -1,6 +1,5 @@
-//! Tests for custom filters.
+//! Tests for custom native filters.
 
-/*
 use std::{iter::once, rc::Rc};
 
 use jaq_core::{parse, Ctx, CustomFilter, Definitions, Error, RcIter, Val};
@@ -256,4 +255,3 @@ fn iterator() {
         None,
     );
 }
-*/
