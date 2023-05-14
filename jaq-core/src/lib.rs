@@ -141,6 +141,12 @@ impl Filter {
 #[derive(Debug, Clone)]
 pub struct Definitions(mir::Defs);
 
+impl Default for Definitions {
+    fn default() -> Self {
+        Self::new(Vec::new())
+    }
+}
+
 impl Definitions {
     /// Create new definitions that have access to global variables of the given names.
     pub fn new(vars: Vec<String>) -> Self {
