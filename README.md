@@ -256,7 +256,7 @@ Here is an overview that summarises:
 - [x] Stream generators (`range`, `recurse`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
 - [ ] More string filters (`startswith`, `ltrimstr`, ...)
-- [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
+- [ ] More array filters (`group_by`, `min_by`, `max_by`, `unique`, ...)
 
 
 ## Standard filters
