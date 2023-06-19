@@ -83,7 +83,9 @@ const CORE: [(&str, usize, RunPtr); 28] = [
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
     ("length", 0, |_, cv| box_once(cv.1.len())),
-    ("keys", 0, |_, cv| box_once(cv.1.keys().map(Val::arr))),
+    ("keys_unsorted", 0, |_, cv| {
+        box_once(cv.1.keys().map(Val::arr))
+    }),
     ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
     ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
     ("ceil", 0, |_, cv| box_once(cv.1.round(|f| f.ceil()))),
