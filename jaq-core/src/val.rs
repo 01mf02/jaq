@@ -292,6 +292,16 @@ impl Val {
         err.map_or(Ok(Val::Arr(a)), Err)
     }
 
+    /// Return true if string starts with a given string.
+    ///
+    /// Fail on any other value.
+    pub fn starts_with(&self, other: &Self) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => Ok(s.starts_with(&**o)),
+            _ => Err(Error::StartsWith(self.clone(), other.clone())),
+        }
+    }
+
     /// Group an array by the given function.
     ///
     /// Fail on any other value.

@@ -193,3 +193,11 @@ fn split() {
         json!(["", "c", "cd", ""]),
     );
 }
+
+#[test]
+fn startswith() {
+    give(json!("foobar"), r#"startswith("")"#, json!(true));
+    give(json!("foobar"), r#"startswith("bar")"#, json!(false));
+    give(json!("foobar"), r#"startswith("foo")"#, json!(true));
+    give(json!(""), r#"startswith("foo")"#, json!(false));
+}

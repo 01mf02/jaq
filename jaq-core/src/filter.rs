@@ -78,7 +78,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 28] = [
+const CORE: [(&str, usize, RunPtr); 29] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -160,6 +160,10 @@ const CORE: [(&str, usize, RunPtr); 28] = [
     }),
     ("recurse_outer", 1, |args, cv| {
         args[0].recurse1(false, true, cv)
+    }),
+    ("startswith", 1, |args, cv| {
+        let keys = args[0].run(cv.clone());
+        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.starts_with(&k?)?))))
     }),
 ];
 

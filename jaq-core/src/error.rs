@@ -50,6 +50,8 @@ pub enum Error {
     Regex(String),
     /// `"a" | test("."; "b")`
     RegexFlag(char),
+    /// `123 | startswith("x")`
+    StartsWith(Val, Val),
     /// arbitrary errors for custom filters
     Custom(String),
 }
@@ -79,6 +81,7 @@ impl fmt::Display for Error {
             Self::PathExp => write!(f, "invalid path expression"),
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
+            Self::StartsWith(l, r) => write!(f, "cannot check whether {l} starts with {r}"),
             Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }
