@@ -245,7 +245,7 @@ Here is an overview that summarises:
 - [x] Empty (`empty`)
 - [x] Errors (`error`)
 - [x] Input (`inputs`)
-- [x] Length (`length`)
+- [x] Length (`length`, `utf8bytelength`)
 - [x] Rounding (`floor`, `round`, `ceil`)
 - [x] String <-> JSON (`fromjson`, `tojson`)
 - [x] String <-> integers (`explode`, `implode`)

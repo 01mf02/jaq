@@ -78,11 +78,12 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 28] = [
+const CORE: [(&str, usize, RunPtr); 29] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
     ("length", 0, |_, cv| box_once(cv.1.len())),
+    ("utf8bytelength", 0, |_, cv| box_once(cv.1.byte_len())),
     ("keys", 0, |_, cv| box_once(cv.1.keys().map(Val::arr))),
     ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
     ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
