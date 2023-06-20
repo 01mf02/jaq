@@ -259,3 +259,24 @@ fn while_until() {
         json!(120),
     );
 }
+
+yields!(
+    sub,
+    r#""XYZxyzXYZxyz" | sub("x";"Q")"#,
+    json!("XYZQyzXYZxyz")
+);
+yields!(
+    sub_flags,
+    r#""XYZxyzXYZxyz" | sub("x";"Q";"i")"#,
+    json!("QYZxyzXYZxyz")
+);
+yields!(
+    gsub,
+    r#""XYZxyzXYZxyz" | gsub("x";"Q")"#,
+    json!("XYZQyzXYZQyz")
+);
+yields!(
+    gsub_flags,
+    r#""XYZxyzXYZxyz" | gsub("x";"Q";"i")"#,
+    json!("QYZQyzQYZQyz")
+);
