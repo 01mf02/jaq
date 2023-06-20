@@ -54,6 +54,10 @@ pub enum Error {
     StartsWith(Val, Val),
     /// `123 | endswith("x")`
     EndsWith(Val, Val),
+    /// `123 | ltrimstr("x")`
+    StripPrefix(Val, Val),
+    /// `123 | rtrimstr("x")`
+    StripSuffix(Val, Val),
     /// arbitrary errors for custom filters
     Custom(String),
 }
@@ -85,6 +89,8 @@ impl fmt::Display for Error {
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
             Self::StartsWith(l, r) => write!(f, "cannot check whether {l} starts with {r}"),
             Self::EndsWith(l, r) => write!(f, "cannot check whether {l} ends with {r}"),
+            Self::StripPrefix(l, r) => write!(f, "cannot strip prefix {r} from {l}"),
+            Self::StripSuffix(l, r) => write!(f, "cannot strip suffix {r} from {l}"),
             Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }

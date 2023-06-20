@@ -209,3 +209,19 @@ fn endswith() {
     give(json!("foobar"), r#"endswith("bar")"#, json!(true));
     give(json!(""), r#"endswith("foo")"#, json!(false));
 }
+
+#[test]
+fn ltrimstr() {
+    give(json!("foobar"), r#"ltrimstr("")"#, json!("foobar"));
+    give(json!("foobar"), r#"ltrimstr("foo")"#, json!("bar"));
+    give(json!("foobar"), r#"ltrimstr("bar")"#, json!("foobar"));
+    give(json!("اَلْعَرَبِيَّةُ"), r#"ltrimstr("ا")"#, json!("َلْعَرَبِيَّةُ"));
+}
+
+#[test]
+fn rtrimstr() {
+    give(json!("foobar"), r#"rtrimstr("")"#, json!("foobar"));
+    give(json!("foobar"), r#"rtrimstr("bar")"#, json!("foo"));
+    give(json!("foobar"), r#"rtrimstr("foo")"#, json!("foobar"));
+    give(json!("اَلْعَرَبِيَّةُ"), r#"rtrimstr("ا")"#, json!("اَلْعَرَبِيَّةُ"));
+}
