@@ -52,6 +52,10 @@ pub enum Error {
     RegexFlag(char),
     /// `now`
     SystemTime(String),
+    /// `"" | fromdateiso8601`
+    FromIso8601(Val, String),
+    /// `null | todateiso8601`
+    ToIso8601(Val, String),
     /// arbitrary errors for custom filters
     Custom(String),
 }
@@ -82,6 +86,8 @@ impl fmt::Display for Error {
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
             Self::SystemTime(why) => write!(f, "Could not get system time: {why}"),
+            Self::FromIso8601(v, why) => write!(f, "cannot parse {v} as ISO-8601 timestamp: {why}"),
+            Self::ToIso8601(v, why) => write!(f, "cannot format {v} as ISO-8601 timestamp: {why}"),
             Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }

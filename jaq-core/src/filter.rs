@@ -78,7 +78,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 29] = [
+const CORE: [(&str, usize, RunPtr); 31] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -108,6 +108,12 @@ const CORE: [(&str, usize, RunPtr); 29] = [
             .duration_since(UNIX_EPOCH)
             .map_err(|e| Error::SystemTime(e.to_string()));
         box_once(duration.map(|x| x.as_secs_f64()).map(Val::Float))
+    }),
+    ("fromdateiso8601", 0, |_, cv| {
+        box_once(cv.1.from_iso8601().map(Val::Float))
+    }),
+    ("todateiso8601", 0, |_, cv| {
+        box_once(cv.1.to_iso8601().map(Val::str))
     }),
     ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
     ("sort_by", 1, |args, cv| {
