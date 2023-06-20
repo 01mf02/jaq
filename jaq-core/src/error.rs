@@ -50,6 +50,8 @@ pub enum Error {
     Regex(String),
     /// `"a" | test("."; "b")`
     RegexFlag(char),
+    /// `now`
+    SystemTime(String),
     /// arbitrary errors for custom filters
     Custom(String),
 }
@@ -79,6 +81,7 @@ impl fmt::Display for Error {
             Self::PathExp => write!(f, "invalid path expression"),
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
+            Self::SystemTime(why) => write!(f, "Could not get system time: {why}"),
             Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }
