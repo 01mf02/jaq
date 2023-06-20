@@ -302,6 +302,16 @@ impl Val {
         }
     }
 
+    /// Return true if string ends with a given string.
+    ///
+    /// Fail on any other value.
+    pub fn ends_with(&self, other: &Self) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => Ok(s.ends_with(&**o)),
+            _ => Err(Error::EndsWith(self.clone(), other.clone())),
+        }
+    }
+
     /// Group an array by the given function.
     ///
     /// Fail on any other value.

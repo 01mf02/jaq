@@ -201,3 +201,11 @@ fn startswith() {
     give(json!("foobar"), r#"startswith("foo")"#, json!(true));
     give(json!(""), r#"startswith("foo")"#, json!(false));
 }
+
+#[test]
+fn endswith() {
+    give(json!("foobar"), r#"endswith("")"#, json!(true));
+    give(json!("foobar"), r#"endswith("foo")"#, json!(false));
+    give(json!("foobar"), r#"endswith("bar")"#, json!(true));
+    give(json!(""), r#"endswith("foo")"#, json!(false));
+}
