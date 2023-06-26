@@ -62,7 +62,7 @@ fn alt() {
 #[test]
 fn try_() {
     give(json!(0), ".?", json!(0));
-    give(json!(0), "keys?, 1", json!(1));
+    give(json!(0), "keys_unsorted?, 1", json!(1));
     give(json!(0), "[(1, error, 2)?]", json!([1, 2]));
 }
 
