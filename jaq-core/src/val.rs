@@ -302,6 +302,52 @@ impl Val {
         err.map_or(Ok(Val::Arr(a)), Err)
     }
 
+    /// Return true if string starts with a given string.
+    ///
+    /// Fail on any other value.
+    pub fn starts_with(&self, other: &Self) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => Ok(s.starts_with(&**o)),
+            _ => Err(Error::StartsWith(self.clone(), other.clone())),
+        }
+    }
+
+    /// Return true if string ends with a given string.
+    ///
+    /// Fail on any other value.
+    pub fn ends_with(&self, other: &Self) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => Ok(s.ends_with(&**o)),
+            _ => Err(Error::EndsWith(self.clone(), other.clone())),
+        }
+    }
+
+    /// Return a string with the given prefix string removed
+    ///
+    /// Fail on any other value.
+    pub fn strip_prefix(&self, other: &Self) -> Result<String, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => match s.strip_prefix(&**o) {
+                Some(res) => Ok(res.into()),
+                None => Ok(s.to_string()),
+            },
+            _ => Err(Error::StripPrefix(self.clone(), other.clone())),
+        }
+    }
+
+    /// Return a string with the given suffix string removed
+    ///
+    /// Fail on any other value.
+    pub fn strip_suffix(&self, other: &Self) -> Result<String, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => match s.strip_suffix(&**o) {
+                Some(res) => Ok(res.into()),
+                None => Ok(s.to_string()),
+            },
+            _ => Err(Error::StripSuffix(self.clone(), other.clone())),
+        }
+    }
+
     /// Group an array by the given function.
     ///
     /// Fail on any other value.

@@ -200,3 +200,35 @@ fn split() {
         json!(["", "c", "cd", ""]),
     );
 }
+
+#[test]
+fn startswith() {
+    give(json!("foobar"), r#"startswith("")"#, json!(true));
+    give(json!("foobar"), r#"startswith("bar")"#, json!(false));
+    give(json!("foobar"), r#"startswith("foo")"#, json!(true));
+    give(json!(""), r#"startswith("foo")"#, json!(false));
+}
+
+#[test]
+fn endswith() {
+    give(json!("foobar"), r#"endswith("")"#, json!(true));
+    give(json!("foobar"), r#"endswith("foo")"#, json!(false));
+    give(json!("foobar"), r#"endswith("bar")"#, json!(true));
+    give(json!(""), r#"endswith("foo")"#, json!(false));
+}
+
+#[test]
+fn ltrimstr() {
+    give(json!("foobar"), r#"ltrimstr("")"#, json!("foobar"));
+    give(json!("foobar"), r#"ltrimstr("foo")"#, json!("bar"));
+    give(json!("foobar"), r#"ltrimstr("bar")"#, json!("foobar"));
+    give(json!("اَلْعَرَبِيَّةُ"), r#"ltrimstr("ا")"#, json!("َلْعَرَبِيَّةُ"));
+}
+
+#[test]
+fn rtrimstr() {
+    give(json!("foobar"), r#"rtrimstr("")"#, json!("foobar"));
+    give(json!("foobar"), r#"rtrimstr("bar")"#, json!("foo"));
+    give(json!("foobar"), r#"rtrimstr("foo")"#, json!("foobar"));
+    give(json!("اَلْعَرَبِيَّةُ"), r#"rtrimstr("ا")"#, json!("اَلْعَرَبِيَّةُ"));
+}
