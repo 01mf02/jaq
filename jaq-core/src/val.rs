@@ -185,7 +185,7 @@ impl Val {
     /// Return any `key` for which `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
-    pub fn keys(&self) -> Result<Vec<Val>, Error> {
+    pub fn keys_unsorted(&self) -> Result<Vec<Val>, Error> {
         match self {
             Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
             Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),

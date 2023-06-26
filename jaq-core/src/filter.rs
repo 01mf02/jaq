@@ -84,7 +84,7 @@ const CORE: [(&str, usize, RunPtr); 29] = [
     }),
     ("length", 0, |_, cv| box_once(cv.1.len())),
     ("keys_unsorted", 0, |_, cv| {
-        box_once(cv.1.keys().map(Val::arr))
+        box_once(cv.1.keys_unsorted().map(Val::arr))
     }),
     ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
     ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
