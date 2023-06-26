@@ -78,6 +78,7 @@ def nth(n): .[ n];
 def nth(n; g): last(limit(n + 1; g));
 
 # Objects <-> Arrays
+def keys: keys_unsorted | sort;
 def   to_entries: [keys[] as $k | { key: $k, value: .[$k] }];
 def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;

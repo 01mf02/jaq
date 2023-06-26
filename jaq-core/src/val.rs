@@ -148,6 +148,16 @@ impl Val {
         }
     }
 
+    /// Return the number of bytes used to encode a string in UTF-8
+    ///
+    /// Fail on any other value.
+    pub fn byte_len(&self) -> Result<Self, Error> {
+        match self {
+            Self::Str(s) => Ok(Self::Int(s.len() as isize)),
+            _ => Err(Error::ByteLength(self.clone())),
+        }
+    }
+
     /// Apply a rounding function to floating-point numbers, then convert them to integers.
     ///
     /// Return integers unchanged, and fail on any other input.

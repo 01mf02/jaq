@@ -20,6 +20,8 @@ pub enum Error {
     Arr(Val),
     /// `0 == 0 | length`
     Length(Val),
+    /// `0 == 0 | utf8bytelength`
+    ByteLength(Val),
     /// `"a" | round`
     Round(Val),
     /// `"[1, 2" | fromjson`
@@ -72,6 +74,7 @@ impl fmt::Display for Error {
             Self::Str(v) => write!(f, "cannot use {v} as string"),
             Self::Arr(v) => write!(f, "cannot use {v} as array"),
             Self::Length(v) => write!(f, "{v} has no length"),
+            Self::ByteLength(v) => write!(f, "only strings have UTF-8 byte length: {v}"),
             Self::Round(v) => write!(f, "cannot round {v}"),
             Self::FromJson(v, why) => write!(f, "cannot parse {v} as JSON: {why}"),
             Self::Keys(v) => write!(f, "{v} has no keys"),
