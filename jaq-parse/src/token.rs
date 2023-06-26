@@ -52,11 +52,15 @@ impl fmt::Display for Token {
 
 // A parser for numbers
 fn num() -> impl Parser<char, String, Error = Simple<char>> {
-    let comma = just('.').chain(text::digits(10).or_not().map(|d| d.unwrap_or_default()));
-    let exp = one_of("eE").chain(text::digits(10));
+    let comma = just('.').chain(text::digits(10).or_not());
+
+    let exp = one_of("eE")
+        .chain(one_of("+-").or_not())
+        .chain::<char, _, _>(text::digits(10));
+
     text::int(10)
-        .chain::<char, _, _>(comma.or_not().flatten())
-        .chain::<char, _, _>(exp.or_not().flatten())
+        .chain::<char, _, _>(comma.or_not())
+        .chain::<char, _, _>(exp.or_not())
         .collect()
 }
 
