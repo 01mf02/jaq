@@ -78,7 +78,7 @@ fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
-const CORE: [(&str, usize, RunPtr); 28] = [
+const CORE: [(&str, usize, RunPtr); 29] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
@@ -93,6 +93,7 @@ const CORE: [(&str, usize, RunPtr); 28] = [
     ("tojson", 0, |_, cv| {
         box_once(Ok(Val::str(cv.1.to_string())))
     }),
+    ("utf8bytelength", 0, |_, cv| box_once(cv.1.byte_len())),
     ("explode", 0, |_, cv| box_once(cv.1.explode().map(Val::arr))),
     ("implode", 0, |_, cv| box_once(cv.1.implode().map(Val::str))),
     ("ascii_downcase", 0, |_, cv| {

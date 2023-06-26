@@ -92,6 +92,13 @@ fn length() {
 }
 
 #[test]
+fn utf8bytelength() {
+    give(json!("foo"), "utf8bytelength", json!(3));
+    give(json!("ƒoo"), "utf8bytelength", json!(4));
+    give(json!("नमस्ते"), "utf8bytelength", json!(18));
+}
+
+#[test]
 fn limit() {
     // a big WTF: jq outputs "1" here! that looks like another bug ...
     gives(json!(null), "limit(0; 1,2)", []);
