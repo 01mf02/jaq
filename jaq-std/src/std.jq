@@ -116,6 +116,7 @@ def splits(re; flags): split(re; flags)[];
 
 def sub(re; f; flags): reduce split_matches(re; flags)[] as $x
   (""; . + if $x | isstring then $x else $x | capture_of_match | f end);
+def gsub(re; f; flags): sub(re; f; "g" + flags);
 
 def    test(re):    test(re; "");
 def    scan(re):    scan(re; "");
