@@ -72,12 +72,12 @@ fn json() {
 }
 
 #[test]
-fn keys() {
-    give(json!([0, null, "a"]), "keys", json!([0, 1, 2]));
-    give(json!({"a": 1, "b": 2}), "keys", json!(["a", "b"]));
+fn keys_unsorted() {
+    give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
 
-    fail(json!(0), "keys", Error::Keys(Val::Int(0)));
-    fail(json!(null), "keys", Error::Keys(Val::Null));
+    fail(json!(0), "keys_unsorted", Error::Keys(Val::Int(0)));
+    fail(json!(null), "keys_unsorted", Error::Keys(Val::Null));
 }
 
 #[test]
@@ -122,7 +122,7 @@ fn recurse() {
 
 const RECURSE_PATHS: &str = "def paths:
   { x: ., p: [] } |
-  recurse((.x | keys?)[] as $k | .x |= .[$k] | .p += [$k]) |
+  recurse((.x | keys_unsorted?)[] as $k | .x |= .[$k] | .p += [$k]) |
   .p | if . == [] then empty else . end;";
 
 yields!(
