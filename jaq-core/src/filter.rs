@@ -174,11 +174,11 @@ const CORE: [(&str, usize, RunPtr); 33] = [
     }),
     ("ltrimstr", 1, |args, cv| {
         let keys = args[0].run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Str(cv.1.strip_prefix(&k?)?.into()))))
+        Box::new(keys.map(move |k| Ok(Val::Str(cv.1.strip_prefix(&k?)?))))
     }),
     ("rtrimstr", 1, |args, cv| {
         let keys = args[0].run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Str(cv.1.strip_suffix(&k?)?.into()))))
+        Box::new(keys.map(move |k| Ok(Val::Str(cv.1.strip_suffix(&k?)?))))
     }),
 ];
 

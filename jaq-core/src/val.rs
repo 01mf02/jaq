@@ -322,29 +322,27 @@ impl Val {
         }
     }
 
-    /// Return a string with the given prefix string removed
+    /// Remove given prefix string from the string.
     ///
     /// Fail on any other value.
-    pub fn strip_prefix(&self, other: &Self) -> Result<String, Error> {
-        match (self, other) {
-            (Self::Str(s), Self::Str(o)) => match s.strip_prefix(&**o) {
-                Some(res) => Ok(res.into()),
-                None => Ok(s.to_string()),
-            },
-            _ => Err(Error::StripPrefix(self.clone(), other.clone())),
+    pub fn strip_prefix(&self, other: &Self) -> Result<Rc<String>, Error> {
+        if let (Self::Str(s), Self::Str(o)) = (self, other) {
+            Ok(s.strip_prefix(&**o)
+                .map_or_else(|| s.clone(), |y| Rc::new(y.into())))
+        } else {
+            Err(Error::StripPrefix(self.clone(), other.clone()))
         }
     }
 
-    /// Return a string with the given suffix string removed
+    /// Remove given suffix string from the string.
     ///
     /// Fail on any other value.
-    pub fn strip_suffix(&self, other: &Self) -> Result<String, Error> {
-        match (self, other) {
-            (Self::Str(s), Self::Str(o)) => match s.strip_suffix(&**o) {
-                Some(res) => Ok(res.into()),
-                None => Ok(s.to_string()),
-            },
-            _ => Err(Error::StripSuffix(self.clone(), other.clone())),
+    pub fn strip_suffix(&self, other: &Self) -> Result<Rc<String>, Error> {
+        if let (Self::Str(s), Self::Str(o)) = (self, other) {
+            Ok(s.strip_suffix(&**o)
+                .map_or_else(|| s.clone(), |y| Rc::new(y.into())))
+        } else {
+            Err(Error::StripSuffix(self.clone(), other.clone()))
         }
     }
 
