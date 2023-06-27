@@ -130,6 +130,24 @@ fn min_max() {
         "max_by(.a.b.c)",
         json!({"a": {"b": {"c": 4}}}),
     );
+    // min_by selects the left element when they're equal
+    give(
+        json!([{"a": 1, "b": 3}, {"a": 1, "b": 2}]),
+        "min_by(.a) | .b",
+        json!(3),
+    );
+    // max_by selects the right one
+    give(
+        json!([{"a": 1, "b": 3}, {"a": 1, "b": 2}]),
+        "max_by(.a) | .b",
+        json!(2),
+    );
+    // multiple-output functions can be used to differentiate elements
+    give(
+        json!([{"a": 1, "b": 3}, {"a": 1, "b": 2}]),
+        "max_by(.a, .b) | .b",
+        json!(3),
+    );
 }
 
 #[test]

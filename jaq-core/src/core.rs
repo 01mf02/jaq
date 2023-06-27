@@ -20,7 +20,7 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     core_run.chain(core_update)
 }
 
-const CORE_RUN: [(&str, usize, RunPtr); 33] = [
+const CORE_RUN: [(&str, usize, RunPtr); 35] = [
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
     }),
