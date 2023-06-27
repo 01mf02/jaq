@@ -597,6 +597,8 @@ impl core::ops::Mul for Val {
                     Ok(Null)
                 }
             }
+            (Num(n), r) => Self::from_dec_str(&n) * r,
+            (l, Num(n)) => l * Self::from_dec_str(&n),
             (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
         }
     }

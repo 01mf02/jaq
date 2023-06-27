@@ -44,6 +44,19 @@ fn sub() {
 }
 
 #[test]
+fn mul() {
+    give(json!(1), ". * 2", json!(2));
+    give(json!(1.0), ". * 2.", json!(2.0));
+    give(json!(1), "2.0 * .", json!(2.0));
+
+    give(json!("Hello"), "2 * .", json!("HelloHello"));
+    give(json!(2), ". * \"Hello\"", json!("HelloHello"));
+
+    give(json!("Hello"), "0 * .", json!(null));
+    give(json!(-1), ". * \"Hello\"", json!(null));
+}
+
+#[test]
 fn logic() {
     let tf = json!([true, false]);
     give(tf.clone(), "[.[] and .[]]", json!([true, false, false]));
