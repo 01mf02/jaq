@@ -71,7 +71,7 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     from_file: Option<PathBuf>,
 
-    /// Set variable `$<a>` to string "<v>"
+    /// Set variable `$<a>` to string `<v>`
     #[arg(long, value_names = &["a", "v"])]
     arg: Vec<String>,
 
