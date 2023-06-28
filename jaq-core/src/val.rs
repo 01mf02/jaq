@@ -589,14 +589,13 @@ impl core::ops::Mul for Val {
             (Int(x), Int(y)) => Ok(Int(x * y)),
             (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
-            (Str(s), Int(i)) | (Int(i), Str(s)) => {
-                if i > 0 {
-                    Ok(Str(Rc::new(s.repeat(i as usize))))
-                } else {
-                    //String multiplication with negatives or 0 results in null (https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions)
-                    Ok(Null)
-                }
-            }
+            (Str(s), Int(i)) | (Int(i), Str(s)) => Ok({
+                (i > 0)
+                    .then(|| Self::str(s.repeat(i as usize)))
+                    // string multiplication with negatives or 0 results in null
+                    // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
+                    .unwrap_or(Null)
+            }),
             (Num(n), r) => Self::from_dec_str(&n) * r,
             (l, Num(n)) => l * Self::from_dec_str(&n),
             (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
