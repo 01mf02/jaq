@@ -1,6 +1,6 @@
 //! Core filters.
 
-use crate::filter::Filter;
+use crate::filter::Ref;
 use crate::native::{Native, RunPtr, UpdatePtr};
 use crate::results::{box_once, then};
 use crate::{Error, Val};
@@ -67,13 +67,13 @@ const CORE_RUN: [(&str, usize, RunPtr); 33] = [
         Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
     }),
     ("matches", 2, |args, cv| {
-        args[0].regex(&args[1], false, true, cv)
+        Ref(&args[0]).regex(Ref(&args[1]), false, true, cv)
     }),
     ("split_matches", 2, |args, cv| {
-        args[0].regex(&args[1], true, true, cv)
+        Ref(&args[0]).regex(Ref(&args[1]), true, true, cv)
     }),
     ("split_", 2, |args, cv| {
-        args[0].regex(&args[1], true, false, cv)
+        Ref(&args[0]).regex(Ref(&args[1]), true, false, cv)
     }),
     ("first", 1, |args, cv| Box::new(args[0].run(cv).take(1))),
     ("last", 1, |args, cv| {
@@ -95,16 +95,16 @@ const CORE_RUN: [(&str, usize, RunPtr); 33] = [
     //   recurse(.+1 | select(. < $max))
     // ~~~
     ("range", 2, |args, cv| {
-        let prod = Filter::cartesian(&args[0], &args[1], cv);
+        let prod = Ref(&args[0]).cartesian(Ref(&args[1]), cv);
         let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
         let f = |(l, u)| (l..u).map(|i| Ok(Val::Int(i)));
         Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
     }),
     ("recurse_inner", 1, |args, cv| {
-        args[0].recurse1(true, false, cv)
+        Ref(&args[0]).recurse1(true, false, cv)
     }),
     ("recurse_outer", 1, |args, cv| {
-        args[0].recurse1(false, true, cv)
+        Ref(&args[0]).recurse1(false, true, cv)
     }),
     ("startswith", 1, |args, cv| {
         let keys = args[0].run(cv.clone());
@@ -146,7 +146,7 @@ const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 4] = [
     (
         "recurse",
         1,
-        |args, cv| args[0].recurse1(true, true, cv),
-        |args, cv, f| args[0].recurse_update(cv, f),
+        |args, cv| Ref(&args[0]).recurse1(true, true, cv),
+        |args, cv, f| Ref(&args[0]).recurse_update(cv, f),
     ),
 ];

@@ -86,6 +86,34 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
 
 pub type Cv<'c> = (Ctx<'c>, Val);
 
+/*
+pub struct Owned(Filter);
+*/
+
+#[derive(Copy, Clone)]
+pub struct Ref<'a>(pub &'a Filter);
+
+impl<'a> Ref<'a> {
+    pub fn run(self, cv: Cv<'a>) -> ValRs<'a> {
+        self.0.run(cv)
+    }
+
+    pub fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+        self.0.update(cv, f)
+    }
+}
+
+/*
+#[derive(Copy, Clone)]
+pub struct ArgsRef<'a>(&'a [Filter]);
+
+impl<'a> ArgsRef<'a> {
+    pub fn get(self, i: usize) -> Ref<'a> {
+        Ref(&self.0[i])
+    }
+}
+*/
+
 impl Filter {
     pub fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::once;
@@ -100,7 +128,7 @@ impl Filter {
             Self::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Self::Object(o) => Box::new(
                 o.iter()
-                    .map(|(kf, vf)| Self::cartesian(kf, vf, cv.clone()).collect::<Vec<_>>())
+                    .map(|(kf, vf)| Ref(kf).cartesian(Ref(vf), cv.clone()).collect::<Vec<_>>())
                     .multi_cartesian_product()
                     .map(|kvs| {
                         kvs.into_iter()
@@ -118,7 +146,7 @@ impl Filter {
                     .flat_map(move |y| then(y, |y| r.run((cv.0.clone(), y)))),
             ),
             // `l as $x | r`
-            Self::Pipe(l, true, r) => l.pipe(cv, |cv, y| r.run((cv.0.cons_var(y), cv.1))),
+            Self::Pipe(l, true, r) => Ref(l).pipe(cv, |cv, y| r.run((cv.0.cons_var(y), cv.1))),
 
             Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
             Self::Alt(l, r) => {
@@ -140,10 +168,10 @@ impl Filter {
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| f.run((cv.0.clone(), v))),
             ),
-            Self::UpdateMath(path, op, f) => f.pipe(cv, move |cv, y| {
+            Self::UpdateMath(path, op, f) => Ref(f).pipe(cv, move |cv, y| {
                 path.update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
-            Self::Assign(path, f) => f.pipe(cv, |cv, y| {
+            Self::Assign(path, f) => Ref(f).pipe(cv, |cv, y| {
                 path.update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
             Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| {
@@ -156,10 +184,12 @@ impl Filter {
                 })
             })),
             Self::Math(l, op, r) => {
-                Box::new(Self::cartesian(l, r, cv).map(|(x, y)| op.run(x?, y?)))
+                let prod = Ref(l).cartesian(Ref(r), cv);
+                Box::new(prod.map(|(x, y)| op.run(x?, y?)))
             }
             Self::Ord(l, op, r) => {
-                Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
+                let prod = Ref(l).cartesian(Ref(r), cv);
+                Box::new(prod.map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
             }
 
             Self::Fold(typ, xs, init, f) => {
@@ -176,7 +206,7 @@ impl Filter {
                     }
                 }
             }
-            Self::Recurse(f) => f.recurse1(true, true, cv),
+            Self::Recurse(f) => Ref(f).recurse1(true, true, cv),
 
             Self::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
             Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
@@ -221,7 +251,7 @@ impl Filter {
             Self::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
             }),
-            Self::Recurse(l) => l.recurse_update(cv, f),
+            Self::Recurse(l) => Ref(l).recurse_update(cv, f),
 
             Self::Var(_) => err,
             Self::Call { skip, id } => {
@@ -233,11 +263,22 @@ impl Filter {
         }
     }
 
+    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
+    pub fn recurse() -> Self {
+        // `[]?`
+        let path = (path::Part::Range(None, None), path::Opt::Optional);
+        // `.[]?`
+        let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
+        Filter::Recurse(Box::new(path))
+    }
+}
+
+impl<'a> Ref<'a> {
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
     /// In that case, we can consume `cv` instead of cloning it.
-    fn pipe<'a>(&'a self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
+    pub fn pipe(self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
         let mut l = self.run(cv.clone());
 
         // if we expect at most one element from the left side,
@@ -255,12 +296,8 @@ impl Filter {
         Box::new(l.flat_map(move |y| then(y, |y| f(cv.clone(), y))))
     }
 
-    /// Run `l` and `r` and return the cartesian product of their outputs.
-    pub fn cartesian<'a>(
-        &'a self,
-        r: &'a Self,
-        cv: Cv<'a>,
-    ) -> impl Iterator<Item = (ValR, ValR)> + 'a {
+    /// Run `self` and `r` and return the cartesian product of their outputs.
+    pub fn cartesian(self, r: Self, cv: Cv<'a>) -> impl Iterator<Item = (ValR, ValR)> + 'a {
         let l = self.run(cv.clone());
         let r: Vec<_> = r.run(cv).collect();
         if r.len() == 1 {
@@ -273,22 +310,13 @@ impl Filter {
         }
     }
 
-    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
-    pub fn recurse() -> Self {
-        // `[]?`
-        let path = (path::Part::Range(None, None), path::Opt::Optional);
-        // `.[]?`
-        let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
-        Filter::Recurse(Box::new(path))
-    }
-
-    pub fn recurse1<'a>(&'a self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
+    pub fn recurse1(self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
         let f = move |v| self.run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
 
     /// Return the output of `recurse(l) |= f`.
-    pub fn recurse_update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
+    pub fn recurse_update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
         Box::new(f(cv.1).flat_map(move |v| {
             then(v, |v| {
@@ -299,8 +327,8 @@ impl Filter {
         }))
     }
 
-    pub fn regex<'a>(&'a self, flags: &'a Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
-        let flags_re = Self::cartesian(flags, self, (cv.0, cv.1.clone()));
+    pub fn regex(self, flags: Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
+        let flags_re = flags.cartesian(self, (cv.0, cv.1.clone()));
         Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
     }
 }
