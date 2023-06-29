@@ -78,6 +78,7 @@ def nth(n): .[ n];
 def nth(n; g): last(limit(n + 1; g));
 
 # Objects <-> Arrays
+def keys: keys_unsorted | sort;
 def   to_entries: [keys[] as $k | { key: $k, value: .[$k] }];
 def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;
@@ -115,6 +116,7 @@ def splits(re; flags): split(re; flags)[];
 
 def sub(re; f; flags): reduce split_matches(re; flags)[] as $x
   (""; . + if $x | isstring then $x else $x | capture_of_match | f end);
+def gsub(re; f; flags): sub(re; f; "g" + flags);
 
 def    test(re):    test(re; "");
 def    scan(re):    scan(re; "");

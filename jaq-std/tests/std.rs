@@ -108,6 +108,12 @@ yields!(join_nums, r#"[2, 3, 4, 5] | join(1)"#, 17);
 
 yields!(map, "[1, 2] | map(.+1)", [2, 3]);
 
+yields!(
+    keys,
+    r#"{"foo":null,"abc":null,"fax":null,"az":null} | keys"#,
+    ["abc", "az", "fax", "foo"]
+);
+
 #[test]
 fn min_max() {
     give(json!([]), "min", json!(null));
@@ -259,3 +265,24 @@ fn while_until() {
         json!(120),
     );
 }
+
+yields!(
+    sub,
+    r#""XYZxyzXYZxyz" | sub("x";"Q")"#,
+    json!("XYZQyzXYZxyz")
+);
+yields!(
+    sub_flags,
+    r#""XYZxyzXYZxyz" | sub("x";"Q";"i")"#,
+    json!("QYZxyzXYZxyz")
+);
+yields!(
+    gsub,
+    r#""XYZxyzXYZxyz" | gsub("x";"Q")"#,
+    json!("XYZQyzXYZQyz")
+);
+yields!(
+    gsub_flags,
+    r#""XYZxyzXYZxyz" | gsub("x";"Q";"i")"#,
+    json!("QYZQyzQYZQyz")
+);

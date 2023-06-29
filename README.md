@@ -245,7 +245,7 @@ Here is an overview that summarises:
 - [x] Empty (`empty`)
 - [x] Errors (`error`)
 - [x] Input (`inputs`)
-- [x] Length (`length`)
+- [x] Length (`length`, `utf8bytelength`)
 - [x] Rounding (`floor`, `round`, `ceil`)
 - [x] String <-> JSON (`fromjson`, `tojson`)
 - [x] String <-> integers (`explode`, `implode`)
@@ -255,7 +255,7 @@ Here is an overview that summarises:
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
-- [ ] More string filters (`startswith`, `ltrimstr`, ...)
+- [x] More string filters (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
 - [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
 
 

@@ -45,11 +45,13 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod core;
 mod error;
 mod filter;
 mod lazy_iter;
 mod lir;
 mod mir;
+mod native;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -129,6 +131,7 @@ impl Filter {
     /// Apply the filter to the given value and return stream of results.
     pub fn run<'a>(&'a self, mut ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
         ctx.recs = &self.1;
+        use filter::FilterT;
         self.0.run((ctx, val))
     }
 }
@@ -137,19 +140,19 @@ impl Filter {
 ///
 /// For example, if we define a filter `def map(f): [.[] | f]`,
 /// then the definitions will associate `map/1` to its definition.
-pub struct Definitions(mir::Defs);
+pub use mir::Defs as Definitions;
 
 impl Definitions {
-    /// Create new definitions that have access to global variables of the given names.
-    pub fn new(vars: Vec<String>) -> Self {
-        Self(mir::Defs::new(vars))
-    }
-
-    /// Start out with only core filters, such as `length`, `keys`, ...
+    /// Add the core filters, such as `length`, `keys`, ...
     ///
     /// Does not import filters from the standard library, such as `map`.
     pub fn insert_core(&mut self) {
-        self.insert_natives(filter::natives())
+        self.insert_natives(core::core())
+    }
+
+    /// Add a native filter with given name and arity.
+    pub fn insert_native(&mut self, name: &str, arity: usize, filter: filter::Native) {
+        self.insert_fn(name.to_string(), arity, filter);
     }
 
     /// Add native filters with given names and arities.
@@ -159,7 +162,7 @@ impl Definitions {
     ) {
         natives
             .into_iter()
-            .for_each(|(name, arity, f)| self.0.insert_fn(name, arity, f))
+            .for_each(|(name, arity, f)| self.insert_fn(name, arity, f))
     }
 
     /// Import parsed definitions, such as obtained from the standard library.
@@ -170,23 +173,18 @@ impl Definitions {
         defs: impl IntoIterator<Item = Def>,
         errs: &mut Vec<parse::Error>,
     ) {
-        defs.into_iter().for_each(|def| self.0.root_def(def, errs));
-    }
-
-    /// Import a custom, Rust-defined filter.
-    pub fn insert_custom(&mut self, name: &str, arity: usize, filter: filter::Native) {
-        self.0.insert_fn(name.to_string(), arity, filter);
+        defs.into_iter().for_each(|def| self.root_def(def, errs));
     }
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn finish(mut self, (defs, body): Main, errs: &mut Vec<parse::Error>) -> Filter {
         self.insert_defs(defs, errs);
-        self.0.root_filter(body, errs);
+        self.root_filter(body, errs);
         if !errs.is_empty() {
             return Filter(filter::Filter::Id, Vec::new());
         }
         //std::dbg!("before LIR");
-        let (f, recs) = lir::root_def(&self.0);
+        let (f, recs) = lir::root_def(&self);
         //std::dbg!("after LIR", &f, &recs);
         Filter(f, recs)
     }

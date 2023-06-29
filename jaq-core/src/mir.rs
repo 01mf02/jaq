@@ -2,7 +2,6 @@
 //!
 //! This is quite close to the output of parsing,
 //! but replaces names by unique integers.
-//! This makes the subsequent transformation step ,
 //! That way, the subsequent transformation step(s)
 //! always succeed and do not have to fight with shadowing.
 //! But most importantly, this allows us to record recursive calls.
@@ -80,6 +79,7 @@ pub struct Ctx {
 }
 
 impl Defs {
+    /// Create new definitions that have access to global variables of the given names.
     pub fn new(vars: Vec<String>) -> Self {
         use alloc::string::ToString;
         let root = Def {

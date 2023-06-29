@@ -1,9 +1,9 @@
+pub use crate::native::Native;
 use crate::path::{self, Path};
-use crate::results::{fold, recurse, then};
+use crate::results::{box_once, fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
-use alloc::string::{String, ToString};
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_parse::filter::FoldType;
 use jaq_parse::{MathOp, OrdOp};
@@ -71,174 +71,6 @@ pub enum Filter {
     Native(Native, Vec<Filter>),
 }
 
-type RunPtr = for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>;
-type UpdatePtr = for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
-
-fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
-    Box::new(core::iter::once(x))
-}
-
-const CORE: [(&str, usize, RunPtr); 31] = [
-    ("inputs", 0, |_, cv| {
-        Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
-    }),
-    ("length", 0, |_, cv| box_once(cv.1.len())),
-    ("keys", 0, |_, cv| box_once(cv.1.keys().map(Val::arr))),
-    ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
-    ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
-    ("ceil", 0, |_, cv| box_once(cv.1.round(|f| f.ceil()))),
-    ("fromjson", 0, |_, cv| box_once(cv.1.from_json())),
-    ("tojson", 0, |_, cv| {
-        box_once(Ok(Val::str(cv.1.to_string())))
-    }),
-    ("explode", 0, |_, cv| box_once(cv.1.explode().map(Val::arr))),
-    ("implode", 0, |_, cv| box_once(cv.1.implode().map(Val::str))),
-    ("ascii_downcase", 0, |_, cv| {
-        box_once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
-    }),
-    ("ascii_upcase", 0, |_, cv| {
-        box_once(cv.1.mutate_str(|s| s.make_ascii_uppercase()))
-    }),
-    ("reverse", 0, |_, cv| {
-        box_once(cv.1.mutate_arr(|a| a.reverse()))
-    }),
-    ("now", 0, |_, _| {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| Error::SystemTime(e.to_string()));
-        box_once(duration.map(|x| x.as_secs_f64()).map(Val::Float))
-    }),
-    ("fromdateiso8601", 0, |_, cv| {
-        box_once(cv.1.from_iso8601().map(Val::Float))
-    }),
-    ("todateiso8601", 0, |_, cv| {
-        box_once(cv.1.to_iso8601().map(Val::str))
-    }),
-    ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
-    ("sort_by", 1, |args, cv| {
-        box_once(cv.1.sort_by(|v| args[0].run((cv.0.clone(), v))))
-    }),
-    ("group_by", 1, |args, cv| {
-        box_once(cv.1.group_by(|v| args[0].run((cv.0.clone(), v))))
-    }),
-    ("has", 1, |args, cv| {
-        let keys = args[0].run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))))
-    }),
-    ("contains", 1, |args, cv| {
-        let vals = args[0].run(cv.clone());
-        Box::new(vals.map(move |y| Ok(Val::Bool(cv.1.contains(&y?)))))
-    }),
-    ("split", 1, |args, cv| {
-        let seps = args[0].run(cv.clone());
-        Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
-    }),
-    ("matches", 2, |args, cv| {
-        args[0].regex(&args[1], false, true, cv)
-    }),
-    ("split_matches", 2, |args, cv| {
-        args[0].regex(&args[1], true, true, cv)
-    }),
-    ("split_", 2, |args, cv| {
-        args[0].regex(&args[1], true, false, cv)
-    }),
-    ("first", 1, |args, cv| Box::new(args[0].run(cv).take(1))),
-    ("last", 1, |args, cv| {
-        then(args[0].run(cv).try_fold(None, |_, x| Ok(Some(x?))), |y| {
-            Box::new(y.map(Ok).into_iter())
-        })
-    }),
-    ("limit", 2, |args, cv| {
-        let n = args[0].run(cv.clone()).map(|n| n?.as_int());
-        let f = move |n| args[1].run(cv.clone()).take(core::cmp::max(0, n) as usize);
-        Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(n)))))
-    }),
-    // `range(min; max)` returns all integers `n` with `min <= n < max`.
-    //
-    // This implements a ~10x faster version of:
-    // ~~~ text
-    // range(min; max):
-    //   min as $min | max as $max | $min | select(. < $max) |
-    //   recurse(.+1 | select(. < $max))
-    // ~~~
-    ("range", 2, |args, cv| {
-        let prod = Filter::cartesian(&args[0], &args[1], cv);
-        let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
-        let f = |(l, u)| (l..u).map(|i| Ok(Val::Int(i)));
-        Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
-    }),
-    ("recurse_inner", 1, |args, cv| {
-        args[0].recurse1(true, false, cv)
-    }),
-    ("recurse_outer", 1, |args, cv| {
-        args[0].recurse1(false, true, cv)
-    }),
-];
-
-const CORE_UPDATE: [(&str, usize, RunPtr, UpdatePtr); 4] = [
-    (
-        "empty",
-        0,
-        |_, _| Box::new(core::iter::empty()),
-        |_, cv, _| box_once(Ok(cv.1)),
-    ),
-    (
-        "error",
-        0,
-        |_, cv| box_once(Err(Error::Val(cv.1))),
-        |_, cv, _| box_once(Err(Error::Val(cv.1))),
-    ),
-    (
-        "debug",
-        0,
-        |_, cv| box_once(Ok(cv.1.debug())),
-        |_, cv, f| f(cv.1.debug()),
-    ),
-    (
-        "recurse",
-        1,
-        |args, cv| args[0].recurse1(true, true, cv),
-        |args, cv, f| args[0].recurse_update(cv, f),
-    ),
-];
-
-pub fn natives() -> impl Iterator<Item = (String, usize, Native)> {
-    // TODO: make this more compact
-    let cores = CORE
-        .iter()
-        .map(|(name, arity, f)| (name.to_string(), *arity, Native::new(*f)));
-    let core_update = CORE_UPDATE.iter().map(|(name, arity, run, update)| {
-        (name.to_string(), *arity, Native::with_update(*run, *update))
-    });
-    cores.chain(core_update)
-}
-
-/// A filter whose behaviour is specified by function pointers.
-#[derive(Clone)]
-pub struct Native {
-    run: RunPtr,
-    update: UpdatePtr,
-}
-
-impl core::fmt::Debug for Native {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        f.debug_struct("Native").finish()
-    }
-}
-
-impl Native {
-    /// Create a new custom filter from a function.
-    pub const fn new(run: RunPtr) -> Self {
-        Self::with_update(run, |_, _, _| box_once(Err(Error::PathExp)))
-    }
-
-    /// Create a new custom filter from a run function and an update function (used for `filter |= ...`).
-    pub const fn with_update(run: RunPtr, update: UpdatePtr) -> Self {
-        Self { run, update }
-    }
-}
-
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
 pub trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
@@ -254,8 +86,36 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
 
 pub type Cv<'c> = (Ctx<'c>, Val);
 
-impl Filter {
-    pub fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
+/*
+pub struct Owned(Filter);
+*/
+
+#[derive(Copy, Clone)]
+pub struct Ref<'a>(pub &'a Filter);
+
+impl FilterT for Ref<'_> {
+    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
+        self.0.run(cv)
+    }
+
+    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+        self.0.update(cv, f)
+    }
+}
+
+/*
+#[derive(Copy, Clone)]
+pub struct ArgsRef<'a>(&'a [Filter]);
+
+impl<'a> ArgsRef<'a> {
+    pub fn get(self, i: usize) -> Ref<'a> {
+        Ref(&self.0[i])
+    }
+}
+*/
+
+impl FilterT for Filter {
+    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::once;
         use itertools::Itertools;
         match self {
@@ -400,6 +260,22 @@ impl Filter {
             Self::Native(Native { update, .. }, args) => (update)(args, cv, f),
         }
     }
+}
+
+impl Filter {
+    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
+    pub fn recurse() -> Self {
+        // `[]?`
+        let path = (path::Part::Range(None, None), path::Opt::Optional);
+        // `.[]?`
+        let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
+        Filter::Recurse(Box::new(path))
+    }
+}
+
+pub trait FilterT {
+    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a>;
+    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs;
 
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
@@ -423,7 +299,12 @@ impl Filter {
         Box::new(l.flat_map(move |y| then(y, |y| f(cv.clone(), y))))
     }
 
-    fn cartesian<'a>(&'a self, r: &'a Self, cv: Cv<'a>) -> impl Iterator<Item = (ValR, ValR)> + 'a {
+    /// Run `self` and `r` and return the cartesian product of their outputs.
+    fn cartesian<'a>(
+        &'a self,
+        r: &'a Self,
+        cv: Cv<'a>,
+    ) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
         let l = self.run(cv.clone());
         let r: Vec<_> = r.run(cv).collect();
         if r.len() == 1 {
@@ -436,21 +317,13 @@ impl Filter {
         }
     }
 
-    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
-    pub(crate) fn recurse() -> Self {
-        // `[]?`
-        let path = (path::Part::Range(None, None), path::Opt::Optional);
-        // `.[]?`
-        let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
-        Filter::Recurse(Box::new(path))
-    }
-
     fn recurse1<'a>(&'a self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
         let f = move |v| self.run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
 
-    fn recurse_update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
+    /// Return the output of `recurse(l) |= f`.
+    fn recurse_update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
         Box::new(f(cv.1).flat_map(move |v| {
             then(v, |v| {
@@ -462,7 +335,7 @@ impl Filter {
     }
 
     fn regex<'a>(&'a self, flags: &'a Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
-        let flags_re = Self::cartesian(flags, self, (cv.0, cv.1.clone()));
+        let flags_re = flags.cartesian(self, (cv.0, cv.1.clone()));
         Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
     }
 }

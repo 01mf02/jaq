@@ -72,12 +72,12 @@ fn json() {
 }
 
 #[test]
-fn keys() {
-    give(json!([0, null, "a"]), "keys", json!([0, 1, 2]));
-    give(json!({"a": 1, "b": 2}), "keys", json!(["a", "b"]));
+fn keys_unsorted() {
+    give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
 
-    fail(json!(0), "keys", Error::Keys(Val::Int(0)));
-    fail(json!(null), "keys", Error::Keys(Val::Null));
+    fail(json!(0), "keys_unsorted", Error::Keys(Val::Int(0)));
+    fail(json!(null), "keys_unsorted", Error::Keys(Val::Null));
 }
 
 #[test]
@@ -89,6 +89,13 @@ fn length() {
     give(json!(-2), "length", json!(2));
     give(json!(2.5), "length", json!(2.5));
     give(json!(-2.5), "length", json!(2.5));
+}
+
+#[test]
+fn utf8bytelength() {
+    give(json!("foo"), "utf8bytelength", json!(3));
+    give(json!("ƒoo"), "utf8bytelength", json!(4));
+    give(json!("नमस्ते"), "utf8bytelength", json!(18));
 }
 
 #[test]
@@ -115,7 +122,7 @@ fn recurse() {
 
 const RECURSE_PATHS: &str = "def paths:
   { x: ., p: [] } |
-  recurse((.x | keys?)[] as $k | .x |= .[$k] | .p += [$k]) |
+  recurse((.x | keys_unsorted?)[] as $k | .x |= .[$k] | .p += [$k]) |
   .p | if . == [] then empty else . end;";
 
 yields!(
@@ -192,4 +199,36 @@ fn split() {
         r#"split("ab")"#,
         json!(["", "c", "cd", ""]),
     );
+}
+
+#[test]
+fn startswith() {
+    give(json!("foobar"), r#"startswith("")"#, json!(true));
+    give(json!("foobar"), r#"startswith("bar")"#, json!(false));
+    give(json!("foobar"), r#"startswith("foo")"#, json!(true));
+    give(json!(""), r#"startswith("foo")"#, json!(false));
+}
+
+#[test]
+fn endswith() {
+    give(json!("foobar"), r#"endswith("")"#, json!(true));
+    give(json!("foobar"), r#"endswith("foo")"#, json!(false));
+    give(json!("foobar"), r#"endswith("bar")"#, json!(true));
+    give(json!(""), r#"endswith("foo")"#, json!(false));
+}
+
+#[test]
+fn ltrimstr() {
+    give(json!("foobar"), r#"ltrimstr("")"#, json!("foobar"));
+    give(json!("foobar"), r#"ltrimstr("foo")"#, json!("bar"));
+    give(json!("foobar"), r#"ltrimstr("bar")"#, json!("foobar"));
+    give(json!("اَلْعَرَبِيَّةُ"), r#"ltrimstr("ا")"#, json!("َلْعَرَبِيَّةُ"));
+}
+
+#[test]
+fn rtrimstr() {
+    give(json!("foobar"), r#"rtrimstr("")"#, json!("foobar"));
+    give(json!("foobar"), r#"rtrimstr("bar")"#, json!("foo"));
+    give(json!("foobar"), r#"rtrimstr("foo")"#, json!("foobar"));
+    give(json!("اَلْعَرَبِيَّةُ"), r#"rtrimstr("ا")"#, json!("اَلْعَرَبِيَّةُ"));
 }

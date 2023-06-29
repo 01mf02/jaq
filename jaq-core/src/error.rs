@@ -20,6 +20,8 @@ pub enum Error {
     Arr(Val),
     /// `0 == 0 | length`
     Length(Val),
+    /// `0 == 0 | utf8bytelength`
+    ByteLength(Val),
     /// `"a" | round`
     Round(Val),
     /// `"[1, 2" | fromjson`
@@ -50,6 +52,14 @@ pub enum Error {
     Regex(String),
     /// `"a" | test("."; "b")`
     RegexFlag(char),
+    /// `123 | startswith("x")`
+    StartsWith(Val, Val),
+    /// `123 | endswith("x")`
+    EndsWith(Val, Val),
+    /// `123 | ltrimstr("x")`
+    StripPrefix(Val, Val),
+    /// `123 | rtrimstr("x")`
+    StripSuffix(Val, Val),
     /// `now`
     SystemTime(String),
     /// `"" | fromdateiso8601`
@@ -70,6 +80,7 @@ impl fmt::Display for Error {
             Self::Str(v) => write!(f, "cannot use {v} as string"),
             Self::Arr(v) => write!(f, "cannot use {v} as array"),
             Self::Length(v) => write!(f, "{v} has no length"),
+            Self::ByteLength(v) => write!(f, "only strings have UTF-8 byte length: {v}"),
             Self::Round(v) => write!(f, "cannot round {v}"),
             Self::FromJson(v, why) => write!(f, "cannot parse {v} as JSON: {why}"),
             Self::Keys(v) => write!(f, "{v} has no keys"),
@@ -85,6 +96,10 @@ impl fmt::Display for Error {
             Self::PathExp => write!(f, "invalid path expression"),
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
+            Self::StartsWith(l, r) => write!(f, "cannot check whether {l} starts with {r}"),
+            Self::EndsWith(l, r) => write!(f, "cannot check whether {l} ends with {r}"),
+            Self::StripPrefix(l, r) => write!(f, "cannot strip prefix {r} from {l}"),
+            Self::StripSuffix(l, r) => write!(f, "cannot strip suffix {r} from {l}"),
             Self::SystemTime(why) => write!(f, "Could not get system time: {why}"),
             Self::FromIso8601(v, why) => write!(f, "cannot parse {v} as ISO-8601 timestamp: {why}"),
             Self::ToIso8601(v, why) => write!(f, "cannot format {v} as ISO-8601 timestamp: {why}"),

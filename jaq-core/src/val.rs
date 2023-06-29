@@ -148,6 +148,16 @@ impl Val {
         }
     }
 
+    /// Return the number of bytes used to encode a string in UTF-8
+    ///
+    /// Fail on any other value.
+    pub fn byte_len(&self) -> Result<Self, Error> {
+        match self {
+            Self::Str(s) => Ok(Self::Int(s.len() as isize)),
+            _ => Err(Error::ByteLength(self.clone())),
+        }
+    }
+
     /// Apply a rounding function to floating-point numbers, then convert them to integers.
     ///
     /// Return integers unchanged, and fail on any other input.
@@ -175,7 +185,7 @@ impl Val {
     /// Return any `key` for which `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
-    pub fn keys(&self) -> Result<Vec<Val>, Error> {
+    pub fn keys_unsorted(&self) -> Result<Vec<Val>, Error> {
         match self {
             Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
             Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),
@@ -340,6 +350,50 @@ impl Val {
         let mut err = None;
         Rc::make_mut(&mut a).sort_by_cached_key(|x| x.clone().run_if_ok(&mut err, &f));
         err.map_or(Ok(Val::Arr(a)), Err)
+    }
+
+    /// Return true if string starts with a given string.
+    ///
+    /// Fail on any other value.
+    pub fn starts_with(&self, other: &Self) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => Ok(s.starts_with(&**o)),
+            _ => Err(Error::StartsWith(self.clone(), other.clone())),
+        }
+    }
+
+    /// Return true if string ends with a given string.
+    ///
+    /// Fail on any other value.
+    pub fn ends_with(&self, other: &Self) -> Result<bool, Error> {
+        match (self, other) {
+            (Self::Str(s), Self::Str(o)) => Ok(s.ends_with(&**o)),
+            _ => Err(Error::EndsWith(self.clone(), other.clone())),
+        }
+    }
+
+    /// Remove given prefix string from the string.
+    ///
+    /// Fail on any other value.
+    pub fn strip_prefix(&self, other: &Self) -> Result<Rc<String>, Error> {
+        if let (Self::Str(s), Self::Str(o)) = (self, other) {
+            Ok(s.strip_prefix(&**o)
+                .map_or_else(|| s.clone(), |y| Rc::new(y.into())))
+        } else {
+            Err(Error::StripPrefix(self.clone(), other.clone()))
+        }
+    }
+
+    /// Remove given suffix string from the string.
+    ///
+    /// Fail on any other value.
+    pub fn strip_suffix(&self, other: &Self) -> Result<Rc<String>, Error> {
+        if let (Self::Str(s), Self::Str(o)) = (self, other) {
+            Ok(s.strip_suffix(&**o)
+                .map_or_else(|| s.clone(), |y| Rc::new(y.into())))
+        } else {
+            Err(Error::StripSuffix(self.clone(), other.clone()))
+        }
     }
 
     /// Group an array by the given function.
@@ -585,6 +639,10 @@ impl core::ops::Mul for Val {
             (Int(x), Int(y)) => Ok(Int(x * y)),
             (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
+            (Str(s), Int(i)) | (Int(i), Str(s)) if i > 0 => Ok(Self::str(s.repeat(i as usize))),
+            // string multiplication with negatives or 0 results in null
+            // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
+            (Str(_), Int(_)) | (Int(_), Str(_)) => Ok(Null),
             (Num(n), r) => Self::from_dec_str(&n) * r,
             (l, Num(n)) => l * Self::from_dec_str(&n),
             (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
