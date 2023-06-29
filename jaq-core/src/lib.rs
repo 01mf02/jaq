@@ -131,6 +131,7 @@ impl Filter {
     /// Apply the filter to the given value and return stream of results.
     pub fn run<'a>(&'a self, mut ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
         ctx.recs = &self.1;
+        use filter::FilterT;
         self.0.run((ctx, val))
     }
 }
