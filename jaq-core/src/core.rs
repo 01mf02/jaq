@@ -54,9 +54,7 @@ const CORE_RUN: [(&str, usize, RunPtr); 36] = [
             .map_err(|e| Error::SystemTime(e.to_string()));
         box_once(duration.map(|x| x.as_secs_f64()).map(Val::Float))
     }),
-    ("fromdateiso8601", 0, |_, cv| {
-        box_once(cv.1.from_iso8601().map(Val::Float))
-    }),
+    ("fromdateiso8601", 0, |_, cv| box_once(cv.1.from_iso8601())),
     ("todateiso8601", 0, |_, cv| {
         box_once(cv.1.to_iso8601().map(Val::str))
     }),

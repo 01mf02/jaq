@@ -260,15 +260,22 @@ impl Val {
     }
 
     /// Parse a string as an ISO-8601 timestamp
-    pub fn from_iso8601(&self) -> Result<f64, Error> {
+    pub fn from_iso8601(&self) -> ValR {
         use time::format_description::well_known::Iso8601;
         use time::OffsetDateTime;
         match self {
             Self::Str(s) => {
                 let datetime = OffsetDateTime::parse(s, &Iso8601::DEFAULT)
                     .map_err(|e| Error::FromIso8601(self.clone(), e.to_string()))?;
-                let duration = (datetime.unix_timestamp_nanos() as f64) / 1_000_000_000_f64;
-                Ok(duration)
+                let epoch_s = datetime.unix_timestamp();
+                match s.as_str() {
+                    s if s.contains('.') => Ok(Self::Float(
+                        epoch_s as f64 + (datetime.nanosecond() as f64 * 1e-9_f64),
+                    )),
+                    _ => isize::try_from(epoch_s)
+                        .map(Self::Int)
+                        .or_else(|_| Ok(Self::Num(epoch_s.to_string().into()))),
+                }
             }
             _ => Err(Error::FromIso8601(
                 self.clone(),
