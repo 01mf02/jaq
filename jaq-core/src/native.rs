@@ -1,6 +1,6 @@
 //! Native filters.
 
-use crate::filter::{Cv, Filter, Update};
+use crate::filter::{Args, Cv, Update};
 use crate::val::ValRs;
 use crate::Error;
 use alloc::boxed::Box;
@@ -12,8 +12,8 @@ pub struct Native {
     pub update: UpdatePtr,
 }
 
-pub type RunPtr = for<'a> fn(&'a [Filter], Cv<'a>) -> ValRs<'a>;
-pub type UpdatePtr = for<'a> fn(&'a [Filter], Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
+pub type RunPtr = for<'a> fn(Args<'a>, Cv<'a>) -> ValRs<'a>;
+pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
 
 impl Native {
     /// Create a native filter from a run function.

@@ -91,28 +91,19 @@ pub struct Owned(Filter);
 */
 
 #[derive(Copy, Clone)]
-pub struct Ref<'a>(pub &'a Filter);
+pub struct Args<'a>(&'a [Filter]);
 
-impl FilterT for Ref<'_> {
-    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
-        self.0.run(cv)
-    }
-
-    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
-        self.0.update(cv, f)
-    }
-}
-
-/*
-#[derive(Copy, Clone)]
-pub struct ArgsRef<'a>(&'a [Filter]);
-
-impl<'a> ArgsRef<'a> {
-    pub fn get(self, i: usize) -> Ref<'a> {
-        Ref(&self.0[i])
+impl<'a> Args<'a> {
+    /// Obtain the n-th argument passed to the filter, crash if it is not given.
+    ///
+    /// This function returns an `impl` in order not to expose the `Filter` type publicly.
+    /// It would be more elegant to implement `Index<usize>` here instead,
+    /// but because of returning `impl`, we cannot do this right now, see:
+    /// <https://github.com/rust-lang/rust/issues/63063>.
+    pub fn get(self, i: usize) -> &'a impl FilterT {
+        &self.0[i]
     }
 }
-*/
 
 impl FilterT for Filter {
     fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
@@ -213,7 +204,7 @@ impl FilterT for Filter {
                 rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
-            Self::Native(Native { run, .. }, args) => (run)(args, cv),
+            Self::Native(Native { run, .. }, args) => (run)(Args(args), cv),
         }
     }
 
@@ -257,7 +248,7 @@ impl FilterT for Filter {
                 rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Native(Native { update, .. }, args) => (update)(args, cv, f),
+            Self::Native(Native { update, .. }, args) => (update)(Args(args), cv, f),
         }
     }
 }
