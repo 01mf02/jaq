@@ -371,6 +371,49 @@ impl Val {
         Ok(Val::arr(grouped))
     }
 
+    /// Get the minimum or maximum element from an array according to
+    /// the given function.
+    ///
+    /// Fail on any other value.
+    fn minmax_by<'a>(
+        self,
+        f: impl Fn(Val) -> ValRs<'a>,
+        swap: impl Fn(&Vec<Val>, &Vec<Val>) -> bool,
+    ) -> ValR {
+        let mut err = None;
+        let result = rc_unwrap_or_clone(self.into_arr()?)
+            .into_iter()
+            .map(|x| (x.clone().run_if_ok(&mut err, &f), x))
+            .reduce(|(acc_k, acc_x), (k, x)| {
+                if swap(&k, &acc_k) {
+                    (k, x)
+                } else {
+                    (acc_k, acc_x)
+                }
+            });
+        if let Some(err) = err {
+            Err(err)
+        } else {
+            Ok(result.map(|pair| pair.1).unwrap_or(Val::Null))
+        }
+    }
+
+    /// Get the minimum element from an array according to the given
+    /// function.
+    ///
+    /// Fail on any other value.
+    pub fn min_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        self.minmax_by(f, |v, min_v| v < min_v)
+    }
+
+    /// Get the maximum element from an array according to the given
+    /// function.
+    ///
+    /// Fail on any other value.
+    pub fn max_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+        self.minmax_by(f, |v, max_v| v >= max_v)
+    }
+
     /// Split a string by a given separator string.
     ///
     /// Fail if any of the two given values is not a string.
