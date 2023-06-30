@@ -60,10 +60,10 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         box_once(cv.1.group_by(|v| args.get(0).run((cv.0.clone(), v))))
     }),
     ("min_by", 1, |args, cv| {
-        box_once(cv.1.min_by(|v| args.get(0).run((cv.0.clone(), v))))
+        box_once(cv.1.cmp_by(|v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my))
     }),
     ("max_by", 1, |args, cv| {
-        box_once(cv.1.max_by(|v| args.get(0).run((cv.0.clone(), v))))
+        box_once(cv.1.cmp_by(|v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my))
     }),
     ("has", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());

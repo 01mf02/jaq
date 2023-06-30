@@ -375,43 +375,25 @@ impl Val {
     /// the given function.
     ///
     /// Fail on any other value.
-    fn minmax_by<'a>(
+    pub fn cmp_by<'a>(
         self,
         f: impl Fn(Val) -> ValRs<'a>,
-        swap: impl Fn(&Vec<Val>, &Vec<Val>) -> bool,
+        replace: impl Fn(&Vec<Val>, &Vec<Val>) -> bool,
     ) -> ValR {
-        let mut err = None;
-        let result = rc_unwrap_or_clone(self.into_arr()?)
-            .into_iter()
-            .map(|x| (x.clone().run_if_ok(&mut err, &f), x))
-            .reduce(|(acc_k, acc_x), (k, x)| {
-                if swap(&k, &acc_k) {
-                    (k, x)
-                } else {
-                    (acc_k, acc_x)
-                }
-            });
-        if let Some(err) = err {
-            Err(err)
+        let iter = rc_unwrap_or_clone(self.into_arr()?).into_iter();
+        let mut iter = iter.map(|x: Val| (x.clone(), f(x).collect::<Result<_, _>>()));
+        let (mut mx, mut my) = if let Some((x, y)) = iter.next() {
+            (x, y?)
         } else {
-            Ok(result.map(|pair| pair.1).unwrap_or(Val::Null))
+            return Ok(Val::Null);
+        };
+        for (x, y) in iter {
+            let y = y?;
+            if replace(&my, &y) {
+                (mx, my) = (x, y);
+            }
         }
-    }
-
-    /// Get the minimum element from an array according to the given
-    /// function.
-    ///
-    /// Fail on any other value.
-    pub fn min_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        self.minmax_by(f, |v, min_v| v < min_v)
-    }
-
-    /// Get the maximum element from an array according to the given
-    /// function.
-    ///
-    /// Fail on any other value.
-    pub fn max_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        self.minmax_by(f, |v, max_v| v >= max_v)
+        Ok(mx)
     }
 
     /// Split a string by a given separator string.
