@@ -155,6 +155,7 @@ impl Part<Vec<Val>> {
     }
 }
 
+/*
 impl<F> Path<F> {
     pub fn map<F2>(self, f: impl Fn(F) -> F2) -> Path<F2> {
         let path = self.0.into_iter().map(|(p, opt)| (p.map2(&f), opt));
@@ -171,6 +172,7 @@ impl<F> Part<F> {
         }
     }
 }
+*/
 
 impl<F> From<Part<F>> for Path<F> {
     fn from(p: Part<F>) -> Self {

@@ -51,7 +51,6 @@ mod filter;
 mod lazy_iter;
 mod lir;
 mod mir;
-mod native;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -63,6 +62,7 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
+pub use filter::{Args, FilterT, Native};
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
