@@ -108,6 +108,20 @@ fn limit() {
     give(json!(null), "[limit(-1; 0, 1)]", json!([]));
 }
 
+yields!(min_empty, "[] | min_by(.)", json!(null));
+// when output is equal, min_by selects the left element and max_by the right one
+yields!(
+    min_max_eq,
+    "[{a: 1, b: 3}, {a: 1, b: 2}] | [(min_by(.a), max_by(.a)) | .b]",
+    [3, 2]
+);
+// multiple-output functions can be used to differentiate elements
+yields!(
+    max_mult,
+    "[{a: 1, b: 3}, {a: 1, b: 2}] | max_by(.a, .b) | .b",
+    3
+);
+
 #[test]
 fn range() {
     let y = json!([-1, -1, 0, 1, 1]);
