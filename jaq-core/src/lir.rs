@@ -266,7 +266,7 @@ impl Ctx {
             }
             Expr::Try(f) => Filter::Try(get(*f, self)),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
-            Expr::Recurse => Filter::recurse(),
+            Expr::Recurse => Filter::recurse0(),
 
             Expr::Binary(l, BinaryOp::Pipe(None), r) => {
                 Filter::Pipe(get(*l, self), false, get(*r, self))

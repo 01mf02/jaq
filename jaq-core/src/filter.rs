@@ -1,4 +1,3 @@
-pub use crate::native::Native;
 use crate::path::{self, Path};
 use crate::results::{box_once, fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
@@ -86,20 +85,48 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
 
 pub type Cv<'c> = (Ctx<'c>, Val);
 
+/// A filter which is implemented using function pointers.
+#[derive(Clone)]
+pub struct Native {
+    run: RunPtr,
+    update: UpdatePtr,
+}
+
+pub type RunPtr = for<'a> fn(Args<'a>, Cv<'a>) -> ValRs<'a>;
+pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
+
+impl Native {
+    /// Create a native filter from a run function, without support for updates.
+    pub const fn new(run: RunPtr) -> Self {
+        Self::with_update(run, |_, _, _| crate::results::box_once(Err(Error::PathExp)))
+    }
+
+    /// Create a native filter from a run function and an update function (used for `filter |= ...`).
+    pub const fn with_update(run: RunPtr, update: UpdatePtr) -> Self {
+        Self { run, update }
+    }
+}
+
+impl core::fmt::Debug for Native {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.debug_struct("Native").finish()
+    }
+}
+
 /*
 pub struct Owned(Filter);
 */
 
+/// Arguments passed to a native filter.
 #[derive(Copy, Clone)]
 pub struct Args<'a>(&'a [Filter]);
 
 impl<'a> Args<'a> {
     /// Obtain the n-th argument passed to the filter, crash if it is not given.
-    ///
-    /// This function returns an `impl` in order not to expose the `Filter` type publicly.
-    /// It would be more elegant to implement `Index<usize>` here instead,
-    /// but because of returning `impl`, we cannot do this right now, see:
-    /// <https://github.com/rust-lang/rust/issues/63063>.
+    // This function returns an `impl` in order not to expose the `Filter` type publicly.
+    // It would be more elegant to implement `Index<usize>` here instead,
+    // but because of returning `impl`, we cannot do this right now, see:
+    // <https://github.com/rust-lang/rust/issues/63063>.
     pub fn get(self, i: usize) -> &'a impl FilterT {
         &self.0[i]
     }
@@ -195,7 +222,7 @@ impl FilterT for Filter {
                     }
                 }
             }
-            Self::Recurse(f) => f.recurse1(true, true, cv),
+            Self::Recurse(f) => f.recurse(true, true, cv),
 
             Self::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
             Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
@@ -208,7 +235,6 @@ impl FilterT for Filter {
         }
     }
 
-    /// `p.update(cv, f)` returns the output of `v | p |= f`
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
         let err = box_once(Err(Error::PathExp));
         match self {
@@ -254,8 +280,8 @@ impl FilterT for Filter {
 }
 
 impl Filter {
-    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
-    pub fn recurse() -> Self {
+    /// `..`, also known as `recurse/0`, is defined as `recurse(.[]?)`
+    pub fn recurse0() -> Self {
         // `[]?`
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?`
@@ -264,8 +290,12 @@ impl Filter {
     }
 }
 
+/// Function from a value to a stream of value results.
 pub trait FilterT {
+    /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
     fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a>;
+
+    /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
     fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs;
 
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
@@ -308,7 +338,13 @@ pub trait FilterT {
         }
     }
 
-    fn recurse1<'a>(&'a self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
+    /// Return the output of `recurse(f)` if `inner` and `outer` are true.
+    ///
+    /// This function implements a generalisation of `recurse(f)`:
+    /// if `inner` is true, it returns values for which `f` yields at least one output, and
+    /// if `outer` is true, it returns values for which `f` yields no output.
+    /// This is useful to implement `while` and `until`.
+    fn recurse<'a>(&'a self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
         let f = move |v| self.run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
@@ -323,11 +359,6 @@ pub trait FilterT {
                 self.update((cv.0.clone(), v), Box::new(rec))
             })
         }))
-    }
-
-    fn regex<'a>(&'a self, flags: &'a Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
-        let flags_re = flags.cartesian(self, (cv.0, cv.1.clone()));
-        Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
     }
 }
 

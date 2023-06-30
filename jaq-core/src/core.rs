@@ -1,8 +1,8 @@
 //! Core filters.
 
-use crate::filter::FilterT;
-use crate::native::{Native, RunPtr, UpdatePtr};
+use crate::filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
 use crate::results::{box_once, then};
+use crate::val::ValRs;
 use crate::{Error, Val};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
@@ -18,6 +18,11 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         (name.to_string(), *arity, Native::with_update(*run, *update))
     });
     core_run.chain(core_update)
+}
+
+fn regex<'a, F: FilterT>(re: &'a F, flags: &'a F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {
+    let flags_re = flags.cartesian(re, (cv.0, cv.1.clone()));
+    Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
 }
 
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
@@ -67,13 +72,13 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
     }),
     ("matches", 2, |args, cv| {
-        args.get(0).regex(args.get(1), false, true, cv)
+        regex(args.get(0), args.get(1), false, true, cv)
     }),
     ("split_matches", 2, |args, cv| {
-        args.get(0).regex(args.get(1), true, true, cv)
+        regex(args.get(0), args.get(1), true, true, cv)
     }),
     ("split_", 2, |args, cv| {
-        args.get(0).regex(args.get(1), true, false, cv)
+        regex(args.get(0), args.get(1), true, false, cv)
     }),
     ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
     ("last", 1, |args, cv| {
@@ -101,10 +106,10 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
     }),
     ("recurse_inner", 1, |args, cv| {
-        args.get(0).recurse1(true, false, cv)
+        args.get(0).recurse(true, false, cv)
     }),
     ("recurse_outer", 1, |args, cv| {
-        args.get(0).recurse1(false, true, cv)
+        args.get(0).recurse(false, true, cv)
     }),
     ("startswith", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
@@ -146,7 +151,7 @@ const CORE_UPDATE: &[(&str, usize, RunPtr, UpdatePtr)] = &[
     (
         "recurse",
         1,
-        |args, cv| args.get(0).recurse1(true, true, cv),
+        |args, cv| args.get(0).recurse(true, true, cv),
         |args, cv, f| args.get(0).recurse_update(cv, f),
     ),
 ];
