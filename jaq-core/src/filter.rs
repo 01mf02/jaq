@@ -113,10 +113,6 @@ impl core::fmt::Debug for Native {
     }
 }
 
-/*
-pub struct Owned(Filter);
-*/
-
 /// Arguments passed to a native filter.
 #[derive(Copy, Clone)]
 pub struct Args<'a>(&'a [Filter]);
@@ -181,7 +177,12 @@ impl FilterT for Filter {
                     if v.as_bool() { then_ } else { else_ }.run(cv.clone())
                 })
             })),
-            Self::Path(f, path) => path.run(cv, f),
+            Self::Path(f, path) => then(path.eval(|p| p.run(cv.clone())), |path| {
+                let outs = f.run(cv).map(move |i| path.collect(i?));
+                Box::new(
+                    outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))),
+                )
+            }),
             Self::Update(path, f) => path.update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| f.run((cv.0.clone(), v))),
@@ -250,7 +251,11 @@ impl FilterT for Filter {
             Self::Id => f(cv.1),
             Self::Path(l, path) => l.update(
                 (cv.0.clone(), cv.1),
-                Box::new(move |v| path.update((cv.0.clone(), v), |v| f(v))),
+                Box::new(move |v| {
+                    then(path.eval(|i| i.run((cv.0.clone(), v.clone()))), |path| {
+                        path.update(v, &f)
+                    })
+                }),
             ),
             Self::Pipe(l, false, r) => l.update(
                 (cv.0.clone(), cv.1),
@@ -359,45 +364,5 @@ pub trait FilterT {
                 self.update((cv.0.clone(), v), Box::new(rec))
             })
         }))
-    }
-}
-
-impl Path<Filter> {
-    fn update<'a: 'f, 'f, F>(&'a self, cv: Cv<'a>, f: F) -> ValRs<'f>
-    where
-        F: Fn(Val) -> ValRs<'f> + Copy,
-    {
-        let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
-        then(path.collect(), |path: Vec<_>| {
-            path::Part::update(path.iter(), cv.1, f)
-        })
-    }
-
-    fn run<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> ValRs {
-        let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
-        let path = match path.collect::<Result<Vec<_>, _>>() {
-            Ok(path) => path,
-            Err(e) => return box_once(Err(e)),
-        };
-        let outs = init.run(cv).map(move |i| {
-            path.iter().try_fold(Vec::from([i?]), |acc, (part, opt)| {
-                opt.collect(acc.into_iter().flat_map(|x| part.collect(x)))
-            })
-        });
-        Box::new(outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))))
-    }
-}
-
-impl path::Part<Filter> {
-    fn idx<'a>(&'a self, cv: Cv<'a>) -> Result<path::Part<Vec<Val>>, Error> {
-        use path::Part::*;
-        match self {
-            Index(i) => Ok(Index(i.run(cv).collect::<Result<_, _>>()?)),
-            Range(from, until) => {
-                let from = from.as_ref().map(|f| f.run(cv.clone()).collect());
-                let until = until.as_ref().map(|u| u.run(cv).collect());
-                Ok(Range(from.transpose()?, until.transpose()?))
-            }
-        }
     }
 }
