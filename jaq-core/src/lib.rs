@@ -78,23 +78,21 @@ type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
 /// Filter execution context.
 #[derive(Clone)]
-pub struct Ctx<'i> {
+pub struct Ctx<'a> {
     /// variable bindings
     vars: RcList<Val>,
-    inputs: &'i Inputs<'i>,
-    recs: &'i [(usize, filter::Filter)],
+    inputs: &'a Inputs<'a>,
 }
 
-impl<'i> Ctx<'i> {
+impl<'a> Ctx<'a> {
     /// Construct a context.
-    pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'i Inputs<'i>) -> Self {
+    pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'a Inputs<'a>) -> Self {
         let vars = vars.into_iter().fold(RcList::Nil, |acc, v| acc.cons(v));
-        let recs = &[];
-        Self { vars, inputs, recs }
+        Self { vars, inputs }
     }
 
     /// Add a new variable binding.
-    pub fn cons_var(mut self, x: Val) -> Self {
+    pub(crate) fn cons_var(mut self, x: Val) -> Self {
         self.vars = self.vars.cons(x);
         self
     }
@@ -125,12 +123,11 @@ impl<'i> Ctx<'i> {
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Default, Clone)]
-pub struct Filter(filter::Filter, Vec<(usize, filter::Filter)>);
+pub struct Filter(filter::Owned);
 
 impl Filter {
     /// Apply the filter to the given value and return stream of results.
     pub fn run<'a>(&'a self, mut ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
-        ctx.recs = &self.1;
         self.0.run((ctx, val))
     }
 }
@@ -180,11 +177,9 @@ impl Definitions {
         self.insert_defs(defs, errs);
         self.root_filter(body, errs);
         if !errs.is_empty() {
-            return Filter(filter::Filter::Id, Vec::new());
+            return Filter::default()
         }
         //std::dbg!("before LIR");
-        let (f, recs) = lir::root_def(&self);
-        //std::dbg!("after LIR", &f, &recs);
-        Filter(f, recs)
+        Filter(lir::root_def(&self))
     }
 }

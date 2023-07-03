@@ -4,7 +4,7 @@
 //! The invariants in this module can be difficult to preserve.
 //! `assert!` your way around here and watch your step.
 
-use crate::filter::Filter;
+use crate::filter::Ast as Filter;
 use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};

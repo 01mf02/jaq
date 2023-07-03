@@ -20,7 +20,7 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     core_run.chain(core_update)
 }
 
-fn regex<'a, F: FilterT>(re: &'a F, flags: &'a F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {
+fn regex<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {
     let flags_re = flags.cartesian(re, (cv.0, cv.1.clone()));
     Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
 }
