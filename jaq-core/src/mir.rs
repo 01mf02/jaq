@@ -70,6 +70,10 @@ impl Def {
     }
 }
 
+/// Link names and arities to corresponding filters.
+///
+/// For example, if we define a filter `def map(f): [.[] | f]`,
+/// then the definitions will associate `map/1` to its definition.
 pub struct Defs(Vec<Def>);
 
 impl Defs {

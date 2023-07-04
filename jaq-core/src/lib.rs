@@ -61,6 +61,7 @@ pub use jaq_parse as parse;
 
 pub use error::Error;
 pub use filter::{Args, FilterT, Native};
+pub use mir::Ctx as ParseCtx;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
@@ -117,12 +118,6 @@ impl<'a> Ctx<'a> {
 
 /// Function from a value to a stream of value results.
 pub type Filter = filter::Owned;
-
-/// Link names and arities to corresponding filters.
-///
-/// For example, if we define a filter `def map(f): [.[] | f]`,
-/// then the definitions will associate `map/1` to its definition.
-pub use mir::Ctx as ParseCtx;
 
 impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
