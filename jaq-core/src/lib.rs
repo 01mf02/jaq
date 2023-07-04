@@ -60,7 +60,7 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
-pub use filter::{Args, FilterT, Native};
+pub use filter::{Args, FilterT, Native, Owned as Filter};
 pub use mir::Ctx as ParseCtx;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
@@ -115,9 +115,6 @@ impl<'a> Ctx<'a> {
         self
     }
 }
-
-/// Function from a value to a stream of value results.
-pub type Filter = filter::Owned;
 
 impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
