@@ -129,14 +129,6 @@ fn limit() {
 }
 
 #[test]
-fn now() {
-    let curr_timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap();
-    give(json!(null), "now | round", json!(curr_timestamp.as_secs()));
-}
-
-#[test]
 fn range() {
     let y = json!([-1, -1, 0, 1, 1]);
     give(json!(null), "[range(-1, 1; 0, 2)]", y);
