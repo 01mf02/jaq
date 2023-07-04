@@ -1,4 +1,3 @@
-pub use crate::native::Native;
 use crate::path::{self, Path};
 use crate::results::{box_once, fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
@@ -9,8 +8,21 @@ use jaq_parse::filter::FoldType;
 use jaq_parse::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
+#[derive(Debug, Default, Clone)]
+pub struct Owned(Ast, Vec<(usize, Ast)>);
+
+#[derive(Debug, Copy, Clone)]
+pub struct Ref<'a>(&'a Ast, &'a [(usize, Ast)]);
+
+impl Owned {
+    pub(crate) fn new(main: Ast, recs: Vec<(usize, Ast)>) -> Self {
+        Self(main, recs)
+    }
+}
+
+/// Function from a value to a stream of value results.
 #[derive(Clone, Debug, Default)]
-pub enum Filter {
+pub enum Ast {
     #[default]
     Id,
     Int(isize),
@@ -68,7 +80,7 @@ pub enum Filter {
         id: usize,
     },
 
-    Native(Native, Vec<Filter>),
+    Native(Native, Vec<Self>),
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
@@ -86,49 +98,76 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
 
 pub type Cv<'c> = (Ctx<'c>, Val);
 
-/*
-pub struct Owned(Filter);
-*/
+/// A filter which is implemented using function pointers.
+#[derive(Clone)]
+pub struct Native {
+    run: RunPtr,
+    update: UpdatePtr,
+}
 
-#[derive(Copy, Clone)]
-pub struct Ref<'a>(pub &'a Filter);
+pub type RunPtr = for<'a> fn(Args<'a>, Cv<'a>) -> ValRs<'a>;
+pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
 
-impl FilterT for Ref<'_> {
-    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
-        self.0.run(cv)
+impl Native {
+    /// Create a native filter from a run function, without support for updates.
+    pub const fn new(run: RunPtr) -> Self {
+        Self::with_update(run, |_, _, _| crate::results::box_once(Err(Error::PathExp)))
     }
 
-    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
-        self.0.update(cv, f)
+    /// Create a native filter from a run function and an update function (used for `filter |= ...`).
+    pub const fn with_update(run: RunPtr, update: UpdatePtr) -> Self {
+        Self { run, update }
     }
 }
 
-/*
-#[derive(Copy, Clone)]
-pub struct ArgsRef<'a>(&'a [Filter]);
-
-impl<'a> ArgsRef<'a> {
-    pub fn get(self, i: usize) -> Ref<'a> {
-        Ref(&self.0[i])
+impl core::fmt::Debug for Native {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.debug_struct("Native").finish()
     }
 }
-*/
 
-impl FilterT for Filter {
-    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a> {
+/// Arguments passed to a native filter.
+#[derive(Copy, Clone)]
+pub struct Args<'a>(&'a [Ast], &'a [(usize, Ast)]);
+
+impl<'a> Args<'a> {
+    /// Obtain the n-th argument passed to the filter, crash if it is not given.
+    // This function returns an `impl` in order not to expose the `Filter` type publicly.
+    // It would be more elegant to implement `Index<usize>` here instead,
+    // but because of returning `impl`, we cannot do this right now, see:
+    // <https://github.com/rust-lang/rust/issues/63063>.
+    pub fn get(self, i: usize) -> impl FilterT<'a> {
+        Ref(&self.0[i], self.1)
+    }
+}
+
+impl<'a> FilterT<'a> for &'a Owned {
+    fn run(self, cv: Cv<'a>) -> ValRs<'a> {
+        Ref(&self.0, &*self.1).run(cv)
+    }
+
+    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+        Ref(&self.0, &*self.1).update(cv, f)
+    }
+}
+
+impl<'a> FilterT<'a> for Ref<'a> {
+    fn run(self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::once;
         use itertools::Itertools;
-        match self {
-            Self::Id => box_once(Ok(cv.1)),
-            Self::Int(n) => box_once(Ok(Val::Int(*n))),
-            Self::Float(x) => box_once(Ok(Val::Float(*x))),
-            Self::Str(s) => box_once(Ok(Val::str(s.clone()))),
-            Self::Array(None) => box_once(Ok(Val::Arr(Default::default()))),
-            Self::Array(Some(f)) => box_once(f.run(cv).collect::<Result<_, _>>().map(Val::arr)),
-            Self::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
-            Self::Object(o) => Box::new(
+        // wrap a filter AST with the filter definitions
+        let w = move |f: &'a Ast| Ref(f, self.1);
+        match &self.0 {
+            Ast::Id => box_once(Ok(cv.1)),
+            Ast::Int(n) => box_once(Ok(Val::Int(*n))),
+            Ast::Float(x) => box_once(Ok(Val::Float(*x))),
+            Ast::Str(s) => box_once(Ok(Val::str(s.clone()))),
+            Ast::Array(None) => box_once(Ok(Val::Arr(Default::default()))),
+            Ast::Array(Some(f)) => box_once(w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)),
+            Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
+            Ast::Object(o) => Box::new(
                 o.iter()
-                    .map(|(kf, vf)| Self::cartesian(kf, vf, cv.clone()).collect::<Vec<_>>())
+                    .map(|(k, v)| Self::cartesian(w(k), w(v), cv.clone()).collect::<Vec<_>>())
                     .multi_cartesian_product()
                     .map(|kvs| {
                         kvs.into_iter()
@@ -137,63 +176,68 @@ impl FilterT for Filter {
                             .map(Val::obj)
                     }),
             ),
-            Self::Try(f) => Box::new(f.run(cv).filter(|y| y.is_ok())),
-            Self::Neg(f) => Box::new(f.run(cv).map(|v| -v?)),
+            Ast::Try(f) => Box::new(w(f).run(cv).filter(|y| y.is_ok())),
+            Ast::Neg(f) => Box::new(w(f).run(cv).map(|v| -v?)),
 
             // `l | r`
-            Self::Pipe(l, false, r) => Box::new(
-                l.run((cv.0.clone(), cv.1))
-                    .flat_map(move |y| then(y, |y| r.run((cv.0.clone(), y)))),
+            Ast::Pipe(l, false, r) => Box::new(
+                w(l).run((cv.0.clone(), cv.1))
+                    .flat_map(move |y| then(y, |y| w(r).run((cv.0.clone(), y)))),
             ),
             // `l as $x | r`
-            Self::Pipe(l, true, r) => l.pipe(cv, |cv, y| r.run((cv.0.cons_var(y), cv.1))),
+            Ast::Pipe(l, true, r) => w(l).pipe(cv, move |cv, y| w(r).run((cv.0.cons_var(y), cv.1))),
 
-            Self::Comma(l, r) => Box::new(l.run(cv.clone()).chain(r.run(cv))),
-            Self::Alt(l, r) => {
-                let mut l = l
+            Ast::Comma(l, r) => Box::new(w(l).run(cv.clone()).chain(w(r).run(cv))),
+            Ast::Alt(l, r) => {
+                let mut l = w(l)
                     .run(cv.clone())
                     .filter(|v| v.as_ref().map_or(true, |v| v.as_bool()));
                 match l.next() {
                     Some(head) => Box::new(once(head).chain(l)),
-                    None => r.run(cv),
+                    None => w(r).run(cv),
                 }
             }
-            Self::Ite(if_, then_, else_) => Box::new(if_.run(cv.clone()).flat_map(move |v| {
+            Ast::Ite(if_, then_, else_) => Box::new(w(if_).run(cv.clone()).flat_map(move |v| {
                 then(v, |v| {
-                    if v.as_bool() { then_ } else { else_ }.run(cv.clone())
+                    w(if v.as_bool() { then_ } else { else_ }).run(cv.clone())
                 })
             })),
-            Self::Path(f, path) => path.run(cv, f),
-            Self::Update(path, f) => path.update(
+            Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
+                let outs = w(f).run(cv).map(move |i| path.collect(i?));
+                Box::new(
+                    outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))),
+                )
+            }),
+            Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
-                Box::new(move |v| f.run((cv.0.clone(), v))),
+                Box::new(move |v| w(f).run((cv.0.clone(), v))),
             ),
-            Self::UpdateMath(path, op, f) => f.pipe(cv, move |cv, y| {
-                path.update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
+            Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
-            Self::Assign(path, f) => f.pipe(cv, |cv, y| {
-                path.update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
+            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
-            Self::Logic(l, stop, r) => Box::new(l.run(cv.clone()).flat_map(move |l| {
+            Ast::Logic(l, stop, r) => Box::new(w(l).run(cv.clone()).flat_map(move |l| {
                 then(l, |l| {
                     if l.as_bool() == *stop {
                         box_once(Ok(Val::Bool(*stop)))
                     } else {
-                        Box::new(r.run(cv.clone()).map(|r| Ok(Val::Bool(r?.as_bool()))))
+                        Box::new(w(r).run(cv.clone()).map(|r| Ok(Val::Bool(r?.as_bool()))))
                     }
                 })
             })),
-            Self::Math(l, op, r) => {
-                Box::new(Self::cartesian(l, r, cv).map(|(x, y)| op.run(x?, y?)))
+            Ast::Math(l, op, r) => {
+                Box::new(Self::cartesian(w(l), w(r), cv).map(|(x, y)| op.run(x?, y?)))
             }
-            Self::Ord(l, op, r) => {
-                Box::new(Self::cartesian(l, r, cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))))
-            }
+            Ast::Ord(l, op, r) => Box::new(
+                Self::cartesian(w(l), w(r), cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))),
+            ),
 
-            Self::Fold(typ, xs, init, f) => {
-                let xs = rc_lazy_list::List::from_iter(xs.run(cv.clone()));
-                let init = init.run(cv.clone());
-                let f = move |x, v| f.run((cv.0.clone().cons_var(x), v));
+            Ast::Fold(typ, xs, init, f) => {
+                let xs = rc_lazy_list::List::from_iter(w(xs).run(cv.clone()));
+                let init = w(init).run(cv.clone());
+                let f = move |x, v| w(f).run((cv.0.clone().cons_var(x), v));
                 match typ {
                     FoldType::Reduce => Box::new(fold(false, xs, init, f)),
                     FoldType::For => Box::new(fold(true, xs, init, f)),
@@ -204,84 +248,94 @@ impl FilterT for Filter {
                     }
                 }
             }
-            Self::Recurse(f) => f.recurse1(true, true, cv),
+            Ast::Recurse(f) => w(f).recurse(true, true, cv),
 
-            Self::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
-            Self::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
-                let (save, rec) = &cv.0.recs[*id];
+            Ast::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
+            Ast::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
+                let (save, rec) = &self.1[*id];
                 //std::dbg!(save, skip, &cv.0.vars, &cv.0.clone().save_skip_vars(*save, *skip).vars);
-                rec.run((cv.0.save_skip_vars(*save, *skip), cv.1))
+                w(rec).run((cv.0.save_skip_vars(*save, *skip), cv.1))
             })),
 
-            Self::Native(Native { run, .. }, args) => (run)(args, cv),
+            Ast::Native(Native { run, .. }, args) => (run)(Args(args, self.1), cv),
         }
     }
 
-    /// `p.update(cv, f)` returns the output of `v | p |= f`
-    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs {
+    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         let err = box_once(Err(Error::PathExp));
-        match self {
-            Self::Int(_) | Self::Float(_) | Self::Str(_) => err,
-            Self::Array(_) | Self::Object(_) => err,
-            Self::Neg(_) | Self::Logic(..) | Self::Math(..) | Self::Ord(..) => err,
-            Self::Update(..) | Self::UpdateMath(..) | Self::Assign(..) => err,
+        let w = move |f: &'a Ast| Ref(f, self.1);
+        match self.0 {
+            Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
+            Ast::Array(_) | Ast::Object(_) => err,
+            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
+            Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Self::Try(_) | Self::Alt(..) => todo!(),
-            Self::Fold(..) => todo!(),
+            Ast::Try(_) | Ast::Alt(..) => todo!(),
+            Ast::Fold(..) => todo!(),
 
-            Self::Id => f(cv.1),
-            Self::Path(l, path) => l.update(
+            Ast::Id => f(cv.1),
+            Ast::Path(l, path) => w(l).update(
                 (cv.0.clone(), cv.1),
-                Box::new(move |v| path.update((cv.0.clone(), v), |v| f(v))),
+                Box::new(move |v| {
+                    then(path.eval(|i| w(i).run((cv.0.clone(), v.clone()))), |path| {
+                        path.update(v, &f)
+                    })
+                }),
             ),
-            Self::Pipe(l, false, r) => l.update(
+            Ast::Pipe(l, false, r) => w(l).update(
                 (cv.0.clone(), cv.1),
-                Box::new(move |v| r.update((cv.0.clone(), v), f.clone())),
+                Box::new(move |v| w(r).update((cv.0.clone(), v), f.clone())),
             ),
-            Self::Pipe(l, true, r) => reduce(l.run(cv.clone()), cv.1, move |x, v| {
-                r.update((cv.0.clone().cons_var(x), v), f.clone())
+            Ast::Pipe(l, true, r) => reduce(w(l).run(cv.clone()), cv.1, move |x, v| {
+                w(r).update((cv.0.clone().cons_var(x), v), f.clone())
             }),
-            Self::Comma(l, r) => {
-                let l = l.update((cv.0.clone(), cv.1), f.clone());
-                Box::new(l.flat_map(move |v| then(v, |v| r.update((cv.0.clone(), v), f.clone()))))
+            Ast::Comma(l, r) => {
+                let l = w(l).update((cv.0.clone(), cv.1), f.clone());
+                Box::new(
+                    l.flat_map(move |v| then(v, |v| w(r).update((cv.0.clone(), v), f.clone()))),
+                )
             }
-            Self::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
-                if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
+            Ast::Ite(if_, then_, else_) => reduce(w(if_).run(cv.clone()), cv.1, move |x, v| {
+                w(if x.as_bool() { then_ } else { else_ }).update((cv.0.clone(), v), f.clone())
             }),
-            Self::Recurse(l) => l.recurse_update(cv, f),
+            Ast::Recurse(l) => w(l).recurse_update(cv, f),
 
-            Self::Var(_) => err,
-            Self::Call { skip, id } => {
-                let (save, rec) = &cv.0.recs[*id];
-                rec.update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
+            Ast::Var(_) => err,
+            Ast::Call { skip, id } => {
+                let (save, rec) = &self.1[*id];
+                w(rec).update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
             }
 
-            Self::Native(Native { update, .. }, args) => (update)(args, cv, f),
+            Ast::Native(Native { update, .. }, args) => (update)(Args(args, self.1), cv, f),
         }
     }
 }
 
-impl Filter {
-    /// `..`, also known as `recurse`, is defined as `recurse(.[]?)`
-    pub fn recurse() -> Self {
+impl Ast {
+    /// `..`, also known as `recurse/0`, is defined as `recurse(.[]?)`
+    pub fn recurse0() -> Self {
         // `[]?`
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?`
-        let path = Filter::Path(Box::new(Filter::Id), Path(Vec::from([path])));
-        Filter::Recurse(Box::new(path))
+        let path = Ast::Path(Box::new(Ast::Id), Path(Vec::from([path])));
+        Ast::Recurse(Box::new(path))
     }
 }
 
-pub trait FilterT {
-    fn run<'a>(&'a self, cv: Cv<'a>) -> ValRs<'a>;
-    fn update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs;
+/// Function from a value to a stream of value results.
+pub trait FilterT<'a>: Clone + 'a {
+    /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
+    fn run(self, cv: Cv<'a>) -> ValRs<'a>;
+
+    /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
+    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
 
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
     /// In that case, we can consume `cv` instead of cloning it.
-    fn pipe<'a>(&'a self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
+    fn pipe(self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
         let mut l = self.run(cv.clone());
 
         // if we expect at most one element from the left side,
@@ -300,11 +354,7 @@ pub trait FilterT {
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
-    fn cartesian<'a>(
-        &'a self,
-        r: &'a Self,
-        cv: Cv<'a>,
-    ) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
+    fn cartesian(self, r: Self, cv: Cv<'a>) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
         let l = self.run(cv.clone());
         let r: Vec<_> = r.run(cv).collect();
         if r.len() == 1 {
@@ -317,65 +367,27 @@ pub trait FilterT {
         }
     }
 
-    fn recurse1<'a>(&'a self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
-        let f = move |v| self.run((cv.0.clone(), v));
+    /// Return the output of `recurse(f)` if `inner` and `outer` are true.
+    ///
+    /// This function implements a generalisation of `recurse(f)`:
+    /// if `inner` is true, it returns values for which `f` yields at least one output, and
+    /// if `outer` is true, it returns values for which `f` yields no output.
+    /// This is useful to implement `while` and `until`.
+    fn recurse(self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
+        let f = move |v| self.clone().run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
 
     /// Return the output of `recurse(l) |= f`.
-    fn recurse_update<'a>(&'a self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+    fn recurse_update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
         Box::new(f(cv.1).flat_map(move |v| {
             then(v, |v| {
                 let (c, f) = (cv.0.clone(), f.clone());
-                let rec = move |v| self.recurse_update((c.clone(), v), f.clone());
-                self.update((cv.0.clone(), v), Box::new(rec))
+                let slf = self.clone();
+                let rec = move |v| slf.clone().recurse_update((c.clone(), v), f.clone());
+                (self.clone()).update((cv.0.clone(), v), Box::new(rec))
             })
         }))
-    }
-
-    fn regex<'a>(&'a self, flags: &'a Self, s: bool, m: bool, cv: Cv<'a>) -> ValRs {
-        let flags_re = flags.cartesian(self, (cv.0, cv.1.clone()));
-        Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
-    }
-}
-
-impl Path<Filter> {
-    fn update<'a: 'f, 'f, F>(&'a self, cv: Cv<'a>, f: F) -> ValRs<'f>
-    where
-        F: Fn(Val) -> ValRs<'f> + Copy,
-    {
-        let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
-        then(path.collect(), |path: Vec<_>| {
-            path::Part::update(path.iter(), cv.1, f)
-        })
-    }
-
-    fn run<'a>(&'a self, cv: Cv<'a>, init: &'a Filter) -> ValRs {
-        let path = self.0.iter().map(|(p, opt)| Ok((p.idx(cv.clone())?, *opt)));
-        let path = match path.collect::<Result<Vec<_>, _>>() {
-            Ok(path) => path,
-            Err(e) => return box_once(Err(e)),
-        };
-        let outs = init.run(cv).map(move |i| {
-            path.iter().try_fold(Vec::from([i?]), |acc, (part, opt)| {
-                opt.collect(acc.into_iter().flat_map(|x| part.collect(x)))
-            })
-        });
-        Box::new(outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))))
-    }
-}
-
-impl path::Part<Filter> {
-    fn idx<'a>(&'a self, cv: Cv<'a>) -> Result<path::Part<Vec<Val>>, Error> {
-        use path::Part::*;
-        match self {
-            Index(i) => Ok(Index(i.run(cv).collect::<Result<_, _>>()?)),
-            Range(from, until) => {
-                let from = from.as_ref().map(|f| f.run(cv.clone()).collect());
-                let until = until.as_ref().map(|u| u.run(cv).collect());
-                Ok(Range(from.transpose()?, until.transpose()?))
-            }
-        }
     }
 }

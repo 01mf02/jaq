@@ -4,7 +4,7 @@
 //! The invariants in this module can be difficult to preserve.
 //! `assert!` your way around here and watch your step.
 
-use crate::filter::Filter;
+use crate::filter::{self, Ast as Filter};
 use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
@@ -33,8 +33,6 @@ impl View {
     }
 }
 
-type Arity = usize;
-
 #[derive(Default)]
 struct Ctx {
     /// number of variables in the execution context at the current point
@@ -53,7 +51,7 @@ pub struct Rec {
     filter: Filter,
 }
 
-pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
+pub fn root_def(defs: &mir::Defs) -> filter::Owned {
     //std::dbg!(defs);
     let root_id = 0;
     //let vars = defs.get(root_id).args.len();
@@ -62,7 +60,7 @@ pub fn root_def(defs: &mir::Defs) -> (Filter, Vec<(Arity, Filter)>) {
     let f = ctx.def(root_id, view, defs);
     let recs = ctx.recs.into_iter();
     let recs = recs.map(|rec| (defs.get(rec.id).arity(), rec.filter));
-    (f, recs.collect())
+    filter::Owned::new(f, recs.collect())
 }
 
 // this has to be fulfilled for the IDs of the filters in any `view.recs`
@@ -266,7 +264,7 @@ impl Ctx {
             }
             Expr::Try(f) => Filter::Try(get(*f, self)),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
-            Expr::Recurse => Filter::recurse(),
+            Expr::Recurse => Filter::recurse0(),
 
             Expr::Binary(l, BinaryOp::Pipe(None), r) => {
                 Filter::Pipe(get(*l, self), false, get(*r, self))

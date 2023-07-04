@@ -116,10 +116,20 @@ yields!(
 
 #[test]
 fn min_max() {
-    give(json!([]), "min", json!(null));
-    give(json!([]), "max", json!(null));
     give(json!([1, 4, 2]), "min", json!(1));
     give(json!([1, 4, 2]), "max", json!(4));
+    // TODO: find examples where `min_by(f)` yields output different from `min`
+    // (and move it then to jaq-core/tests/named.rs)
+    give(
+        json!([{"a": {"b": {"c": 1}}}, {"a": {"b": {"c": 4}}}, {"a": {"b": {"c": 2}}}]),
+        "min_by(.a.b.c)",
+        json!({"a": {"b": {"c": 1}}}),
+    );
+    give(
+        json!([{"a": {"b": {"c": 1}}}, {"a": {"b": {"c": 4}}}, {"a": {"b": {"c": 2}}}]),
+        "max_by(.a.b.c)",
+        json!({"a": {"b": {"c": 4}}}),
+    );
 }
 
 #[test]

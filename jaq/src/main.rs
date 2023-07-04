@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use jaq_core::{Ctx, Definitions, Filter, RcIter, Val};
+use jaq_core::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
@@ -229,19 +229,16 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 }
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
-    let mut defs = Definitions::new(vars);
+    let mut defs = ParseCtx::new(vars);
     defs.insert_core();
-    let mut errs = Vec::new();
-    defs.insert_defs(jaq_std::std(), &mut errs);
-    assert!(errs.is_empty());
-
-    let (main, mut errs) = jaq_core::parse::parse(filter_str, jaq_core::parse::main());
-
-    let filter = main.map(|main| defs.finish(main, &mut errs));
-    if errs.is_empty() {
-        Ok(filter.unwrap())
+    defs.insert_defs(jaq_std::std());
+    assert!(defs.errs.is_empty());
+    let filter = defs.parse_filter(filter_str);
+    if defs.errs.is_empty() {
+        Ok(filter)
     } else {
-        Err(errs
+        Err(defs
+            .errs
             .into_iter()
             .map(|error| ParseError {
                 error,
@@ -407,7 +404,7 @@ fn run(
     for item in if cli.null_input { &null } else { &iter } {
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
-        for output in filter.run(ctx.clone(), input) {
+        for output in filter.run((ctx.clone(), input)) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
@@ -533,7 +530,7 @@ fn run_test(test: jaq_core::parse::test::Test<String>) -> Result<(Val, Val), Err
     };
     let input = json(test.input)?;
     let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Vec<_>, _> = filter.run(ctx, input).collect();
+    let obtain: Result<Vec<_>, _> = filter.run((ctx, input)).collect();
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
 }
 

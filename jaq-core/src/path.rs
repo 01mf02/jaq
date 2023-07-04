@@ -14,6 +14,18 @@ pub enum Part<I> {
     Range(Option<I>, Option<I>),
 }
 
+impl Path<Vec<Val>> {
+    pub fn collect(&self, v: Val) -> Result<Vec<Val>, Error> {
+        self.0.iter().try_fold(Vec::from([v]), |acc, (part, opt)| {
+            opt.collect(acc.into_iter().flat_map(|x| part.collect(x)))
+        })
+    }
+
+    pub fn update<'f>(&self, v: Val, f: impl Fn(Val) -> ValRs<'f> + Copy) -> ValRs<'f> {
+        Part::update(self.0.iter(), v, f)
+    }
+}
+
 impl Part<Vec<Val>> {
     pub fn collect(&self, current: Val) -> ValRs {
         use core::iter::once;
@@ -156,18 +168,22 @@ impl Part<Vec<Val>> {
 }
 
 impl<F> Path<F> {
-    pub fn map<F2>(self, f: impl Fn(F) -> F2) -> Path<F2> {
-        let path = self.0.into_iter().map(|(p, opt)| (p.map2(&f), opt));
-        Path(path.collect())
+    pub fn eval<'a>(&'a self, run: impl Fn(&'a F) -> ValRs<'a>) -> Result<Path<Vec<Val>>, Error> {
+        let path = self.0.iter().map(|(p, opt)| Ok((p.eval(&run)?, *opt)));
+        Ok(Path(path.collect::<Result<_, _>>()?))
     }
 }
 
 impl<F> Part<F> {
-    pub fn map2<F2>(self, f: impl Fn(F) -> F2) -> Part<F2> {
+    fn eval<'a>(&'a self, run: impl Fn(&'a F) -> ValRs<'a>) -> Result<Part<Vec<Val>>, Error> {
         use Part::*;
         match self {
-            Index(i) => Index(f(i)),
-            Range(from, until) => Range(from.map(&f), until.map(&f)),
+            Index(i) => Ok(Index(run(i).collect::<Result<_, _>>()?)),
+            Range(from, until) => {
+                let from = from.as_ref().map(|f| run(f).collect());
+                let until = until.as_ref().map(|u| run(u).collect());
+                Ok(Range(from.transpose()?, until.transpose()?))
+            }
         }
     }
 }

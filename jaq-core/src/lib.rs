@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_core::{parse, Ctx, Definitions, Error, RcIter, Val};
+//! use jaq_core::{Ctx, Error, FilterT, ParseCtx, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
@@ -19,19 +19,17 @@
 //! // start out only from core filters,
 //! // which do not include filters in the standard library
 //! // such as `map`, `select` etc.
-//! let mut defs = Definitions::new(Vec::new());
+//! let mut defs = ParseCtx::new(Vec::new());
 //! defs.insert_core();
 //!
 //! // parse the filter in the context of the given definitions
-//! let mut errs = Vec::new();
-//! let f = parse::parse(&filter, parse::main()).0.unwrap();
-//! let f = defs.finish(f, &mut errs);
-//! assert_eq!(errs, Vec::new());
+//! let f = defs.parse_filter(&filter);
+//! assert_eq!(defs.errs, Vec::new());
 //!
 //! let inputs = RcIter::new(core::iter::empty());
 //!
 //! // iterator over the output values
-//! let mut out = f.run(Ctx::new([], &inputs), Val::from(input));
+//! let mut out = f.run((Ctx::new([], &inputs), Val::from(input)));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -51,7 +49,6 @@ mod filter;
 mod lazy_iter;
 mod lir;
 mod mir;
-mod native;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -63,38 +60,34 @@ mod val;
 pub use jaq_parse as parse;
 
 pub use error::Error;
+pub use filter::{Args, FilterT, Native};
+pub use mir::Ctx as ParseCtx;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR};
 
-use alloc::{
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::string::String;
 use lazy_iter::LazyIter;
-use parse::{Def, Main};
 use rc_list::RcList;
 
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
 /// Filter execution context.
 #[derive(Clone)]
-pub struct Ctx<'i> {
+pub struct Ctx<'a> {
     /// variable bindings
     vars: RcList<Val>,
-    inputs: &'i Inputs<'i>,
-    recs: &'i [(usize, filter::Filter)],
+    inputs: &'a Inputs<'a>,
 }
 
-impl<'i> Ctx<'i> {
+impl<'a> Ctx<'a> {
     /// Construct a context.
-    pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'i Inputs<'i>) -> Self {
+    pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'a Inputs<'a>) -> Self {
         let vars = vars.into_iter().fold(RcList::Nil, |acc, v| acc.cons(v));
-        let recs = &[];
-        Self { vars, inputs, recs }
+        Self { vars, inputs }
     }
 
     /// Add a new variable binding.
-    pub fn cons_var(mut self, x: Val) -> Self {
+    pub(crate) fn cons_var(mut self, x: Val) -> Self {
         self.vars = self.vars.cons(x);
         self
     }
@@ -124,68 +117,23 @@ impl<'i> Ctx<'i> {
 }
 
 /// Function from a value to a stream of value results.
-#[derive(Debug, Default, Clone)]
-pub struct Filter(filter::Filter, Vec<(usize, filter::Filter)>);
+pub type Filter = filter::Owned;
 
-impl Filter {
-    /// Apply the filter to the given value and return stream of results.
-    pub fn run<'a>(&'a self, mut ctx: Ctx<'a>, val: Val) -> val::ValRs<'a> {
-        ctx.recs = &self.1;
-        use filter::FilterT;
-        self.0.run((ctx, val))
-    }
-}
-
-/// Link names and arities to corresponding filters.
-///
-/// For example, if we define a filter `def map(f): [.[] | f]`,
-/// then the definitions will associate `map/1` to its definition.
-pub use mir::Defs as Definitions;
-
-impl Definitions {
-    /// Add the core filters, such as `length`, `keys`, ...
-    ///
-    /// Does not import filters from the standard library, such as `map`.
-    pub fn insert_core(&mut self) {
-        self.insert_natives(core::core())
-    }
-
-    /// Add a native filter with given name and arity.
-    pub fn insert_native(&mut self, name: &str, arity: usize, filter: filter::Native) {
-        self.insert_fn(name.to_string(), arity, filter);
-    }
-
-    /// Add native filters with given names and arities.
-    pub fn insert_natives(
-        &mut self,
-        natives: impl IntoIterator<Item = (String, usize, filter::Native)>,
-    ) {
-        natives
-            .into_iter()
-            .for_each(|(name, arity, f)| self.insert_fn(name, arity, f))
-    }
-
-    /// Import parsed definitions, such as obtained from the standard library.
-    ///
-    /// Errors that might occur include undefined variables, for example.
-    pub fn insert_defs(
-        &mut self,
-        defs: impl IntoIterator<Item = Def>,
-        errs: &mut Vec<parse::Error>,
-    ) {
-        defs.into_iter().for_each(|def| self.root_def(def, errs));
-    }
-
+impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn finish(mut self, (defs, body): Main, errs: &mut Vec<parse::Error>) -> Filter {
-        self.insert_defs(defs, errs);
-        self.root_filter(body, errs);
-        if !errs.is_empty() {
-            return Filter(filter::Filter::Id, Vec::new());
+    pub fn parse_filter(&mut self, filter: &str) -> Filter {
+        let (filter, mut errs) = parse::parse(filter, parse::main());
+        self.errs.append(&mut errs);
+
+        if let Some((defs, body)) = filter {
+            self.insert_defs(defs);
+            self.root_filter(body);
+        }
+
+        if !self.errs.is_empty() {
+            return Default::default();
         }
         //std::dbg!("before LIR");
-        let (f, recs) = lir::root_def(&self);
-        //std::dbg!("after LIR", &f, &recs);
-        Filter(f, recs)
+        lir::root_def(&self.defs)
     }
 }

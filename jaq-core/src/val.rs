@@ -428,6 +428,31 @@ impl Val {
         Ok(Val::arr(grouped))
     }
 
+    /// Get the minimum or maximum element from an array according to
+    /// the given function.
+    ///
+    /// Fail on any other value.
+    pub fn cmp_by<'a>(
+        self,
+        f: impl Fn(Val) -> ValRs<'a>,
+        replace: impl Fn(&Vec<Val>, &Vec<Val>) -> bool,
+    ) -> ValR {
+        let iter = rc_unwrap_or_clone(self.into_arr()?).into_iter();
+        let mut iter = iter.map(|x: Val| (x.clone(), f(x).collect::<Result<_, _>>()));
+        let (mut mx, mut my) = if let Some((x, y)) = iter.next() {
+            (x, y?)
+        } else {
+            return Ok(Val::Null);
+        };
+        for (x, y) in iter {
+            let y = y?;
+            if replace(&my, &y) {
+                (mx, my) = (x, y);
+            }
+        }
+        Ok(mx)
+    }
+
     /// Split a string by a given separator string.
     ///
     /// Fail if any of the two given values is not a string.
