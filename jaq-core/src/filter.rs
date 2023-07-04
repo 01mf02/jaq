@@ -7,8 +7,18 @@ use dyn_clone::DynClone;
 use jaq_parse::filter::FoldType;
 use jaq_parse::{MathOp, OrdOp};
 
-pub type Owned = (Ast, Vec<(usize, Ast)>);
-pub type Ref<'a> = (&'a Ast, &'a [(usize, Ast)]);
+/// Function from a value to a stream of value results.
+#[derive(Debug, Default, Clone)]
+pub struct Owned(Ast, Vec<(usize, Ast)>);
+
+#[derive(Debug, Copy, Clone)]
+pub struct Ref<'a>(&'a Ast, &'a [(usize, Ast)]);
+
+impl Owned {
+    pub(crate) fn new(main: Ast, recs: Vec<(usize, Ast)>) -> Self {
+        Self(main, recs)
+    }
+}
 
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug, Default)]
@@ -127,17 +137,17 @@ impl<'a> Args<'a> {
     // but because of returning `impl`, we cannot do this right now, see:
     // <https://github.com/rust-lang/rust/issues/63063>.
     pub fn get(self, i: usize) -> impl FilterT<'a> {
-        (&self.0[i], self.1)
+        Ref(&self.0[i], self.1)
     }
 }
 
 impl<'a> FilterT<'a> for &'a Owned {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
-        (&self.0, &*self.1).run(cv)
+        Ref(&self.0, &*self.1).run(cv)
     }
 
     fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
-        (&self.0, &*self.1).update(cv, f)
+        Ref(&self.0, &*self.1).update(cv, f)
     }
 }
 
@@ -146,7 +156,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
         use core::iter::once;
         use itertools::Itertools;
         // wrap a filter AST with the filter definitions
-        let w = move |f: &'a Ast| (f, self.1);
+        let w = move |f: &'a Ast| Ref(f, self.1);
         match &self.0 {
             Ast::Id => box_once(Ok(cv.1)),
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
@@ -253,7 +263,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
     fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         let err = box_once(Err(Error::PathExp));
-        let w = move |f: &'a Ast| (f, self.1);
+        let w = move |f: &'a Ast| Ref(f, self.1);
         match self.0 {
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,

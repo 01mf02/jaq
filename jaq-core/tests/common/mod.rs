@@ -1,4 +1,4 @@
-use jaq_core::{parse, Ctx, Definitions, Error, RcIter, Val};
+use jaq_core::{Ctx, FilterT, ParseCtx, Error, RcIter, Val};
 use serde_json::Value;
 
 pub fn give(x: Value, f: &str, y: Value) {
@@ -18,12 +18,10 @@ pub fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
 }
 
 pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
-    let mut defs = Definitions::new(Vec::new());
+    let mut defs = ParseCtx::new(Vec::new());
     defs.insert_core();
-    let mut errs = Vec::new();
-    let f = parse::parse(&f, parse::main()).0.unwrap();
-    let f = defs.finish(f, &mut errs);
-    assert_eq!(errs, Vec::new());
+    let f = defs.parse_filter(f);
+    assert_eq!(defs.errs, Vec::new());
 
     let to = |v| Val::from(v);
 
@@ -31,7 +29,7 @@ pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Err
     let expected: Vec<_> = expected.chain(err.into_iter().map(Err)).collect();
 
     let inputs = RcIter::new(core::iter::empty());
-    let out: Vec<_> = f.run(Ctx::new([], &inputs), to(x)).collect();
+    let out: Vec<_> = f.run((Ctx::new([], &inputs), to(x))).collect();
     assert_eq!(out, expected);
 }
 
