@@ -5,10 +5,12 @@ use alloc::{boxed::Box, vec::Vec};
 
 type Results<'a, T, E> = Box<dyn Iterator<Item = Result<T, E>> + 'a>;
 
+/// Return a boxed iterator that yields a single element.
 pub fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once(x))
 }
 
+/// If `x` is an `Err`, return it as iterator, else apply `f` to `x` and return its output.
 pub fn then<'a, T, U: 'a, E: 'a>(
     x: Result<T, E>,
     f: impl FnOnce(T) -> Results<'a, U, E>,
