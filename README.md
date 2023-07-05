@@ -282,11 +282,13 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 
 ## Advanced features
 
+- [x] Basic date handling (`now`, `fromdateiso8601`, `todateiso8601`)
+- [ ] Advanced timestamp handling (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
+
 jaq currently does *not* aim to support several features of jq, such as:
 
 - Paths
 - Modules
-- Dates
 - SQL-style operators
 - Streaming
 

@@ -259,6 +259,63 @@ impl Val {
         self.as_arr()?.iter().map(|v| v.as_codepoint()).collect()
     }
 
+    /// Parse a string as an ISO-8601 timestamp
+    pub fn from_iso8601(&self) -> ValR {
+        use time::format_description::well_known::Iso8601;
+        use time::OffsetDateTime;
+        match self {
+            Self::Str(s) => {
+                let datetime = OffsetDateTime::parse(s, &Iso8601::DEFAULT)
+                    .map_err(|e| Error::FromIso8601(self.clone(), e.to_string()))?;
+                let epoch_s = datetime.unix_timestamp();
+                match s.as_str() {
+                    s if s.contains('.') => Ok(Self::Float(
+                        epoch_s as f64 + (datetime.nanosecond() as f64 * 1e-9_f64),
+                    )),
+                    _ => isize::try_from(epoch_s)
+                        .map(Self::Int)
+                        .or_else(|_| Ok(Self::Num(epoch_s.to_string().into()))),
+                }
+            }
+            _ => Err(Error::FromIso8601(
+                self.clone(),
+                "Value is not a string".to_string(),
+            )),
+        }
+    }
+
+    /// Parse a string as an ISO-8601 timestamp
+    pub fn to_iso8601(&self) -> Result<String, Error> {
+        use time::format_description::well_known::iso8601;
+        use time::OffsetDateTime;
+        const SECONDS_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
+            .set_time_precision(iso8601::TimePrecision::Second {
+                decimal_digits: None,
+            })
+            .encode();
+        match self {
+            Self::Num(n) => Self::from_dec_str(n).to_iso8601(),
+            Self::Float(f) => {
+                let f_ns = (f * 1_000_000_000_f64).round() as i128;
+                OffsetDateTime::from_unix_timestamp_nanos(f_ns)
+                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))?
+                    .format(&iso8601::Iso8601::DEFAULT)
+                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))
+            }
+            Self::Int(i) => {
+                let iso8601_fmt_s = iso8601::Iso8601::<SECONDS_CONFIG>;
+                OffsetDateTime::from_unix_timestamp(*i as i64)
+                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))?
+                    .format(&iso8601_fmt_s)
+                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))
+            }
+            _ => Err(Error::ToIso8601(
+                self.clone(),
+                "Cannot parse type as a timestamp".to_string(),
+            )),
+        }
+    }
+
     /// Apply a function to a string.
     pub fn mutate_str(self, f: impl Fn(&mut String)) -> ValR {
         let mut s = self.to_str()?;
