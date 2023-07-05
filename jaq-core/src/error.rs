@@ -60,12 +60,6 @@ pub enum Error {
     StripPrefix(Val, Val),
     /// `123 | rtrimstr("x")`
     StripSuffix(Val, Val),
-    /// `now`
-    SystemTime(String),
-    /// `"" | fromdateiso8601`
-    FromIso8601(Val, String),
-    /// `null | todateiso8601`
-    ToIso8601(Val, String),
     /// arbitrary errors for custom filters
     Custom(String),
 }
@@ -100,9 +94,6 @@ impl fmt::Display for Error {
             Self::EndsWith(l, r) => write!(f, "cannot check whether {l} ends with {r}"),
             Self::StripPrefix(l, r) => write!(f, "cannot strip prefix {r} from {l}"),
             Self::StripSuffix(l, r) => write!(f, "cannot strip suffix {r} from {l}"),
-            Self::SystemTime(why) => write!(f, "Could not get system time: {why}"),
-            Self::FromIso8601(v, why) => write!(f, "cannot parse {v} as ISO-8601 timestamp: {why}"),
-            Self::ToIso8601(v, why) => write!(f, "cannot format {v} as ISO-8601 timestamp: {why}"),
             Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }
