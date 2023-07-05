@@ -96,7 +96,7 @@ fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) 
     Box::new(fold(false, xs, box_once(Ok(init)), f))
 }
 
-pub type Cv<'c> = (Ctx<'c>, Val);
+type Cv<'c> = (Ctx<'c>, Val);
 
 /// A filter which is implemented using function pointers.
 #[derive(Clone)]
@@ -105,7 +105,9 @@ pub struct Native {
     update: UpdatePtr,
 }
 
+/// Run function pointer.
 pub type RunPtr = for<'a> fn(Args<'a>, Cv<'a>) -> ValRs<'a>;
+/// Update function pointer.
 pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
 
 impl Native {
@@ -143,11 +145,11 @@ impl<'a> Args<'a> {
 
 impl<'a> FilterT<'a> for &'a Owned {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
-        Ref(&self.0, &*self.1).run(cv)
+        Ref(&self.0, &self.1).run(cv)
     }
 
     fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
-        Ref(&self.0, &*self.1).update(cv, f)
+        Ref(&self.0, &self.1).update(cv, f)
     }
 }
 

@@ -1,6 +1,8 @@
 //! Helpers to interface with the `regex` crate.
 
 use alloc::string::{String, ToString};
+use alloc::{rc::Rc, vec::Vec};
+use jaq_core::{Error, Val};
 
 #[derive(Default)]
 pub struct Flags {
@@ -113,4 +115,58 @@ impl Match {
             name: name.map(|s| s.to_string()),
         }
     }
+}
+
+impl From<Match> for Val {
+    fn from(m: crate::regex::Match) -> Self {
+        let obj = [
+            ("offset", Val::Int(m.offset as isize)),
+            ("length", Val::Int(m.length as isize)),
+            ("string", Val::str(m.string)),
+            ("name", m.name.map(Val::str).unwrap_or(Val::Null)),
+        ];
+        let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
+        Val::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
+    }
+}
+
+/// Apply a regular expression to the given input value.
+///
+/// `sm` indicates whether to
+/// 1. output strings that do *not* match the regex, and
+/// 2. output the matches.
+pub fn regex(s: &str, re: &str, flags: &str, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
+    let flags = Flags::new(flags).map_err(Error::RegexFlag)?;
+    let re = flags.regex(re).map_err(|e| Error::Regex(e.to_string()))?;
+    let (split, matches) = sm;
+
+    let mut last_byte = 0;
+    let mut bc = ByteChar::new(s);
+    let mut out = Vec::new();
+
+    for c in re.captures_iter(s) {
+        let whole = c.get(0).unwrap();
+        if whole.start() >= s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
+            continue;
+        }
+        let vs = c
+            .iter()
+            .zip(re.capture_names())
+            .filter_map(|(match_, name)| Some(Match::new(&mut bc, match_?, name)))
+            .map(Val::from);
+        if split {
+            out.push(Val::str(s[last_byte..whole.start()].to_string()));
+            last_byte = whole.end();
+        }
+        if matches {
+            out.push(Val::arr(vs.collect()));
+        }
+        if !flags.global() {
+            break;
+        }
+    }
+    if split {
+        out.push(Val::str(s[last_byte..].to_string()));
+    }
+    Ok(out)
 }

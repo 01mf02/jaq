@@ -20,7 +20,7 @@ pub fn then<'a, T, U: 'a, E: 'a>(
 
 // if `inner` is true, output values that yield non-empty output;
 // if `outer` is true, output values that yield     empty output
-pub fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
+pub(crate) fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
     inner: bool,
     outer: bool,
     init: Results<'a, T, E>,
@@ -67,7 +67,7 @@ pub fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
 }
 
 // if `inner` is true, output intermediate results
-pub fn fold<'a, T: Clone + 'a, E: Clone + 'a>(
+pub(crate) fn fold<'a, T: Clone + 'a, E: Clone + 'a>(
     inner: bool,
     xs: List<'a, Result<T, E>>,
     init: Results<'a, T, E>,

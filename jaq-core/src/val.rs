@@ -91,7 +91,7 @@ impl Val {
     }
 
     /// If the value is a string, return it, else fail.
-    fn as_str(&self) -> Result<&Rc<String>, Error> {
+    pub fn as_str(&self) -> Result<&Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
             _ => Err(Error::Str(self.clone())),
@@ -114,7 +114,8 @@ impl Val {
         }
     }
 
-    fn from_dec_str(n: &str) -> Self {
+    /// Try to parse a string to a [Self::Float], else return [Self::Null].
+    pub fn from_dec_str(n: &str) -> Self {
         n.parse().map_or(Self::Null, Self::Float)
     }
 
@@ -124,11 +125,6 @@ impl Val {
         // conversion from isize to u32 may fail on 64-bit systems for high values of c
         let u = u32::try_from(i).map_err(|_| Error::Char(i))?;
         char::from_u32(u).ok_or(Error::Char(i))
-    }
-
-    pub(crate) fn debug(self) -> Self {
-        log::debug!("{}", self);
-        self
     }
 
     /// Return 0 for null, the absolute value for numbers, and
@@ -257,63 +253,6 @@ impl Val {
     /// Convert an array of Unicode codepoints into a string.
     pub fn implode(&self) -> Result<String, Error> {
         self.as_arr()?.iter().map(|v| v.as_codepoint()).collect()
-    }
-
-    /// Parse a string as an ISO-8601 timestamp
-    pub fn from_iso8601(&self) -> ValR {
-        use time::format_description::well_known::Iso8601;
-        use time::OffsetDateTime;
-        match self {
-            Self::Str(s) => {
-                let datetime = OffsetDateTime::parse(s, &Iso8601::DEFAULT)
-                    .map_err(|e| Error::FromIso8601(self.clone(), e.to_string()))?;
-                let epoch_s = datetime.unix_timestamp();
-                match s.as_str() {
-                    s if s.contains('.') => Ok(Self::Float(
-                        epoch_s as f64 + (datetime.nanosecond() as f64 * 1e-9_f64),
-                    )),
-                    _ => isize::try_from(epoch_s)
-                        .map(Self::Int)
-                        .or_else(|_| Ok(Self::Num(epoch_s.to_string().into()))),
-                }
-            }
-            _ => Err(Error::FromIso8601(
-                self.clone(),
-                "Value is not a string".to_string(),
-            )),
-        }
-    }
-
-    /// Parse a string as an ISO-8601 timestamp
-    pub fn to_iso8601(&self) -> Result<String, Error> {
-        use time::format_description::well_known::iso8601;
-        use time::OffsetDateTime;
-        const SECONDS_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
-            .set_time_precision(iso8601::TimePrecision::Second {
-                decimal_digits: None,
-            })
-            .encode();
-        match self {
-            Self::Num(n) => Self::from_dec_str(n).to_iso8601(),
-            Self::Float(f) => {
-                let f_ns = (f * 1_000_000_000_f64).round() as i128;
-                OffsetDateTime::from_unix_timestamp_nanos(f_ns)
-                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))?
-                    .format(&iso8601::Iso8601::DEFAULT)
-                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))
-            }
-            Self::Int(i) => {
-                let iso8601_fmt_s = iso8601::Iso8601::<SECONDS_CONFIG>;
-                OffsetDateTime::from_unix_timestamp(*i as i64)
-                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))?
-                    .format(&iso8601_fmt_s)
-                    .map_err(|e| Error::ToIso8601(self.clone(), e.to_string()))
-            }
-            _ => Err(Error::ToIso8601(
-                self.clone(),
-                "Cannot parse type as a timestamp".to_string(),
-            )),
-        }
     }
 
     /// Apply a function to a string.
@@ -469,52 +408,6 @@ impl Val {
         })
     }
 
-    /// Apply a regular expression to the given input value.
-    ///
-    /// `sm` indicates whether to
-    /// 1. output strings that do *not* match the regex, and
-    /// 2. output the matches.
-    pub fn regex(&self, re: &Self, flags: &Self, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
-        use crate::regex::{ByteChar, Flags, Match};
-
-        let s = self.as_str()?;
-        let flags = Flags::new(flags.as_str()?).map_err(Error::RegexFlag)?;
-        let re = flags
-            .regex(re.as_str()?)
-            .map_err(|e| Error::Regex(e.to_string()))?;
-        let (split, matches) = sm;
-
-        let mut last_byte = 0;
-        let mut bc = ByteChar::new(s);
-        let mut out = Vec::new();
-
-        for c in re.captures_iter(s) {
-            let whole = c.get(0).unwrap();
-            if whole.start() >= s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
-                continue;
-            }
-            let vs = c
-                .iter()
-                .zip(re.capture_names())
-                .filter_map(|(match_, name)| Some(Match::new(&mut bc, match_?, name)))
-                .map(Val::from);
-            if split {
-                out.push(Val::str(s[last_byte..whole.start()].to_string()));
-                last_byte = whole.end();
-            }
-            if matches {
-                out.push(Val::arr(vs.collect()));
-            }
-            if !flags.global() {
-                break;
-            }
-        }
-        if split {
-            out.push(Val::str(s[last_byte..].to_string()));
-        }
-        Ok(out)
-    }
-
     /// Parse at least one JSON value, given an initial token and a lexer.
     ///
     /// If the underlying lexer reads input fallibly (for example `IterLexer`),
@@ -601,19 +494,6 @@ impl From<Val> for serde_json::Value {
                     .collect(),
             ),
         }
-    }
-}
-
-impl From<crate::regex::Match> for Val {
-    fn from(m: crate::regex::Match) -> Self {
-        let obj = [
-            ("offset", Val::Int(m.offset as isize)),
-            ("length", Val::Int(m.length as isize)),
-            ("string", Val::str(m.string)),
-            ("name", m.name.map(Val::str).unwrap_or(Val::Null)),
-        ];
-        let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
-        Val::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
     }
 }
 

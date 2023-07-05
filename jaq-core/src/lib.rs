@@ -20,7 +20,6 @@
 //! // which do not include filters in the standard library
 //! // such as `map`, `select` etc.
 //! let mut defs = ParseCtx::new(Vec::new());
-//! defs.insert_core();
 //!
 //! // parse the filter in the context of the given definitions
 //! let f = defs.parse_filter(&filter);
@@ -43,7 +42,6 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod core;
 mod error;
 mod filter;
 mod lazy_iter;
@@ -53,17 +51,16 @@ mod path;
 mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
-mod regex;
-mod results;
+pub mod results;
 mod val;
 
 pub use jaq_parse as parse;
 
 pub use error::Error;
-pub use filter::{Args, FilterT, Native, Owned as Filter};
+pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
 pub use mir::Ctx as ParseCtx;
 pub use rc_iter::RcIter;
-pub use val::{Val, ValR};
+pub use val::{Val, ValR, ValRs};
 
 use alloc::string::String;
 use lazy_iter::LazyIter;
@@ -90,6 +87,11 @@ impl<'a> Ctx<'a> {
     pub(crate) fn cons_var(mut self, x: Val) -> Self {
         self.vars = self.vars.cons(x);
         self
+    }
+
+    /// Return remaining input values.
+    pub fn inputs(&self) -> &'a Inputs<'a> {
+        self.inputs
     }
 
     /// Obtain and remove the `save` most recent variable bindings,

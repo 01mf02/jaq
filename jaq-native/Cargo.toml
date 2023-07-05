@@ -1,0 +1,23 @@
+[package]
+name = "jaq-native"
+version = "1.0.0-alpha"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
+edition = "2021"
+license = "MIT"
+readme = "../README.md"
+description = "Default native filters for jaq"
+repository = "https://github.com/01mf02/jaq"
+keywords = ["json", "query", "jq"]
+
+[features]
+default = ["std", "log", "regex", "time"]
+std = []
+
+[dependencies]
+jaq-core = { version = "1.0.0-alpha", path = "../jaq-core" }
+time = { version = "0.3.22", optional = true, features = ["formatting", "parsing"] }
+regex = { version = "1.8.4", optional = true }
+log = { version = "0.4.17", optional = true }
+
+[dev-dependencies]
+serde_json = "1.0"

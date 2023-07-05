@@ -1,33 +1,60 @@
 //! Core filters.
+#![no_std]
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
-use crate::filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
-use crate::results::{box_once, then};
-use crate::val::ValRs;
-use crate::{Error, Val};
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
+mod regex;
+mod time;
+
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
+use jaq_core::results::{box_once, then};
+use jaq_core::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
+use jaq_core::{Error, Val, ValRs};
 
-/// Return those named filters available by default in jaq
-/// which are implemented as native filters.
-pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
-    // TODO: make this more compact
-    let core_run = CORE_RUN
-        .iter()
-        .map(|(name, arity, f)| (name.to_string(), *arity, Native::new(*f)));
-    let core_update = CORE_UPDATE.iter().map(|(name, arity, run, update)| {
-        (name.to_string(), *arity, Native::with_update(*run, *update))
-    });
-    core_run.chain(core_update)
+/// Return the minimal set of named filters available in jaq
+/// which are implemented as native filters, such as `length`, `keys`, ...,
+/// but not `now`, `debug`, `fromdateiso8601`, ...
+///
+/// Does not return filters from the standard library, such as `map`.
+pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
+    run(CORE_RUN).chain(upd(CORE_UPDATE))
 }
 
-fn regex<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {
-    let flags_re = flags.cartesian(re, (cv.0, cv.1.clone()));
-    Box::new(flags_re.map(move |(flags, re)| Ok(Val::arr(cv.1.regex(&re?, &flags?, (s, m))?))))
+/// Return those named filters available by default in jaq
+/// which are implemented as native filters, such as `length`, `keys`, ...,
+/// but also `now`, `debug`, `fromdateiso8601`, ...
+///
+/// Does not return filters from the standard library, such as `map`.
+#[cfg(all(feature = "std", feature = "log", feature = "regex", feature = "time"))]
+pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
+    minimal()
+        .chain(run(STD))
+        .chain(upd(LOG))
+        .chain(run(REGEX))
+        .chain(run(TIME))
+}
+
+fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
+    fs.iter()
+        .map(|(name, arity, f)| (name.to_string(), *arity, Native::new(*f)))
+}
+
+fn upd<'a>(
+    fs: &'a [(&str, usize, RunPtr, UpdatePtr)],
+) -> impl Iterator<Item = (String, usize, Native)> + 'a {
+    fs.iter().map(|(name, arity, run, update)| {
+        (name.to_string(), *arity, Native::with_update(*run, *update))
+    })
 }
 
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
-        Box::new(cv.0.inputs.map(|r| r.map_err(Error::Parse)))
+        Box::new(cv.0.inputs().map(|r| r.map_err(Error::Parse)))
     }),
     ("length", 0, |_, cv| box_once(cv.1.len())),
     ("keys_unsorted", 0, |_, cv| {
@@ -51,17 +78,6 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
     ("reverse", 0, |_, cv| {
         box_once(cv.1.mutate_arr(|a| a.reverse()))
-    }),
-    ("now", 0, |_, _| {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let duration = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| Error::SystemTime(e.to_string()));
-        box_once(duration.map(|x| x.as_secs_f64()).map(Val::Float))
-    }),
-    ("fromdateiso8601", 0, |_, cv| box_once(cv.1.from_iso8601())),
-    ("todateiso8601", 0, |_, cv| {
-        box_once(cv.1.to_iso8601().map(Val::str))
     }),
     ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
     ("sort_by", 1, |args, cv| {
@@ -87,15 +103,6 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("split", 1, |args, cv| {
         let seps = args.get(0).run(cv.clone());
         Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
-    }),
-    ("matches", 2, |args, cv| {
-        regex(args.get(0), args.get(1), false, true, cv)
-    }),
-    ("split_matches", 2, |args, cv| {
-        regex(args.get(0), args.get(1), true, true, cv)
-    }),
-    ("split_", 2, |args, cv| {
-        regex(args.get(0), args.get(1), true, false, cv)
     }),
     ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
     ("last", 1, |args, cv| {
@@ -146,6 +153,55 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
 ];
 
+#[cfg(feature = "std")]
+fn now() -> Result<f64, Error> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|x| x.as_secs_f64())
+        .map_err(|e| Error::Custom(e.to_string()))
+}
+
+#[cfg(feature = "std")]
+const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+
+#[cfg(feature = "regex")]
+fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: (Ctx<'a>, Val)) -> ValRs<'a> {
+    let flags_re = flags.cartesian(re, (cv.0, cv.1.clone()));
+
+    Box::new(flags_re.map(move |(flags, re)| {
+        Ok(Val::arr(regex::regex(
+            cv.1.as_str()?,
+            re?.as_str()?,
+            flags?.as_str()?,
+            (s, m),
+        )?))
+    }))
+}
+
+#[cfg(feature = "regex")]
+const REGEX: &[(&str, usize, RunPtr)] = &[
+    ("matches", 2, |args, cv| {
+        re(args.get(0), args.get(1), false, true, cv)
+    }),
+    ("split_matches", 2, |args, cv| {
+        re(args.get(0), args.get(1), true, true, cv)
+    }),
+    ("split_", 2, |args, cv| {
+        re(args.get(0), args.get(1), true, false, cv)
+    }),
+];
+
+#[cfg(feature = "time")]
+const TIME: &[(&str, usize, RunPtr)] = &[
+    ("fromdateiso8601", 0, |_, cv| {
+        then(cv.1.as_str(), |s| box_once(time::from_iso8601(s)))
+    }),
+    ("todateiso8601", 0, |_, cv| {
+        box_once(time::to_iso8601(&cv.1).map(Val::str))
+    }),
+];
+
 const CORE_UPDATE: &[(&str, usize, RunPtr, UpdatePtr)] = &[
     (
         "empty",
@@ -160,15 +216,23 @@ const CORE_UPDATE: &[(&str, usize, RunPtr, UpdatePtr)] = &[
         |_, cv, _| box_once(Err(Error::Val(cv.1))),
     ),
     (
-        "debug",
-        0,
-        |_, cv| box_once(Ok(cv.1.debug())),
-        |_, cv, f| f(cv.1.debug()),
-    ),
-    (
         "recurse",
         1,
         |args, cv| args.get(0).recurse(true, true, cv),
         |args, cv, f| args.get(0).recurse_update(cv, f),
     ),
 ];
+
+#[cfg(feature = "log")]
+fn debug<T: core::fmt::Display>(x: T) -> T {
+    log::debug!("{}", x);
+    x
+}
+
+#[cfg(feature = "log")]
+const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
+    "debug",
+    0,
+    |_, cv| box_once(Ok(debug(cv.1))),
+    |_, cv, f| f(debug(cv.1)),
+)];

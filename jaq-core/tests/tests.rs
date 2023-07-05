@@ -69,14 +69,14 @@ fn alt() {
     give(json!([null, false]), ".[] // 0", json!(0));
     give(json!([null, 1, false, 2]), "[.[] // 0]", json!([1, 2]));
     give(json!([1, 2]), "[.[] // 0]", json!([1, 2]));
-    give(json!([1, 2]), "[.[] // error]", json!([1, 2]));
+    give(json!([1, 2]), r#"[.[] // -"a"]"#, json!([1, 2]));
 }
 
 #[test]
 fn try_() {
     give(json!(0), ".?", json!(0));
-    give(json!(0), "keys_unsorted?, 1", json!(1));
-    give(json!(0), "[(1, error, 2)?]", json!([1, 2]));
+    give(json!(0), r#"(-"a")?, 1"#, json!(1));
+    give(json!(0), r#"[(1, -"a", 2)?]"#, json!([1, 2]));
 }
 
 #[test]
@@ -214,14 +214,6 @@ yields!(args_mixed, "def f(a; $b): a + $b; 1 as $a | f($a; 2)", 3);
 
 yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
 
-yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
-
-yields!(
-    rec_two_var_args,
-    "def f($a; $b): [$a, $b], f($a+1; $b+1); [limit(3; f(0; 1))]",
-    [[0, 1], [1, 2], [2, 3]]
-);
-
 const ACKERMANN: &str = "def ack($m; $n):
   if $m == 0 then $n + 1
   elif $n == 0 then ack($m-1; 1)
@@ -232,9 +224,6 @@ yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 4)"), 125);
 
 #[test]
 fn reduce() {
-    let f = "reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)";
-    give(json!(0), f, json!(500500));
-
     let ff = |s| format!(". as $x | reduce 2 as $y (4; {}) | . + $x", s);
 
     let f = ff("3 as $z | . + $x + $y + $z");

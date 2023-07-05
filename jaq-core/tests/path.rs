@@ -77,12 +77,12 @@ fn index_update() {
     give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
     give(json!({"a": 1}), ".b |= 1", json!({"a": 1, "b": 1}));
     give(json!({"a": 1}), ".b |= .+1", json!({"a": 1, "b": 1}));
-    give(json!({"a": 1, "b": 2}), ".b |= empty", json!({"a": 1}));
+    give(json!({"a": 1, "b": 2}), ".b |= ([]|.[])", json!({"a": 1}));
     give(json!({"a": 1, "b": 2}), ".a += 1", json!({"a": 2, "b": 2}));
 
     give(json!([0, 1, 2]), ".[1] |= .+2", json!([0, 3, 2]));
-    give(json!([0, 1, 2]), ".[-1,-1] |= empty", json!([0]));
-    give(json!([0, 1, 2]), ".[ 0, 0] |= empty", json!([2]));
+    give(json!([0, 1, 2]), ".[-1,-1] |= ([]|.[])", json!([0]));
+    give(json!([0, 1, 2]), ".[ 0, 0] |= ([]|.[])", json!([2]));
 
     use Error::IndexOutOfBounds as Oob;
     fail(json!([0, 1, 2]), ".[ 3] |=  3", Oob(3));
@@ -111,7 +111,7 @@ fn iter_update() {
 
     give(
         json!({"a": 1, "b": 2}),
-        ".[] |= ((if .>1 then . else empty end) | .+1)",
+        ".[] |= ((if .>1 then . else ([]|.[]) end) | .+1)",
         json!({"b": 3}),
     );
 
@@ -146,7 +146,7 @@ fn update_mult() {
     give(json!({"a": 1}), ".a |= (.,.+1)", json!({"a": 1}));
 
     // jq returns null here
-    gives(json!(1), ". |= empty", []);
+    gives(json!(1), ". |= ([]|.[])", []);
     // jq returns just 1 here
     gives(json!(1), ". |= (.,.)", [json!(1), json!(1)]);
     // jq returns just [1] here
@@ -155,7 +155,7 @@ fn update_mult() {
     give(json!([1, 3]), ".[] |= (., .+1)", json!([1, 2, 3, 4]));
     // here comes a huge WTF: jq returns [2,4] here
     // this is a known bug: <https://github.com/stedolan/jq/issues/2051>
-    give(json!([1, 2, 3, 4, 5]), ".[] |= empty", json!([]));
+    give(json!([1, 2, 3, 4, 5]), ".[] |= ([]|.[])", json!([]));
 }
 
 #[test]

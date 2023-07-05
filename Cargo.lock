@@ -256,6 +256,7 @@ dependencies = [
  "env_logger",
  "hifijson",
  "jaq-core",
+ "jaq-native",
  "jaq-std",
  "memmap2",
  "mimalloc",
@@ -273,8 +274,16 @@ dependencies = [
  "indexmap",
  "itertools",
  "jaq-parse",
- "log",
  "once_cell",
+ "serde_json",
+]
+
+[[package]]
+name = "jaq-native"
+version = "1.0.0-alpha"
+dependencies = [
+ "jaq-core",
+ "log",
  "regex",
  "serde_json",
  "time",
@@ -294,6 +303,7 @@ version = "1.0.0-alpha"
 dependencies = [
  "bincode",
  "jaq-core",
+ "jaq-native",
  "jaq-parse",
  "serde_json",
 ]

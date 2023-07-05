@@ -19,6 +19,7 @@ pub fn fails<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Error) {
 
 pub fn yields<const N: usize>(x: Value, f: &str, ys: [Value; N], err: Option<Error>) {
     let mut defs = ParseCtx::new(Vec::new());
+    defs.insert_natives(jaq_native::core());
     let f = defs.parse_filter(f);
     assert_eq!(defs.errs, Vec::new());
 

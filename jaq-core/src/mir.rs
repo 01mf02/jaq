@@ -163,13 +163,6 @@ impl Ctx {
         }
     }
 
-    /// Add the core filters, such as `length`, `keys`, ...
-    ///
-    /// Does not import filters from the standard library, such as `map`.
-    pub fn insert_core(&mut self) {
-        self.insert_natives(crate::core::core())
-    }
-
     /// Add a native filter with given name and arity.
     pub fn insert_native(&mut self, name: String, arity: usize, f: crate::filter::Native) {
         self.native.push((name, arity, f))
