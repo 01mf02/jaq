@@ -10,11 +10,11 @@ extern crate std;
 mod regex;
 mod time;
 
-use alloc::boxed::Box;
 use alloc::string::{String, ToString};
-use jaq_core::results::{box_once, then};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use jaq_core::results::{box_once, run_if_ok, then};
 use jaq_core::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
-use jaq_core::{Error, Val, ValRs};
+use jaq_core::{Error, Val, ValR, ValRs};
 
 /// Return the minimal set of named filters available in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
@@ -52,6 +52,83 @@ fn upd<'a>(
     })
 }
 
+// This might be included in the Rust standard library:
+// <https://github.com/rust-lang/rust/issues/93610>
+fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
+    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+}
+
+/// Sort array by the given function.
+fn sort_by<'a>(xs: &mut [Val], f: impl Fn(Val) -> ValRs<'a>) -> Result<(), Error> {
+    // Some(e) iff an error has previously occurred
+    let mut err = None;
+    xs.sort_by_cached_key(|x| run_if_ok(x.clone(), &mut err, &f));
+    err.map_or(Ok(()), Err)
+}
+
+/// Group an array by the given function.
+fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+    let mut err = None;
+    let mut yx = xs
+        .into_iter()
+        .map(|x| (run_if_ok(x.clone(), &mut err, &f), x))
+        .collect::<Vec<(Vec<Val>, Val)>>();
+    if let Some(err) = err {
+        return Err(err);
+    }
+
+    yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
+
+    use itertools::Itertools;
+    let grouped = yx
+        .into_iter()
+        .group_by(|(y, _)| y.clone())
+        .into_iter()
+        .map(|(_y, yxs)| Val::arr(yxs.map(|(_y, x)| x).collect()))
+        .collect();
+    Ok(Val::arr(grouped))
+}
+
+/// Get the minimum or maximum element from an array according to the given function.
+fn cmp_by<'a, R>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>, replace: R) -> ValR
+where
+    R: Fn(&Vec<Val>, &Vec<Val>) -> bool,
+{
+    let iter = xs.into_iter();
+    let mut iter = iter.map(|x: Val| (x.clone(), f(x).collect::<Result<_, _>>()));
+    let (mut mx, mut my) = if let Some((x, y)) = iter.next() {
+        (x, y?)
+    } else {
+        return Ok(Val::Null);
+    };
+    for (x, y) in iter {
+        let y = y?;
+        if replace(&my, &y) {
+            (mx, my) = (x, y);
+        }
+    }
+    Ok(mx)
+}
+
+/// Split a string by a given separator string.
+fn split(s: &str, sep: &str) -> Vec<Val> {
+    if sep.is_empty() {
+        // Rust's `split` function with an empty separator ("")
+        // yields an empty string as first and last result
+        // to prevent this, we are using `chars` instead
+        s.chars().map(|s| Val::str(s.to_string())).collect()
+    } else {
+        s.split(sep).map(|s| Val::str(s.to_string())).collect()
+    }
+}
+
+fn strip<F>(s: &Rc<String>, other: &str, f: F) -> Rc<String>
+where
+    F: for<'a> Fn(&'a str, &str) -> Option<&'a str>,
+{
+    f(&s, other).map_or_else(|| s.clone(), |stripped| Rc::new(stripped.into()))
+}
+
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs().map(|r| r.map_err(Error::Parse)))
@@ -67,7 +144,9 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("tojson", 0, |_, cv| {
         box_once(Ok(Val::str(cv.1.to_string())))
     }),
-    ("utf8bytelength", 0, |_, cv| box_once(cv.1.byte_len())),
+    ("utf8bytelength", 0, |_, cv| {
+        then(cv.1.as_str(), |s| box_once(Ok(Val::Int(s.len() as isize))))
+    }),
     ("explode", 0, |_, cv| box_once(cv.1.explode().map(Val::arr))),
     ("implode", 0, |_, cv| box_once(cv.1.implode().map(Val::str))),
     ("ascii_downcase", 0, |_, cv| {
@@ -81,16 +160,24 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
     ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
     ("sort_by", 1, |args, cv| {
-        box_once(cv.1.sort_by(|v| args.get(0).run((cv.0.clone(), v))))
+        box_once(cv.1.try_mutate_arr(|arr| sort_by(arr, |v| args.get(0).run((cv.0.clone(), v)))))
     }),
     ("group_by", 1, |args, cv| {
-        box_once(cv.1.group_by(|v| args.get(0).run((cv.0.clone(), v))))
+        then(cv.1.into_arr().map(rc_unwrap_or_clone), |arr| {
+            box_once(group_by(arr, |v| args.get(0).run((cv.0.clone(), v))))
+        })
     }),
     ("min_by", 1, |args, cv| {
-        box_once(cv.1.cmp_by(|v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my))
+        let f = |v| args.get(0).run((cv.0.clone(), v));
+        then(cv.1.into_arr().map(rc_unwrap_or_clone), |arr| {
+            box_once(cmp_by(arr, f, |my, y| y < my))
+        })
     }),
     ("max_by", 1, |args, cv| {
-        box_once(cv.1.cmp_by(|v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my))
+        let f = |v| args.get(0).run((cv.0.clone(), v));
+        then(cv.1.into_arr().map(rc_unwrap_or_clone), |arr| {
+            box_once(cmp_by(arr, f, |my, y| y >= my))
+        })
     }),
     ("has", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
@@ -102,7 +189,7 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
     ("split", 1, |args, cv| {
         let seps = args.get(0).run(cv.clone());
-        Box::new(seps.map(move |sep| Ok(Val::arr(cv.1.split(&sep?)?))))
+        Box::new(seps.map(move |sep| Ok(Val::arr(split(cv.1.as_str()?, sep?.as_str()?)))))
     }),
     ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
     ("last", 1, |args, cv| {
@@ -137,19 +224,25 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
     ("startswith", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.starts_with(&k?)?))))
+        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.as_str()?.starts_with(&**k?.as_str()?)))))
     }),
     ("endswith", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.ends_with(&k?)?))))
+        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.as_str()?.ends_with(&**k?.as_str()?)))))
     }),
     ("ltrimstr", 1, |args, cv| {
-        let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Str(cv.1.strip_prefix(&k?)?))))
+        Box::new(args.get(0).run(cv.clone()).map(move |pre| {
+            Ok(Val::Str(strip(cv.1.as_str()?, &pre?.to_str()?, |s, o| {
+                s.strip_prefix(o)
+            })))
+        }))
     }),
     ("rtrimstr", 1, |args, cv| {
-        let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Str(cv.1.strip_suffix(&k?)?))))
+        Box::new(args.get(0).run(cv.clone()).map(move |suf| {
+            Ok(Val::Str(strip(cv.1.as_str()?, &suf?.to_str()?, |s, o| {
+                s.strip_suffix(o)
+            })))
+        }))
     }),
 ];
 

@@ -282,6 +282,7 @@ dependencies = [
 name = "jaq-native"
 version = "1.0.0-alpha"
 dependencies = [
+ "itertools",
  "jaq-core",
  "log",
  "regex",

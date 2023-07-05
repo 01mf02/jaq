@@ -99,7 +99,7 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    fn into_arr(self) -> Result<Rc<Vec<Val>>, Error> {
+    pub fn into_arr(self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Arr(self)),
@@ -141,16 +141,6 @@ impl Val {
             Self::Str(s) => Ok(Self::Int(s.chars().count() as isize)),
             Self::Arr(a) => Ok(Self::Int(a.len() as isize)),
             Self::Obj(o) => Ok(Self::Int(o.len() as isize)),
-        }
-    }
-
-    /// Return the number of bytes used to encode a string in UTF-8
-    ///
-    /// Fail on any other value.
-    pub fn byte_len(&self) -> Result<Self, Error> {
-        match self {
-            Self::Str(s) => Ok(Self::Int(s.len() as isize)),
-            _ => Err(Error::ByteLength(self.clone())),
         }
     }
 
@@ -269,143 +259,11 @@ impl Val {
         Ok(Self::Arr(a))
     }
 
-    /// Apply the function to the value if there is no error,
-    /// set error if the function application yielded an error.
-    ///
-    /// This is useful if we have to run a function in a context
-    /// where we cannot fail immediately.
-    fn run_if_ok<'a>(self, err: &mut Option<Error>, f: &impl Fn(Val) -> ValRs<'a>) -> Vec<Val> {
-        if err.is_some() {
-            return Vec::new();
-        };
-        match f(self).collect() {
-            Ok(y) => y,
-            Err(e) => {
-                *err = Some(e);
-                Vec::new()
-            }
-        }
-    }
-
-    /// Sort array by the given function.
-    ///
-    /// Fail on any other value.
-    pub fn sort_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
+    /// Apply a fallible function to an array.
+    pub fn try_mutate_arr(self, f: impl Fn(&mut Vec<Val>) -> Result<(), Error>) -> ValR {
         let mut a = self.into_arr()?;
-        // Some(e) iff an error has previously occurred
-        let mut err = None;
-        Rc::make_mut(&mut a).sort_by_cached_key(|x| x.clone().run_if_ok(&mut err, &f));
-        err.map_or(Ok(Val::Arr(a)), Err)
-    }
-
-    /// Return true if string starts with a given string.
-    ///
-    /// Fail on any other value.
-    pub fn starts_with(&self, other: &Self) -> Result<bool, Error> {
-        match (self, other) {
-            (Self::Str(s), Self::Str(o)) => Ok(s.starts_with(&**o)),
-            _ => Err(Error::StartsWith(self.clone(), other.clone())),
-        }
-    }
-
-    /// Return true if string ends with a given string.
-    ///
-    /// Fail on any other value.
-    pub fn ends_with(&self, other: &Self) -> Result<bool, Error> {
-        match (self, other) {
-            (Self::Str(s), Self::Str(o)) => Ok(s.ends_with(&**o)),
-            _ => Err(Error::EndsWith(self.clone(), other.clone())),
-        }
-    }
-
-    /// Remove given prefix string from the string.
-    ///
-    /// Fail on any other value.
-    pub fn strip_prefix(&self, other: &Self) -> Result<Rc<String>, Error> {
-        if let (Self::Str(s), Self::Str(o)) = (self, other) {
-            Ok(s.strip_prefix(&**o)
-                .map_or_else(|| s.clone(), |y| Rc::new(y.into())))
-        } else {
-            Err(Error::StripPrefix(self.clone(), other.clone()))
-        }
-    }
-
-    /// Remove given suffix string from the string.
-    ///
-    /// Fail on any other value.
-    pub fn strip_suffix(&self, other: &Self) -> Result<Rc<String>, Error> {
-        if let (Self::Str(s), Self::Str(o)) = (self, other) {
-            Ok(s.strip_suffix(&**o)
-                .map_or_else(|| s.clone(), |y| Rc::new(y.into())))
-        } else {
-            Err(Error::StripSuffix(self.clone(), other.clone()))
-        }
-    }
-
-    /// Group an array by the given function.
-    ///
-    /// Fail on any other value.
-    pub fn group_by<'a>(self, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-        let mut err = None;
-        let mut yx = rc_unwrap_or_clone(self.into_arr()?)
-            .into_iter()
-            .map(|x| (x.clone().run_if_ok(&mut err, &f), x))
-            .collect::<Vec<(Vec<Val>, Val)>>();
-        if let Some(err) = err {
-            return Err(err);
-        }
-
-        yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
-
-        use itertools::Itertools;
-        let grouped = yx
-            .into_iter()
-            .group_by(|(y, _)| y.clone())
-            .into_iter()
-            .map(|(_y, yxs)| Val::arr(yxs.map(|(_y, x)| x).collect()))
-            .collect();
-        Ok(Val::arr(grouped))
-    }
-
-    /// Get the minimum or maximum element from an array according to
-    /// the given function.
-    ///
-    /// Fail on any other value.
-    pub fn cmp_by<'a>(
-        self,
-        f: impl Fn(Val) -> ValRs<'a>,
-        replace: impl Fn(&Vec<Val>, &Vec<Val>) -> bool,
-    ) -> ValR {
-        let iter = rc_unwrap_or_clone(self.into_arr()?).into_iter();
-        let mut iter = iter.map(|x: Val| (x.clone(), f(x).collect::<Result<_, _>>()));
-        let (mut mx, mut my) = if let Some((x, y)) = iter.next() {
-            (x, y?)
-        } else {
-            return Ok(Val::Null);
-        };
-        for (x, y) in iter {
-            let y = y?;
-            if replace(&my, &y) {
-                (mx, my) = (x, y);
-            }
-        }
-        Ok(mx)
-    }
-
-    /// Split a string by a given separator string.
-    ///
-    /// Fail if any of the two given values is not a string.
-    pub fn split(&self, sep: &Self) -> Result<Vec<Val>, Error> {
-        let s = self.as_str()?;
-        let sep = sep.as_str()?;
-        Ok(if sep.is_empty() {
-            // Rust's `split` function with an empty separator ("")
-            // yields an empty string as first and last result
-            // to prevent this, we are using `chars` instead
-            s.chars().map(|s| Self::str(s.to_string())).collect()
-        } else {
-            s.split(&**sep).map(|s| Self::str(s.to_string())).collect()
-        })
+        f(Rc::make_mut(&mut a))?;
+        Ok(Self::Arr(a))
     }
 
     /// Parse at least one JSON value, given an initial token and a lexer.
