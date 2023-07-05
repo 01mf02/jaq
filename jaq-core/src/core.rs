@@ -52,6 +52,17 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("reverse", 0, |_, cv| {
         box_once(cv.1.mutate_arr(|a| a.reverse()))
     }),
+    ("now", 0, |_, _| {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let duration = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| Error::SystemTime(e.to_string()));
+        box_once(duration.map(|x| x.as_secs_f64()).map(Val::Float))
+    }),
+    ("fromdateiso8601", 0, |_, cv| box_once(cv.1.from_iso8601())),
+    ("todateiso8601", 0, |_, cv| {
+        box_once(cv.1.to_iso8601().map(Val::str))
+    }),
     ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
     ("sort_by", 1, |args, cv| {
         box_once(cv.1.sort_by(|v| args.get(0).run((cv.0.clone(), v))))

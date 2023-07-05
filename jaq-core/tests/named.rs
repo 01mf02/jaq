@@ -13,6 +13,26 @@ fn ascii() {
 }
 
 #[test]
+fn dateiso8601() {
+    give(
+        json!("1970-01-02T00:00:00Z"),
+        "fromdateiso8601",
+        json!(86400),
+    );
+    give(
+        json!("1970-01-02T00:00:00.123456789Z"),
+        "fromdateiso8601",
+        json!(86400.123456789),
+    );
+    give(json!(86400), "todateiso8601", json!("1970-01-02T00:00:00Z"));
+    give(
+        json!(86400.123456789),
+        "todateiso8601",
+        json!("1970-01-02T00:00:00.123456789Z"),
+    );
+}
+
+#[test]
 fn explode_implode() {
     give(json!("❤ の"), "explode", json!([10084, 32, 12398]));
     give(json!("y̆"), "explode", json!([121, 774]));
