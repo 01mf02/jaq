@@ -7,7 +7,9 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(feature = "regex")]
 mod regex;
+#[cfg(feature = "time")]
 mod time;
 
 use alloc::string::{String, ToString};
