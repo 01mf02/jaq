@@ -19,7 +19,7 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Check (without default features)
-      working-directory: jaq-core
+      working-directory: jaq-native
       run: cargo check --no-default-features
     - name: Run tests
       run: cargo test --verbose
