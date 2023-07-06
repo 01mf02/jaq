@@ -16,7 +16,7 @@ std = []
 [dependencies]
 jaq-core = { version = "1.0.0-alpha", path = "../jaq-core" }
 time = { version = "0.3.22", optional = true, features = ["formatting", "parsing"] }
-regex = { version = "1.8.4", optional = true }
+regex = { version = "1.9", optional = true }
 log = { version = "0.4.17", optional = true }
 itertools = "0.10.3"
 
