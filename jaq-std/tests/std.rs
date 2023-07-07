@@ -26,6 +26,23 @@ fn any() {
 }
 
 #[test]
+fn date() {
+    // aliases for fromdateiso8601 and todateiso8601
+    give(json!("1970-01-02T00:00:00Z"), "fromdate", json!(86400));
+    give(
+        json!("1970-01-02T00:00:00.123456789Z"),
+        "fromdate",
+        json!(86400.123456789),
+    );
+    give(json!(86400), "todate", json!("1970-01-02T00:00:00Z"));
+    give(
+        json!(86400.123456789),
+        "todate",
+        json!("1970-01-02T00:00:00.123456789Z"),
+    );
+}
+
+#[test]
 fn entries() {
     let obj = json!({"a": 1, "b": 2});
     let entries = json!([{"key": "a", "value": 1}, {"key": "b", "value": 2}]);
