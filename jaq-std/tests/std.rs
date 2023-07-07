@@ -43,6 +43,19 @@ fn date() {
 }
 
 #[test]
+fn date_roundtrip() {
+    let epoch = 946684800;
+    give(json!(epoch), "todate|fromdate", json!(epoch));
+    let epoch_ns = 946684800.123456;
+    give(json!(epoch_ns), "todate|fromdate", json!(epoch_ns));
+
+    let iso = "2000-01-01T00:00:00Z";
+    give(json!(iso), "fromdate|todate", json!(iso));
+    let iso_ns = "2000-01-01T00:00:00.123456000Z";
+    give(json!(iso_ns), "fromdate|todate", json!(iso_ns));
+}
+
+#[test]
 fn entries() {
     let obj = json!({"a": 1, "b": 2});
     let entries = json!([{"key": "a", "value": 1}, {"key": "b", "value": 2}]);
