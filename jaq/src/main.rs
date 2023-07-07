@@ -62,6 +62,8 @@ struct Cli {
     join_output: bool,
 
     /// Print NUL after each value, instead of a newline
+    ///
+    /// Unlike jq, this does not enable `--raw-output`.
     #[arg(short = '0', long)]
     nul_output: bool,
 
