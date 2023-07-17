@@ -6,12 +6,23 @@ mod token;
 
 pub use def::{defs, main};
 
-use chumsky::prelude::*;
 use crate::{Spanned, Token};
 use alloc::{string::String, string::ToString, vec::Vec};
+use chumsky::prelude::*;
 
 /// Lex/parse error.
 pub type Error = Simple<String>;
+
+/// A (potentially empty) parenthesised and `;`-separated sequence of arguments.
+fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
+where
+    P: Parser<Token, T> + Clone,
+{
+    arg.separated_by(just(Token::Ctrl(';')))
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+        .or_not()
+        .map(Option::unwrap_or_default)
+}
 
 fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     let comment = just("#").then(take_until(just('\n'))).padded();

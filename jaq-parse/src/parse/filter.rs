@@ -4,16 +4,6 @@ use crate::{MathOp, OrdOp, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 
-pub(crate) fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
-where
-    P: Parser<Token, T> + Clone,
-{
-    arg.separated_by(just(Token::Ctrl(';')))
-        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-        .or_not()
-        .map(Option::unwrap_or_default)
-}
-
 fn variable() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! {
         Token::Var(v) => v,
@@ -99,7 +89,7 @@ where
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
-    let call = ident.then(args(filter));
+    let call = ident.then(super::args(filter));
 
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
@@ -217,7 +207,7 @@ where
         .map(|(f, ops)| f.parse(ops))
 }
 
-pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
+pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
     // filters that may or may not contain commas on the toplevel,
     // i.e. not inside parentheses
     let mut with_comma = Recursive::declare();

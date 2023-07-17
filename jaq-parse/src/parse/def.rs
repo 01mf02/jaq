@@ -1,4 +1,4 @@
-use super::filter::{args, filter};
+use super::filter::filter;
 use crate::def::{Arg, Main};
 use crate::{Def, Token};
 use alloc::vec::Vec;
@@ -22,7 +22,7 @@ where
 
     just(Token::Def)
         .ignore_then(ident.labelled("filter name"))
-        .then(args(arg).labelled("filter args"))
+        .then(super::args(arg).labelled("filter args"))
         .then_ignore(just(Token::Ctrl(':')))
         .then(def.repeated().collect())
         .then(filter())
