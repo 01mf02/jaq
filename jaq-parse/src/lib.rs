@@ -7,18 +7,19 @@ extern crate alloc;
 
 mod parse;
 
+mod def;
 pub mod filter;
 mod ops;
 pub mod path;
 mod prec_climb;
 pub mod test;
 mod token;
-mod toplevel;
 
+pub use def::{Arg, Def, Main};
 pub use ops::{MathOp, OrdOp};
+pub use parse::{defs, main};
 use path::Path;
 use token::Token;
-pub use toplevel::{defs, main, Arg, Def, Main};
 
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
