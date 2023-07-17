@@ -29,6 +29,8 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
 
     let out_ex = fs::read_to_string(out_path)?;
     let out_act = str::from_utf8(&jaq_out.stdout).expect("invalid UTF-8 in output");
+    // remove '\r' from output for compatibility with Windows
+    let out_act = out_act.replace('\r', "");
     if out_ex.trim() != out_act.trim() {
         println!("Expected output:\n{}\n---", out_ex);
         println!("Actual output:\n{}\n---", out_act);
