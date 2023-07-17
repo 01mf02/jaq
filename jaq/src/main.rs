@@ -8,9 +8,16 @@ use std::process::{ExitCode, Termination};
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+const VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (rev: ",
+    env!("COMMIT_SHA"),
+    ")"
+);
+
 /// Just Another Query Tool
 #[derive(Parser)]
-#[command(version)]
+#[command(version = VERSION)]
 struct Cli {
     /// Use null as single input value
     #[arg(short, long)]
