@@ -1,6 +1,6 @@
-use super::prec_climb;
+use super::{prec_climb, Token};
 use crate::filter::{AssignOp, BinaryOp, Filter, Fold, FoldType, KeyVal};
-use crate::{MathOp, OrdOp, Spanned, Token};
+use crate::{MathOp, OrdOp, Spanned};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 
@@ -235,7 +235,13 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
 
     let try_ = named
         .then(just(Token::Ctrl('?')).repeated().collect::<Vec<_>>())
-        .map_with_span(|(f, try_), span| Filter::try_(f, try_, span));
+        .map_with_span(|(f, try_), span| {
+            if try_.is_empty() {
+                f
+            } else {
+                (Filter::Try(Box::new(f)), span)
+            }
+        });
 
     let neg = neg(try_).boxed();
 

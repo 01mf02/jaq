@@ -1,6 +1,6 @@
-use super::filter::filter;
+use super::{filter::filter, Token};
 use crate::def::{Arg, Main};
-use crate::{Def, Token};
+use crate::Def;
 use alloc::vec::Vec;
 use chumsky::prelude::*;
 

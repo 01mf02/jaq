@@ -5,8 +5,9 @@ mod prec_climb;
 mod token;
 
 pub use def::{defs, main};
+use token::Token;
 
-use crate::{Spanned, Token};
+use crate::Spanned;
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 

@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{MathOp, OrdOp, Path, Span, Spanned, Token};
+use crate::{MathOp, OrdOp, Path, Span, Spanned};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 #[cfg(feature = "serde")]
@@ -145,25 +145,21 @@ impl From<String> for Filter {
 }
 
 impl Filter {
-    pub(crate) fn binary(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
+    /// Create a binary expression, such as `1 + 2`.
+    pub fn binary(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
         (Filter::Binary(Box::new(a), op, Box::new(b)), span)
     }
 
-    pub(crate) fn path(f: Spanned<Self>, path: Path<Self>, span: Span) -> Spanned<Self> {
+    /// Create a path expression, such as `keys[]` or `.a.b`.
+    ///
+    /// Here, `f` is a filter on whose output the path is executed on,
+    /// such as `keys` and `.` in the example above.
+    pub fn path(f: Spanned<Self>, path: Path<Self>, span: Span) -> Spanned<Self> {
         if path.is_empty() {
             f
         } else {
             (Filter::Path(Box::new(f), path), span)
-        }
-    }
-
-    // TODO: remove this?
-    pub(crate) fn try_(f: Spanned<Self>, try_: Vec<Token>, span: Span) -> Spanned<Self> {
-        if try_.is_empty() {
-            f
-        } else {
-            (Filter::Try(Box::new(f)), span)
         }
     }
 }

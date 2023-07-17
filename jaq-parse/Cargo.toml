@@ -11,8 +11,8 @@ keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
 
 [features]
-default = ["serde"]
+default = ["chumsky", "serde"]
 
 [dependencies]
-chumsky = { version = "0.9.0", default-features = false }
+chumsky = { version = "0.9.0", default-features = false, optional = true }
 serde = { version = "1.0.137", features = ["derive"], optional = true }

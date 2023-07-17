@@ -16,7 +16,7 @@ pub enum Part<I> {
     Range(Option<I>, Option<I>),
 }
 
-/// Optionality of a path part.
+/// Optionality of a path part, i.e. whether `?` is present.
 ///
 /// For example, `[] | .a` fails with an error, while `[] | .a?` returns nothing.
 /// By default, path parts are *essential*, meaning that they fail.

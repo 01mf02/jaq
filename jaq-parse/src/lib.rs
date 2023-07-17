@@ -5,6 +5,7 @@
 
 extern crate alloc;
 
+#[cfg(feature = "chumsky")]
 mod parse;
 
 mod def;
@@ -12,13 +13,12 @@ pub mod filter;
 mod ops;
 pub mod path;
 pub mod test;
-mod token;
 
 pub use def::{Arg, Def, Main};
 pub use ops::{MathOp, OrdOp};
+#[cfg(feature = "chumsky")]
 pub use parse::{defs, main, parse, Error};
 use path::Path;
-use token::Token;
 
 type Span = core::ops::Range<usize>;
 

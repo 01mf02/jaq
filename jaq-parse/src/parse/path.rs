@@ -1,5 +1,6 @@
+use super::Token;
 use crate::path::{Opt, Part, Path};
-use crate::{Spanned, Token};
+use crate::Spanned;
 use alloc::string::String;
 use chumsky::prelude::*;
 
