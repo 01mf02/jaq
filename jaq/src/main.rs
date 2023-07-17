@@ -185,12 +185,14 @@ fn real_main() -> Result<ExitCode, Error> {
         last
     };
 
-    Ok(if cli.exit_status {
-        // return exit code 4 if no value is output
-        ExitCode::from(last.map(|b| (!b).into()).unwrap_or(4))
+    if cli.exit_status {
+        last.map_or_else(
+            || Err(Error::NoOutput),
+            |b| b.then_some(ExitCode::SUCCESS).ok_or(Error::FalseOrNull),
+        )
     } else {
-        ExitCode::SUCCESS
-    })
+        Ok(ExitCode::SUCCESS)
+    }
 }
 
 fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[String], f: F) -> Result<(), Error>
@@ -341,11 +343,14 @@ enum Error {
     Parse(String),
     Jaq(jaq_core::Error),
     Persist(tempfile::PersistError),
+    FalseOrNull,
+    NoOutput,
 }
 
 impl Termination for Error {
     fn report(self) -> ExitCode {
         let exit = match self {
+            Self::FalseOrNull => 1,
             Self::Io(prefix, e) => {
                 eprint!("Error: ");
                 prefix.into_iter().for_each(|p| eprint!("{}: ", p));
@@ -364,9 +369,10 @@ impl Termination for Error {
                 }
                 3
             }
+            Self::NoOutput => 4,
             Self::Parse(e) => {
                 eprintln!("Error: failed to parse: {}", e);
-                4
+                5
             }
             Self::Jaq(e) => {
                 eprintln!("Error: {}", e);
