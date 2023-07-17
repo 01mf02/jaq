@@ -128,3 +128,7 @@ def gsub(re; f): sub(re; f; "g");
 
 # I/O
 def input: first(inputs);
+
+# Date
+def   todate:   todateiso8601;
+def fromdate: fromdateiso8601;
