@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{prec_climb, MathOp, OrdOp, Path, Span, Spanned, Token};
+use crate::{parse, prec_climb, MathOp, OrdOp, Path, Span, Spanned, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
@@ -277,7 +277,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
 
     let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
-    let key_str = crate::path::key()
+    let key_str = parse::path::key()
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
     let key_filter = parenthesised
@@ -387,16 +387,14 @@ pub(crate) fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Tok
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
 
-    use crate::path;
-
     // e.g. `keys[]`
     let atom = atom(with_comma.clone(), sans_comma.clone());
-    let atom_path = || path::path(with_comma.clone());
+    let atom_path = || parse::path::path(with_comma.clone());
     let atom_with_path = atom.then(atom_path().collect());
 
     // e.g. `.[].a` or `.a`
     let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
-    let id_path = path::index().or_not().chain(atom_path());
+    let id_path = parse::path::index().or_not().chain(atom_path());
     let id_with_path = id.then(id_path.collect());
 
     let path = atom_with_path.or(id_with_path);
