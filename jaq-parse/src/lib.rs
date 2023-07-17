@@ -11,7 +11,6 @@ mod def;
 pub mod filter;
 mod ops;
 pub mod path;
-mod prec_climb;
 pub mod test;
 mod token;
 

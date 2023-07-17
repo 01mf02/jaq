@@ -1,5 +1,5 @@
+use super::filter::{args, filter};
 use crate::def::{Arg, Main};
-use crate::filter::{args, filter};
 use crate::{Def, Token};
 use alloc::vec::Vec;
 use chumsky::prelude::*;
