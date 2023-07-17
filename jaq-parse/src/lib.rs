@@ -5,6 +5,8 @@
 
 extern crate alloc;
 
+mod parse;
+
 pub mod filter;
 mod ops;
 pub mod path;
@@ -31,7 +33,7 @@ pub type Error = Simple<String>;
 fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
     let comment = just("#").then(take_until(just('\n'))).padded();
 
-    token::token()
+    parse::token()
         .padded_by(comment.repeated())
         .map_with_span(|tok, span| (tok, span))
         .padded()
