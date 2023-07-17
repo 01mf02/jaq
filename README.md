@@ -68,22 +68,6 @@ If you have cloned this repository, you can also build jaq by executing one of t
     $ cargo build --release # places binary into target/release/jaq
     $ cargo install --locked --path jaq # installs binary
 
-Note that for named capture groups,
-the syntax `(?<name>exp)` is **not** supported when installing jaq by
-`cargo install jaq`; however, it **is** supported when installing jaq using
-`cargo install --git https://github.com/01mf02/jaq`,
-`cargo build`, or
-`cargo install --path jaq`.
-<details>
-This is because the underlying crate for parsing regular expressions, `regex-syntax`,
-does not support the `(?<name>exp)` syntax at the time of writing,
-so jaq currently uses a patched version of this crate,
-which is however not considered by `cargo install jaq`.
-In the future,
-the `(?<name>exp)` syntax is [likely to be included](https://github.com/rust-lang/regex/issues/955) in `regex-syntax`,
-which will make the `(?<name>exp)` syntax available also when installing jaq via `cargo install jaq`.
-</details>
-
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
 
