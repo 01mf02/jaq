@@ -61,6 +61,12 @@ struct Cli {
     #[arg(short, long)]
     join_output: bool,
 
+    /// Print NUL after each value, instead of a newline
+    ///
+    /// Unlike jq, this does not enable `--raw-output`.
+    #[arg(short = '0', long)]
+    nul_output: bool,
+
     /// Color output
     #[arg(long, value_name = "WHEN", default_value = "auto")]
     color: Color,
@@ -436,7 +442,9 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
             }?
         }
     };
-    if !cli.join_output {
+    if cli.nul_output {
+        write!(writer, "\0")?
+    } else if !cli.join_output {
         writeln!(writer)?
     }
     Ok(())
