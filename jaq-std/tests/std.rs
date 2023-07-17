@@ -144,6 +144,13 @@ yields!(
     ["abc", "az", "fax", "foo"]
 );
 
+yields!(
+    match_many,
+    r#""ABab" | [match("a", "b"; "", "i") | .string]"#,
+    // TODO: is this order really desired?
+    ["a", "b", "A", "B"]
+);
+
 #[test]
 fn min_max() {
     give(json!([1, 4, 2]), "min", json!(1));
@@ -219,6 +226,13 @@ fn repeat() {
     let y = json!([0, 1, 0, 1]);
     give(json!([0, 1]), "[limit(4; repeat(.[]))]", y);
 }
+
+yields!(
+    scan,
+    r#""abAB" | [scan("a", "b"; "g", "gi")]"#,
+    // TODO: is this order really desired?
+    json!(["a", "b", "a", "A", "b", "B"])
+);
 
 #[test]
 fn select() {
