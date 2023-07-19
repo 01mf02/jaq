@@ -234,14 +234,14 @@ Here is an overview that summarises:
 - [x] String <-> JSON (`fromjson`, `tojson`)
 - [x] String <-> integers (`explode`, `implode`)
 - [x] String normalisation (`ascii_downcase`, `ascii_upcase`)
+- [x] String prefix/postfix (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
 - [x] String splitting (`split("foo")`)
-- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`)
+- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
+- [x] Time (`now`, `fromdateiso8601`, `todateiso8601`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
-- [x] More string filters (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
-- [x] More array filters (`group_by`, `min_by`, `max_by`, ...)
-
+- [ ] More time filters (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
 
 ## Standard filters
 
@@ -255,19 +255,17 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Filtering (`select(. >= 0)`)
 - [x] Selection (`values`, `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`, `iterables`, `scalars`)
 - [x] Conversion (`tostring`, `tonumber`)
-- [x] Iterable filters (`map(.+1)`, `map_values(.+1)`, `add`, `join("a")`, `min`, `max`)
-- [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`)
+- [x] Iterable filters (`map(.+1)`, `map_values(.+1)`, `add`, `join("a")`)
+- [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`, `min`, `max`)
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
 - [x] Recursion (`walk`)
 - [x] I/O (`input`)
 - [x] Regular expressions (`test`, `scan`, `match`, `capture`, `splits`, `sub`, `gsub`)
+- [x] Time (`fromdate`, `todate`)
 
 
 ## Advanced features
-
-- [x] Basic date handling (`now`, `fromdateiso8601`, `todateiso8601`)
-- [ ] Advanced timestamp handling (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
 
 jaq currently does *not* aim to support several features of jq, such as:
 
