@@ -32,11 +32,18 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
 /// but also `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-#[cfg(all(feature = "std", feature = "log", feature = "regex", feature = "time"))]
+#[cfg(all(
+    feature = "std",
+    feature = "log",
+    feature = "math",
+    feature = "regex",
+    feature = "time"
+))]
 pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     minimal()
         .chain(run(STD))
         .chain(upd(LOG))
+        .chain(run(MATH))
         .chain(run(REGEX))
         .chain(run(TIME))
 }
@@ -259,6 +266,62 @@ fn now() -> Result<f64, Error> {
 
 #[cfg(feature = "std")]
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+
+#[cfg(feature = "math")]
+fn as_float(v: Val, fun: &str) -> Result<f64, Error> {
+    match v {
+        Val::Int(n) => Ok(n as f64),
+        Val::Float(n) => Ok(n),
+        Val::Num(ref n) => n.parse().or(Err(Error::MathFn(String::from(fun), v))),
+        _ => Err(Error::MathFn(String::from(fun), v)),
+    }
+}
+
+#[cfg(feature = "math")]
+macro_rules! math_0_ary {
+    ($f: ident) => {
+        (stringify!($f), 0, |_, cv| {
+            box_once(as_float(cv.1, stringify!($f)).map(libm::$f).map(Val::Float))
+        })
+    };
+}
+
+#[cfg(feature = "math")]
+const MATH: &[(&str, usize, RunPtr)] = &[
+    math_0_ary!(acos),
+    math_0_ary!(acosh),
+    math_0_ary!(asin),
+    math_0_ary!(asinh),
+    math_0_ary!(atan),
+    math_0_ary!(atanh),
+    math_0_ary!(cbrt),
+    math_0_ary!(cos),
+    math_0_ary!(cosh),
+    math_0_ary!(erf),
+    math_0_ary!(erfc),
+    math_0_ary!(exp),
+    math_0_ary!(exp10),
+    math_0_ary!(exp2),
+    math_0_ary!(expm1),
+    math_0_ary!(fabs),
+    math_0_ary!(j0),
+    math_0_ary!(j1),
+    math_0_ary!(lgamma),
+    math_0_ary!(log),
+    math_0_ary!(log10),
+    math_0_ary!(log1p),
+    math_0_ary!(log2),
+    math_0_ary!(rint),
+    math_0_ary!(sin),
+    math_0_ary!(sinh),
+    math_0_ary!(sqrt),
+    math_0_ary!(tan),
+    math_0_ary!(tanh),
+    math_0_ary!(tgamma),
+    math_0_ary!(trunc),
+    math_0_ary!(y0),
+    math_0_ary!(y1),
+];
 
 #[cfg(feature = "regex")]
 fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: (Ctx<'a>, Val)) -> ValRs<'a> {

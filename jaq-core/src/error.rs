@@ -34,6 +34,8 @@ pub enum Error {
     Neg(Val),
     /// `1 - "a"`
     MathOp(Val, jaq_syn::MathOp, Val),
+    /// `"1" | sin` or `pow(2; "3")` or `fma(2; 3; "4")`
+    MathFn(String, Val),
     /// `0 | .[0]`
     Index(Val),
     /// `{} | .[0]`
@@ -71,6 +73,7 @@ impl fmt::Display for Error {
             Self::Iter(v) => write!(f, "cannot iterate over {v}"),
             Self::Neg(v) => write!(f, "cannot negate {v}"),
             Self::MathOp(l, op, r) => write!(f, "cannot calculate {l} {op} {r}"),
+            Self::MathFn(fun, v) => write!(f, "cannot apply {fun} to {v}"),
             Self::Index(v) => write!(f, "cannot index {v}"),
             Self::IndexWith(v, i) => write!(f, "cannot index {v} with {i}"),
             Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),

@@ -10,14 +10,16 @@ repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 
 [features]
-default = ["std", "log", "regex", "time"]
+default = ["std", "log", "math", "regex", "time"]
 std = []
+math = ["libm"]
 
 [dependencies]
 jaq-core = { version = "1.0.0-alpha", path = "../jaq-core" }
 time = { version = "0.3.22", optional = true, features = ["formatting", "parsing"] }
 regex = { version = "1.9", optional = true }
 log = { version = "0.4.17", optional = true }
+libm = { version = "0.2.7", optional = true }
 itertools = "0.10.3"
 
 [dev-dependencies]
