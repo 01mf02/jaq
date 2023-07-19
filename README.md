@@ -240,7 +240,7 @@ Here is an overview that summarises:
 - [x] Stream generators (`range`, `recurse`)
 - [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
 - [x] More string filters (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
-- [ ] More array filters (`group_by`, `min_by`, `max_by`, ...)
+- [x] More array filters (`group_by`, `min_by`, `max_by`, ...)
 
 
 ## Standard filters
@@ -271,7 +271,6 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 
 jaq currently does *not* aim to support several features of jq, such as:
 
-- Paths
 - Modules
 - SQL-style operators
 - Streaming
