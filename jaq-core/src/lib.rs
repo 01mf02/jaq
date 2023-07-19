@@ -133,7 +133,7 @@ impl ParseCtx {
         lir::root_def(&self.defs)
     }
 
-    /// Run a filter on given input, and panic if it does not yield the given output.
+    /// Compile and run a filter on given input, panic if it does not compile or yield the given output.
     ///
     /// This is for testing purposes.
     pub fn yields(&mut self, x: Val, f: jaq_syn::Main, ys: impl Iterator<Item = ValR>) {
