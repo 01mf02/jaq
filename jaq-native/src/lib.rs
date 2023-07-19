@@ -287,6 +287,23 @@ macro_rules! math_0_ary {
 }
 
 #[cfg(feature = "math")]
+macro_rules! math_2_ary {
+    ($f: ident) => {
+        (stringify!($f), 2, |args, cv| {
+            let xs = args.get(0).run(cv.clone()).collect::<Vec<ValR>>();
+            let ys = args.get(1).run(cv.clone());
+            Box::new(ys.flat_map(move |y| {
+                xs.clone().into_iter().map(move |x| {
+                    let xf = as_float(x?, stringify!($f))?;
+                    let yf = as_float(y.clone()?, stringify!($f))?;
+                    Ok(Val::Float(libm::$f(xf, yf)))
+                })
+            }))
+        })
+    };
+}
+
+#[cfg(feature = "math")]
 const MATH: &[(&str, usize, RunPtr)] = &[
     math_0_ary!(acos),
     math_0_ary!(acosh),
@@ -321,6 +338,21 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math_0_ary!(trunc),
     math_0_ary!(y0),
     math_0_ary!(y1),
+    math_2_ary!(atan2),
+    math_2_ary!(copysign),
+    math_2_ary!(fdim),
+    math_2_ary!(fmax),
+    math_2_ary!(fmin),
+    math_2_ary!(fmod),
+    // math_2_ary!(frexp),
+    math_2_ary!(hypot),
+    // math_2_ary!(jn),
+    // math_2_ary!(ldexp),
+    // math_2_ary!(modf),
+    math_2_ary!(nextafter),
+    math_2_ary!(pow),
+    math_2_ary!(remainder),
+    // math_2_ary!(yn),
 ];
 
 #[cfg(feature = "regex")]
