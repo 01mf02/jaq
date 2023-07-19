@@ -21,9 +21,13 @@
 //! // such as `map`, `select` etc.
 //! let mut defs = ParseCtx::new(Vec::new());
 //!
+//! // parse the filter
+//! let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
+//! assert_eq!(errs, Vec::new());
+//!
 //! // parse the filter in the context of the given definitions
-//! let f = defs.parse_filter(&filter);
-//! assert_eq!(defs.errs, Vec::new());
+//! let f = defs.parse_filter(f.unwrap());
+//! assert!(defs.errs.is_empty());
 //!
 //! let inputs = RcIter::new(core::iter::empty());
 //!
@@ -53,8 +57,6 @@ mod rc_lazy_list;
 mod rc_list;
 pub mod results;
 mod val;
-
-pub use jaq_parse as parse;
 
 pub use error::Error;
 pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
@@ -120,19 +122,27 @@ impl<'a> Ctx<'a> {
 
 impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn parse_filter(&mut self, filter: &str) -> Filter {
-        let (filter, mut errs) = parse::parse(filter, parse::main());
-        self.errs.append(&mut errs);
-
-        if let Some((defs, body)) = filter {
-            self.insert_defs(defs);
-            self.root_filter(body);
-        }
+    // TODO: find a better name for this function
+    pub fn parse_filter(&mut self, (defs, body): jaq_syn::Main) -> Filter {
+        self.insert_defs(defs);
+        self.root_filter(body);
 
         if !self.errs.is_empty() {
             return Default::default();
         }
         //std::dbg!("before LIR");
         lir::root_def(&self.defs)
+    }
+
+    /// Run a filter on given input, and panic if it does not yield the given output.
+    ///
+    /// This is for testing purposes.
+    pub fn yields(&mut self, x: Val, f: jaq_syn::Main, ys: impl Iterator<Item = ValR>) {
+        let f = self.parse_filter(f);
+        assert!(self.errs.is_empty());
+
+        let inputs = RcIter::new(core::iter::empty());
+        let out = f.run((Ctx::new([], &inputs), x.into()));
+        itertools::assert_equal(out, ys);
     }
 }

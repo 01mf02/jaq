@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "jaq-syn",
     "jaq-parse",
     "jaq-core",
     "jaq-native",

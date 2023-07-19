@@ -8,7 +8,7 @@ use crate::filter::{self, Ast as Filter};
 use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
-use jaq_parse::filter::{AssignOp, BinaryOp, Fold, KeyVal};
+use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 
 #[derive(Debug, Clone, Default)]
 struct View {
@@ -293,7 +293,7 @@ impl Ctx {
             }
             Expr::Path(f, path) => {
                 let f = get(*f, self);
-                use jaq_parse::path::Part;
+                use jaq_syn::path::Part;
                 let path = path.into_iter().map(|(p, opt)| match p {
                     Part::Index(i) => (path::Part::Index(*get(i, self)), opt),
                     Part::Range(lower, upper) => {

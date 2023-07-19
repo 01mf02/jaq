@@ -4,8 +4,8 @@ use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
-use jaq_parse::filter::FoldType;
-use jaq_parse::{MathOp, OrdOp};
+use jaq_syn::filter::FoldType;
+use jaq_syn::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Default, Clone)]

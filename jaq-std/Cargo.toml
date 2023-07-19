@@ -17,6 +17,7 @@ jaq-parse = { version = "1.0.0-alpha", path = "../jaq-parse" }
 bincode = { version = "1.3.3", optional = true }
 
 [dependencies]
+jaq-syn   = { version = "1.0.0-alpha", path = "../jaq-syn" }
 jaq-parse = { version = "1.0.0-alpha", path = "../jaq-parse" }
 bincode = { version = "1.3.3", optional = true }
 

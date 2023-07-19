@@ -6,7 +6,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
 use hifijson::{LexAlloc, Token};
-use jaq_parse::MathOp;
+use jaq_syn::MathOp;
 
 /// JSON value with sharing.
 ///

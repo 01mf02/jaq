@@ -33,7 +33,7 @@ pub enum Error {
     /// `-"a"`
     Neg(Val),
     /// `1 - "a"`
-    MathOp(Val, jaq_parse::MathOp, Val),
+    MathOp(Val, jaq_syn::MathOp, Val),
     /// `0 | .[0]`
     Index(Val),
     /// `{} | .[0]`

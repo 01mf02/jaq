@@ -257,7 +257,9 @@ dependencies = [
  "hifijson",
  "jaq-core",
  "jaq-native",
+ "jaq-parse",
  "jaq-std",
+ "jaq-syn",
  "memmap2",
  "mimalloc",
  "serde_json",
@@ -274,6 +276,7 @@ dependencies = [
  "indexmap",
  "itertools",
  "jaq-parse",
+ "jaq-syn",
  "once_cell",
  "serde_json",
 ]
@@ -284,6 +287,7 @@ version = "1.0.0-alpha"
 dependencies = [
  "itertools",
  "jaq-core",
+ "jaq-parse",
  "log",
  "regex",
  "serde_json",
@@ -295,7 +299,7 @@ name = "jaq-parse"
 version = "1.0.0-alpha"
 dependencies = [
  "chumsky",
- "serde",
+ "jaq-syn",
 ]
 
 [[package]]
@@ -306,7 +310,15 @@ dependencies = [
  "jaq-core",
  "jaq-native",
  "jaq-parse",
+ "jaq-syn",
  "serde_json",
+]
+
+[[package]]
+name = "jaq-syn"
+version = "1.0.0-alpha"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

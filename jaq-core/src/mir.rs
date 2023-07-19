@@ -6,12 +6,12 @@
 //! always succeed and do not have to fight with shadowing.
 //! But most importantly, this allows us to record recursive calls.
 
-use crate::parse;
 use alloc::{boxed::Box, string::String, vec::Vec};
-use parse::filter::{BinaryOp, Filter as Expr, Fold};
-use parse::{Arg, Error, Spanned};
+use core::fmt;
+use jaq_syn::filter::{BinaryOp, Filter as Expr, Fold};
+use jaq_syn::{Arg, Spanned};
 
-type HirFilter = Spanned<parse::filter::Filter>;
+type HirFilter = Spanned<jaq_syn::filter::Filter>;
 pub type MirFilter = Spanned<Filter>;
 
 pub type DefId = usize;
@@ -25,7 +25,7 @@ pub enum Call {
     Native(crate::filter::Native),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum Num {
     Float(f64),
     Int(isize),
@@ -41,7 +41,7 @@ impl Num {
     }
 }
 
-pub type Filter = parse::filter::Filter<Call, VarIdx, Num>;
+pub type Filter = jaq_syn::filter::Filter<Call, VarIdx, Num>;
 
 #[derive(Debug)]
 pub struct Def {
@@ -127,8 +127,8 @@ impl Defs {
     /// but it will offset the index of the argument by the ancestor arguments.
     fn nonvar_arg_position(&self, id: DefId, name: &str) -> Option<usize> {
         let args = self.0[id].args.iter();
-        let nonvar_args: Vec<_> = args.filter_map(|a| a.get_nonvar()).collect();
-        let i = nonvar_args.into_iter().rposition(|arg| arg == name)?;
+        let filter_args: Vec<_> = args.filter_map(|a| a.get_filter()).collect();
+        let i = filter_args.into_iter().rposition(|arg| arg == name)?;
         let ancestors = self.0[id].ancestors.iter();
         let ancestor_args = ancestors.flat_map(|aid| self.0[*aid].args.iter());
         Some(i + ancestor_args.filter(|a| !a.is_var()).count())
@@ -140,13 +140,32 @@ const ROOT_ID: usize = 0;
 /// HIR to MIR transformation.
 pub struct Ctx {
     /// errors occurred during transformation
-    pub errs: Vec<Error>,
+    pub errs: Vec<Spanned<Error>>,
     /// IDs of recursive definitions
     recs: Vec<DefId>,
     /// accessible defined filters
     pub(crate) defs: Defs,
     /// accessible native filters
     native: Vec<(String, usize, crate::filter::Native)>,
+}
+
+pub enum Error {
+    RecCallWithFilterArg,
+    Undefined(Arg),
+    Num(Num),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::RecCallWithFilterArg => "recursive call of a filter with filter argument",
+            Self::Undefined(a) if a.is_var() => "undefined variable",
+            Self::Undefined(_) => "undefined filter",
+            Self::Num(Num::Float(_)) => "cannot interpret as floating-point number",
+            Self::Num(Num::Int(_)) => "cannot interpret as machine-size integer",
+        }
+        .fmt(f)
+    }
 }
 
 impl Ctx {
@@ -181,12 +200,12 @@ impl Ctx {
     /// Import parsed definitions, such as obtained from the standard library.
     ///
     /// Errors that might occur include undefined variables, for example.
-    pub fn insert_defs(&mut self, defs: impl IntoIterator<Item = parse::Def>) {
+    pub fn insert_defs(&mut self, defs: impl IntoIterator<Item = jaq_syn::Def>) {
         defs.into_iter().for_each(|def| self.root_def(def));
     }
 
     /// Insert a root definition.
-    pub fn root_def(&mut self, def: parse::Def) {
+    pub fn root_def(&mut self, def: jaq_syn::Def) {
         self.def(Vec::from([ROOT_ID]), def);
         for rec_idx in &self.recs {
             self.defs.0[*rec_idx].recursive = true;
@@ -198,7 +217,7 @@ impl Ctx {
         self.defs.0[ROOT_ID].body = self.filter(ROOT_ID, Vec::new(), filter);
     }
 
-    fn def(&mut self, mut ancestors: Vec<DefId>, def: parse::Def) {
+    fn def(&mut self, mut ancestors: Vec<DefId>, def: jaq_syn::Def) {
         // generate a fresh definition ID
         let id: DefId = self.defs.0.len();
         self.defs.0.push(Def {
@@ -253,8 +272,7 @@ impl Ctx {
                             //std::dbg!("recursion!");
                             //std::dbg!(&child.args);
                             if child.args.iter().any(|a| !a.is_var()) {
-                                let error = "attempting to recursively call filter with non-variable argument";
-                                self.errs.push(Error::custom(f.1.clone(), error));
+                                self.errs.push((Error::RecCallWithFilterArg, f.1.clone()));
                             }
 
                             self.recs.push(*child_idx);
@@ -280,8 +298,8 @@ impl Ctx {
                 {
                     Filter::Call(Call::Native(native.clone()), args)
                 } else {
-                    let error = "could not find function";
-                    self.errs.push(Error::custom(f.1.clone(), error));
+                    self.errs
+                        .push((Error::Undefined(Arg::new_filter(name)), f.1.clone()));
                     Filter::Id
                 }
             }
@@ -291,7 +309,7 @@ impl Ctx {
                 let vars: Vec<_> = arg_vars.chain(local_vars).collect();
                 Filter::Var(vars.iter().rposition(|i| *i == v).unwrap_or_else(|| {
                     self.errs
-                        .push(Error::custom(f.1.clone(), "undefined variable"));
+                        .push((Error::Undefined(Arg::new_var(v)), f.1.clone()));
                     0
                 }))
             }
@@ -309,11 +327,7 @@ impl Ctx {
             }
             Expr::Id => Filter::Id,
             Expr::Num(n) => Filter::Num(Num::parse(&n).unwrap_or_else(|n| {
-                let err = match n {
-                    Num::Float(_) => "cannot interpret as floating-point number",
-                    Num::Int(_) => "cannot interpret as machine-size integer",
-                };
-                self.errs.push(Error::custom(f.1.clone(), err));
+                self.errs.push((Error::Num(n), f.1.clone()));
                 n
             })),
             Expr::Str(s) => Filter::Str(s),

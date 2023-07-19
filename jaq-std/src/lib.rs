@@ -17,7 +17,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 /// Return the standard library.
-pub fn std() -> Vec<jaq_parse::Def> {
+pub fn std() -> Vec<jaq_syn::Def> {
     #[cfg(feature = "bincode")]
     {
         // use preparsed standard library

@@ -2,7 +2,7 @@ use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
 use crate::Error;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
-pub use jaq_parse::path::Opt;
+pub use jaq_syn::path::Opt;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(Part<F>, Opt)>);

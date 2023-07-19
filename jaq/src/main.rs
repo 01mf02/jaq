@@ -248,7 +248,17 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     defs.insert_natives(jaq_native::core());
     defs.insert_defs(jaq_std::std());
     assert!(defs.errs.is_empty());
-    let filter = defs.parse_filter(filter_str);
+    let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
+    if !errs.is_empty() {
+        return Err(errs
+            .into_iter()
+            .map(|error| ParseError {
+                error,
+                filter: filter_str.to_owned(),
+            })
+            .collect());
+    }
+    let filter = defs.parse_filter(filter.unwrap());
     if defs.errs.is_empty() {
         Ok(filter)
     } else {
@@ -256,7 +266,7 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
             .errs
             .into_iter()
             .map(|error| ParseError {
-                error,
+                error: chumsky::error::Simple::custom(error.1, error.0.to_string()),
                 filter: filter_str.to_owned(),
             })
             .collect())
@@ -537,7 +547,7 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
     report.with_config(config).finish()
 }
 
-fn run_test(test: jaq_core::parse::test::Test<String>) -> Result<(Val, Val), Error> {
+fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(Vec::new(), &inputs);
 
@@ -557,7 +567,7 @@ fn run_test(test: jaq_core::parse::test::Test<String>) -> Result<(Val, Val), Err
 
 fn run_tests(file: std::fs::File) -> ExitCode {
     let lines = io::BufReader::new(file).lines().map(|l| l.unwrap());
-    let tests = jaq_core::parse::test::Parser::new(lines);
+    let tests = jaq_syn::test::Parser::new(lines);
 
     let (mut passed, mut total) = (0, 0);
     for test in tests {

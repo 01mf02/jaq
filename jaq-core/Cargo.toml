@@ -16,7 +16,7 @@ default = ["std", "serde_json"]
 std = []
 
 [dependencies]
-jaq-parse = { version = "1.0.0-alpha", path = "../jaq-parse" }
+jaq-syn = { version = "1.0.0-alpha", path = "../jaq-syn" }
 ahash = "0.7.6"
 dyn-clone = "1.0"
 hifijson = "0.2.0"
@@ -24,3 +24,6 @@ indexmap = "2.0"
 itertools = "0.10.3"
 once_cell = "1.16.0"
 serde_json = { version = "1.0.81", optional = true }
+
+[dev-dependencies]
+jaq-parse = { version = "1.0.0-alpha", path = "../jaq-parse" }
