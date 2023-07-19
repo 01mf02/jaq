@@ -25,8 +25,8 @@
 //! let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
 //! assert_eq!(errs, Vec::new());
 //!
-//! // parse the filter in the context of the given definitions
-//! let f = defs.parse_filter(f.unwrap());
+//! // compile the filter in the context of the given definitions
+//! let f = defs.compile(f.unwrap());
 //! assert!(defs.errs.is_empty());
 //!
 //! let inputs = RcIter::new(core::iter::empty());
@@ -122,8 +122,7 @@ impl<'a> Ctx<'a> {
 
 impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    // TODO: find a better name for this function
-    pub fn parse_filter(&mut self, (defs, body): jaq_syn::Main) -> Filter {
+    pub fn compile(&mut self, (defs, body): jaq_syn::Main) -> Filter {
         self.insert_defs(defs);
         self.root_filter(body);
 
@@ -138,7 +137,7 @@ impl ParseCtx {
     ///
     /// This is for testing purposes.
     pub fn yields(&mut self, x: Val, f: jaq_syn::Main, ys: impl Iterator<Item = ValR>) {
-        let f = self.parse_filter(f);
+        let f = self.compile(f);
         assert!(self.errs.is_empty());
 
         let inputs = RcIter::new(core::iter::empty());

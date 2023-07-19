@@ -258,7 +258,7 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
             })
             .collect());
     }
-    let filter = defs.parse_filter(filter.unwrap());
+    let filter = defs.compile(filter.unwrap());
     if defs.errs.is_empty() {
         Ok(filter)
     } else {
