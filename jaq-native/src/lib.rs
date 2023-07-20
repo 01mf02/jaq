@@ -7,6 +7,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(feature = "math")]
+mod math;
 #[cfg(feature = "regex")]
 mod regex;
 #[cfg(feature = "time")]
@@ -268,91 +270,62 @@ fn now() -> Result<f64, Error> {
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
 
 #[cfg(feature = "math")]
-fn as_float(v: Val, fun: &str) -> Result<f64, Error> {
-    match v {
-        Val::Int(n) => Ok(n as f64),
-        Val::Float(n) => Ok(n),
-        Val::Num(ref n) => n.parse().or(Err(Error::MathFn(String::from(fun), v))),
-        _ => Err(Error::MathFn(String::from(fun), v)),
-    }
-}
-
-#[cfg(feature = "math")]
-macro_rules! math_0_ary {
-    ($f: ident) => {
-        (stringify!($f), 0, |_, cv| {
-            box_once(as_float(cv.1, stringify!($f)).map(libm::$f).map(Val::Float))
-        })
-    };
-}
-
-#[cfg(feature = "math")]
-macro_rules! math_2_ary {
-    ($f: ident) => {
-        (stringify!($f), 2, |args, cv| {
-            let xs = args.get(0).run(cv.clone()).collect::<Vec<ValR>>();
-            let ys = args.get(1).run(cv.clone());
-            Box::new(ys.flat_map(move |y| {
-                xs.clone().into_iter().map(move |x| {
-                    let xf = as_float(x?, stringify!($f))?;
-                    let yf = as_float(y.clone()?, stringify!($f))?;
-                    Ok(Val::Float(libm::$f(xf, yf)))
-                })
-            }))
-        })
-    };
-}
-
-#[cfg(feature = "math")]
 const MATH: &[(&str, usize, RunPtr)] = &[
-    math_0_ary!(acos),
-    math_0_ary!(acosh),
-    math_0_ary!(asin),
-    math_0_ary!(asinh),
-    math_0_ary!(atan),
-    math_0_ary!(atanh),
-    math_0_ary!(cbrt),
-    math_0_ary!(cos),
-    math_0_ary!(cosh),
-    math_0_ary!(erf),
-    math_0_ary!(erfc),
-    math_0_ary!(exp),
-    math_0_ary!(exp10),
-    math_0_ary!(exp2),
-    math_0_ary!(expm1),
-    math_0_ary!(fabs),
-    math_0_ary!(j0),
-    math_0_ary!(j1),
-    math_0_ary!(lgamma),
-    math_0_ary!(log),
-    math_0_ary!(log10),
-    math_0_ary!(log1p),
-    math_0_ary!(log2),
-    math_0_ary!(rint),
-    math_0_ary!(sin),
-    math_0_ary!(sinh),
-    math_0_ary!(sqrt),
-    math_0_ary!(tan),
-    math_0_ary!(tanh),
-    math_0_ary!(tgamma),
-    math_0_ary!(trunc),
-    math_0_ary!(y0),
-    math_0_ary!(y1),
-    math_2_ary!(atan2),
-    math_2_ary!(copysign),
-    math_2_ary!(fdim),
-    math_2_ary!(fmax),
-    math_2_ary!(fmin),
-    math_2_ary!(fmod),
-    // math_2_ary!(frexp),
-    math_2_ary!(hypot),
-    // math_2_ary!(jn),
-    // math_2_ary!(ldexp),
-    // math_2_ary!(modf),
-    math_2_ary!(nextafter),
-    math_2_ary!(pow),
-    math_2_ary!(remainder),
-    // math_2_ary!(yn),
+    math::math_0_ary!(acos, math::as_float, Val::Float),
+    math::math_0_ary!(acosh, math::as_float, Val::Float),
+    math::math_0_ary!(asin, math::as_float, Val::Float),
+    math::math_0_ary!(asinh, math::as_float, Val::Float),
+    math::math_0_ary!(atan, math::as_float, Val::Float),
+    math::math_0_ary!(atanh, math::as_float, Val::Float),
+    math::math_0_ary!(cbrt, math::as_float, Val::Float),
+    math::math_0_ary!(cos, math::as_float, Val::Float),
+    math::math_0_ary!(cosh, math::as_float, Val::Float),
+    math::math_0_ary!(erf, math::as_float, Val::Float),
+    math::math_0_ary!(erfc, math::as_float, Val::Float),
+    math::math_0_ary!(exp, math::as_float, Val::Float),
+    math::math_0_ary!(exp10, math::as_float, Val::Float),
+    math::math_0_ary!(exp2, math::as_float, Val::Float),
+    math::math_0_ary!(expm1, math::as_float, Val::Float),
+    math::math_0_ary!(fabs, math::as_float, Val::Float),
+    math::math_0_ary!(j0, math::as_float, Val::Float),
+    math::math_0_ary!(j1, math::as_float, Val::Float),
+    math::math_0_ary!(lgamma, math::as_float, Val::Float),
+    math::math_0_ary!(log, math::as_float, Val::Float),
+    math::math_0_ary!(log10, math::as_float, Val::Float),
+    math::math_0_ary!(log1p, math::as_float, Val::Float),
+    math::math_0_ary!(log2, math::as_float, Val::Float),
+    math::math_0_ary!(rint, math::as_float, Val::Float),
+    math::math_0_ary!(sin, math::as_float, Val::Float),
+    math::math_0_ary!(sinh, math::as_float, Val::Float),
+    math::math_0_ary!(sqrt, math::as_float, Val::Float),
+    math::math_0_ary!(tan, math::as_float, Val::Float),
+    math::math_0_ary!(tanh, math::as_float, Val::Float),
+    math::math_0_ary!(tgamma, math::as_float, Val::Float),
+    math::math_0_ary!(trunc, math::as_float, Val::Float),
+    math::math_0_ary!(y0, math::as_float, Val::Float),
+    math::math_0_ary!(y1, math::as_float, Val::Float),
+    math::math_2_ary!(atan2, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(copysign, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(fdim, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(fmax, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(fmin, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(fmod, math::as_float, math::as_float, Val::Float),
+    // math::math_2_ary!(frexp),
+    math::math_2_ary!(hypot, math::as_float, math::as_float, Val::Float),
+    // math::math_2_ary!(jn),
+    // math::math_2_ary!(ldexp),
+    // math::math_2_ary!(modf),
+    math::math_2_ary!(nextafter, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(pow, math::as_float, math::as_float, Val::Float),
+    math::math_2_ary!(remainder, math::as_float, math::as_float, Val::Float),
+    // math::math_2_ary!(yn),
+    math::math_3_ary!(
+        fma,
+        math::as_float,
+        math::as_float,
+        math::as_float,
+        Val::Float
+    ),
 ];
 
 #[cfg(feature = "regex")]
