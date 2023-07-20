@@ -15,7 +15,7 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use jaq_core::results::{box_once, run_if_ok, then};
 use jaq_core::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
 use jaq_core::{Error, Val, ValR, ValRs};
@@ -287,6 +287,10 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::math_0_ary!(exp2, math::as_float, Val::Float),
     math::math_0_ary!(expm1, math::as_float, Val::Float),
     math::math_0_ary!(fabs, math::as_float, Val::Float),
+    math::math_0_ary!(frexp, math::as_float, |(m, e)| Val::Arr(Rc::new(vec![
+        Val::Float(m),
+        Val::Int(e as isize)
+    ]))),
     math::math_0_ary!(j0, math::as_float, Val::Float),
     math::math_0_ary!(j1, math::as_float, Val::Float),
     math::math_0_ary!(lgamma, math::as_float, Val::Float),
@@ -294,6 +298,10 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::math_0_ary!(log10, math::as_float, Val::Float),
     math::math_0_ary!(log1p, math::as_float, Val::Float),
     math::math_0_ary!(log2, math::as_float, Val::Float),
+    math::math_0_ary!(modf, math::as_float, |(f, r)| Val::Arr(Rc::new(vec![
+        Val::Float(f),
+        Val::Float(r)
+    ]))),
     math::math_0_ary!(rint, math::as_float, Val::Float),
     math::math_0_ary!(sin, math::as_float, Val::Float),
     math::math_0_ary!(sinh, math::as_float, Val::Float),
@@ -310,15 +318,13 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::math_2_ary!(fmax, math::as_float, math::as_float, Val::Float),
     math::math_2_ary!(fmin, math::as_float, math::as_float, Val::Float),
     math::math_2_ary!(fmod, math::as_float, math::as_float, Val::Float),
-    // math::math_2_ary!(frexp),
     math::math_2_ary!(hypot, math::as_float, math::as_float, Val::Float),
-    // math::math_2_ary!(jn),
-    // math::math_2_ary!(ldexp),
-    // math::math_2_ary!(modf),
+    math::math_2_ary!(jn, math::as_int, math::as_float, Val::Float),
+    math::math_2_ary!(ldexp, math::as_float, math::as_int, Val::Float),
     math::math_2_ary!(nextafter, math::as_float, math::as_float, Val::Float),
     math::math_2_ary!(pow, math::as_float, math::as_float, Val::Float),
     math::math_2_ary!(remainder, math::as_float, math::as_float, Val::Float),
-    // math::math_2_ary!(yn),
+    math::math_2_ary!(yn, math::as_int, math::as_float, Val::Float),
     math::math_3_ary!(
         fma,
         math::as_float,
