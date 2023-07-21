@@ -196,14 +196,20 @@ fn math() {
         ".[] | sin as $s | cos as $c | $s * $s + $c * $c",
         [json!(1.0), json!(1.0), json!(1.0), json!(1.0), json!(1.0)],
     );
+    // 0-argument math filters that return pairs, such as modf
+    gives(
+        json!([3, 3.25, 3.5]),
+        ".[] | modf",
+        [json!([0.0, 3.0]), json!([0.25, 3.0]), json!([0.5, 3.0])],
+    );
     // 2-argument math filters, such as pow
     gives(
-        json!({"bases": [1,4,9], "exponents": [1,0.5,2]}),
+        json!({"bases": [0.25,4,9], "exponents": [1,0.5,2]}),
         "pow(.bases[]; .exponents[])",
         [
-            json!(1.0),
-            json!(1.0),
-            json!(1.0),
+            json!(0.25),
+            json!(0.5),
+            json!(0.0625),
             json!(4.0),
             json!(2.0),
             json!(16.0),
