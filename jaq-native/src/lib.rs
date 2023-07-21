@@ -326,9 +326,8 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::ff_f!("nexttoward", nextafter),
     math::ff_f!(pow),
     math::ff_f!(remainder),
-    math::fi_f!("scalbn_", scalbn),
-    // scalb is implemented in jaq-std
-    // scalbln is implemented in jaq-std
+    math::fi_f!("scalb", scalbn),
+    math::fi_f!("scalbln", scalbn),
     math::if_f!(yn),
     math::fff_f!(fma),
 ];

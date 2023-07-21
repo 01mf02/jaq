@@ -22,6 +22,16 @@ def isinfinite: . == infinite or  . == -infinite;
 def isfinite:   isnumber and (isinfinite | not);
 def isnormal:   isnumber and ((. == 0 or isnan or isinfinite) | not);
 
+# Math
+def logb:
+    if . == 0 then -infinite
+  elif isinfinite then infinite
+  elif isnan then .
+  else ilogb_ end;
+def pow10:       pow(10; .);
+def significand: scalb(.; ilogb_ | -1 * .);
+def drem($l; r): remainder($l; r) as $x | if $x == 0 then copysign($x; $l) else $x end;
+
 # Type
 def type:
     if . == null then "null"
