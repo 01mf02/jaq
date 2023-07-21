@@ -189,6 +189,47 @@ yields!(
 );
 
 #[test]
+fn math() {
+    // 0-argument math filters, such as sin and cos
+    gives(
+        json!([-2.2, -1.1, 0, 1.1, 2.2]),
+        ".[] | sin as $s | cos as $c | $s * $s + $c * $c",
+        [json!(1.0), json!(1.0), json!(1.0), json!(1.0), json!(1.0)],
+    );
+    // 2-argument math filters, such as pow
+    gives(
+        json!({"bases": [1,4,9], "exponents": [1,0.5,2]}),
+        "pow(.bases[]; .exponents[])",
+        [
+            json!(1.0),
+            json!(1.0),
+            json!(1.0),
+            json!(4.0),
+            json!(2.0),
+            json!(16.0),
+            json!(9.0),
+            json!(3.0),
+            json!(81.0),
+        ],
+    );
+    // 3-argument math filters, such as fma
+    gives(
+        json!({"x": [2,1], "y": [3,4], "z": [4,5]}),
+        "fma(.x[]; .y[]; .z[])",
+        [
+            json!(10.0),
+            json!(11.0),
+            json!(12.0),
+            json!(13.0),
+            json!(7.0),
+            json!(8.0),
+            json!(8.0),
+            json!(9.0),
+        ],
+    );
+}
+
+#[test]
 fn regex() {
     let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;
     let s = "2012-03-14, 2013-01-01 and 2014-07-05";
