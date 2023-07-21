@@ -271,159 +271,66 @@ const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val
 
 #[cfg(feature = "math")]
 const MATH: &[(&str, usize, RunPtr)] = &[
-    math::math_0_ary!("acos", libm::acos, math::as_float, Val::Float),
-    math::math_0_ary!("acosh", libm::acosh, math::as_float, Val::Float),
-    math::math_0_ary!("asin", libm::asin, math::as_float, Val::Float),
-    math::math_0_ary!("asinh", libm::asinh, math::as_float, Val::Float),
-    math::math_0_ary!("atan", libm::atan, math::as_float, Val::Float),
-    math::math_0_ary!("atanh", libm::atanh, math::as_float, Val::Float),
-    math::math_0_ary!("cbrt", libm::cbrt, math::as_float, Val::Float),
-    math::math_0_ary!("cos", libm::cos, math::as_float, Val::Float),
-    math::math_0_ary!("cosh", libm::cosh, math::as_float, Val::Float),
-    math::math_0_ary!("erf", libm::erf, math::as_float, Val::Float),
-    math::math_0_ary!("erfc", libm::erfc, math::as_float, Val::Float),
-    math::math_0_ary!("exp", libm::exp, math::as_float, Val::Float),
-    math::math_0_ary!("exp10", libm::exp10, math::as_float, Val::Float),
-    math::math_0_ary!("exp2", libm::exp2, math::as_float, Val::Float),
-    math::math_0_ary!("expm1", libm::expm1, math::as_float, Val::Float),
-    math::math_0_ary!("fabs", libm::fabs, math::as_float, Val::Float),
-    math::math_0_ary!("frexp", libm::frexp, math::as_float, |(m, e)| Val::Arr(
-        Rc::new(vec![Val::Float(m), Val::Int(e as isize)])
-    )),
-    math::math_0_ary!("gamma", libm::tgamma, math::as_float, Val::Float),
-    math::math_0_ary!("j0", libm::j0, math::as_float, Val::Float),
-    math::math_0_ary!("j1", libm::j1, math::as_float, Val::Float),
-    math::math_0_ary!("lgamma", libm::lgamma, math::as_float, Val::Float),
-    math::math_0_ary!("log", libm::log, math::as_float, Val::Float),
-    math::math_0_ary!("log10", libm::log10, math::as_float, Val::Float),
-    math::math_0_ary!("log1p", libm::log1p, math::as_float, Val::Float),
-    math::math_0_ary!("log2", libm::log2, math::as_float, Val::Float),
-    math::math_0_ary!("logb", math::logb, math::as_float, Val::Float),
-    math::math_0_ary!("modf", libm::modf, math::as_float, |(f, r)| Val::Arr(
-        Rc::new(vec![Val::Float(f), Val::Float(r)])
-    )),
-    math::math_0_ary!("nearbyint", libm::round, math::as_float, Val::Float),
-    math::math_0_ary!("pow10", math::pow10, math::as_float, Val::Float),
-    math::math_0_ary!("rint", libm::rint, math::as_float, Val::Float),
-    math::math_0_ary!("significand", math::significand, math::as_float, Val::Float),
-    math::math_0_ary!("sin", libm::sin, math::as_float, Val::Float),
-    math::math_0_ary!("sinh", libm::sinh, math::as_float, Val::Float),
-    math::math_0_ary!("sqrt", libm::sqrt, math::as_float, Val::Float),
-    math::math_0_ary!("tan", libm::tan, math::as_float, Val::Float),
-    math::math_0_ary!("tanh", libm::tanh, math::as_float, Val::Float),
-    math::math_0_ary!("tgamma", libm::tgamma, math::as_float, Val::Float),
-    math::math_0_ary!("trunc", libm::trunc, math::as_float, Val::Float),
-    math::math_0_ary!("y0", libm::y0, math::as_float, Val::Float),
-    math::math_0_ary!("y1", libm::y1, math::as_float, Val::Float),
-    math::math_2_ary!(
-        "atan2",
-        libm::atan2,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "copysign",
-        libm::copysign,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "drem",
-        math::drem,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "fdim",
-        libm::fdim,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "fmax",
-        libm::fmax,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "fmin",
-        libm::fmin,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "fmod",
-        libm::fmod,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "hypot",
-        libm::hypot,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!("jn", libm::jn, math::as_int, math::as_float, Val::Float),
-    math::math_2_ary!(
-        "ldexp",
-        libm::ldexp,
-        math::as_float,
-        math::as_int,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "nextafter",
-        libm::nextafter,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "nexttoward",
-        libm::nextafter,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!("pow", libm::pow, math::as_float, math::as_float, Val::Float),
-    math::math_2_ary!(
-        "remainder",
-        libm::remainder,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "scalb",
-        libm::scalbn,
-        math::as_float,
-        math::as_int,
-        Val::Float
-    ),
-    math::math_2_ary!(
-        "scalbln",
-        libm::scalbn,
-        math::as_float,
-        math::as_int,
-        Val::Float
-    ),
-    math::math_2_ary!("yn", libm::yn, math::as_int, math::as_float, Val::Float),
-    math::math_3_ary!(
-        "fma",
-        libm::fma,
-        math::as_float,
-        math::as_float,
-        math::as_float,
-        Val::Float
-    ),
+    math::f_f!(acos),
+    math::f_f!(acosh),
+    math::f_f!(asin),
+    math::f_f!(asinh),
+    math::f_f!(atan),
+    math::f_f!(atanh),
+    math::f_f!(cbrt),
+    math::f_f!(cos),
+    math::f_f!(cosh),
+    math::f_f!(erf),
+    math::f_f!(erfc),
+    math::f_f!(exp),
+    math::f_f!(exp10),
+    math::f_f!(exp2),
+    math::f_f!(expm1),
+    math::f_f!(fabs),
+    math::f_fi!(frexp),
+    math::f_f!("gamma", tgamma),
+    math::f_i!("ilogb_", ilogb),
+    math::f_f!(j0),
+    math::f_f!(j1),
+    math::f_f!(lgamma),
+    math::f_f!(log),
+    math::f_f!(log10),
+    math::f_f!(log1p),
+    math::f_f!(log2),
+    // logb is implemented in jaq-std
+    math::f_ff!(modf),
+    math::f_f!("nearbyint", round),
+    // pow10 is implemented in jaq-std
+    math::f_f!(rint),
+    // significand is implemented in jaq-std
+    math::f_f!(sin),
+    math::f_f!(sinh),
+    math::f_f!(sqrt),
+    math::f_f!(tan),
+    math::f_f!(tanh),
+    math::f_f!(tgamma),
+    math::f_f!(trunc),
+    math::f_f!(y0),
+    math::f_f!(y1),
+    math::ff_f!(atan2),
+    math::ff_f!(copysign),
+    // drem is implemented in jaq-std
+    math::ff_f!(fdim),
+    math::ff_f!(fmax),
+    math::ff_f!(fmin),
+    math::ff_f!(fmod),
+    math::ff_f!(hypot),
+    math::if_f!(jn),
+    math::fi_f!(ldexp),
+    math::ff_f!(nextafter),
+    math::ff_f!("nexttoward", nextafter),
+    math::ff_f!(pow),
+    math::ff_f!(remainder),
+    math::fi_f!("scalbn_", scalbn),
+    // scalb is implemented in jaq-std
+    // scalbln is implemented in jaq-std
+    math::if_f!(yn),
+    math::fff_f!(fma),
 ];
 
 #[cfg(feature = "regex")]
