@@ -127,6 +127,37 @@ yields!(
     false
 );
 
+yields!(logb_nan, "nan | logb | isnan", true);
+yields!(logb_inf, "infinite | logb | isinfinite and . > 0", true);
+yields!(
+    logb_neg_inf,
+    "-infinite | logb | isinfinite and . > 0",
+    true
+);
+yields!(logb_zero, "0 | logb | isinfinite and . < 0", true);
+yields!(
+    logb_range,
+    "[-2.2, -2, -1, 1, 2, 2.2] | map(logb)",
+    [1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+);
+
+yields!(significand_nan, "nan | significand | isnan", true);
+yields!(
+    significand_inf,
+    "infinite | significand | isinfinite and . > 0",
+    true
+);
+yields!(
+    significand_neg_inf,
+    "-infinite | significand | isinfinite and . < 0",
+    true
+);
+yields!(
+    significand_range,
+    "[-123.456, -2.2, -2, -1, 0, 0.00001, 1, 2, 2.2, 123.456] | map(significand)",
+    [-1.929, -1.1, -1.0, -1.0, 0.0, 1.31072, 1.0, 1.0, 1.1, 1.929]
+);
+
 yields!(join_empty, r#"[] | join(" ")"#, json!(null));
 yields!(
     join_strs,

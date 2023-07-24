@@ -24,13 +24,17 @@ def isnormal:   isnumber and ((. == 0 or isnan or isinfinite) | not);
 
 # Math
 def logb:
-    if . == 0 then -infinite
+    if . == 0.0 then -infinite
   elif isinfinite then infinite
   elif isnan then .
-  else ilogb_ end;
-def pow10:       pow(10; .);
-def significand: scalb(.; ilogb_ | -1 * .);
-def drem($l; r): remainder($l; r) as $x | if $x == 0 then copysign($x; $l) else $x end;
+  else ilogb | . + 0.0 end;
+def pow10:       pow(10.0; .);
+def scalb(x; e): x * pow(2.0; e);
+def significand:
+    if isinfinite or isnan then .
+  elif . == 0.0 then 0.0
+  else scalbln(.; ilogb | -1 * .) end;
+def drem($l; r): remainder($l; r) | if . == 0 then copysign(.; $l) else . end;
 
 # Type
 def type:

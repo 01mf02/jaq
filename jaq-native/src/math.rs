@@ -137,9 +137,9 @@ macro_rules! math_3_ary {
                     .cartesian_product(ys)
                     .cartesian_product(zs)
                     .map(|((x, y), z)| {
-                        let x = $domain1(&x.clone()?)?;
-                        let y = $domain2(&y.clone()?)?;
-                        let z = $domain3(&z.clone()?)?;
+                        let x = $domain1(&x?)?;
+                        let y = $domain2(&y?)?;
+                        let z = $domain3(&z?)?;
                         Ok($codomain(libm::$f(x, y, z)))
                     }),
             )

@@ -204,7 +204,7 @@ fn math() {
     );
     // 2-argument math filters, such as pow
     gives(
-        json!({"bases": [0.25,4,9], "exponents": [1,0.5,2]}),
+        json!({"bases": [0.25, 4, 9], "exponents": [1, 0.5, 2]}),
         "pow(.bases[]; .exponents[])",
         [
             json!(0.25),
@@ -220,7 +220,7 @@ fn math() {
     );
     // 3-argument math filters, such as fma
     gives(
-        json!({"x": [2,1], "y": [3,4], "z": [4,5]}),
+        json!({"x": [2, 1], "y": [3, 4], "z": [4, 5]}),
         "fma(.x[]; .y[]; .z[])",
         [
             json!(10.0),
