@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "compilers", "parser-implementations"]
 default = ["mimalloc"]
 
 [dependencies]
-jaq-core = { version = "0.10.0", path = "../jaq-core" }
+jaq-core = { version = "0.10.1", path = "../jaq-core" }
 jaq-std  = { version = "0.10.0", path = "../jaq-std" }
 ariadne = "0.1.5"
 atty = "0.2"
