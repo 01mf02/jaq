@@ -128,28 +128,51 @@ yields!(
 );
 
 yields!(logb_nan, "nan | logb | isnan", true);
-yields!(logb_inf, "infinite | logb | isinfinite and . > 0", true);
-yields!(
-    logb_neg_inf,
-    "-infinite | logb | isinfinite and . > 0",
-    true
-);
-yields!(logb_zero, "0 | logb | isinfinite and . < 0", true);
+yields!(logb_inf, "infinite | logb | . == infinite", true);
+yields!(logb_neg_inf, "-infinite | logb | . == infinite", true);
+yields!(logb_zero, "0 | logb | . == -infinite", true);
 yields!(
     logb_range,
     "[-2.2, -2, -1, 1, 2, 2.2] | map(logb)",
     [1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
 );
 
+yields!(
+    drem_nan,
+    "[drem(nan, 1; nan, 1)] == [nan, nan, nan, 0.0]",
+    true
+);
+yields!(
+    drem_range,
+    "[drem(3.5, -4; 6, 1.75, 2)]",
+    [-2.5, 0.0, -0.5, 2.0, -0.5, -0.0]
+);
+
+yields!(
+    scalb_nan,
+    "[scalb(nan, 1; nan, 1)] == [nan, nan, nan, 2.0]",
+    true
+);
+yields!(
+    scalb_range,
+    "[scalb(-2.5, 0, 2.5; 2, 3)]",
+    [-10.0, -20.0, 0.0, 0.0, 10.0, 20.0]
+);
+yields!(
+    scalb_eqv_pow2,
+    "[-2.2, -1.1, -0.01, 0, 0.01, 1.1, 2.2] | [scalb(1.0; .[])] == [pow(2.0; .[])]",
+    true
+);
+
 yields!(significand_nan, "nan | significand | isnan", true);
 yields!(
     significand_inf,
-    "infinite | significand | isinfinite and . > 0",
+    "infinite | significand | . == infinite",
     true
 );
 yields!(
     significand_neg_inf,
-    "-infinite | significand | isinfinite and . < 0",
+    "-infinite | significand | . == -infinite",
     true
 );
 yields!(

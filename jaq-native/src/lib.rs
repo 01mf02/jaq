@@ -288,7 +288,6 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::f_f!(expm1),
     math::f_f!(fabs),
     math::f_fi!(frexp),
-    math::f_f!("gamma", tgamma),
     math::f_i!(ilogb),
     math::f_f!(j0),
     math::f_f!(j1),
@@ -323,7 +322,7 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::if_f!(jn),
     math::fi_f!(ldexp),
     math::ff_f!(nextafter),
-    math::ff_f!("nexttoward", nextafter),
+    // nexttoward is implemented in jaq-std
     math::ff_f!(pow),
     math::ff_f!(remainder),
     // scalb is implemented in jaq-std

@@ -188,52 +188,29 @@ yields!(
     json!([[1], 2, 3])
 );
 
-#[test]
-fn math() {
-    // 0-argument math filters, such as sin and cos
-    gives(
-        json!([-2.2, -1.1, 0, 1.1, 2.2]),
-        ".[] | sin as $s | cos as $c | $s * $s + $c * $c",
-        [json!(1.0), json!(1.0), json!(1.0), json!(1.0), json!(1.0)],
-    );
-    // 0-argument math filters that return pairs, such as modf
-    gives(
-        json!([3, 3.25, 3.5]),
-        ".[] | modf",
-        [json!([0.0, 3.0]), json!([0.25, 3.0]), json!([0.5, 3.0])],
-    );
-    // 2-argument math filters, such as pow
-    gives(
-        json!({"bases": [0.25, 4, 9], "exponents": [1, 0.5, 2]}),
-        "pow(.bases[]; .exponents[])",
-        [
-            json!(0.25),
-            json!(0.5),
-            json!(0.0625),
-            json!(4.0),
-            json!(2.0),
-            json!(16.0),
-            json!(9.0),
-            json!(3.0),
-            json!(81.0),
-        ],
-    );
-    // 3-argument math filters, such as fma
-    gives(
-        json!({"x": [2, 1], "y": [3, 4], "z": [4, 5]}),
-        "fma(.x[]; .y[]; .z[])",
-        [
-            json!(10.0),
-            json!(11.0),
-            json!(12.0),
-            json!(13.0),
-            json!(7.0),
-            json!(8.0),
-            json!(8.0),
-            json!(9.0),
-        ],
-    );
-}
+yields!(
+    math_0_argument_scalar_filters,
+    "[-2.2, -1.1, 0, 1.1, 2.2 | sin as $s | cos as $c | $s * $s + $c * $c]",
+    [1.0, 1.0, 1.0, 1.0, 1.0]
+);
+
+yields!(
+    math_0_argument_vector_filters,
+    "[3, 3.25, 3.5 | modf]",
+    [[0.0, 3.0], [0.25, 3.0], [0.5, 3.0]]
+);
+
+yields!(
+    math_2_argument_filters,
+    "[pow(0.25, 4, 9; 1, 0.5, 2)]",
+    [0.25, 0.5, 0.0625, 4.0, 2.0, 16.0, 9.0, 3.0, 81.0]
+);
+
+yields!(
+    math_3_argument_filters,
+    "[fma(2, 1; 3, 4; 4, 5)]",
+    [10.0, 11.0, 12.0, 13.0, 7.0, 8.0, 8.0, 9.0]
+);
 
 #[test]
 fn regex() {
