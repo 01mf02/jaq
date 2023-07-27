@@ -128,7 +128,7 @@ fn strip<F>(s: &Rc<String>, other: &str, f: F) -> Rc<String>
 where
     F: for<'a> Fn(&'a str, &str) -> Option<&'a str>,
 {
-    f(&s, other).map_or_else(|| s.clone(), |stripped| Rc::new(stripped.into()))
+    f(s, other).map_or_else(|| s.clone(), |stripped| Rc::new(stripped.into()))
 }
 
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[

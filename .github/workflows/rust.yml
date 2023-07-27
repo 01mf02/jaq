@@ -21,5 +21,7 @@ jobs:
     - name: Check (without default features)
       working-directory: jaq-native
       run: cargo check --no-default-features
+    - name: Lint
+      run: cargo clippy -- -Dwarnings
     - name: Run tests
       run: cargo test --verbose
