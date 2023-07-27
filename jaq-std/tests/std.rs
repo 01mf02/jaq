@@ -55,6 +55,17 @@ fn date_roundtrip() {
     give(json!(iso_ns), "fromdate|todate", json!(iso_ns));
 }
 
+yields!(
+    drem_nan,
+    "[drem(nan, 1; nan, 1)] == [nan, nan, nan, 0.0]",
+    true
+);
+yields!(
+    drem_range,
+    "[drem(3.5, -4; 6, 1.75, 2)]",
+    [-2.5, 0.0, -0.5, 2.0, -0.5, -0.0]
+);
+
 #[test]
 fn entries() {
     let obj = json!({"a": 1, "b": 2});
@@ -127,60 +138,6 @@ yields!(
     false
 );
 
-yields!(logb_nan, "nan | logb | isnan", true);
-yields!(logb_inf, "infinite | logb | . == infinite", true);
-yields!(logb_neg_inf, "-infinite | logb | . == infinite", true);
-yields!(logb_zero, "0 | logb | . == -infinite", true);
-yields!(
-    logb_range,
-    "[-2.2, -2, -1, 1, 2, 2.2] | map(logb)",
-    [1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
-);
-
-yields!(
-    drem_nan,
-    "[drem(nan, 1; nan, 1)] == [nan, nan, nan, 0.0]",
-    true
-);
-yields!(
-    drem_range,
-    "[drem(3.5, -4; 6, 1.75, 2)]",
-    [-2.5, 0.0, -0.5, 2.0, -0.5, -0.0]
-);
-
-yields!(
-    scalb_nan,
-    "[scalb(nan, 1; nan, 1)] == [nan, nan, nan, 2.0]",
-    true
-);
-yields!(
-    scalb_range,
-    "[scalb(-2.5, 0, 2.5; 2, 3)]",
-    [-10.0, -20.0, 0.0, 0.0, 10.0, 20.0]
-);
-yields!(
-    scalb_eqv_pow2,
-    "[-2.2, -1.1, -0.01, 0, 0.01, 1.1, 2.2] | [scalb(1.0; .[])] == [pow(2.0; .[])]",
-    true
-);
-
-yields!(significand_nan, "nan | significand | isnan", true);
-yields!(
-    significand_inf,
-    "infinite | significand | . == infinite",
-    true
-);
-yields!(
-    significand_neg_inf,
-    "-infinite | significand | . == -infinite",
-    true
-);
-yields!(
-    significand_range,
-    "[-123.456, -2.2, -2, -1, 0, 0.00001, 1, 2, 2.2, 123.456] | map(significand)",
-    [-1.929, -1.1, -1.0, -1.0, 0.0, 1.31072, 1.0, 1.0, 1.1, 1.929]
-);
-
 yields!(join_empty, r#"[] | join(" ")"#, json!(null));
 yields!(
     join_strs,
@@ -197,6 +154,16 @@ yields!(
     r#"{"foo":null,"abc":null,"fax":null,"az":null} | keys"#,
     ["abc", "az", "fax", "foo"]
 );
+
+yields!(logb_inf, "infinite | logb | . == infinite", true);
+yields!(logb_nan, "nan | logb | isnan", true);
+yields!(logb_neg_inf, "-infinite | logb | . == infinite", true);
+yields!(
+    logb_range,
+    "[-2.2, -2, -1, 1, 2, 2.2] | map(logb)",
+    [1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+);
+yields!(logb_zero, "0 | logb | . == -infinite", true);
 
 yields!(
     match_many,
@@ -281,6 +248,25 @@ fn repeat() {
     give(json!([0, 1]), "[limit(4; repeat(.[]))]", y);
 }
 
+// the implementation of scalb in jq (or the libm.a library) doesn't
+// allow for float exponents; jaq tolerates float exponents in scalb
+// and rejects them in scalbln
+yields!(
+    scalb_eqv_pow2,
+    "[-2.2, -1.1, -0.01, 0, 0.01, 1.1, 2.2] | [scalb(1.0; .[])] == [pow(2.0; .[])]",
+    true
+);
+yields!(
+    scalb_nan,
+    "[scalb(nan, 1; nan, 1)] == [nan, nan, nan, 2.0]",
+    true
+);
+yields!(
+    scalb_range,
+    "[scalb(-2.5, 0, 2.5; 2, 2.5, 3) * 1000 | round]",
+    [-10000, -14142, -20000, 0, 0, 0, 10000, 14142, 20000]
+);
+
 yields!(
     scan,
     r#""abAB" | [scan("a", "b"; "g", "gi")]"#,
@@ -307,6 +293,23 @@ fn select() {
     give(v.clone(), "[.[] | scalars]", scalars);
     give(v.clone(), "[.[] | values]", values);
 }
+
+yields!(
+    significand_inf,
+    "infinite | significand | . == infinite",
+    true
+);
+yields!(significand_nan, "nan | significand | isnan", true);
+yields!(
+    significand_neg_inf,
+    "-infinite | significand | . == -infinite",
+    true
+);
+yields!(
+    significand_range,
+    "[-123.456, -2.2, -2, -1, 0, 0.00001, 1, 2, 2.2, 123.456] | map(significand)",
+    [-1.929, -1.1, -1.0, -1.0, 0.0, 1.31072, 1.0, 1.0, 1.1, 1.929]
+);
 
 #[test]
 fn transpose() {
