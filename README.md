@@ -240,7 +240,7 @@ Here is an overview that summarises:
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
 - [x] Time (`now`, `fromdateiso8601`, `todateiso8601`)
-- [ ] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...)
+- [x] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...) ([list of numeric filters](#numeric-filters))
 - [ ] More time filters (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
 
 ## Standard filters
@@ -264,6 +264,81 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Regular expressions (`test`, `scan`, `match`, `capture`, `splits`, `sub`, `gsub`)
 - [x] Time (`fromdate`, `todate`)
 
+## Numeric filters
+
+jaq imports many filters from [libm](https://crates.io/crates/libm)
+and follows their type signature.
+
+<details><summary>Full list of numeric filters defined in jaq</summary>
+
+Zero-argument filters:
+
+- [x] `acos`
+- [x] `acosh`
+- [x] `asin`
+- [x] `asinh`
+- [x] `atan`
+- [x] `atanh`
+- [x] `cbrt`
+- [x] `cos`
+- [x] `cosh`
+- [x] `erf`
+- [x] `erfc`
+- [x] `exp`
+- [x] `exp10`
+- [x] `exp2`
+- [x] `expm1`
+- [x] `fabs`
+- [x] `frexp`, which returns pairs of (float, integer).
+- [x] `ilogb`, which returns integers.
+- [x] `j0`
+- [x] `j1`
+- [x] `lgamma`
+- [x] `log`
+- [x] `log10`
+- [x] `log1p`
+- [x] `log2`
+- [x] `logb`
+- [x] `modf`, which returns pairs of (float, float).
+- [x] `nearbyint`
+- [x] `pow10`
+- [x] `rint`
+- [x] `significand`
+- [x] `sin`
+- [x] `sinh`
+- [x] `sqrt`
+- [x] `tan`
+- [x] `tanh`
+- [x] `tgamma`
+- [x] `trunc`
+- [x] `y0`
+- [x] `y1`
+
+Two-argument filters that ignore `.`:
+
+- [x] `atan2`
+- [x] `copysign`
+- [x] `drem`
+- [x] `fdim`
+- [x] `fmax`
+- [x] `fmin`
+- [x] `fmod`
+- [x] `hypot`
+- [x] `jn`, which takes an integer as first argument.
+- [x] `ldexp`, which takes an integer as second argument.
+- [x] `nextafter`
+- [x] `nexttoward`
+- [x] `pow`
+- [x] `remainder`
+- [x] `scalb`
+- [x] `scalbln`, which takes as integer as second argument.
+- [x] `yn`, which takes an integer as first argument.
+
+Three-argument filters that ignore `.`:
+
+- [x] `fma`
+
+</details>
 
 ## Advanced features
 

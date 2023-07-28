@@ -188,6 +188,30 @@ yields!(
     json!([[1], 2, 3])
 );
 
+yields!(
+    math_0_argument_scalar_filters,
+    "[-2.2, -1.1, 0, 1.1, 2.2 | sin as $s | cos as $c | $s * $s + $c * $c]",
+    [1.0, 1.0, 1.0, 1.0, 1.0]
+);
+
+yields!(
+    math_0_argument_vector_filters,
+    "[3, 3.25, 3.5 | modf]",
+    [[0.0, 3.0], [0.25, 3.0], [0.5, 3.0]]
+);
+
+yields!(
+    math_2_argument_filters,
+    "[pow(0.25, 4, 9; 1, 0.5, 2)]",
+    [0.25, 0.5, 0.0625, 4.0, 2.0, 16.0, 9.0, 3.0, 81.0]
+);
+
+yields!(
+    math_3_argument_filters,
+    "[fma(2, 1; 3, 4; 4, 5)]",
+    [10.0, 11.0, 12.0, 13.0, 7.0, 8.0, 8.0, 9.0]
+);
+
 #[test]
 fn regex() {
     let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;

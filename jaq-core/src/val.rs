@@ -82,6 +82,17 @@ impl Val {
         }
     }
 
+    /// If the value is or can be converted to float, return it, else
+    /// fail.
+    pub fn as_float(&self) -> Result<f64, Error> {
+        match self {
+            Val::Int(n) => Ok(*n as f64),
+            Val::Float(n) => Ok(*n),
+            Val::Num(n) => n.parse().or(Err(Error::Float(self.clone()))),
+            _ => Err(Error::Float(self.clone())),
+        }
+    }
+
     /// If the value is a string, return it, else fail.
     pub fn to_str(self) -> Result<Rc<String>, Error> {
         match self {

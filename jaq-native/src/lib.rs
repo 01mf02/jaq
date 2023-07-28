@@ -7,13 +7,15 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(feature = "math")]
+mod math;
 #[cfg(feature = "regex")]
 mod regex;
 #[cfg(feature = "time")]
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use jaq_core::results::{box_once, run_if_ok, then};
 use jaq_core::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
 use jaq_core::{Error, Val, ValR, ValRs};
@@ -32,11 +34,18 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
 /// but also `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-#[cfg(all(feature = "std", feature = "log", feature = "regex", feature = "time"))]
+#[cfg(all(
+    feature = "std",
+    feature = "log",
+    feature = "math",
+    feature = "regex",
+    feature = "time"
+))]
 pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     minimal()
         .chain(run(STD))
         .chain(upd(LOG))
+        .chain(run(MATH))
         .chain(run(REGEX))
         .chain(run(TIME))
 }
@@ -259,6 +268,68 @@ fn now() -> Result<f64, Error> {
 
 #[cfg(feature = "std")]
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+
+#[cfg(feature = "math")]
+const MATH: &[(&str, usize, RunPtr)] = &[
+    math::f_f!(acos),
+    math::f_f!(acosh),
+    math::f_f!(asin),
+    math::f_f!(asinh),
+    math::f_f!(atan),
+    math::f_f!(atanh),
+    math::f_f!(cbrt),
+    math::f_f!(cos),
+    math::f_f!(cosh),
+    math::f_f!(erf),
+    math::f_f!(erfc),
+    math::f_f!(exp),
+    math::f_f!(exp10),
+    math::f_f!(exp2),
+    math::f_f!(expm1),
+    math::f_f!(fabs),
+    math::f_fi!(frexp),
+    math::f_i!(ilogb),
+    math::f_f!(j0),
+    math::f_f!(j1),
+    math::f_f!(lgamma),
+    math::f_f!(log),
+    math::f_f!(log10),
+    math::f_f!(log1p),
+    math::f_f!(log2),
+    // logb is implemented in jaq-std
+    math::f_ff!(modf),
+    math::f_f!("nearbyint", round),
+    // pow10 is implemented in jaq-std
+    math::f_f!(rint),
+    // significand is implemented in jaq-std
+    math::f_f!(sin),
+    math::f_f!(sinh),
+    math::f_f!(sqrt),
+    math::f_f!(tan),
+    math::f_f!(tanh),
+    math::f_f!(tgamma),
+    math::f_f!(trunc),
+    math::f_f!(y0),
+    math::f_f!(y1),
+    math::ff_f!(atan2),
+    math::ff_f!(copysign),
+    // drem is implemented in jaq-std
+    math::ff_f!(fdim),
+    math::ff_f!(fmax),
+    math::ff_f!(fmin),
+    math::ff_f!(fmod),
+    math::ff_f!(hypot),
+    math::if_f!(jn),
+    math::fi_f!(ldexp),
+    math::ff_f!(nextafter),
+    // nexttoward is implemented in jaq-std
+    math::ff_f!(pow),
+    math::ff_f!(remainder),
+    // scalb is implemented in jaq-std
+    math::fi_f!("scalbln", scalbn),
+    math::if_f!(yn),
+    math::fff_f!(fma),
+];
 
 #[cfg(feature = "regex")]
 fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: (Ctx<'a>, Val)) -> ValRs<'a> {
