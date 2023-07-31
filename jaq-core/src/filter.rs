@@ -37,6 +37,7 @@ pub enum Ast {
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     Ite(Box<Self>, Box<Self>, Box<Self>),
+    TryCatch(Box<Self>, Option<Box<Self>>),
     /// `reduce`, `for`, and `foreach`
     ///
     /// The first field indicates whether to yield intermediate results
@@ -202,6 +203,26 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Ite(if_, then_, else_) => w(if_).pipe(cv, move |cv, v| {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv.clone())
             }),
+            Ast::TryCatch(try_, catch_) => {
+                let (ctx, v) = cv;
+                let mut switched = false;
+                let mut stream = w(try_).run((ctx.clone(), v));
+                let step = move || match stream.next() {
+                    None => None,
+                    Some(Err(e)) if switched => Some(Err(e)),
+                    Some(Err(e)) => {
+                        switched = true;
+                        stream = if let Some(catch_filter) = catch_ {
+                            w(catch_filter).run((ctx.clone(), e.as_val()))
+                        } else {
+                            Box::new(std::iter::empty())
+                        };
+                        stream.next()
+                    }
+                    Some(y) => Some(y),
+                };
+                Box::new(std::iter::from_fn(step))
+            }
             Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
                 let outs = w(f).run(cv).map(move |i| path.collect(i?));
                 Box::new(
@@ -271,6 +292,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             // these are up for grabs to implement :)
             Ast::Try(_) | Ast::Alt(..) => todo!(),
             Ast::Fold(..) => todo!(),
+            Ast::TryCatch(_, _) => todo!(),
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => w(l).update(
