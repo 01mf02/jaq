@@ -21,7 +21,7 @@ pub fn gives<const N: usize>(x: Value, f: &str, ys: [Value; N]) {
 
 #[macro_export]
 macro_rules! yields {
-    ($func_name:ident, $filter:expr, $output: expr) => {
+    ($func_name:ident, $filter:expr, $output:expr) => {
         #[test]
         fn $func_name() {
             give(json!(null), $filter, json!($output))

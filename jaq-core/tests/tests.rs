@@ -146,6 +146,31 @@ fn if_then_else() {
     gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
+yields!(
+    try_catch_short_circuits,
+    "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
+    ["1", "2", "cannot index {} with 0"]
+);
+yields!(
+    try_catch_nested,
+    "try try {}[0] catch {}[1] catch .",
+    "cannot index {} with 1"
+);
+yields!(
+    try_catch_multi_valued,
+    "[(try (1,2,3[0]) catch (3,4)) | . - 1]",
+    [0, 1, 2, 3]
+);
+yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2]);
+// try should not gulp expressions after a comma; if it did, the inner
+// try in this test would short-circuit and omit the 1[1] error
+// expression, and the whole expression would yield an empty stream
+yields!(
+    try_parsing_isnt_greedy,
+    "try (try 0[0], 1[1]) catch .",
+    "cannot index 1"
+);
+
 #[test]
 fn ord() {
     give(json!(null), ". < (0 != 0)", json!(true));

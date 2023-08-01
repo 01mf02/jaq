@@ -240,7 +240,7 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
         path.map_with_span(|(f, path), span| Filter::path(f, path, span)),
         fold(with_comma.clone()),
         if_then_else(with_comma.clone()),
-        try_catch(with_comma.clone()),
+        try_catch(sans_comma.clone()),
     ))
     .boxed();
 
