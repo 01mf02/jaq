@@ -2,7 +2,11 @@ use crate::path::{self, Path};
 use crate::results::{box_once, fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
 use jaq_syn::{MathOp, OrdOp};
@@ -37,7 +41,7 @@ pub enum Ast {
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     Ite(Box<Self>, Box<Self>, Box<Self>),
-    TryCatch(Box<Self>, Option<Box<Self>>),
+    TryCatch(Box<Self>, Box<Self>),
     /// `reduce`, `for`, and `foreach`
     ///
     /// The first field indicates whether to yield intermediate results
@@ -212,11 +216,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     Some(Err(e)) if switched => Some(Err(e)),
                     Some(Err(e)) => {
                         switched = true;
-                        stream = if let Some(catch_filter) = catch_ {
-                            w(catch_filter).run((ctx.clone(), e.as_val()))
-                        } else {
-                            Box::new(std::iter::empty())
-                        };
+                        stream = w(catch_).run((
+                            ctx.clone(),
+                            match e {
+                                Error::Val(ev) => ev,
+                                _ => Val::str(e.to_string()),
+                            },
+                        ));
                         stream.next()
                     }
                     Some(y) => Some(y),

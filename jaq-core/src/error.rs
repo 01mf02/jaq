@@ -56,15 +56,6 @@ pub enum Error {
     Custom(String),
 }
 
-impl Error {
-    /// Convert an error into a Val, to be used for `catch`
-    /// expressions.
-    pub fn as_val(&self) -> Val {
-        // TODO: make it better, Jude
-        Val::Null
-    }
-}
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
