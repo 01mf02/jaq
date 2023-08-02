@@ -199,11 +199,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     None => w(r).run(cv),
                 }
             }
-            Ast::Ite(if_, then_, else_) => Box::new(w(if_).run(cv.clone()).flat_map(move |v| {
-                then(v, |v| {
-                    w(if v.as_bool() { then_ } else { else_ }).run(cv.clone())
-                })
-            })),
+            Ast::Ite(if_, then_, else_) => w(if_).pipe(cv, move |cv, v| {
+                w(if v.as_bool() { then_ } else { else_ }).run(cv.clone())
+            }),
             Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
                 let outs = w(f).run(cv).map(move |i| path.collect(i?));
                 Box::new(
@@ -220,15 +218,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
-            Ast::Logic(l, stop, r) => Box::new(w(l).run(cv.clone()).flat_map(move |l| {
-                then(l, |l| {
-                    if l.as_bool() == *stop {
-                        box_once(Ok(Val::Bool(*stop)))
-                    } else {
-                        Box::new(w(r).run(cv.clone()).map(|r| Ok(Val::Bool(r?.as_bool()))))
-                    }
-                })
-            })),
+            Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
+                if l.as_bool() == *stop {
+                    box_once(Ok(Val::Bool(*stop)))
+                } else {
+                    Box::new(w(r).run(cv).map(|r| Ok(Val::Bool(r?.as_bool()))))
+                }
+            }),
             Ast::Math(l, op, r) => {
                 Box::new(Self::cartesian(w(l), w(r), cv).map(|(x, y)| op.run(x?, y?)))
             }
