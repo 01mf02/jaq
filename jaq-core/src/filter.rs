@@ -323,6 +323,15 @@ impl Ast {
         let path = Ast::Path(Box::new(Ast::Id), Path(Vec::from([path])));
         Ast::Recurse(Box::new(path))
     }
+
+    /// `{}[]` returns zero values.
+    pub fn empty() -> Self {
+        // `{}`
+        let obj = Ast::Object(Vec::new());
+        // `[]`
+        let path = (path::Part::Range(None, None), path::Opt::Essential);
+        Ast::Path(Box::new(obj), Path(Vec::from([path])))
+    }
 }
 
 /// Function from a value to a stream of value results.
