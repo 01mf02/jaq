@@ -244,7 +244,9 @@ impl Ctx {
             Expr::Num(mir::Num::Float(f)) => Filter::Float(f),
             Expr::Num(mir::Num::Int(i)) => Filter::Int(i),
             Expr::Str(s) => Filter::Str(s),
-            Expr::Array(a) => Filter::Array(a.map(|a| get(*a, self))),
+            Expr::Array(a) => {
+                Filter::Array(a.map_or_else(|| Box::new(Filter::empty()), |a| get(*a, self)))
+            }
             Expr::Object(o) => {
                 let kvs = o.into_iter().map(|kv| match kv {
                     KeyVal::Filter(k, v) => (*get(k, self), *get(v, self)),

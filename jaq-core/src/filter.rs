@@ -28,7 +28,7 @@ pub enum Ast {
     Int(isize),
     Float(f64),
     Str(String),
-    Array(Option<Box<Self>>),
+    Array(Box<Self>),
     Object(Vec<(Self, Self)>),
 
     Try(Box<Self>),
@@ -164,8 +164,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
             Ast::Str(s) => box_once(Ok(Val::str(s.clone()))),
-            Ast::Array(None) => box_once(Ok(Val::Arr(Default::default()))),
-            Ast::Array(Some(f)) => box_once(w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)),
+            Ast::Array(f) => box_once(w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)),
             Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Ast::Object(o) => Box::new(
                 o.iter()
