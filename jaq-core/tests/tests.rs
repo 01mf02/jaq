@@ -146,10 +146,12 @@ fn if_then_else() {
     gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
+// This behaviour diverges from jq. In jaq, a `try` will propagate all
+// errors in the stream to the `catch` filter.
 yields!(
-    try_catch_short_circuits,
+    try_catch_does_not_short_circuit,
     "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
-    ["1", "2", "cannot index {} with 0"]
+    ["1", "2", "cannot index {} with 0", "4"]
 );
 yields!(
     try_catch_nested,
@@ -161,13 +163,19 @@ yields!(
     "[(try (1,2,3[0]) catch (3,4)) | . - 1]",
     [0, 1, 2, 3]
 );
-yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2]);
-// try should not gulp expressions after a comma; if it did, the inner
-// try in this test would short-circuit and omit the 1[1] error
-// expression, and the whole expression would yield an empty stream
+yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2, 4]);
+// try should not gulp expressions after a comma or a pipe; if it did,
+// the inner try in these tests would short-circuit and omit the 1[1]
+// error expression, and the whole expression would yield an empty
+// stream
 yields!(
-    try_parsing_isnt_greedy,
+    try_parsing_isnt_greedy_wrt_commas,
     "try (try 0[0], 1[1]) catch .",
+    "cannot index 1"
+);
+yields!(
+    try_parsing_isnt_greedy_wrt_pipes,
+    "try (try 0 | 1[1]) catch .",
     "cannot index 1"
 );
 

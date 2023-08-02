@@ -1,5 +1,5 @@
 use crate::Val;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use core::fmt;
 
 /// Errors that can occur during filter execution.
@@ -54,6 +54,16 @@ pub enum Error {
     RegexFlag(char),
     /// arbitrary errors for custom filters
     Custom(String),
+}
+
+impl Error {
+    /// Convert the error into a value to be used by `catch` filters.
+    pub fn as_val(self) -> Val {
+        match self {
+            Error::Val(ev) => ev,
+            _ => Val::str(self.to_string()),
+        }
+    }
 }
 
 impl fmt::Display for Error {

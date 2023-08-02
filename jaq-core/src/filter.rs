@@ -2,11 +2,7 @@ use crate::path::{self, Path};
 use crate::results::{box_once, fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
-use alloc::{
-    boxed::Box,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
 use jaq_syn::{MathOp, OrdOp};
@@ -35,13 +31,12 @@ pub enum Ast {
     Array(Option<Box<Self>>),
     Object(Vec<(Self, Self)>),
 
-    Try(Box<Self>),
+    Try(Box<Self>, Box<Self>),
     Neg(Box<Self>),
     Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
     Alt(Box<Self>, Box<Self>),
     Ite(Box<Self>, Box<Self>, Box<Self>),
-    TryCatch(Box<Self>, Box<Self>),
     /// `reduce`, `for`, and `foreach`
     ///
     /// The first field indicates whether to yield intermediate results
@@ -183,7 +178,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
                             .map(Val::obj)
                     }),
             ),
-            Ast::Try(f) => Box::new(w(f).run(cv).filter(|y| y.is_ok())),
+            Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
+                if let Err(e) = y {
+                    w(c).run((cv.0.clone(), e.as_val()))
+                } else {
+                    box_once(y)
+                }
+            })),
             Ast::Neg(f) => Box::new(w(f).run(cv).map(|v| -v?)),
 
             // `l | r`
@@ -207,28 +208,6 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Ite(if_, then_, else_) => w(if_).pipe(cv, move |cv, v| {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv.clone())
             }),
-            Ast::TryCatch(try_, catch_) => {
-                let (ctx, v) = cv;
-                let mut switched = false;
-                let mut stream = w(try_).run((ctx.clone(), v));
-                let step = move || match stream.next() {
-                    None => None,
-                    Some(Err(e)) if switched => Some(Err(e)),
-                    Some(Err(e)) => {
-                        switched = true;
-                        stream = w(catch_).run((
-                            ctx.clone(),
-                            match e {
-                                Error::Val(ev) => ev,
-                                _ => Val::str(e.to_string()),
-                            },
-                        ));
-                        stream.next()
-                    }
-                    Some(y) => Some(y),
-                };
-                Box::new(std::iter::from_fn(step))
-            }
             Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
                 let outs = w(f).run(cv).map(move |i| path.collect(i?));
                 Box::new(
@@ -296,9 +275,8 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::Try(_) | Ast::Alt(..) => todo!(),
+            Ast::Try(..) | Ast::Alt(..) => todo!(),
             Ast::Fold(..) => todo!(),
-            Ast::TryCatch(_, _) => todo!(),
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => w(l).update(

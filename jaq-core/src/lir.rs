@@ -4,10 +4,9 @@
 //! The invariants in this module can be difficult to preserve.
 //! `assert!` your way around here and watch your step.
 
-use crate::filter::{self, Ast as Filter, Native};
+use crate::filter::{self, Ast as Filter};
 use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
-use crate::results::box_once;
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 
@@ -263,7 +262,7 @@ impl Ctx {
                 });
                 Filter::Object(kvs.collect())
             }
-            Expr::Try(f) => Filter::Try(get(*f, self)),
+            Expr::Try(f) => Filter::Try(get(*f, self), Box::new(Filter::empty())),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
             Expr::Recurse => Filter::recurse0(),
 
@@ -292,18 +291,11 @@ impl Ctx {
                     Filter::Ite(get(if_, self), get(then_, self), Box::new(acc))
                 })
             }
-            Expr::TryCatch(try_, catch_) => Filter::TryCatch(
+            Expr::TryCatch(try_, catch_) => Filter::Try(
                 get(*try_, self),
                 catch_
                     .map(|c| get(*c, self))
-                    .unwrap_or(Box::new(Filter::Native(
-                        // TODO: this is a re-implementation of empty
-                        Native::with_update(
-                            |_, _| Box::new(core::iter::empty()),
-                            |_, cv, _| box_once(Ok(cv.1)),
-                        ),
-                        Vec::new(),
-                    ))),
+                    .unwrap_or(Box::new(Filter::empty())),
             ),
             Expr::Path(f, path) => {
                 let f = get(*f, self);
