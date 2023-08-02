@@ -200,7 +200,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 }
             }
             Ast::Ite(if_, then_, else_) => w(if_).pipe(cv, move |cv, v| {
-                w(if v.as_bool() { then_ } else { else_ }).run(cv.clone())
+                w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
             Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
                 let outs = w(f).run(cv).map(move |i| path.collect(i?));
