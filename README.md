@@ -189,7 +189,7 @@ Here is an overview that summarises:
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
 - [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
-- [ ] Error handling (`try ... catch ...`)
+- [x] Error handling (`try ... catch ...`) (see the [differences from jq](#error-handling))
 - [ ] String interpolation
 - [ ] Format strings (`@csv`, `@html`, `@json`)
 
@@ -639,6 +639,23 @@ Furthermore, jq provides the filter
 jaq does *not* provide `foreach/3` because
 it requires completely separate logic from `foreach/2` and `reduce`
 in both the parser and the interpreter.
+
+
+## Error handling
+
+In jq, the `try f catch g` expression breaks out of the `f` stream as
+soon as an error occurs, ceding control to `g` after that. This is
+mentioned in its manual as a possible mechanism for breaking out of
+loops
+([here](https://jqlang.github.io/jq/manual/#breaking-out-of-control-structures)). jaq
+however doesn't interrupt the `f` stream, but instead sends _each_
+error value emitted to the `g` filter; the result is a stream of
+values emitted from `f` with values emitted from `g` interspersed
+where errors ocurred.
+
+```jq
+[try (1, error(2), 3, error(4)) catch .] == [1, 2, 3, 4]
+```
 
 
 ## Miscellaneous
