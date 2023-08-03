@@ -653,6 +653,15 @@ error value emitted to the `g` filter; the result is a stream of
 values emitted from `f` with values emitted from `g` interspersed
 where errors ocurred.
 
+Consider the following example: this expression is `true` in jq,
+because the first `error(2)` interrupts the stream:
+
+```jq
+[try (1, error(2), 3, error(4)) catch .] == [1, 2]
+```
+
+In jaq however, this holds:
+
 ```jq
 [try (1, error(2), 3, error(4)) catch .] == [1, 2, 3, 4]
 ```

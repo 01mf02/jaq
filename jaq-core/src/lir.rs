@@ -293,9 +293,7 @@ impl Ctx {
             }
             Expr::TryCatch(try_, catch_) => Filter::Try(
                 get(*try_, self),
-                catch_
-                    .map(|c| get(*c, self))
-                    .unwrap_or(Box::new(Filter::empty())),
+                catch_.map_or_else(|| Box::new(Filter::empty()), |c| get(*c, self)),
             ),
             Expr::Path(f, path) => {
                 let f = get(*f, self);

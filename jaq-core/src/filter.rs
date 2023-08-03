@@ -179,11 +179,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     }),
             ),
             Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
-                if let Err(e) = y {
-                    w(c).run((cv.0.clone(), e.as_val()))
-                } else {
-                    box_once(y)
-                }
+                y.map_or_else(
+                    |e| w(c).run((cv.0.clone(), e.as_val())),
+                    |v| box_once(Ok(v)),
+                )
             })),
             Ast::Neg(f) => Box::new(w(f).run(cv).map(|v| -v?)),
 

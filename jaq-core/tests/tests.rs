@@ -164,18 +164,23 @@ yields!(
     [0, 1, 2, 3]
 );
 yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2, 4]);
-// try should not gulp expressions after a comma or a pipe; if it did,
-// the inner try in these tests would short-circuit and omit the 1[1]
-// error expression, and the whole expression would yield an empty
-// stream
+// try should not gulp expressions after an infix operator; if it did,
+// the inner try in these tests would resolve to empty and omit the
+// 1[1] error expression, and the whole expression would yield an
+// empty stream
 yields!(
-    try_parsing_isnt_greedy_wrt_commas,
+    try_parsing_isnt_greedy_wrt_comma,
     "try (try 0[0], 1[1]) catch .",
     "cannot index 1"
 );
 yields!(
-    try_parsing_isnt_greedy_wrt_pipes,
+    try_parsing_isnt_greedy_wrt_pipe,
     "try (try 0 | 1[1]) catch .",
+    "cannot index 1"
+);
+yields!(
+    try_parsing_isnt_greedy_wrt_plus,
+    "try (try 0 + 1[1]) catch .",
     "cannot index 1"
 );
 

@@ -164,14 +164,12 @@ impl prec_climb::Output<BinaryOp> for Spanned<Filter> {
     }
 }
 
-fn pipe() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
-    let as_var = just(Token::As).ignore_then(variable()).or_not();
-    as_var
-        .then_ignore(just(Token::Op("|".to_string())))
-        .map(BinaryOp::Pipe)
-}
-
 fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
+    let as_var = just(Token::As).ignore_then(variable()).or_not();
+    let pipe = as_var
+        .then_ignore(just(Token::Op("|".to_string())))
+        .map(BinaryOp::Pipe);
+
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
     let update_with = |op: MathOp| assign(AssignOp::UpdateWith(op));
 
@@ -179,6 +177,7 @@ fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
     let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
 
     choice((
+        pipe,
         // normally, here would be `,`,
         // however, in some contexts, we want to exclude `,`
         // (for example, `f` and `g` in `{a: f, b: g}` must not contain `,`)
@@ -223,7 +222,6 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
     // i.e. not inside parentheses
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
-    let mut sans_comma_pipe = Recursive::declare();
 
     // e.g. `keys[]`
     let atom = atom(with_comma.clone(), sans_comma.clone());
@@ -235,14 +233,20 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
     let id_path = super::path::index().or_not().chain(atom_path());
     let id_with_path = id.then(id_path.collect());
 
-    let path = atom_with_path.or(id_with_path);
+    let path = atom_with_path
+        .or(id_with_path)
+        .map_with_span(|(f, path), span| Filter::path(f, path, span));
+
+    // `try f catch g` is actually an atom, and both f and g must be atoms
+    let mut extended_atom = Recursive::declare();
+    let try_catch = try_catch(extended_atom.clone());
+    extended_atom.define(path.clone().or(try_catch));
 
     // named operators, such as `reduce` or `if-then-else`
     let named = choice((
-        path.map_with_span(|(f, path), span| Filter::path(f, path, span)),
+        extended_atom,
         fold(with_comma.clone()),
         if_then_else(with_comma.clone()),
-        try_catch(sans_comma_pipe.clone()),
     ))
     .boxed();
 
@@ -258,11 +262,9 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
 
     let neg = neg(try_).boxed();
 
-    let nopipe_op = binary_op().boxed();
-    let op = pipe().or(nopipe_op.clone());
+    let op = binary_op().boxed();
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 
-    sans_comma_pipe.define(climb(neg.clone(), nopipe_op));
     sans_comma.define(climb(neg.clone(), op.clone()));
     with_comma.define(climb(neg, op.or(comma)));
 
