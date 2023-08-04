@@ -1,8 +1,8 @@
 # jaq
 
 ![Build status](https://github.com/01mf02/jaq/workflows/Rust/badge.svg)
-[![Crates.io](https://img.shields.io/crates/v/jaq-core.svg)](https://crates.io/crates/jaq-core)
-[![Documentation](https://docs.rs/jaq-core/badge.svg)](https://docs.rs/jaq-core)
+[![Crates.io](https://img.shields.io/crates/v/jaq-interpret.svg)](https://crates.io/crates/jaq-interpret)
+[![Documentation](https://docs.rs/jaq-interpret/badge.svg)](https://docs.rs/jaq-interpret)
 [![Rust 1.62+](https://img.shields.io/badge/rust-1.62+-orange.svg)](https://www.rust-lang.org)
 
 jaq is a clone of the JSON data processing tool [jq].
