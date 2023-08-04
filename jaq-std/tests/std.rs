@@ -165,11 +165,11 @@ yields!(
 );
 yields!(logb_zero, "0 | logb | . == -infinite", true);
 
+// here we diverge from jq, which returns ["a", "b", "A", "B"]
 yields!(
     match_many,
     r#""ABab" | [match("a", "b"; "", "i") | .string]"#,
-    // TODO: is this order really desired?
-    ["a", "b", "A", "B"]
+    ["a", "A", "b", "B"]
 );
 
 #[test]
@@ -267,11 +267,12 @@ yields!(
     [-10000, -14142, -20000, 0, 0, 0, 10000, 14142, 20000]
 );
 
+// here we diverge from jq, which returns ["a", "b", "a", "A", "b", "B"]
 yields!(
     scan,
     r#""abAB" | [scan("a", "b"; "g", "gi")]"#,
     // TODO: is this order really desired?
-    json!(["a", "b", "a", "A", "b", "B"])
+    json!(["a", "a", "A", "b", "b", "B"])
 );
 
 #[test]
