@@ -333,9 +333,9 @@ const MATH: &[(&str, usize, RunPtr)] = &[
 
 #[cfg(feature = "regex")]
 fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: (Ctx<'a>, Val)) -> ValRs<'a> {
-    let flags_re = flags.cartesian(re, (cv.0, cv.1.clone()));
+    let re_flags = re.cartesian(flags, (cv.0, cv.1.clone()));
 
-    Box::new(flags_re.map(move |(flags, re)| {
+    Box::new(re_flags.map(move |(re, flags)| {
         Ok(Val::arr(regex::regex(
             cv.1.as_str()?,
             re?.as_str()?,
