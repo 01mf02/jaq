@@ -233,18 +233,11 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
     let id_path = super::path::index().or_not().chain(atom_path());
     let id_with_path = id.then(id_path.collect());
 
-    let path = atom_with_path
-        .or(id_with_path)
-        .map_with_span(|(f, path), span| Filter::path(f, path, span));
-
-    // `try f catch g` is actually an atom, and both f and g must be atoms
-    let mut extended_atom = Recursive::declare();
-    let try_catch = try_catch(extended_atom.clone().or(neg(extended_atom.clone())));
-    extended_atom.define(path.clone().or(try_catch));
+    let path = atom_with_path.or(id_with_path);
 
     // named operators, such as `reduce` or `if-then-else`
     let named = choice((
-        extended_atom,
+        path.map_with_span(|(f, path), span| Filter::path(f, path, span)),
         fold(with_comma.clone()),
         if_then_else(with_comma.clone()),
     ))
@@ -261,12 +254,13 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
         });
 
     let neg = neg(try_).boxed();
+    let tc = recursive(|f| try_catch(f).or(neg));
 
     let op = binary_op().boxed();
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 
-    sans_comma.define(climb(neg.clone(), op.clone()));
-    with_comma.define(climb(neg, op.or(comma)));
+    sans_comma.define(climb(tc.clone(), op.clone()));
+    with_comma.define(climb(tc, op.or(comma)));
 
     with_comma
 }
