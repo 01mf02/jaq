@@ -19,7 +19,7 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Check (without default features)
-      working-directory: jaq-native
+      working-directory: jaq-core
       run: cargo check --no-default-features
     - name: Lint
       run: cargo clippy -- -Dwarnings
