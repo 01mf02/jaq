@@ -239,7 +239,7 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
 
     // `try f catch g` is actually an atom, and both f and g must be atoms
     let mut extended_atom = Recursive::declare();
-    let try_catch = try_catch(extended_atom.clone());
+    let try_catch = try_catch(extended_atom.clone().or(neg(extended_atom.clone())));
     extended_atom.define(path.clone().or(try_catch));
 
     // named operators, such as `reduce` or `if-then-else`
