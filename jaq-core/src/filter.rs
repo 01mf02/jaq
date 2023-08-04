@@ -31,7 +31,7 @@ pub enum Ast {
     Array(Box<Self>),
     Object(Vec<(Self, Self)>),
 
-    Try(Box<Self>),
+    Try(Box<Self>, Box<Self>),
     Neg(Box<Self>),
     Pipe(Box<Self>, bool, Box<Self>),
     Comma(Box<Self>, Box<Self>),
@@ -177,7 +177,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
                             .map(Val::obj)
                     }),
             ),
-            Ast::Try(f) => Box::new(w(f).run(cv).filter(|y| y.is_ok())),
+            Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
+                y.map_or_else(
+                    |e| w(c).run((cv.0.clone(), e.as_val())),
+                    |v| box_once(Ok(v)),
+                )
+            })),
             Ast::Neg(f) => Box::new(w(f).run(cv).map(|v| -v?)),
 
             // `l | r`
@@ -268,7 +273,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::Try(_) | Ast::Alt(..) => todo!(),
+            Ast::Try(..) | Ast::Alt(..) => todo!(),
             Ast::Fold(..) => todo!(),
 
             Ast::Id => f(cv.1),

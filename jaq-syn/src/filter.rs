@@ -128,6 +128,8 @@ pub enum Filter<C = String, V = String, Num = String> {
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
     Fold(FoldType, Fold<Box<Spanned<Self>>>),
+    /// `try` and optional `catch`
+    TryCatch(Box<Spanned<Self>>, Option<Box<Spanned<Self>>>),
     /// Error suppression, e.g. `keys?`
     Try(Box<Spanned<Self>>),
     /// Negation

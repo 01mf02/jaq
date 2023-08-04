@@ -146,6 +146,54 @@ fn if_then_else() {
     gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
+// This behaviour diverges from jq. In jaq, a `try` will propagate all
+// errors in the stream to the `catch` filter.
+yields!(
+    try_catch_does_not_short_circuit,
+    "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
+    ["1", "2", "cannot index {} with 0", "4"]
+);
+yields!(
+    try_catch_nested,
+    "try try {}[0] catch {}[1] catch .",
+    "cannot index {} with 1"
+);
+yields!(
+    try_catch_multi_valued,
+    "[(try (1,2,3[0]) catch (3,4)) | . - 1]",
+    [0, 1, 2, 3]
+);
+yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2, 4]);
+yields!(
+    try_catch_prefix_operation,
+    "try -[] catch .",
+    "cannot negate []"
+);
+yields!(
+    try_catch_postfix_operation,
+    "[try 0[0]? catch .]",
+    json!([])
+);
+// try should not gulp expressions after an infix operator; if it did,
+// the inner try in these tests would resolve to empty and omit the
+// 1[1] error expression, and the whole expression would yield an
+// empty stream
+yields!(
+    try_parsing_isnt_greedy_wrt_comma,
+    "try (try 0[0], 1[1]) catch .",
+    "cannot index 1"
+);
+yields!(
+    try_parsing_isnt_greedy_wrt_pipe,
+    "try (try 0 | 1[1]) catch .",
+    "cannot index 1"
+);
+yields!(
+    try_parsing_isnt_greedy_wrt_plus,
+    "try (try 0 + 1[1]) catch .",
+    "cannot index 1"
+);
+
 #[test]
 fn ord() {
     give(json!(null), ". < (0 != 0)", json!(true));

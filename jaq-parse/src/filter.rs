@@ -46,6 +46,16 @@ where
         .map_with_span(|(inner, fold), span| (Filter::Fold(inner, fold), span))
 }
 
+fn try_catch<P>(filter: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
+{
+    let try_ = just(Token::Try).ignore_then(filter.clone().map(Box::new));
+    let catch_ = just(Token::Catch).ignore_then(filter.map(Box::new));
+    try_.then(catch_.or_not())
+        .map_with_span(|(try_, catch_), span| (Filter::TryCatch(try_, catch_), span))
+}
+
 // 'Atoms' are filters that contain no ambiguity
 fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
@@ -244,12 +254,13 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
         });
 
     let neg = neg(try_).boxed();
+    let tc = recursive(|f| try_catch(f).or(neg));
 
     let op = binary_op().boxed();
     let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
 
-    sans_comma.define(climb(neg.clone(), op.clone()));
-    with_comma.define(climb(neg, op.or(comma)));
+    sans_comma.define(climb(tc.clone(), op.clone()));
+    with_comma.define(climb(tc, op.or(comma)));
 
     with_comma
 }

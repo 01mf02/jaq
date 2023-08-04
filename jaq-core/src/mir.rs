@@ -346,6 +346,9 @@ impl Ctx {
                     .map(|(i, t)| (*get(i, self), *get(t, self)));
                 Filter::Ite(if_thens.collect(), get(*else_, self))
             }
+            Expr::TryCatch(try_, catch_) => {
+                Filter::TryCatch(get(*try_, self), catch_.map(|c| get(*c, self)))
+            }
             Expr::Path(f, path) => {
                 let f = get(*f, self);
                 let path = path

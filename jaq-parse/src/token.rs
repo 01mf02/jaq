@@ -24,6 +24,8 @@ pub enum Token {
     Reduce,
     For,
     Foreach,
+    Try,
+    Catch,
 }
 
 impl fmt::Display for Token {
@@ -46,6 +48,8 @@ impl fmt::Display for Token {
             Self::Reduce => "reduce".fmt(f),
             Self::For => "for".fmt(f),
             Self::Foreach => "foreach".fmt(f),
+            Self::Try => "try".fmt(f),
+            Self::Catch => "catch".fmt(f),
         }
     }
 }
@@ -119,6 +123,8 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         "reduce" => Token::Reduce,
         "for" => Token::For,
         "foreach" => Token::Foreach,
+        "try" => Token::Try,
+        "catch" => Token::Catch,
         _ => Token::Ident(ident),
     });
 

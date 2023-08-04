@@ -1,0 +1,1 @@
+[range(.) | try (. | error) catch .]

@@ -264,7 +264,7 @@ impl Ctx {
                 });
                 Filter::Object(kvs.collect())
             }
-            Expr::Try(f) => Filter::Try(get(*f, self)),
+            Expr::Try(f) => Filter::Try(get(*f, self), Box::new(Filter::empty())),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
             Expr::Recurse => Filter::recurse0(),
 
@@ -293,6 +293,10 @@ impl Ctx {
                     Filter::Ite(get(if_, self), get(then_, self), Box::new(acc))
                 })
             }
+            Expr::TryCatch(try_, catch_) => Filter::Try(
+                get(*try_, self),
+                catch_.map_or_else(|| Box::new(Filter::empty()), |c| get(*c, self)),
+            ),
             Expr::Path(f, path) => {
                 let f = get(*f, self);
                 use jaq_syn::path::Part;
