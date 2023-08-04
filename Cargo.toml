@@ -2,8 +2,8 @@
 members = [
     "jaq-syn",
     "jaq-parse",
+    "jaq-interpret",
     "jaq-core",
-    "jaq-native",
     "jaq-std",
     "jaq",
 ]

@@ -1,6 +1,6 @@
 use alloc::format;
 use alloc::string::{String, ToString};
-use jaq_core::{Error, Val, ValR};
+use jaq_interpret::{Error, Val, ValR};
 
 /// Parse an ISO-8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).

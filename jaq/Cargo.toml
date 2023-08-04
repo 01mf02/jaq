@@ -14,11 +14,11 @@ categories = ["command-line-utilities", "compilers", "parser-implementations"]
 default = ["mimalloc"]
 
 [dependencies]
-jaq-syn    = { version = "1.0.0-alpha", path = "../jaq-syn" }
-jaq-parse  = { version = "1.0.0-alpha", path = "../jaq-parse" }
-jaq-core   = { version = "1.0.0-alpha", path = "../jaq-core" }
-jaq-native = { version = "1.0.0-alpha", path = "../jaq-native" }
-jaq-std    = { version = "1.0.0-alpha", path = "../jaq-std" }
+jaq-syn       = { version = "1.0.0-alpha", path = "../jaq-syn" }
+jaq-parse     = { version = "1.0.0-alpha", path = "../jaq-parse" }
+jaq-interpret = { version = "1.0.0-alpha", path = "../jaq-interpret" }
+jaq-core      = { version = "1.0.0-alpha", path = "../jaq-core" }
+jaq-std       = { version = "1.0.0-alpha", path = "../jaq-std" }
 ariadne = "0.1.5"
 atty = "0.2"
 chumsky = { version = "0.9.0", default-features = false }

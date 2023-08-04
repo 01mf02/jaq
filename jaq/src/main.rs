@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use jaq_core::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
+use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
@@ -238,7 +238,7 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut defs = ParseCtx::new(vars);
-    defs.insert_natives(jaq_native::core());
+    defs.insert_natives(jaq_core::core());
     defs.insert_defs(jaq_std::std());
     assert!(defs.errs.is_empty());
     let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
@@ -351,7 +351,7 @@ enum Error {
     Io(Option<String>, io::Error),
     Chumsky(Vec<ParseError>),
     Parse(String),
-    Jaq(jaq_core::Error),
+    Jaq(jaq_interpret::Error),
     Persist(tempfile::PersistError),
     FalseOrNull,
     NoOutput,

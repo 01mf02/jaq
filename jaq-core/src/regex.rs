@@ -2,7 +2,7 @@
 
 use alloc::string::{String, ToString};
 use alloc::{rc::Rc, vec::Vec};
-use jaq_core::{Error, Val};
+use jaq_interpret::{Error, Val};
 
 #[derive(Default)]
 pub struct Flags {

@@ -256,7 +256,7 @@ dependencies = [
  "env_logger",
  "hifijson",
  "jaq-core",
- "jaq-native",
+ "jaq-interpret",
  "jaq-parse",
  "jaq-std",
  "jaq-syn",
@@ -270,6 +270,20 @@ dependencies = [
 name = "jaq-core"
 version = "1.0.0-alpha"
 dependencies = [
+ "itertools",
+ "jaq-interpret",
+ "jaq-parse",
+ "libm",
+ "log",
+ "regex",
+ "serde_json",
+ "time",
+]
+
+[[package]]
+name = "jaq-interpret"
+version = "1.0.0-alpha"
+dependencies = [
  "ahash",
  "dyn-clone",
  "hifijson",
@@ -279,20 +293,6 @@ dependencies = [
  "jaq-syn",
  "once_cell",
  "serde_json",
-]
-
-[[package]]
-name = "jaq-native"
-version = "1.0.0-alpha"
-dependencies = [
- "itertools",
- "jaq-core",
- "jaq-parse",
- "libm",
- "log",
- "regex",
- "serde_json",
- "time",
 ]
 
 [[package]]
@@ -309,7 +309,7 @@ version = "1.0.0-alpha"
 dependencies = [
  "bincode",
  "jaq-core",
- "jaq-native",
+ "jaq-interpret",
  "jaq-parse",
  "jaq-syn",
  "serde_json",

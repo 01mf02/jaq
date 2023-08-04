@@ -1,8 +1,8 @@
 use serde_json::Value;
 
-fn yields(x: jaq_core::Val, f: &str, ys: impl Iterator<Item = jaq_core::ValR>) {
-    let mut ctx = jaq_core::ParseCtx::new(Vec::new());
-    ctx.insert_natives(jaq_native::core());
+fn yields(x: jaq_interpret::Val, f: &str, ys: impl Iterator<Item = jaq_interpret::ValR>) {
+    let mut ctx = jaq_interpret::ParseCtx::new(Vec::new());
+    ctx.insert_natives(jaq_core::core());
     ctx.insert_defs(jaq_std::std());
 
     let (f, errs) = jaq_parse::parse(f, jaq_parse::main());
@@ -10,7 +10,7 @@ fn yields(x: jaq_core::Val, f: &str, ys: impl Iterator<Item = jaq_core::ValR>) {
     ctx.yields(x, f.unwrap(), ys)
 }
 
-pub fn fail(x: Value, f: &str, err: jaq_core::Error) {
+pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {
     yields(x.into(), f, core::iter::once(Err(err)))
 }
 
