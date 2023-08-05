@@ -1,0 +1,78 @@
+name: release
+on:
+  release:
+    types:
+      - released
+  workflow_dispatch:
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v3
+      - run: rustup target add ${{ matrix.target }}
+        shell: bash
+      - if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - if: matrix.target == 'aarch64-unknown-linux-musl'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc' >>"$GITHUB_ENV"
+          echo 'CC=aarch64-linux-gnu-gcc' >>"$GITHUB_ENV"
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+        shell: bash
+      - name: Create artifact for Linux and macOS
+        shell: bash
+        if: runner.os != 'Windows'
+        run: |
+          export ARTIFACT_NAME="jaq-v${{ github.ref_type == 'tag' && github.ref_name || 0 }}-${{ matrix.target }}.tar.gz"
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >>"$GITHUB_ENV"
+          cd target/${{ matrix.target }}/release
+          tar czf "../../../${ARTIFACT_NAME}" jaq ../../../LICENSE-MIT -C ../../../ README.md
+
+      - name: Create artifact for Windows
+        shell: bash
+        if: runner.os == 'Windows'
+        run: |
+          export ARTIFACT_NAME="jaq-v${{ github.ref_type == 'tag' && github.ref_name || 0 }}-${{ matrix.target }}.zip"
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >>"$GITHUB_ENV"
+          cd target/${{ matrix.target }}/release
+          7z a "../../../${ARTIFACT_NAME}" jaq.exe ../../../LICENSE-MIT ../../../README.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: jaq-${{ matrix.target }}
+          path: ${{ env.ARTIFACT_NAME }}
+
+      - name: Release artifact
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v1
+        with:
+          append_body: true
+          files: ${{ env.ARTIFACT_NAME }}
