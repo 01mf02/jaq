@@ -35,25 +35,20 @@ jobs:
       - name: Set up Rust
         run: rustup target add ${{ matrix.target }}
         shell: bash
-      - name: Install musl-tools
+      - name: Install cross
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-      - name: Set up for aarch64-unknown-linux-musl
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        shell: bash
-        # Needs to set some environment variables
-        # https://github.com/rust-lang/rust/issues/89626
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc' >>"$GITHUB_ENV"
-          echo 'CFLAGS=-mno-outline-atomics' >>"$GITHUB_ENV"
-          echo 'CC=aarch64-linux-gnu-gcc' >>"$GITHUB_ENV"
+          curl -sSfLo /tmp/cross.tar.gz https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf /tmp/cross.tar.gz -C /tmp
+          sudo mv /tmp/cross /usr/local/bin/cross
       - name: Build
+        if: runner.os != 'Linux'
         run: cargo build --release --locked --target ${{ matrix.target }}
+        shell: bash
+      - name: Build with cross
+        if: runner.os == 'Linux'
+        run: cross build --release --locked --target ${{ matrix.target }}
         shell: bash
       - name: Create artifact for Linux and macOS
         shell: bash
