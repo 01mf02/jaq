@@ -5,6 +5,8 @@ on:
       - released
   workflow_dispatch:
 
+permissions:
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
