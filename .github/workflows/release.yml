@@ -37,11 +37,9 @@ jobs:
         shell: bash
       - name: Install cross
         if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          curl -sSfLo /tmp/cross.tar.gz https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzf /tmp/cross.tar.gz -C /tmp
-          sudo mv /tmp/cross /usr/local/bin/cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
       - name: Build
         if: runner.os != 'Linux'
         run: cargo build --release --locked --target ${{ matrix.target }}
