@@ -32,20 +32,24 @@ jobs:
             target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v3
-      - run: rustup target add ${{ matrix.target }}
+      - name: Set up Rust
+        run: rustup target add ${{ matrix.target }}
         shell: bash
-      - if: runner.os == 'Linux'
+      - name: Install musl-tools
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
-      - if: matrix.target == 'aarch64-unknown-linux-musl'
+      - name: Set up for aarch64-unknown-linux-musl
+        if: matrix.target == 'aarch64-unknown-linux-musl'
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo 'CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc' >>"$GITHUB_ENV"
-      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
         shell: bash
       - name: Create artifact for Linux and macOS
         shell: bash
