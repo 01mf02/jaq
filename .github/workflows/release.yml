@@ -40,6 +40,11 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cross
+      - name: Set up for Windows static build
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          echo 'RUSTFLAGS=-Ctarget-feature=+crt-static' >>"$GITHUB_ENV"
       - name: Build
         if: runner.os != 'Linux'
         run: cargo build --release --locked --target ${{ matrix.target }}
