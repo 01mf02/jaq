@@ -288,9 +288,8 @@ impl Ctx {
                 }
             }
             Expr::Ite(if_thens, else_) => {
-                let if_thens = if_thens.into_iter().rev();
                 let else_ = else_.map_or(Filter::Id, |else_| *get(*else_, self));
-                if_thens.fold(else_, |acc, (if_, then_)| {
+                if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
                     Filter::Ite(get(if_, self), get(then_, self), Box::new(acc))
                 })
             }
