@@ -344,7 +344,7 @@ impl Ctx {
                 let if_thens = if_thens
                     .into_iter()
                     .map(|(i, t)| (*get(i, self), *get(t, self)));
-                Filter::Ite(if_thens.collect(), get(*else_, self))
+                Filter::Ite(if_thens.collect(), else_.map(|else_| get(*else_, self)))
             }
             Expr::TryCatch(try_, catch_) => {
                 Filter::TryCatch(get(*try_, self), catch_.map(|c| get(*c, self)))

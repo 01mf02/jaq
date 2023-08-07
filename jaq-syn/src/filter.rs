@@ -122,7 +122,10 @@ pub enum Filter<C = String, V = String, Num = String> {
     /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Box<Spanned<Self>>, Path<Self>),
     /// If-then-else
-    Ite(Vec<(Spanned<Self>, Spanned<Self>)>, Box<Spanned<Self>>),
+    Ite(
+        Vec<(Spanned<Self>, Spanned<Self>)>,
+        Option<Box<Spanned<Self>>>,
+    ),
     /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
     ///
     /// The first field indicates whether to yield intermediate results
