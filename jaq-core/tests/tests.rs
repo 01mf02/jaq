@@ -4,7 +4,7 @@ pub mod common;
 
 use common::{fail, give, gives};
 use jaq_interpret::error::{Error, Type};
-use jaq_interpret::{Val};
+use jaq_interpret::Val;
 use serde_json::json;
 
 yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
@@ -49,7 +49,7 @@ fn explode_implode() {
     give(json!("❤ の"), "explode | implode", json!("❤ の"));
     give(json!("y̆"), "explode | implode", json!("y̆"));
 
-    //fail(json!([1114112]), "implode", Error::Char(1114112));
+    give(json!([1114112]), "try implode catch -1", json!(-1));
 }
 
 #[test]
@@ -105,8 +105,9 @@ fn keys_unsorted() {
     give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
     give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
 
-    fail(json!(0), "keys_unsorted", Error::Type(Val::Int(0), Type::Iter));
-    fail(json!(null), "keys_unsorted",Error::Type(Val::Null, Type::Iter));
+    let err = |v| Error::Type(v, Type::Iter);
+    fail(json!(0), "keys_unsorted", err(Val::Int(0)));
+    fail(json!(null), "keys_unsorted", err(Val::Null));
 }
 
 #[test]
@@ -257,8 +258,9 @@ fn round() {
     give(json!(-1.4), "floor", json!(-2));
     give(json!(-1.4), "ceil", json!(-1));
 
-    fail(json!([]), "round", Error::Type(Val::from(json!([])), Type::Num));
-    fail(json!({}), "round", Error::Type(Val::from(json!({})), Type::Num));
+    let err = |v| Error::Type(Val::from(v), Type::Num);
+    fail(json!([]), "round", err(json!([])));
+    fail(json!({}), "round", err(json!({})));
 }
 
 #[test]
