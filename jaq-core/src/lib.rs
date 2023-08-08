@@ -15,7 +15,7 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use alloc::{boxed::Box, format, rc::Rc, vec::Vec};
 use jaq_interpret::results::{box_once, run_if_ok, then};
 use jaq_interpret::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
 use jaq_interpret::{Error, Val, ValR, ValRs};
@@ -38,6 +38,7 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
     feature = "std",
     feature = "log",
     feature = "math",
+    feature = "parse_json",
     feature = "regex",
     feature = "time"
 ))]
@@ -46,6 +47,7 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         .chain(run(STD))
         .chain(upd(LOG))
         .chain(run(MATH))
+        .chain(run(PARSE_JSON))
         .chain(run(REGEX))
         .chain(run(TIME))
 }
@@ -67,6 +69,23 @@ fn upd<'a>(
 // <https://github.com/rust-lang/rust/issues/93610>
 fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+}
+
+/// Return 0 for null, the absolute value for numbers, and
+/// the length for strings, arrays, and objects.
+///
+/// Fail on booleans.
+fn length(v: &Val) -> ValR {
+    match v {
+        Val::Null => Ok(Val::Int(0)),
+        Val::Bool(_) => Err(Error::from_str(format!("{v} has no length"))),
+        Val::Int(i) => Ok(Val::Int(i.abs())),
+        Val::Num(n) => length(&Val::from_dec_str(n)),
+        Val::Float(f) => Ok(Val::Float(f.abs())),
+        Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
+        Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
+        Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
+    }
 }
 
 /// Sort array by the given function.
@@ -121,6 +140,31 @@ where
     Ok(mx)
 }
 
+/// Convert a string into an array of its Unicode codepoints.
+fn explode(s: &str) -> Result<Vec<Val>, Error> {
+    // conversion from u32 to isize may fail on 32-bit systems for high values of c
+    let conv = |c: char| {
+        Ok(Val::Int(
+            isize::try_from(c as u32).map_err(Error::from_str)?,
+        ))
+    };
+    s.chars().map(conv).collect()
+}
+
+/// Convert an array of Unicode codepoints into a string.
+fn implode(xs: &[Val]) -> Result<String, Error> {
+    xs.iter().map(as_codepoint).collect()
+}
+
+/// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
+fn as_codepoint(v: &Val) -> Result<char, Error> {
+    let i = v.as_int()?;
+    // conversion from isize to u32 may fail on 64-bit systems for high values of c
+    let u = u32::try_from(i).map_err(Error::from_str)?;
+    // may fail e.g. on `[1114112] | implode`
+    char::from_u32(u).ok_or(Error::from_str(format!("cannot use {u} as character")))
+}
+
 /// Split a string by a given separator string.
 fn split(s: &str, sep: &str) -> Vec<Val> {
     if sep.is_empty() {
@@ -142,24 +186,27 @@ where
 
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
-        Box::new(cv.0.inputs().map(|r| r.map_err(Error::Parse)))
+        Box::new(cv.0.inputs().map(|r| r.map_err(Error::from_str)))
     }),
-    ("length", 0, |_, cv| box_once(cv.1.len())),
+    ("length", 0, |_, cv| box_once(length(&cv.1))),
     ("keys_unsorted", 0, |_, cv| {
         box_once(cv.1.keys_unsorted().map(Val::arr))
     }),
     ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
     ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
     ("ceil", 0, |_, cv| box_once(cv.1.round(|f| f.ceil()))),
-    ("fromjson", 0, |_, cv| box_once(cv.1.from_json())),
     ("tojson", 0, |_, cv| {
         box_once(Ok(Val::str(cv.1.to_string())))
     }),
     ("utf8bytelength", 0, |_, cv| {
         then(cv.1.as_str(), |s| box_once(Ok(Val::Int(s.len() as isize))))
     }),
-    ("explode", 0, |_, cv| box_once(cv.1.explode().map(Val::arr))),
-    ("implode", 0, |_, cv| box_once(cv.1.implode().map(Val::str))),
+    ("explode", 0, |_, cv| {
+        box_once(cv.1.as_str().and_then(|s| Ok(Val::arr(explode(s)?))))
+    }),
+    ("implode", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|a| Ok(Val::str(implode(a)?))))
+    }),
     ("ascii_downcase", 0, |_, cv| {
         box_once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
     }),
@@ -263,11 +310,26 @@ fn now() -> Result<f64, Error> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|x| x.as_secs_f64())
-        .map_err(|e| Error::Custom(e.to_string()))
+        .map_err(Error::from_str)
 }
 
 #[cfg(feature = "std")]
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+
+#[cfg(feature = "parse_json")]
+/// Convert string to a single JSON value.
+fn from_json(s: &str) -> ValR {
+    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
+    use hifijson::token::Lex;
+    lexer
+        .exactly_one(Val::parse)
+        .map_err(|e| Error::from_str(format!("cannot parse {s} as JSON: {e}")))
+}
+
+#[cfg(feature = "parse_json")]
+const PARSE_JSON: &[(&str, usize, RunPtr)] = &[("fromjson", 0, |_, cv| {
+    box_once(cv.1.as_str().and_then(|s| from_json(s)))
+})];
 
 #[cfg(feature = "math")]
 const MATH: &[(&str, usize, RunPtr)] = &[

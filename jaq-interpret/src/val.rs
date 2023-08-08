@@ -1,10 +1,11 @@
 //! JSON values with reference-counted sharing.
 
-use crate::Error;
+use crate::error::{Error, Type};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt;
+#[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
 use jaq_syn::MathOp;
 
@@ -78,7 +79,7 @@ impl Val {
     pub fn as_int(&self) -> Result<isize, Error> {
         match self {
             Self::Int(i) => Ok(*i),
-            _ => Err(Error::Int(self.clone())),
+            _ => Err(Error::Type(self.clone(), Type::Int)),
         }
     }
 
@@ -86,10 +87,10 @@ impl Val {
     /// fail.
     pub fn as_float(&self) -> Result<f64, Error> {
         match self {
-            Val::Int(n) => Ok(*n as f64),
-            Val::Float(n) => Ok(*n),
-            Val::Num(n) => n.parse().or(Err(Error::Float(self.clone()))),
-            _ => Err(Error::Float(self.clone())),
+            Self::Int(n) => Ok(*n as f64),
+            Self::Float(n) => Ok(*n),
+            Self::Num(n) => n.parse().or(Err(Error::Type(self.clone(), Type::Float))),
+            _ => Err(Error::Type(self.clone(), Type::Float)),
         }
     }
 
@@ -97,7 +98,7 @@ impl Val {
     pub fn to_str(self) -> Result<Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
-            _ => Err(Error::Str(self)),
+            _ => Err(Error::Type(self, Type::Str)),
         }
     }
 
@@ -105,7 +106,7 @@ impl Val {
     pub fn as_str(&self) -> Result<&Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
-            _ => Err(Error::Str(self.clone())),
+            _ => Err(Error::Type(self.clone(), Type::Str)),
         }
     }
 
@@ -113,15 +114,15 @@ impl Val {
     pub fn into_arr(self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
-            _ => Err(Error::Arr(self)),
+            _ => Err(Error::Type(self, Type::Arr)),
         }
     }
 
     /// If the value is an array, return it, else fail.
-    fn as_arr(&self) -> Result<&Rc<Vec<Val>>, Error> {
+    pub fn as_arr(&self) -> Result<&Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
-            _ => Err(Error::Arr(self.clone())),
+            _ => Err(Error::Type(self.clone(), Type::Arr)),
         }
     }
 
@@ -130,52 +131,27 @@ impl Val {
         n.parse().map_or(Self::Null, Self::Float)
     }
 
-    /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
-    fn as_codepoint(&self) -> Result<char, Error> {
-        let i = self.as_int()?;
-        // conversion from isize to u32 may fail on 64-bit systems for high values of c
-        let u = u32::try_from(i).map_err(|_| Error::Char(i))?;
-        char::from_u32(u).ok_or(Error::Char(i))
-    }
-
-    /// Return 0 for null, the absolute value for numbers, and
-    /// the length for strings, arrays, and objects.
-    ///
-    /// Fail on booleans.
-    pub fn len(&self) -> Result<Self, Error> {
-        match self {
-            Self::Null => Ok(Self::Int(0)),
-            Self::Bool(_) => Err(Error::Length(self.clone())),
-            Self::Int(i) => Ok(Self::Int(i.abs())),
-            Self::Num(n) => Self::from_dec_str(n).len(),
-            Self::Float(f) => Ok(Self::Float(f.abs())),
-            Self::Str(s) => Ok(Self::Int(s.chars().count() as isize)),
-            Self::Arr(a) => Ok(Self::Int(a.len() as isize)),
-            Self::Obj(o) => Ok(Self::Int(o.len() as isize)),
-        }
-    }
-
     /// Apply a rounding function to floating-point numbers, then convert them to integers.
     ///
     /// Return integers unchanged, and fail on any other input.
     pub fn round(&self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
         match self {
             Self::Int(_) => Ok(self.clone()),
+            // TODO: this should fail if float does not fit into isize!
             Self::Float(x) => Ok(Self::Int(f(*x) as isize)),
             Self::Num(n) => Self::from_dec_str(n).round(f),
-            _ => Err(Error::Round(self.clone())),
+            _ => Err(Error::Type(self.clone(), Type::Num)),
         }
     }
 
     /// Return true if `value | .[key]` is defined.
     ///
-    /// Fail on values that are neither null, arrays, nor objects.
+    /// Fail on values that are neither arrays nor objects.
     pub fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
-            (Self::Null, _) => Ok(false),
             (Self::Arr(a), Self::Int(i)) if *i >= 0 => Ok((*i as usize) < a.len()),
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
-            _ => Err(Error::Has(self.clone(), key.clone())),
+            _ => Err(Error::Index(self.clone(), key.clone())),
         }
     }
 
@@ -186,7 +162,7 @@ impl Val {
         match self {
             Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
             Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),
-            _ => Err(Error::Keys(self.clone())),
+            _ => Err(Error::Type(self.clone(), Type::Iter)),
         }
     }
 
@@ -197,7 +173,7 @@ impl Val {
         match self {
             Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
-            _ => Err(Error::Iter(self)),
+            _ => Err(Error::Type(self, Type::Iter)),
         }
     }
 
@@ -233,29 +209,6 @@ impl Val {
         }
     }
 
-    /// Convert string to a single JSON value.
-    ///
-    /// Fail on any other value.
-    pub fn from_json(&self) -> ValR {
-        let mut lexer = hifijson::SliceLexer::new(self.as_str()?.as_bytes());
-        use hifijson::token::Lex;
-        lexer
-            .exactly_one(Self::parse)
-            .map_err(|e| Error::FromJson(self.clone(), e.to_string()))
-    }
-
-    /// Convert a string into an array of its Unicode codepoints.
-    pub fn explode(&self) -> Result<Vec<Val>, Error> {
-        // conversion from u32 to isize may fail on 32-bit systems for high values of c
-        let conv = |c: char| Val::Int(isize::try_from(c as u32).unwrap());
-        Ok(self.as_str()?.chars().map(conv).collect())
-    }
-
-    /// Convert an array of Unicode codepoints into a string.
-    pub fn implode(&self) -> Result<String, Error> {
-        self.as_arr()?.iter().map(|v| v.as_codepoint()).collect()
-    }
-
     /// Apply a function to a string.
     pub fn mutate_str(self, f: impl Fn(&mut String)) -> ValR {
         let mut s = self.to_str()?;
@@ -282,6 +235,7 @@ impl Val {
     /// If the underlying lexer reads input fallibly (for example `IterLexer`),
     /// the error returned by this function might be misleading.
     /// In that case, always check whether the lexer contains an error.
+    #[cfg(feature = "hifijson")]
     pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
         use hifijson::{token, Error};
         match token {
@@ -466,7 +420,7 @@ impl core::ops::Neg for Val {
             Int(x) => Ok(Int(-x)),
             Float(x) => Ok(Float(-x)),
             Num(n) => -Self::from_dec_str(&n),
-            x => Err(Error::Neg(x)),
+            x => Err(Error::Type(x, Type::Num)),
         }
     }
 }
