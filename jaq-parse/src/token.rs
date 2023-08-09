@@ -106,6 +106,8 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
 
     let var = just('$').ignore_then(text::ident());
 
+    let format_filter = just('@').chain(text::ident()).collect();
+
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("{}()[]:;,?");
 
@@ -135,6 +137,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
         .or(var.map(Token::Var))
+        .or(format_filter.map(Token::Ident))
         .or(num().map(Token::Num))
         .or(str_().map(Token::Str))
         .recover_with(skip_then_retry_until([]))

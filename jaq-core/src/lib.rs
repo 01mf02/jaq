@@ -39,7 +39,8 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
     feature = "log",
     feature = "math",
     feature = "regex",
-    feature = "time"
+    feature = "time",
+    feature = "format"
 ))]
 pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     minimal()
@@ -48,6 +49,7 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         .chain(run(MATH))
         .chain(run(REGEX))
         .chain(run(TIME))
+        .chain(run(FORMAT))
 }
 
 fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
@@ -402,3 +404,93 @@ const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
     |_, cv| box_once(Ok(debug(cv.1))),
     |_, cv, f| f(debug(cv.1)),
 )];
+
+#[cfg(feature = "format")]
+fn to_csv(v: Val, delimiter: u8) -> ValR {
+    use csv::{StringRecord, WriterBuilder};
+    match v.clone() {
+        Val::Arr(vs) => {
+            let mut writer = WriterBuilder::new()
+                .delimiter(delimiter)
+                .from_writer(vec![]);
+            let mut record = StringRecord::new();
+            for cell in &*vs {
+                match cell {
+                    Val::Str(s) => {
+                        record.push_field(s);
+                        Ok(())
+                    }
+                    _ => Err(Error::Str(cell.clone())),
+                }?;
+            }
+            writer
+                .write_record(&record)
+                .map_err(|e| Error::Csv(e.to_string()))?;
+            Ok(Val::str(
+                String::from_utf8(writer.into_inner().map_err(|e| Error::Csv(e.to_string()))?)
+                    .map_or_else(
+                        |e| Err(Error::Csv(e.to_string())),
+                        |s| Ok(s[0..s.len() - 1].to_string()),
+                    )?,
+            ))
+        }
+        _ => Err(Error::Arr(v)),
+    }
+}
+
+#[cfg(feature = "format")]
+const FORMAT: &[(&str, usize, RunPtr)] = &[
+    ("tohtml", 0, |_, cv| {
+        box_once(match cv.1 {
+            Val::Str(s) => Ok(Val::str(html_escape::encode_safe(&*s).to_string())),
+            _ => Err(Error::Str(cv.1)),
+        })
+    }),
+    ("touri", 0, |_, cv| {
+        box_once(match cv.1 {
+            Val::Str(s) => Ok(Val::str(urlencoding::encode(&s).to_string())),
+            _ => Err(Error::Str(cv.1)),
+        })
+    }),
+    ("fromuri", 0, |_, cv| {
+        box_once(match cv.1.clone() {
+            Val::Str(s) => urlencoding::decode(&s).map_or_else(
+                |e| Err(Error::FromUri(cv.1, e.to_string())),
+                |ds| Ok(Val::str(ds.to_string())),
+            ),
+            _ => Err(Error::Str(cv.1)),
+        })
+    }),
+    ("tocsv", 0, |_, cv| box_once(to_csv(cv.1, b','))),
+    ("totsv", 0, |_, cv| box_once(to_csv(cv.1, b'\t'))),
+    ("tosh", 0, |_, cv| {
+        box_once(match cv.1 {
+            Val::Str(s) => Ok(Val::str(
+                shell_escape::escape(Into::into((*s).clone())).to_string(),
+            )),
+            _ => Err(Error::Str(cv.1)),
+        })
+    }),
+    ("tobase64", 0, |_, cv| {
+        use base64::{engine::general_purpose, Engine as _};
+        box_once(match cv.1 {
+            Val::Str(s) => Ok(Val::str(general_purpose::STANDARD.encode((*s).clone()))),
+            _ => Err(Error::Str(cv.1)),
+        })
+    }),
+    ("frombase64", 0, |_, cv| {
+        use base64::{engine::general_purpose, Engine as _};
+        box_once(match cv.1.clone() {
+            Val::Str(s) => general_purpose::STANDARD.decode((*s).clone()).map_or_else(
+                |e| Err(Error::FromBase64(cv.1.clone(), e.to_string())),
+                |d| {
+                    std::str::from_utf8(&d).map_or_else(
+                        |e| Err(Error::FromBase64(cv.1.clone(), e.to_string())),
+                        |ds| Ok(Val::str(ds.to_string())),
+                    )
+                },
+            ),
+            _ => Err(Error::Str(cv.1)),
+        })
+    }),
+];
