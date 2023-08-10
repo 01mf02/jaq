@@ -147,15 +147,3 @@ def input: first(inputs);
 # Date
 def   todate:   todateiso8601;
 def fromdate: fromdateiso8601;
-
-# Formatting
-def    @text: tostring;
-def    @json: tojson;
-def    @html: tostring | tohtml;
-def     @uri: tostring | touri;
-def    @urid: tostring | fromuri;
-def     @csv: map(tostring) | tocsv;
-def     @tsv: map(tostring) | totsv;
-def      @sh: tostring | tosh;
-def  @base64: tostring | tobase64;
-def @base64d: tostring | frombase64;

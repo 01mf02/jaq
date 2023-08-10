@@ -59,6 +59,52 @@ fn first_last() {
     give(json!([1, 2, 3]), "last(.[])", json!(3));
 }
 
+yields!(
+    format_text,
+    "[0, 0 == 0, {}.a, \"hello\", {}, [] | @text]",
+    ["0", "true", "null", "hello", "{}", "[]"]
+);
+yields!(
+    format_json,
+    "[0, 0 == 0, {}.a, \"hello\", {}, [] | @json]",
+    ["0", "true", "null", "\"hello\"", "{}", "[]"]
+);
+yields!(
+    format_html,
+    "\"<p style='visibility: hidden'>sneaky</p>\" | @html",
+    "&lt;p style=&#x27;visibility: hidden&#x27;&gt;sneaky&lt;&#x2F;p&gt;"
+);
+yields!(
+    format_uri,
+    "\"hello cruel world\" | @uri",
+    "hello%20cruel%20world"
+);
+yields!(
+    format_unformat_uri,
+    "\"hello cruel world\" | @uri | @urid",
+    "hello cruel world"
+);
+yields!(
+    format_csv,
+    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\"\", {}, []] | @csv",
+    r#"0,true,null,"hello ""quotes""",{},[]"#
+);
+yields!(
+    format_tsv,
+    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\"\", {}, []] | @tsv",
+    "0\ttrue\tnull\t\"hello \"\"quotes\"\"\"\t{}\t[]"
+);
+yields!(
+    format_base64,
+    "\"hello cruel world\" | @base64",
+    "aGVsbG8gY3J1ZWwgd29ybGQ="
+);
+yields!(
+    format_unformat_base64,
+    "\"hello cruel world\" | @base64 | @base64d",
+    "hello cruel world"
+);
+
 #[test]
 fn group_by() {
     gives(json!([]), "group_by(.)", [json!([])]);

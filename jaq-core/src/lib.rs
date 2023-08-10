@@ -406,91 +406,80 @@ const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
 )];
 
 #[cfg(feature = "format")]
-fn to_csv(v: Val, delimiter: u8) -> ValR {
+fn stringify(v: Val) -> String {
+    v.clone()
+        .to_str()
+        .map_or_else(|_| v.to_string(), |s| s.to_string())
+}
+
+#[cfg(feature = "format")]
+fn to_csv(vs: &[Val], delimiter: u8) -> ValR {
     use csv::{StringRecord, WriterBuilder};
-    match v.clone() {
-        Val::Arr(vs) => {
-            let mut writer = WriterBuilder::new()
-                .delimiter(delimiter)
-                .from_writer(vec![]);
-            let mut record = StringRecord::new();
-            for cell in &*vs {
-                match cell {
-                    Val::Str(s) => {
-                        record.push_field(s);
-                        Ok(())
-                    }
-                    _ => Err(Error::Str(cell.clone())),
-                }?;
-            }
-            writer
-                .write_record(&record)
-                .map_err(|e| Error::Csv(e.to_string()))?;
-            Ok(Val::str(
-                String::from_utf8(writer.into_inner().map_err(|e| Error::Csv(e.to_string()))?)
-                    .map_or_else(
-                        |e| Err(Error::Csv(e.to_string())),
-                        |s| Ok(s[0..s.len() - 1].to_string()),
-                    )?,
-            ))
-        }
-        _ => Err(Error::Arr(v)),
-    }
+    let mut writer = WriterBuilder::new()
+        .delimiter(delimiter)
+        .from_writer(vec![]);
+    let record = StringRecord::from(
+        vs.iter()
+            .map(|cell| stringify(cell.clone()))
+            .collect::<Vec<_>>(),
+    );
+    writer.write_record(&record).map_err(Error::from_any)?;
+    Ok(Val::str(
+        String::from_utf8(writer.into_inner().map_err(Error::from_any)?)
+            .map_err(Error::from_any)
+            .map(|s| s[0..s.len() - 1].to_string())?,
+    ))
 }
 
 #[cfg(feature = "format")]
 const FORMAT: &[(&str, usize, RunPtr)] = &[
-    ("tohtml", 0, |_, cv| {
-        box_once(match cv.1 {
-            Val::Str(s) => Ok(Val::str(html_escape::encode_safe(&*s).to_string())),
-            _ => Err(Error::Str(cv.1)),
-        })
+    ("@text", 0, |_, cv| box_once(Ok(Val::str(stringify(cv.1))))),
+    ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
+    ("@html", 0, |_, cv| {
+        box_once(Ok(Val::str(
+            html_escape::encode_safe(&stringify(cv.1)).to_string(),
+        )))
     }),
-    ("touri", 0, |_, cv| {
-        box_once(match cv.1 {
-            Val::Str(s) => Ok(Val::str(urlencoding::encode(&s).to_string())),
-            _ => Err(Error::Str(cv.1)),
-        })
+    ("@uri", 0, |_, cv| {
+        box_once(Ok(Val::str(
+            urlencoding::encode(&stringify(cv.1)).to_string(),
+        )))
     }),
-    ("fromuri", 0, |_, cv| {
-        box_once(match cv.1.clone() {
-            Val::Str(s) => urlencoding::decode(&s).map_or_else(
-                |e| Err(Error::FromUri(cv.1, e.to_string())),
-                |ds| Ok(Val::str(ds.to_string())),
-            ),
-            _ => Err(Error::Str(cv.1)),
-        })
+    ("@urid", 0, |_, cv| {
+        box_once(
+            urlencoding::decode(&stringify(cv.1))
+                .map_err(Error::from_any)
+                .map(|s| Val::str(s.to_string())),
+        )
     }),
-    ("tocsv", 0, |_, cv| box_once(to_csv(cv.1, b','))),
-    ("totsv", 0, |_, cv| box_once(to_csv(cv.1, b'\t'))),
-    ("tosh", 0, |_, cv| {
-        box_once(match cv.1 {
-            Val::Str(s) => Ok(Val::str(
-                shell_escape::escape(Into::into((*s).clone())).to_string(),
-            )),
-            _ => Err(Error::Str(cv.1)),
-        })
+    ("@csv", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b',')))
     }),
-    ("tobase64", 0, |_, cv| {
+    ("@tsv", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b'\t')))
+    }),
+    ("@sh", 0, |_, cv| {
+        box_once(Ok(Val::str(
+            shell_escape::escape(stringify(cv.1).into()).to_string(),
+        )))
+    }),
+    ("@base64", 0, |_, cv| {
         use base64::{engine::general_purpose, Engine as _};
-        box_once(match cv.1 {
-            Val::Str(s) => Ok(Val::str(general_purpose::STANDARD.encode((*s).clone()))),
-            _ => Err(Error::Str(cv.1)),
-        })
+        box_once(Ok(Val::str(
+            general_purpose::STANDARD.encode(stringify(cv.1)),
+        )))
     }),
-    ("frombase64", 0, |_, cv| {
+    ("@base64d", 0, |_, cv| {
         use base64::{engine::general_purpose, Engine as _};
-        box_once(match cv.1.clone() {
-            Val::Str(s) => general_purpose::STANDARD.decode((*s).clone()).map_or_else(
-                |e| Err(Error::FromBase64(cv.1.clone(), e.to_string())),
-                |d| {
-                    std::str::from_utf8(&d).map_or_else(
-                        |e| Err(Error::FromBase64(cv.1.clone(), e.to_string())),
-                        |ds| Ok(Val::str(ds.to_string())),
-                    )
-                },
-            ),
-            _ => Err(Error::Str(cv.1)),
-        })
+        box_once(
+            general_purpose::STANDARD
+                .decode(stringify(cv.1))
+                .map_err(Error::from_any)
+                .and_then(|d| {
+                    std::str::from_utf8(&d)
+                        .map_err(Error::from_any)
+                        .map(|s| Val::str(s.to_string()))
+                }),
+        )
     }),
 ];

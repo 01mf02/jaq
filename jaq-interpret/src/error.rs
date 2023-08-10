@@ -24,10 +24,6 @@ pub enum Error {
     Round(Val),
     /// `"[1, 2" | fromjson`
     FromJson(Val, String),
-    /// errors from deserializing URIs
-    FromUri(Val, String),
-    /// `"not valid" | @base64d`
-    FromBase64(Val, String),
     /// `[] | has("a")` or `{} | has(0)`
     Has(Val, Val),
     /// `0 | keys`
@@ -56,8 +52,6 @@ pub enum Error {
     Regex(String),
     /// `"a" | test("."; "b")`
     RegexFlag(char),
-    /// CSV serialization errors
-    Csv(String),
     /// arbitrary errors for custom filters
     Custom(String),
 }
@@ -66,9 +60,14 @@ impl Error {
     /// Convert the error into a value to be used by `catch` filters.
     pub fn as_val(self) -> Val {
         match self {
-            Error::Val(ev) => ev,
+            Self::Val(ev) => ev,
             _ => Val::str(self.to_string()),
         }
+    }
+
+    /// Build an error from anything stringifyable.
+    pub fn from_any(s: impl ToString) -> Self {
+        Self::Val(Val::str(s.to_string()))
     }
 }
 
@@ -84,8 +83,6 @@ impl fmt::Display for Error {
             Self::Length(v) => write!(f, "{v} has no length"),
             Self::Round(v) => write!(f, "cannot round {v}"),
             Self::FromJson(v, why) => write!(f, "cannot parse {v} as JSON: {why}"),
-            Self::FromUri(v, why) => write!(f, "cannot parse {v} as URI: {why}"),
-            Self::FromBase64(v, why) => write!(f, "cannot parse {v} as base64: {why}"),
             Self::Keys(v) => write!(f, "{v} has no keys"),
             Self::Has(v, k) => write!(f, "cannot check whether {v} has key {k}"),
             Self::Iter(v) => write!(f, "cannot iterate over {v}"),
@@ -100,7 +97,6 @@ impl fmt::Display for Error {
             Self::PathExp => write!(f, "invalid path expression"),
             Self::Regex(e) => write!(f, "invalid regex: {e}"),
             Self::RegexFlag(c) => write!(f, "invalid regex flag '{c}'"),
-            Self::Csv(e) => write!(f, "csv serialization error: {e}"),
             Self::Custom(e) => write!(f, "custom filter error: {e}"),
         }
     }
