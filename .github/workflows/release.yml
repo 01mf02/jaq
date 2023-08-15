@@ -35,66 +35,66 @@ jobs:
       run: gh release create --draft ${VERSION}
 
   build:
-    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
-    runs-on: ${{ matrix.job.os }}
+    name: ${{ matrix.target }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: create-release
     strategy:
       fail-fast: false
       matrix:
-        job:
-          - { target: aarch64-unknown-linux-gnu   , os: ubuntu-20.04, use-cross: true }
-          - { target: arm-unknown-linux-gnueabihf , os: ubuntu-20.04, use-cross: true }
-          - { target: arm-unknown-linux-musleabihf, os: ubuntu-20.04, use-cross: true }
-          - { target: i686-pc-windows-msvc        , os: windows-2019                  }
-          - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
-          - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
-          - { target: x86_64-apple-darwin         , os: macos-12                      }
-          - { target: x86_64-pc-windows-gnu       , os: windows-2019                  }
-          - { target: x86_64-pc-windows-msvc      , os: windows-2019                  }
-          - { target: x86_64-unknown-linux-gnu    , os: ubuntu-20.04, use-cross: true }
-          - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
+        include:
+        - { target: aarch64-unknown-linux-gnu   , os: ubuntu-20.04, use-cross: true }
+        - { target: arm-unknown-linux-gnueabihf , os: ubuntu-20.04, use-cross: true }
+        - { target: arm-unknown-linux-musleabihf, os: ubuntu-20.04, use-cross: true }
+        - { target: i686-pc-windows-msvc        , os: windows-2019                  }
+        - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
+        - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
+        - { target: x86_64-apple-darwin         , os: macos-12                      }
+        - { target: x86_64-pc-windows-gnu       , os: windows-2019                  }
+        - { target: x86_64-pc-windows-msvc      , os: windows-2019                  }
+        - { target: x86_64-unknown-linux-gnu    , os: ubuntu-20.04, use-cross: true }
+        - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
     env:
       BUILD_CMD: cargo
     steps:
     - uses: actions/checkout@v3
 
     - name: Install ARM/Linux prerequisites
-      if: startsWith(matrix.job.target, 'arm-unknown-linux-')
+      if: startsWith(matrix.target, 'arm-unknown-linux-')
       run: sudo apt-get -y install gcc-arm-linux-gnueabihf
 
     - name: Install AArch64/Linux prerequisites
-      if: matrix.job.target == 'aarch64-unknown-linux-gnu'
+      if: matrix.target == 'aarch64-unknown-linux-gnu'
       run: sudo apt-get -y install gcc-aarch64-linux-gnu
 
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
-        targets: ${{ matrix.job.target }}
+        targets: ${{ matrix.target }}
 
     - name: Install cross
-      if: matrix.job.use-cross
+      if: matrix.use-cross
       uses: taiki-e/install-action@v2
       with:
         tool: cross
 
     - name: Use cross as build tool
-      if: matrix.job.use-cross
+      if: matrix.use-cross
       run: echo "BUILD_CMD=cross" >> $GITHUB_ENV
 
     - name: Build
-      run: $BUILD_CMD build --release --target=${{ matrix.job.target }}
+      run: $BUILD_CMD build --release --target=${{ matrix.target }}
 
     - name: Determine paths
       id: paths
       run: |
-        EXE_suffix="" ; case ${{ matrix.job.target }} in *-pc-windows-*) EXE_suffix=".exe" ;; esac
-        BIN_PATH="target/${{ matrix.job.target }}/release/${NAME}${EXE_suffix}"
-        PKG_NAME=${NAME}-${VERSION}-${{ matrix.job.target }}${EXE_suffix}
+        EXE_suffix="" ; case ${{ matrix.target }} in *-pc-windows-*) EXE_suffix=".exe" ;; esac
+        BIN_PATH="target/${{ matrix.target }}/release/${NAME}${EXE_suffix}"
+        PKG_NAME=${NAME}-${VERSION}-${{ matrix.target }}${EXE_suffix}
         cp ${BIN_PATH} ${PKG_NAME}
         echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
     - name: Compress binary
-      if: matrix.job.use-cross
+      if: matrix.use-cross
       run: upx ${{ steps.paths.outputs.PKG_NAME }}
 
     - name: Upload release archive
