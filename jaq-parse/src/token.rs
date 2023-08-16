@@ -113,24 +113,24 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     let ident = just('@')
         .or_not()
         .chain::<char, String, _>(text::ident())
-        .collect()
-        .map(|ident: String| match ident.as_str() {
-            "def" => Token::Def,
-            "if" => Token::If,
-            "then" => Token::Then,
-            "elif" => Token::Elif,
-            "else" => Token::Else,
-            "end" => Token::End,
-            "or" => Token::Or,
-            "and" => Token::And,
-            "as" => Token::As,
-            "reduce" => Token::Reduce,
-            "for" => Token::For,
-            "foreach" => Token::Foreach,
-            "try" => Token::Try,
-            "catch" => Token::Catch,
-            _ => Token::Ident(ident),
-        });
+        .collect();
+    let ident = ident.map(|ident: String| match ident.as_str() {
+        "def" => Token::Def,
+        "if" => Token::If,
+        "then" => Token::Then,
+        "elif" => Token::Elif,
+        "else" => Token::Else,
+        "end" => Token::End,
+        "or" => Token::Or,
+        "and" => Token::And,
+        "as" => Token::As,
+        "reduce" => Token::Reduce,
+        "for" => Token::For,
+        "foreach" => Token::Foreach,
+        "try" => Token::Try,
+        "catch" => Token::Catch,
+        _ => Token::Ident(ident),
+    });
 
     // A single token can be one of the above
     ident

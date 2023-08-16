@@ -55,8 +55,8 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 
 impl Val {
     /// Construct a string value.
-    pub fn str(s: impl Into<String>) -> Self {
-        Self::Str(Rc::new(s.into()))
+    pub fn str(s: String) -> Self {
+        Self::Str(s.into())
     }
 
     /// Construct an array value.
@@ -113,7 +113,7 @@ impl Val {
     /// it to string.
     pub fn to_string_or_clone(self) -> String {
         match self {
-            Self::Str(s) => s.to_string(),
+            Self::Str(s) => (*s).clone(),
             _ => self.to_string(),
         }
     }

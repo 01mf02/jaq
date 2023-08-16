@@ -1,7 +1,7 @@
 use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
 use crate::Error;
-use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 pub use jaq_syn::path::Opt;
 
 #[derive(Clone, Debug)]
@@ -59,9 +59,7 @@ impl Part<Vec<Val>> {
                     let until = rel_bounds(until).map(move |i| Ok(abs_bound(i?, len, len)));
                     Box::new(prod(from, until).map(move |(from, until)| {
                         let (skip, take) = skip_take(from?, until?);
-                        Ok(Val::str(
-                            s.chars().skip(skip).take(take).collect::<String>(),
-                        ))
+                        Ok(Val::str(s.chars().skip(skip).take(take).collect()))
                     }))
                 }
                 _ => Box::new(once(Err(Error::Index(current)))),

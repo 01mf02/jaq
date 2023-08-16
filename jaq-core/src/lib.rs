@@ -406,7 +406,7 @@ const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
 )];
 
 #[cfg(feature = "format")]
-fn to_csv(vs: &[Val], delimiter: u8) -> ValR {
+fn to_csv(vs: &[Val], delimiter: u8) -> Result<String, Error> {
     use csv::{StringRecord, WriterBuilder};
     let mut writer = WriterBuilder::new()
         .delimiter(delimiter)
@@ -417,11 +417,9 @@ fn to_csv(vs: &[Val], delimiter: u8) -> ValR {
             .collect::<Vec<_>>(),
     );
     writer.write_record(&record).map_err(Error::from_any)?;
-    Ok(Val::str(
-        String::from_utf8(writer.into_inner().map_err(Error::from_any)?)
-            .map_err(Error::from_any)
-            .map(|s| s[0..s.len() - 1].to_string())?,
-    ))
+    String::from_utf8(writer.into_inner().map_err(Error::from_any)?)
+        .map_err(Error::from_any)
+        .map(|s| s[0..s.len() - 1].to_string())
 }
 
 #[cfg(feature = "format")]
@@ -448,10 +446,10 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
         )
     }),
     ("@csv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b',')))
+        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b',')).map(Val::str))
     }),
     ("@tsv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b'\t')))
+        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b'\t')).map(Val::str))
     }),
     ("@sh", 0, |_, cv| {
         box_once(Ok(Val::str(
