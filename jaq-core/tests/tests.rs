@@ -86,13 +86,13 @@ yields!(
 );
 yields!(
     format_csv,
-    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\", and commas\", {}, []] | @csv",
-    r#"0,true,null,"hello ""quotes"", and commas",{},[]"#
+    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\"\", \"and, commas\", {}, []] | @csv",
+    r#"0,true,null,"hello ""quotes""","and, commas",{},[]"#
 );
 yields!(
     format_tsv,
-    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\", and commas\", {}, []] | @tsv",
-    "0\ttrue\tnull\t\"hello \"\"quotes\"\", and commas\"\t{}\t[]"
+    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\"\", \"and, commas\", {}, []] | @tsv",
+    "0\ttrue\tnull\t\"hello \"\"quotes\"\"\"\tand, commas\t{}\t[]"
 );
 yields!(
     format_base64,

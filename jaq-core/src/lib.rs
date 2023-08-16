@@ -432,19 +432,19 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
     ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
     ("@html", 0, |_, cv| {
         box_once(Ok(Val::str(
-            html_escape::encode_safe(&cv.1.to_string_or_clone()).to_string(),
+            html_escape::encode_safe(&cv.1.to_string_or_clone()).into_owned(),
         )))
     }),
     ("@uri", 0, |_, cv| {
         box_once(Ok(Val::str(
-            urlencoding::encode(&cv.1.to_string_or_clone()).to_string(),
+            urlencoding::encode(&cv.1.to_string_or_clone()).into_owned(),
         )))
     }),
     ("@urid", 0, |_, cv| {
         box_once(
             urlencoding::decode(&cv.1.to_string_or_clone())
                 .map_err(Error::from_any)
-                .map(|s| Val::str(s.to_string())),
+                .map(|s| Val::str(s.into_owned())),
         )
     }),
     ("@csv", 0, |_, cv| {
@@ -455,7 +455,7 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
     }),
     ("@sh", 0, |_, cv| {
         box_once(Ok(Val::str(
-            shell_escape::escape(cv.1.to_string_or_clone().into()).to_string(),
+            shell_escape::escape(cv.1.to_string_or_clone().into()).into_owned(),
         )))
     }),
     ("@base64", 0, |_, cv| {
