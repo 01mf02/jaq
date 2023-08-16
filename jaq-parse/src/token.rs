@@ -106,29 +106,31 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
 
     let var = just('$').ignore_then(text::ident());
 
-    let format_filter = just('@').chain(text::ident()).collect();
-
     // A parser for control characters (delimiters, semicolons, etc.)
     let ctrl = one_of("{}()[]:;,?");
 
     // A parser for identifiers and keywords
-    let ident = text::ident().map(|ident: String| match ident.as_str() {
-        "def" => Token::Def,
-        "if" => Token::If,
-        "then" => Token::Then,
-        "elif" => Token::Elif,
-        "else" => Token::Else,
-        "end" => Token::End,
-        "or" => Token::Or,
-        "and" => Token::And,
-        "as" => Token::As,
-        "reduce" => Token::Reduce,
-        "for" => Token::For,
-        "foreach" => Token::Foreach,
-        "try" => Token::Try,
-        "catch" => Token::Catch,
-        _ => Token::Ident(ident),
-    });
+    let ident = just('@')
+        .or_not()
+        .chain::<char, String, _>(text::ident())
+        .collect()
+        .map(|ident: String| match ident.as_str() {
+            "def" => Token::Def,
+            "if" => Token::If,
+            "then" => Token::Then,
+            "elif" => Token::Elif,
+            "else" => Token::Else,
+            "end" => Token::End,
+            "or" => Token::Or,
+            "and" => Token::And,
+            "as" => Token::As,
+            "reduce" => Token::Reduce,
+            "for" => Token::For,
+            "foreach" => Token::Foreach,
+            "try" => Token::Try,
+            "catch" => Token::Catch,
+            _ => Token::Ident(ident),
+        });
 
     // A single token can be one of the above
     ident
@@ -137,7 +139,6 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
         .or(var.map(Token::Var))
-        .or(format_filter.map(Token::Ident))
         .or(num().map(Token::Num))
         .or(str_().map(Token::Str))
         .recover_with(skip_then_retry_until([]))

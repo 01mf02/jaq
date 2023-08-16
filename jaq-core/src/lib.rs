@@ -15,7 +15,7 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec, vec::Vec};
 use jaq_interpret::results::{box_once, run_if_ok, then};
 use jaq_interpret::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
 use jaq_interpret::{Error, Val, ValR, ValRs};
@@ -406,13 +406,6 @@ const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
 )];
 
 #[cfg(feature = "format")]
-fn stringify(v: Val) -> String {
-    v.clone()
-        .to_str()
-        .map_or_else(|_| v.to_string(), |s| s.to_string())
-}
-
-#[cfg(feature = "format")]
 fn to_csv(vs: &[Val], delimiter: u8) -> ValR {
     use csv::{StringRecord, WriterBuilder};
     let mut writer = WriterBuilder::new()
@@ -420,7 +413,7 @@ fn to_csv(vs: &[Val], delimiter: u8) -> ValR {
         .from_writer(vec![]);
     let record = StringRecord::from(
         vs.iter()
-            .map(|cell| stringify(cell.clone()))
+            .map(|v| v.clone().to_string_or_clone())
             .collect::<Vec<_>>(),
     );
     writer.write_record(&record).map_err(Error::from_any)?;
@@ -433,21 +426,23 @@ fn to_csv(vs: &[Val], delimiter: u8) -> ValR {
 
 #[cfg(feature = "format")]
 const FORMAT: &[(&str, usize, RunPtr)] = &[
-    ("@text", 0, |_, cv| box_once(Ok(Val::str(stringify(cv.1))))),
+    ("@text", 0, |_, cv| {
+        box_once(Ok(Val::str(cv.1.to_string_or_clone())))
+    }),
     ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
     ("@html", 0, |_, cv| {
         box_once(Ok(Val::str(
-            html_escape::encode_safe(&stringify(cv.1)).to_string(),
+            html_escape::encode_safe(&cv.1.to_string_or_clone()).to_string(),
         )))
     }),
     ("@uri", 0, |_, cv| {
         box_once(Ok(Val::str(
-            urlencoding::encode(&stringify(cv.1)).to_string(),
+            urlencoding::encode(&cv.1.to_string_or_clone()).to_string(),
         )))
     }),
     ("@urid", 0, |_, cv| {
         box_once(
-            urlencoding::decode(&stringify(cv.1))
+            urlencoding::decode(&cv.1.to_string_or_clone())
                 .map_err(Error::from_any)
                 .map(|s| Val::str(s.to_string())),
         )
@@ -460,25 +455,24 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
     }),
     ("@sh", 0, |_, cv| {
         box_once(Ok(Val::str(
-            shell_escape::escape(stringify(cv.1).into()).to_string(),
+            shell_escape::escape(cv.1.to_string_or_clone().into()).to_string(),
         )))
     }),
     ("@base64", 0, |_, cv| {
         use base64::{engine::general_purpose, Engine as _};
         box_once(Ok(Val::str(
-            general_purpose::STANDARD.encode(stringify(cv.1)),
+            general_purpose::STANDARD.encode(cv.1.to_string_or_clone()),
         )))
     }),
     ("@base64d", 0, |_, cv| {
         use base64::{engine::general_purpose, Engine as _};
         box_once(
             general_purpose::STANDARD
-                .decode(stringify(cv.1))
+                .decode(cv.1.to_string_or_clone())
                 .map_err(Error::from_any)
                 .and_then(|d| {
                     std::str::from_utf8(&d)
-                        .map_err(Error::from_any)
-                        .map(|s| Val::str(s.to_string()))
+                        .map_or_else(|e| Err(Error::from_any(e)), |s| Ok(Val::str(s.to_owned())))
                 }),
         )
     }),

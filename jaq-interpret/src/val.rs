@@ -55,8 +55,8 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 
 impl Val {
     /// Construct a string value.
-    pub fn str(s: String) -> Self {
-        Self::Str(s.into())
+    pub fn str(s: impl Into<String>) -> Self {
+        Self::Str(Rc::new(s.into()))
     }
 
     /// Construct an array value.
@@ -106,6 +106,15 @@ impl Val {
         match self {
             Self::Str(s) => Ok(s),
             _ => Err(Error::Str(self.clone())),
+        }
+    }
+
+    /// If the value is a Str, extract the inner string, else convert
+    /// it to string.
+    pub fn to_string_or_clone(self) -> String {
+        match self {
+            Self::Str(s) => s.to_string(),
+            _ => self.to_string(),
         }
     }
 
