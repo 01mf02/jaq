@@ -470,7 +470,8 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
                 .map_err(Error::from_any)
                 .and_then(|d| {
                     std::str::from_utf8(&d)
-                        .map_or_else(|e| Err(Error::from_any(e)), |s| Ok(Val::str(s.to_owned())))
+                        .map_err(Error::from_any)
+                        .map(|s| Val::str(s.to_owned()))
                 }),
         )
     }),
