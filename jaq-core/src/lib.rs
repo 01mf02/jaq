@@ -142,6 +142,21 @@ where
     f(s, other).map_or_else(|| s.clone(), |stripped| Rc::new(stripped.into()))
 }
 
+fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
+    let fail = || alloc::format!("invalid value in a table row: {v}");
+    Ok(match v {
+        Val::Null => "".to_owned(),
+        Val::Str(s) => f(s),
+        Val::Arr(_) | Val::Obj(_) => return Err(Error::from_any(fail())),
+        v => v.to_string(),
+    })
+}
+
+fn to_csv(vs: &[Val]) -> Result<String, Error> {
+    let fr = |v| fmt_row(v, |s| alloc::format!("\"{}\"", s.replace('"', "\"\"")));
+    Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join(","))
+}
+
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs().map(|r| r.map_err(Error::Parse)))
@@ -257,6 +272,13 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
             })))
         }))
     }),
+    ("@text", 0, |_, cv| {
+        box_once(Ok(Val::str(cv.1.to_string_or_clone())))
+    }),
+    ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
+    ("@csv", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
+    }),
 ];
 
 #[cfg(feature = "std")]
@@ -270,6 +292,66 @@ fn now() -> Result<f64, Error> {
 
 #[cfg(feature = "std")]
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+
+#[cfg(feature = "format")]
+fn to_tsv(vs: &[Val]) -> Result<String, Error> {
+    let fs = |s: &str| {
+        let patterns = &["\n", "\r", "\t", "\\"];
+        let replace_with = &["\\n", "\\r", "\\t", "\\\\"];
+        let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
+        ac.replace_all(s, replace_with)
+    };
+    let fr = |v| fmt_row(v, fs);
+    Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join("\t"))
+}
+
+#[cfg(feature = "format")]
+const FORMAT: &[(&str, usize, RunPtr)] = &[
+    ("@tsv", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
+    }),
+    ("@html", 0, |_, cv| {
+        box_once(Ok(Val::str(
+            html_escape::encode_safe(&cv.1.to_string_or_clone()).into_owned(),
+        )))
+    }),
+    ("@uri", 0, |_, cv| {
+        box_once(Ok(Val::str(
+            urlencoding::encode(&cv.1.to_string_or_clone()).into_owned(),
+        )))
+    }),
+    ("@urid", 0, |_, cv| {
+        box_once(
+            urlencoding::decode(&cv.1.to_string_or_clone())
+                .map_err(Error::from_any)
+                .map(|s| Val::str(s.into_owned())),
+        )
+    }),
+    ("@sh", 0, |_, cv| {
+        box_once(Ok(Val::str(
+            shell_escape::escape(cv.1.to_string_or_clone().into()).into_owned(),
+        )))
+    }),
+    ("@base64", 0, |_, cv| {
+        use base64::{engine::general_purpose, Engine as _};
+        box_once(Ok(Val::str(
+            general_purpose::STANDARD.encode(cv.1.to_string_or_clone()),
+        )))
+    }),
+    ("@base64d", 0, |_, cv| {
+        use base64::{engine::general_purpose, Engine as _};
+        box_once(
+            general_purpose::STANDARD
+                .decode(cv.1.to_string_or_clone())
+                .map_err(Error::from_any)
+                .and_then(|d| {
+                    std::str::from_utf8(&d)
+                        .map_err(Error::from_any)
+                        .map(|s| Val::str(s.to_owned()))
+                }),
+        )
+    }),
+];
 
 #[cfg(feature = "math")]
 const MATH: &[(&str, usize, RunPtr)] = &[
@@ -404,86 +486,3 @@ const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
     |_, cv| box_once(Ok(debug(cv.1))),
     |_, cv, f| f(debug(cv.1)),
 )];
-
-fn to_csv(vs: &[Val]) -> Result<String, Error> {
-    let fail = |v: &Val| alloc::format!("invalid value in a CSV row: {v}");
-    let f = |v: &Val| match v {
-        Val::Null => Ok("".to_owned()),
-        Val::Str(s) => Ok(alloc::format!("\"{}\"", s.replace('"', "\"\""))),
-        Val::Arr(_) | Val::Obj(_) => Err(Error::from_any(fail(v))),
-        v => Ok(v.to_string()),
-    };
-    Ok(vs.iter().map(f).collect::<Result<Vec<_>, _>>()?.join(","))
-}
-
-#[cfg(feature = "format")]
-fn to_tsv(vs: &[Val]) -> Result<String, Error> {
-    let fail = |v: &Val| alloc::format!("invalid value in a TSV row: {v}");
-    let f = |v: &Val| match v {
-        Val::Null => Ok("".to_owned()),
-        Val::Str(s) => {
-            let patterns = &["\n", "\r", "\t", "\\"];
-            let replace_with = &["\\n", "\\r", "\\t", "\\\\"];
-            let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
-            Ok(ac.replace_all(s, replace_with))
-        }
-        Val::Arr(_) | Val::Obj(_) => Err(Error::from_any(fail(v))),
-        v => Ok(v.to_string()),
-    };
-    Ok(vs.iter().map(f).collect::<Result<Vec<_>, _>>()?.join("\t"))
-}
-
-#[cfg(feature = "format")]
-const FORMAT: &[(&str, usize, RunPtr)] = &[
-    ("@text", 0, |_, cv| {
-        box_once(Ok(Val::str(cv.1.to_string_or_clone())))
-    }),
-    ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
-    ("@csv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
-    }),
-    ("@tsv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
-    }),
-    ("@html", 0, |_, cv| {
-        box_once(Ok(Val::str(
-            html_escape::encode_safe(&cv.1.to_string_or_clone()).into_owned(),
-        )))
-    }),
-    ("@uri", 0, |_, cv| {
-        box_once(Ok(Val::str(
-            urlencoding::encode(&cv.1.to_string_or_clone()).into_owned(),
-        )))
-    }),
-    ("@urid", 0, |_, cv| {
-        box_once(
-            urlencoding::decode(&cv.1.to_string_or_clone())
-                .map_err(Error::from_any)
-                .map(|s| Val::str(s.into_owned())),
-        )
-    }),
-    ("@sh", 0, |_, cv| {
-        box_once(Ok(Val::str(
-            shell_escape::escape(cv.1.to_string_or_clone().into()).into_owned(),
-        )))
-    }),
-    ("@base64", 0, |_, cv| {
-        use base64::{engine::general_purpose, Engine as _};
-        box_once(Ok(Val::str(
-            general_purpose::STANDARD.encode(cv.1.to_string_or_clone()),
-        )))
-    }),
-    ("@base64d", 0, |_, cv| {
-        use base64::{engine::general_purpose, Engine as _};
-        box_once(
-            general_purpose::STANDARD
-                .decode(cv.1.to_string_or_clone())
-                .map_err(Error::from_any)
-                .and_then(|d| {
-                    std::str::from_utf8(&d)
-                        .map_err(Error::from_any)
-                        .map(|s| Val::str(s.to_owned()))
-                }),
-        )
-    }),
-];
