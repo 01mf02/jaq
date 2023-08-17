@@ -413,7 +413,7 @@ fn to_csv(vs: &[Val], delimiter: u8) -> Result<String, Error> {
         .from_writer(vec![]);
     let record = StringRecord::from(
         vs.iter()
-            .map(|v| v.clone().to_string_or_clone())
+            .map(|v| v.to_string_or_clone())
             .collect::<Vec<_>>(),
     );
     writer.write_record(&record).map_err(Error::from_any)?;
