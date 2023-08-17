@@ -36,20 +36,20 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
 /// Does not return filters from the standard library, such as `map`.
 #[cfg(all(
     feature = "std",
+    feature = "format",
     feature = "log",
     feature = "math",
     feature = "regex",
     feature = "time",
-    feature = "format"
 ))]
 pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     minimal()
         .chain(run(STD))
+        .chain(run(FORMAT))
         .chain(upd(LOG))
         .chain(run(MATH))
         .chain(run(REGEX))
         .chain(run(TIME))
-        .chain(run(FORMAT))
 }
 
 fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
@@ -405,21 +405,32 @@ const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
     |_, cv, f| f(debug(cv.1)),
 )];
 
+fn to_csv(vs: &[Val]) -> Result<String, Error> {
+    let fail = |v: &Val| alloc::format!("invalid value in a CSV row: {v}");
+    let f = |v: &Val| match v {
+        Val::Null => Ok("".to_owned()),
+        Val::Str(s) => Ok(alloc::format!("\"{}\"", s.replace('"', "\"\""))),
+        Val::Arr(_) | Val::Obj(_) => Err(Error::from_any(fail(v))),
+        v => Ok(v.to_string()),
+    };
+    Ok(vs.iter().map(f).collect::<Result<Vec<_>, _>>()?.join(","))
+}
+
 #[cfg(feature = "format")]
-fn to_csv(vs: &[Val], delimiter: u8) -> Result<String, Error> {
-    use csv::{StringRecord, WriterBuilder};
-    let mut writer = WriterBuilder::new()
-        .delimiter(delimiter)
-        .from_writer(vec![]);
-    let record = StringRecord::from(
-        vs.iter()
-            .map(|v| v.to_string_or_clone())
-            .collect::<Vec<_>>(),
-    );
-    writer.write_record(&record).map_err(Error::from_any)?;
-    String::from_utf8(writer.into_inner().map_err(Error::from_any)?)
-        .map_err(Error::from_any)
-        .map(|s| s[0..s.len() - 1].to_string())
+fn to_tsv(vs: &[Val]) -> Result<String, Error> {
+    let fail = |v: &Val| alloc::format!("invalid value in a TSV row: {v}");
+    let f = |v: &Val| match v {
+        Val::Null => Ok("".to_owned()),
+        Val::Str(s) => {
+            let patterns = &["\n", "\r", "\t", "\\"];
+            let replace_with = &["\\n", "\\r", "\\t", "\\\\"];
+            let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
+            Ok(ac.replace_all(s, replace_with))
+        }
+        Val::Arr(_) | Val::Obj(_) => Err(Error::from_any(fail(v))),
+        v => Ok(v.to_string()),
+    };
+    Ok(vs.iter().map(f).collect::<Result<Vec<_>, _>>()?.join("\t"))
 }
 
 #[cfg(feature = "format")]
@@ -428,6 +439,12 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
         box_once(Ok(Val::str(cv.1.to_string_or_clone())))
     }),
     ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
+    ("@csv", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
+    }),
+    ("@tsv", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
+    }),
     ("@html", 0, |_, cv| {
         box_once(Ok(Val::str(
             html_escape::encode_safe(&cv.1.to_string_or_clone()).into_owned(),
@@ -444,12 +461,6 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
                 .map_err(Error::from_any)
                 .map(|s| Val::str(s.into_owned())),
         )
-    }),
-    ("@csv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b',')).map(Val::str))
-    }),
-    ("@tsv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|vs| to_csv(vs, b'\t')).map(Val::str))
     }),
     ("@sh", 0, |_, cv| {
         box_once(Ok(Val::str(
