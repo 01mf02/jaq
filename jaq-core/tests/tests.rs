@@ -76,13 +76,8 @@ yields!(
 );
 yields!(
     format_uri,
-    r#""hello cruel world" | @uri"#,
-    "hello%20cruel%20world"
-);
-yields!(
-    format_unformat_uri,
-    r#""hello cruel world" | @uri | @urid"#,
-    "hello cruel world"
+    r#""abc123 ?#+&[]" | @uri"#,
+    "abc123%20%3F%23%2B%26%5B%5D"
 );
 yields!(
     format_csv,
@@ -103,6 +98,28 @@ yields!(
     format_unformat_base64,
     r#""hello cruel world" | @base64 | @base64d"#,
     "hello cruel world"
+);
+yields!(
+    format_sh,
+    r#"[0, 0 == 0, {}.a, "plain", "sudo!", ["sudo!", "~/*.txt"] | @sh]"#,
+    [
+        "0",
+        "true",
+        "null",
+        "plain",       // here jq wraps it anyway into "'plain'"
+        "'sudo'\\!''", // here jq doesn't escape the '!'
+        "'sudo'\\!'' '~/*.txt'",
+    ]
+);
+yields!(
+    format_sh_rejects_objects,
+    r#"{a: "b"} | try @sh catch ."#,
+    "object ({\"a\":\"b\"}) can not be escaped for shell"
+);
+yields!(
+    format_sh_rejects_nested_arrays,
+    r#"["fine", "also fine", "but", []] | try @sh catch ."#,
+    "array ([]) can not be escaped for shell"
 );
 
 #[test]

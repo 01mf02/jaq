@@ -322,17 +322,28 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
             urlencoding::encode(&cv.1.to_string_or_clone()).into_owned(),
         )))
     }),
-    ("@urid", 0, |_, cv| {
-        box_once(
-            urlencoding::decode(&cv.1.to_string_or_clone())
-                .map_err(Error::from_any)
-                .map(|s| Val::str(s.into_owned())),
-        )
-    }),
     ("@sh", 0, |_, cv| {
-        box_once(Ok(Val::str(
-            shell_escape::escape(cv.1.to_string_or_clone().into()).into_owned(),
-        )))
+        let fail = |kind, v| {
+            Err(Error::from_any(alloc::format!(
+                "{} ({}) can not be escaped for shell",
+                kind,
+                v
+            )))
+        };
+        let escape_primitive = |v| match v {
+            Val::Arr(_) => fail("array", v),
+            Val::Obj(_) => fail("object", v),
+            _ => Ok(shell_escape::escape(v.to_string_or_clone().into()).into_owned()),
+        };
+        let escaped = match cv.1 {
+            Val::Arr(vs) => vs
+                .iter()
+                .map(|v| escape_primitive(v.clone()))
+                .collect::<Result<Vec<_>, _>>()
+                .map(|ss| ss.join(" ")),
+            _ => escape_primitive(cv.1),
+        };
+        box_once(escaped.map(Val::str))
     }),
     ("@base64", 0, |_, cv| {
         use base64::{engine::general_purpose, Engine as _};
