@@ -61,27 +61,27 @@ fn first_last() {
 
 yields!(
     format_text,
-    "[0, 0 == 0, {}.a, \"hello\", {}, [] | @text]",
+    r#"[0, 0 == 0, {}.a, "hello", {}, [] | @text]"#,
     ["0", "true", "null", "hello", "{}", "[]"]
 );
 yields!(
     format_json,
-    "[0, 0 == 0, {}.a, \"hello\", {}, [] | @json]",
+    r#"[0, 0 == 0, {}.a, "hello", {}, [] | @json]"#,
     ["0", "true", "null", "\"hello\"", "{}", "[]"]
 );
 yields!(
     format_html,
-    "\"<p style='visibility: hidden'>sneaky</p>\" | @html",
-    "&lt;p style=&#x27;visibility: hidden&#x27;&gt;sneaky&lt;&#x2F;p&gt;"
+    r#""<p style='visibility: hidden'>sneaky</p>" | @html"#,
+    "&lt;p style=&apos;visibility: hidden&apos;&gt;sneaky&lt;/p&gt;"
 );
 yields!(
     format_uri,
-    "\"hello cruel world\" | @uri",
+    r#""hello cruel world" | @uri"#,
     "hello%20cruel%20world"
 );
 yields!(
     format_unformat_uri,
-    "\"hello cruel world\" | @uri | @urid",
+    r#""hello cruel world" | @uri | @urid"#,
     "hello cruel world"
 );
 yields!(
@@ -91,17 +91,17 @@ yields!(
 );
 yields!(
     format_tsv,
-    "[0, 0 == 0, {}.a, \"hello \\\"quotes\\\" and \\n\\r\\t\\\\ escapes\"] | @tsv",
+    r#"[0, 0 == 0, {}.a, "hello \"quotes\" and \n\r\t\\ escapes"] | @tsv"#,
     "0\ttrue\t\thello \"quotes\" and \\n\\r\\t\\\\ escapes"
 );
 yields!(
     format_base64,
-    "\"hello cruel world\" | @base64",
+    r#""hello cruel world" | @base64"#,
     "aGVsbG8gY3J1ZWwgd29ybGQ="
 );
 yields!(
     format_unformat_base64,
-    "\"hello cruel world\" | @base64 | @base64d",
+    r#""hello cruel world" | @base64 | @base64d"#,
     "hello cruel world"
 );
 

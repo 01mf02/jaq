@@ -294,13 +294,14 @@ fn now() -> Result<f64, Error> {
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
 
 #[cfg(feature = "format")]
+fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
+    let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
+    ac.replace_all(s, replacements)
+}
+
+#[cfg(feature = "format")]
 fn to_tsv(vs: &[Val]) -> Result<String, Error> {
-    let fs = |s: &str| {
-        let patterns = &["\n", "\r", "\t", "\\"];
-        let replace_with = &["\\n", "\\r", "\\t", "\\\\"];
-        let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
-        ac.replace_all(s, replace_with)
-    };
+    let fs = |s: &str| replace(s, &["\n", "\r", "\t", "\\"], &["\\n", "\\r", "\\t", "\\\\"]);
     let fr = |v| fmt_row(v, fs);
     Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join("\t"))
 }
@@ -311,9 +312,10 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
         box_once(cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
     }),
     ("@html", 0, |_, cv| {
-        box_once(Ok(Val::str(
-            html_escape::encode_safe(&cv.1.to_string_or_clone()).into_owned(),
-        )))
+        let s = cv.1.to_string_or_clone();
+        let patterns = ["<", ">", "&", "\'", "\""];
+        let replacements = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
+        box_once(Ok(Val::str(replace(&s, &patterns, &replacements))))
     }),
     ("@uri", 0, |_, cv| {
         box_once(Ok(Val::str(
