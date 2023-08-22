@@ -142,6 +142,15 @@ where
     f(s, other).map_or_else(|| s.clone(), |stripped| Rc::new(stripped.into()))
 }
 
+fn to_sh(v: &Val) -> Result<String, Error> {
+    let fail = || alloc::format!("cannot escape for shell: {v}");
+    Ok(match v {
+        Val::Str(s) => alloc::format!("'{}'", s.replace('\'', r#"'\''"#)),
+        Val::Arr(_) | Val::Obj(_) => return Err(Error::from_any(fail())),
+        v => v.to_string(),
+    })
+}
+
 fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
     let fail = || alloc::format!("invalid value in a table row: {v}");
     Ok(match v {
@@ -276,6 +285,14 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         box_once(Ok(Val::str(cv.1.to_string_or_clone())))
     }),
     ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
+    ("@sh", 0, |_, cv| {
+        let vs = match &cv.1 {
+            Val::Arr(a) => Box::new(a.iter()),
+            v => box_once(v),
+        };
+        let ss = vs.map(to_sh).collect::<Result<Vec<_>, _>>();
+        box_once(ss.map(|ss| Val::str(ss.join(" "))))
+    }),
     ("@csv", 0, |_, cv| {
         box_once(cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
     }),
@@ -321,29 +338,6 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
         box_once(Ok(Val::str(
             urlencoding::encode(&cv.1.to_string_or_clone()).into_owned(),
         )))
-    }),
-    ("@sh", 0, |_, cv| {
-        let fail = |kind, v| {
-            Err(Error::from_any(alloc::format!(
-                "{} ({}) can not be escaped for shell",
-                kind,
-                v
-            )))
-        };
-        let escape_primitive = |v| match v {
-            Val::Arr(_) => fail("array", v),
-            Val::Obj(_) => fail("object", v),
-            _ => Ok(shell_escape::escape(v.to_string_or_clone().into()).into_owned()),
-        };
-        let escaped = match cv.1 {
-            Val::Arr(vs) => vs
-                .iter()
-                .map(|v| escape_primitive(v.clone()))
-                .collect::<Result<Vec<_>, _>>()
-                .map(|ss| ss.join(" ")),
-            _ => escape_primitive(cv.1),
-        };
-        box_once(escaped.map(Val::str))
     }),
     ("@base64", 0, |_, cv| {
         use base64::{engine::general_purpose, Engine as _};

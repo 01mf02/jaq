@@ -101,25 +101,18 @@ yields!(
 );
 yields!(
     format_sh,
-    r#"[0, 0 == 0, {}.a, "plain", "sudo!", ["sudo!", "~/*.txt"] | @sh]"#,
-    [
-        "0",
-        "true",
-        "null",
-        "plain",       // here jq wraps it anyway into "'plain'"
-        "'sudo'\\!''", // here jq doesn't escape the '!'
-        "'sudo'\\!'' '~/*.txt'",
-    ]
+    r#"[0, 0 == 0, {}.a, "O'Hara!", ["Here", "there"] | @sh]"#,
+    ["0", "true", "null", r#"'O'\''Hara!'"#, r#"'Here' 'there'"#,]
 );
 yields!(
     format_sh_rejects_objects,
-    r#"{a: "b"} | try @sh catch ."#,
-    "object ({\"a\":\"b\"}) can not be escaped for shell"
+    r#"{a: "b"} | try @sh catch -1"#,
+    -1
 );
 yields!(
     format_sh_rejects_nested_arrays,
-    r#"["fine", "also fine", "but", []] | try @sh catch ."#,
-    "array ([]) can not be escaped for shell"
+    r#"["fine, but", []] | try @sh catch -1"#,
+    -1
 );
 
 #[test]
