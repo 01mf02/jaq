@@ -33,7 +33,7 @@ def significand:
   elif . == 0.0 then 0.0
   else scalbln(.; ilogb | -1 * .) end;
 def pow10:            pow(10.0; .);
-def drem($l; r):      remainder($l; r) | if . == 0 then copysign(.; $l) else . end;
+def drem($l; r):      remainder($l; r) | if . == 0 then copysign(.; $l) end;
 def nexttoward(x; y): nextafter(x; y);
 def scalb(x; e):      x * pow(2.0; e);
 
@@ -116,7 +116,7 @@ def inside(xs): . as $x | xs | contains($x);
 def walk(f): def rec: (.[]? |= rec) | f; rec;
 
 def flatten: [recurse(arrays | .[]) | select(isarray | not)];
-def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) | add else . end;
+def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) | add end;
 
 # Regular expressions
 def capture_of_match: map(select(.name) | { (.name): .string} ) | add + {};

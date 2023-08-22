@@ -21,7 +21,7 @@ where
     let else_ = just(Token::Else).ignore_then(filter.map(Box::new));
     if_.then(then.clone())
         .chain(elif.then(then).repeated())
-        .then(else_)
+        .then(else_.or_not())
         .then_ignore(just(Token::End))
         .map_with_span(|(if_thens, else_), span| (Filter::Ite(if_thens, else_), span))
 }
