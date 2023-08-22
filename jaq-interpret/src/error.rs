@@ -12,6 +12,7 @@ pub enum Error {
     /// `0 | error`
     Val(Val),
 
+    /// Expected a value of given type, but got something else
     Type(Val, Type),
     /// `1 - "a"`
     MathOp(Val, jaq_syn::MathOp, Val),
@@ -24,6 +25,7 @@ pub enum Error {
     PathExp,
 }
 
+/// Types and sets of types.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Type {
@@ -37,9 +39,9 @@ pub enum Type {
     Str,
     /// `0 | sort` or `0 | implode` or `[] | .[0:] = 0`
     Arr,
-    /// `0 | .[]` or `0 | .[0]` or `0 | keys`
+    /// `0 | .[]` or `0 | .[0]` or `0 | keys` (array or object)
     Iter,
-
+    /// `{}[0:1]` (string or array)
     Range,
 }
 
