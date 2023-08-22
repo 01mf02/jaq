@@ -109,6 +109,15 @@ impl Val {
         }
     }
 
+    /// If the value is a Str, extract the inner string, else convert
+    /// it to string.
+    pub fn to_string_or_clone(&self) -> String {
+        match self {
+            Self::Str(s) => (**s).clone(),
+            _ => self.to_string(),
+        }
+    }
+
     /// If the value is an array, return it, else fail.
     pub fn into_arr(self) -> Result<Rc<Vec<Val>>, Error> {
         match self {
@@ -118,7 +127,7 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    fn as_arr(&self) -> Result<&Rc<Vec<Val>>, Error> {
+    pub fn as_arr(&self) -> Result<&Rc<Vec<Val>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Arr(self.clone())),

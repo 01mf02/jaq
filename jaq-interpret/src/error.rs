@@ -60,9 +60,14 @@ impl Error {
     /// Convert the error into a value to be used by `catch` filters.
     pub fn as_val(self) -> Val {
         match self {
-            Error::Val(ev) => ev,
+            Self::Val(ev) => ev,
             _ => Val::str(self.to_string()),
         }
+    }
+
+    /// Build an error from anything stringifyable.
+    pub fn from_any(s: impl ToString) -> Self {
+        Self::Val(Val::str(s.to_string()))
     }
 }
 
