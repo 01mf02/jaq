@@ -191,7 +191,7 @@ Here is an overview that summarises:
 - [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
 - [x] Error handling (`try ... catch ...`) (see the [differences from jq](#error-handling))
 - [ ] String interpolation
-- [x] Format strings (`@csv`, `@html`, `@json`)
+- [x] Format strings (`@json`, `@text`, `@csv`, `@tsv`, `@html`, `@sh`, `@base64`, `@base64d`)
 
 
 ## Paths
