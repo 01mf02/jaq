@@ -110,11 +110,8 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     let ctrl = one_of("{}()[]:;,?");
 
     // A parser for identifiers and keywords
-    let ident = just('@')
-        .or_not()
-        .chain::<char, String, _>(text::ident())
-        .collect();
-    let ident = ident.map(|ident: String| match ident.as_str() {
+    let ident = just('@').or_not().chain::<char, _, _>(text::ident());
+    let ident = ident.collect().map(|ident: String| match ident.as_str() {
         "def" => Token::Def,
         "if" => Token::If,
         "then" => Token::Then,
