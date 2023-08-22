@@ -278,6 +278,7 @@ version = "1.0.0-beta"
 dependencies = [
  "aho-corasick",
  "base64",
+ "hifijson",
  "itertools",
  "jaq-interpret",
  "jaq-parse",

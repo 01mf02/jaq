@@ -3,7 +3,7 @@ use jaq_interpret::{Error, Val};
 /// Use a value as an i32 to be given as an argument to a libm
 /// function.
 pub fn as_i32(v: &Val) -> Result<i32, Error> {
-    v.as_int()?.try_into().map_err(|_| Error::Int(v.clone()))
+    v.as_int()?.try_into().map_err(Error::str)
 }
 
 /// Build a 0-ary filter from a 1-ary math function.
@@ -44,10 +44,10 @@ pub(crate) use f_i;
 /// Build a filter from float to (float, int)
 macro_rules! f_fi {
     ($name: expr, $f: ident) => {
-        crate::math::math_0_ary!($name, $f, Val::as_float, |(x, y)| Val::arr(vec![
+        crate::math::math_0_ary!($name, $f, Val::as_float, |(x, y)| Val::arr(Vec::from([
             Val::Float(x),
             Val::Int(y as isize)
-        ]))
+        ])))
     };
     ($f: ident) => {
         crate::math::f_fi!(stringify!($f), $f)
@@ -59,10 +59,10 @@ pub(crate) use f_fi;
 /// Build a filter from float to (float, float)
 macro_rules! f_ff {
     ($name: expr, $f: ident) => {
-        crate::math::math_0_ary!($name, $f, Val::as_float, |(x, y)| Val::arr(vec![
+        crate::math::math_0_ary!($name, $f, Val::as_float, |(x, y)| Val::arr(Vec::from([
             Val::Float(x),
             Val::Float(y)
-        ]))
+        ])))
     };
     ($f: ident) => {
         crate::math::f_ff!(stringify!($f), $f)

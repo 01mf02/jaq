@@ -10,13 +10,15 @@ repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 
 [features]
-default = ["std", "format", "log", "math", "regex", "time"]
+default = ["std", "format", "log", "math", "parse_json", "regex", "time"]
 std = []
 format = ["aho-corasick", "base64", "urlencoding"]
 math = ["libm"]
+parse_json = ["hifijson"]
 
 [dependencies]
 jaq-interpret = { version = "1.0.0-beta", path = "../jaq-interpret" }
+hifijson = { version = "0.2.0", optional = true }
 time = { version = "0.3.22", optional = true, features = ["formatting", "parsing"] }
 regex = { version = "1.9", optional = true }
 log = { version = "0.4.17", optional = true }

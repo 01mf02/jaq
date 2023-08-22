@@ -15,7 +15,7 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, format, rc::Rc, vec::Vec};
 use jaq_interpret::results::{box_once, run_if_ok, then};
 use jaq_interpret::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
 use jaq_interpret::{Error, Val, ValR, ValRs};
@@ -39,6 +39,7 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
     feature = "format",
     feature = "log",
     feature = "math",
+    feature = "parse_json",
     feature = "regex",
     feature = "time",
 ))]
@@ -48,6 +49,7 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         .chain(run(FORMAT))
         .chain(upd(LOG))
         .chain(run(MATH))
+        .chain(run(PARSE_JSON))
         .chain(run(REGEX))
         .chain(run(TIME))
 }
@@ -69,6 +71,23 @@ fn upd<'a>(
 // <https://github.com/rust-lang/rust/issues/93610>
 fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+}
+
+/// Return 0 for null, the absolute value for numbers, and
+/// the length for strings, arrays, and objects.
+///
+/// Fail on booleans.
+fn length(v: &Val) -> ValR {
+    match v {
+        Val::Null => Ok(Val::Int(0)),
+        Val::Bool(_) => Err(Error::str(format!("{v} has no length"))),
+        Val::Int(i) => Ok(Val::Int(i.abs())),
+        Val::Num(n) => length(&Val::from_dec_str(n)),
+        Val::Float(f) => Ok(Val::Float(f.abs())),
+        Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
+        Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
+        Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
+    }
 }
 
 /// Sort array by the given function.
@@ -123,6 +142,27 @@ where
     Ok(mx)
 }
 
+/// Convert a string into an array of its Unicode codepoints.
+fn explode(s: &str) -> Result<Vec<Val>, Error> {
+    // conversion from u32 to isize may fail on 32-bit systems for high values of c
+    let conv = |c: char| Ok(Val::Int(isize::try_from(c as u32).map_err(Error::str)?));
+    s.chars().map(conv).collect()
+}
+
+/// Convert an array of Unicode codepoints into a string.
+fn implode(xs: &[Val]) -> Result<String, Error> {
+    xs.iter().map(as_codepoint).collect()
+}
+
+/// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
+fn as_codepoint(v: &Val) -> Result<char, Error> {
+    let i = v.as_int()?;
+    // conversion from isize to u32 may fail on 64-bit systems for high values of c
+    let u = u32::try_from(i).map_err(Error::str)?;
+    // may fail e.g. on `[1114112] | implode`
+    char::from_u32(u).ok_or(Error::str(format!("cannot use {u} as character")))
+}
+
 /// Split a string by a given separator string.
 fn split(s: &str, sep: &str) -> Vec<Val> {
     if sep.is_empty() {
@@ -143,49 +183,52 @@ where
 }
 
 fn to_sh(v: &Val) -> Result<String, Error> {
-    let fail = || alloc::format!("cannot escape for shell: {v}");
+    let fail = || format!("cannot escape for shell: {v}");
     Ok(match v {
-        Val::Str(s) => alloc::format!("'{}'", s.replace('\'', r#"'\''"#)),
-        Val::Arr(_) | Val::Obj(_) => return Err(Error::from_any(fail())),
+        Val::Str(s) => format!("'{}'", s.replace('\'', r#"'\''"#)),
+        Val::Arr(_) | Val::Obj(_) => return Err(Error::str(fail())),
         v => v.to_string(),
     })
 }
 
 fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
-    let fail = || alloc::format!("invalid value in a table row: {v}");
+    let fail = || format!("invalid value in a table row: {v}");
     Ok(match v {
         Val::Null => "".to_owned(),
         Val::Str(s) => f(s),
-        Val::Arr(_) | Val::Obj(_) => return Err(Error::from_any(fail())),
+        Val::Arr(_) | Val::Obj(_) => return Err(Error::str(fail())),
         v => v.to_string(),
     })
 }
 
 fn to_csv(vs: &[Val]) -> Result<String, Error> {
-    let fr = |v| fmt_row(v, |s| alloc::format!("\"{}\"", s.replace('"', "\"\"")));
+    let fr = |v| fmt_row(v, |s| format!("\"{}\"", s.replace('"', "\"\"")));
     Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join(","))
 }
 
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
-        Box::new(cv.0.inputs().map(|r| r.map_err(Error::Parse)))
+        Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
     }),
-    ("length", 0, |_, cv| box_once(cv.1.len())),
+    ("length", 0, |_, cv| box_once(length(&cv.1))),
     ("keys_unsorted", 0, |_, cv| {
         box_once(cv.1.keys_unsorted().map(Val::arr))
     }),
     ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
     ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
     ("ceil", 0, |_, cv| box_once(cv.1.round(|f| f.ceil()))),
-    ("fromjson", 0, |_, cv| box_once(cv.1.from_json())),
     ("tojson", 0, |_, cv| {
         box_once(Ok(Val::str(cv.1.to_string())))
     }),
     ("utf8bytelength", 0, |_, cv| {
         then(cv.1.as_str(), |s| box_once(Ok(Val::Int(s.len() as isize))))
     }),
-    ("explode", 0, |_, cv| box_once(cv.1.explode().map(Val::arr))),
-    ("implode", 0, |_, cv| box_once(cv.1.implode().map(Val::str))),
+    ("explode", 0, |_, cv| {
+        box_once(cv.1.as_str().and_then(|s| Ok(Val::arr(explode(s)?))))
+    }),
+    ("implode", 0, |_, cv| {
+        box_once(cv.1.as_arr().and_then(|a| Ok(Val::str(implode(a)?))))
+    }),
     ("ascii_downcase", 0, |_, cv| {
         box_once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
     }),
@@ -304,11 +347,26 @@ fn now() -> Result<f64, Error> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|x| x.as_secs_f64())
-        .map_err(|e| Error::Custom(e.to_string()))
+        .map_err(Error::str)
 }
 
 #[cfg(feature = "std")]
 const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+
+#[cfg(feature = "parse_json")]
+/// Convert string to a single JSON value.
+fn from_json(s: &str) -> ValR {
+    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
+    use hifijson::token::Lex;
+    lexer
+        .exactly_one(Val::parse)
+        .map_err(|e| Error::str(format!("cannot parse {s} as JSON: {e}")))
+}
+
+#[cfg(feature = "parse_json")]
+const PARSE_JSON: &[(&str, usize, RunPtr)] = &[("fromjson", 0, |_, cv| {
+    box_once(cv.1.as_str().and_then(|s| from_json(s)))
+})];
 
 #[cfg(feature = "format")]
 fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
@@ -350,10 +408,10 @@ const FORMAT: &[(&str, usize, RunPtr)] = &[
         box_once(
             general_purpose::STANDARD
                 .decode(cv.1.to_string_or_clone())
-                .map_err(Error::from_any)
+                .map_err(Error::str)
                 .and_then(|d| {
                     std::str::from_utf8(&d)
-                        .map_err(Error::from_any)
+                        .map_err(Error::str)
                         .map(|s| Val::str(s.to_owned()))
                 }),
         )

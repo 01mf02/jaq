@@ -1,6 +1,6 @@
+use crate::error::{Error, Type};
 use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
-use crate::Error;
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 pub use jaq_syn::path::Opt;
 
@@ -38,9 +38,9 @@ impl Part<Vec<Val>> {
                 })),
                 Val::Obj(o) => Box::new(indices.iter().map(move |i| match i {
                     Val::Str(s) => Ok(o.get(&**s).cloned().unwrap_or(Val::Null)),
-                    i => Err(Error::IndexWith(Val::Obj(o.clone()), i.clone())),
+                    i => Err(Error::Index(Val::Obj(o.clone()), i.clone())),
                 })),
-                _ => Box::new(once(Err(Error::Index(current)))),
+                _ => Box::new(once(Err(Error::Type(current, Type::Iter)))),
             },
             Self::Range(None, None) => then(current.try_into_iter(), |iter| Box::new(iter.map(Ok))),
             Self::Range(from, until) => match current {
@@ -62,7 +62,7 @@ impl Part<Vec<Val>> {
                         Ok(Val::str(s.chars().skip(skip).take(take).collect()))
                     }))
                 }
-                _ => Box::new(once(Err(Error::Index(current)))),
+                _ => Box::new(once(Err(Error::Type(current, Type::Range)))),
             },
         }
     }
@@ -106,7 +106,7 @@ impl Part<Vec<Val>> {
                                     }
                                 }
                             },
-                            (i, Essential) => return Err(Error::IndexWith(v, i.clone())),
+                            (i, Essential) => return Err(Error::Index(v, i.clone())),
                             (_, Optional) => (),
                         }
                     }
@@ -130,11 +130,11 @@ impl Part<Vec<Val>> {
                     }
                     Ok(v)
                 }
-                _ => opt.fail(v, Error::Index),
+                _ => opt.fail(v, |v| Error::Type(v, Type::Iter)),
             },
             Self::Range(None, None) => match v.try_map(&f)? {
                 y @ (Val::Arr(_) | Val::Obj(_)) => Ok(y),
-                v => opt.fail(v, Error::Iter),
+                v => opt.fail(v, |v| Error::Type(v, Type::Iter)),
             },
             Self::Range(from, until) => match v {
                 Val::Arr(ref mut a) => {
@@ -152,16 +152,12 @@ impl Part<Vec<Val>> {
 
                         let (skip, take) = skip_take(from, until);
                         let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
-                        let y = match f(arr).next().transpose()? {
-                            None => Vec::new(),
-                            Some(Val::Arr(y)) => (*y).clone(),
-                            Some(y) => return Err(Error::SliceAssign(y)),
-                        };
-                        a.splice(skip..skip + take, y);
+                        let y = f(arr).map(|y| y?.into_arr()).next().transpose()?;
+                        a.splice(skip..skip + take, (*y.unwrap_or_default()).clone());
                     }
                     Ok(v)
                 }
-                _ => opt.fail(v, Error::Iter),
+                _ => opt.fail(v, |v| Error::Type(v, Type::Arr)),
             },
         }
     }

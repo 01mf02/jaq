@@ -166,32 +166,33 @@ yields!(
 yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2, 4]);
 yields!(
     try_catch_prefix_operation,
-    "try -[] catch .",
-    "cannot negate []"
+    r#"(try -[] catch .) | . > "" and . < []"#,
+    true
 );
 yields!(
     try_catch_postfix_operation,
     "[try 0[0]? catch .]",
     json!([])
 );
+
 // try should not gulp expressions after an infix operator; if it did,
 // the inner try in these tests would resolve to empty and omit the
 // 1[1] error expression, and the whole expression would yield an
 // empty stream
 yields!(
     try_parsing_isnt_greedy_wrt_comma,
-    "try (try 0[0], 1[1]) catch .",
-    "cannot index 1"
+    "try (try 0[0], 1[1]) catch . == try 1[1] catch .",
+    true
 );
 yields!(
     try_parsing_isnt_greedy_wrt_pipe,
-    "try (try 0 | 1[1]) catch .",
-    "cannot index 1"
+    "try (try 0 | 1[1]) catch . == try 1[1] catch .",
+    true
 );
 yields!(
     try_parsing_isnt_greedy_wrt_plus,
-    "try (try 0 + 1[1]) catch .",
-    "cannot index 1"
+    "try (try 0 + 1[1]) catch . == try 1[1] catch .",
+    true
 );
 
 #[test]
