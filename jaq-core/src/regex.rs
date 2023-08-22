@@ -136,8 +136,8 @@ impl From<Match> for Val {
 /// 1. output strings that do *not* match the regex, and
 /// 2. output the matches.
 pub fn regex(s: &str, re: &str, flags: &str, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
-    let fail_flag = |e| Error::from_str(format!("invalid regex flag: {e}"));
-    let fail_re = |e| Error::from_str(format!("invalid regex: {e}"));
+    let fail_flag = |e| Error::str(format!("invalid regex flag: {e}"));
+    let fail_re = |e| Error::str(format!("invalid regex: {e}"));
     let flags = Flags::new(flags).map_err(fail_flag)?;
     let re = flags.regex(re).map_err(fail_re)?;
     let (split, matches) = sm;

@@ -3,7 +3,7 @@ use jaq_interpret::{Error, Val};
 /// Use a value as an i32 to be given as an argument to a libm
 /// function.
 pub fn as_i32(v: &Val) -> Result<i32, Error> {
-    v.as_int()?.try_into().map_err(Error::from_str)
+    v.as_int()?.try_into().map_err(Error::str)
 }
 
 /// Build a 0-ary filter from a 1-ary math function.

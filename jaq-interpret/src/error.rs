@@ -47,12 +47,13 @@ impl Error {
     /// Convert the error into a value to be used by `catch` filters.
     pub fn as_val(self) -> Val {
         match self {
-            Error::Val(ev) => ev,
+            Self::Val(ev) => ev,
             _ => Val::str(self.to_string()),
         }
     }
 
-    pub fn from_str(s: impl ToString) -> Self {
+    /// Build an error from something that can be converted to a string.
+    pub fn str(s: impl ToString) -> Self {
         Self::Val(Val::str(s.to_string()))
     }
 }
