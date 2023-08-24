@@ -1,7 +1,34 @@
 //! Value access and iteration.
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+/// A possibly interpolated string.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug)]
+pub struct Str<T> {
+    /// the longest prefix of the string until the first interpolation
+    pub head: String,
+    /// sequence of interpolated filters followed by strings
+    pub tail: Vec<(T, String)>,
+}
+
+impl<T> Str<T> {
+    /// Apply a function to the interpolated filters.
+    pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Str<U> {
+        Str {
+            head: self.head,
+            tail: self.tail.into_iter().map(|(x, s)| (f(x), s)).collect(),
+        }
+    }
+}
+
+impl<T> From<String> for Str<T> {
+    fn from(head: String) -> Self {
+        let tail = Vec::new();
+        Self { head, tail }
+    }
+}
 
 /// A path such as `.[].a?[1:]`.
 pub type Path<T> = Vec<(Part<crate::Spanned<T>>, Opt)>;

@@ -62,16 +62,11 @@ where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
     let num = select! {
-        Token::Num(n) => Filter::Num(n),
+        Token::Num(n) => n,
     }
     .labelled("number");
 
-    let str_ = select! {
-        Token::Str(s) => Filter::Str(s),
-    }
-    .labelled("string");
-
-    let str_ = str_.delimited_by(just(Token::Quote), just(Token::Quote));
+    let str_ = super::path::str_(filter.clone());
 
     let ident = select! {
         Token::Ident(ident) => ident,
@@ -91,7 +86,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
 
     let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
-    let key_str = super::path::key()
+    let key_str = super::path::key(filter.clone())
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
     let key_filter = parenthesised
@@ -116,8 +111,8 @@ where
 
     choice((
         parenthesised,
-        str_.map_with_span(|s, span| (s, span)),
-        num.map_with_span(|num, span| (num, span)),
+        str_.map_with_span(|s, span| (Filter::Str(s), span)),
+        num.map_with_span(|num, span| (Filter::Num(num), span)),
         array.map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span)),
         object.map_with_span(|obj, span| (Filter::Object(obj), span)),
         call.map_with_span(|(f, args), span| (Filter::Call(f, args), span)),
@@ -237,8 +232,9 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
 
     // e.g. `.[].a` or `.a`
     let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
-    let id_path = super::path::index().or_not().chain(atom_path());
-    let id_with_path = id.then(id_path.collect());
+    let index = super::path::index(with_comma.clone());
+    let index_path = index.or_not().chain(atom_path());
+    let id_with_path = id.then(index_path.collect());
 
     let path = atom_with_path.or(id_with_path);
 

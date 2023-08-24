@@ -1,7 +1,6 @@
 use super::Token;
-use alloc::string::String;
 use chumsky::prelude::*;
-use jaq_syn::path::{Opt, Part, Path};
+use jaq_syn::path::{Opt, Part, Path, Str};
 use jaq_syn::Spanned;
 
 fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
@@ -11,24 +10,43 @@ fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     })
 }
 
-pub(crate) fn key() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
-    select! {
-        Token::Ident(s) => s,
+pub fn str_<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
+{
+    let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
+
+    let str_ = select! {
         Token::Str(s) => s,
+    };
+    str_.then(parenthesised.then(str_).repeated())
+        .delimited_by(just(Token::Quote), just(Token::Quote))
+        .map(|(head, tail)| Str { head, tail })
+        .labelled("string")
+}
+
+pub fn key<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
+where
+    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
+{
+    select! {
+        Token::Ident(s) => Str::from(s),
     }
+    .or(str_(expr))
     .labelled("object key")
 }
 
-pub(crate) fn index<T: From<String>>(
+pub(crate) fn index<T: From<Str<Spanned<T>>>>(
+    expr: impl Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 ) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = Simple<Token>> + Clone {
-    key()
+    key(expr)
         .map_with_span(|id, span| Part::Index((T::from(id), span)))
         .then(opt())
 }
 
 pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
-    T: From<String>,
+    T: From<Str<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     let range = {
@@ -39,7 +57,7 @@ where
             Some(e2) => Part::Range(Some(e1), e2),
         });
         let starts_with_colon = colon
-            .ignore_then(expr)
+            .ignore_then(expr.clone())
             .map(|e2| Part::Range(None, Some(e2)));
 
         starts_with_expr
@@ -53,7 +71,7 @@ where
         .then(opt())
         .repeated();
 
-    let dot_id = just(Token::Dot).ignore_then(index());
+    let dot_id = just(Token::Dot).ignore_then(index(expr));
 
     ranges
         .clone()

@@ -330,7 +330,7 @@ impl Ctx {
                 self.errs.push((Error::Num(n), f.1.clone()));
                 n
             })),
-            Expr::Str(s) => Filter::Str(s),
+            Expr::Str(s) => Filter::Str(s.map(|f| *get(f, self))),
             Expr::Array(a) => Filter::Array(a.map(|a| get(*a, self))),
             Expr::Object(o) => {
                 Filter::Object(o.into_iter().map(|kv| kv.map(|f| *get(f, self))).collect())

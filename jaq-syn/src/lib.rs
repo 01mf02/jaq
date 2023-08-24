@@ -13,7 +13,7 @@ pub mod test;
 
 pub use def::{Arg, Def, Main};
 pub use ops::{MathOp, OrdOp};
-use path::Path;
+use path::{Path, Str};
 
 /// Position information.
 pub type Span = core::ops::Range<usize>;

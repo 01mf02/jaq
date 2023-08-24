@@ -9,6 +9,8 @@ use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
+use jaq_syn::path::Str;
+use jaq_syn::MathOp;
 
 #[derive(Debug, Clone, Default)]
 struct View {
@@ -140,6 +142,13 @@ impl Ctx {
     // to this function, because it mutably borrows self
     fn filter(&mut self, f: MirFilter, id: DefId, mut view: View, defs: &mir::Defs) -> Filter {
         let get = |f, ctx: &mut Self| Box::new(ctx.filter(f, id, view.clone(), defs));
+        let of_str = |s: Str<_>, ctx: &mut Self| {
+            // TODO: call to_string_or_clone!
+            s.tail.into_iter().fold(Filter::Str(s.head), |acc, (f, s)| {
+                let add = |x, y| Filter::Math(Box::new(x), MathOp::Add, Box::new(y));
+                add(add(acc, *get(f, ctx)), Filter::Str(s))
+            })
+        };
         use mir::Filter as Expr;
 
         //std::dbg!(self.vars);
@@ -243,7 +252,7 @@ impl Ctx {
             Expr::Id => Filter::Id,
             Expr::Num(mir::Num::Float(f)) => Filter::Float(f),
             Expr::Num(mir::Num::Int(i)) => Filter::Int(i),
-            Expr::Str(s) => Filter::Str(s),
+            Expr::Str(s) => of_str(s, self),
             Expr::Array(a) => {
                 Filter::Array(a.map_or_else(|| Box::new(Filter::empty()), |a| get(*a, self)))
             }
@@ -251,7 +260,7 @@ impl Ctx {
                 let kvs = o.into_iter().map(|kv| match kv {
                     KeyVal::Filter(k, v) => (*get(k, self), *get(v, self)),
                     KeyVal::Str(k, v) => {
-                        let k = Filter::Str(k);
+                        let k = of_str(k, self);
                         let v = match v {
                             None => Filter::Path(
                                 Box::new(Filter::Id),
