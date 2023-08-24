@@ -46,9 +46,11 @@ impl Tree {
                 let tokens = tree.into_iter().flat_map(|(t, s)| t.tokens(s));
                 Box::new(once(s).chain(tokens).chain(once(e)))
             }
-            Self::String(s, _interpol) => {
-                let s = (Token::Str(s.0), s.1);
-                Box::new(once(s))
+            Self::String(head, _interpol) => {
+                let s = (Token::Quote, span.start..span.start + 1);
+                let e = (Token::Quote, span.end - 1..span.end);
+                let head = (Token::Str(head.0), head.1);
+                Box::new(once(s).chain(once(head)).chain(once(e)))
             }
         }
     }
@@ -62,6 +64,7 @@ pub enum Token {
     Ident(String),
     Var(String),
     Ctrl(char),
+    Quote,
     DotDot,
     Dot,
     Def,
@@ -86,6 +89,7 @@ impl fmt::Display for Token {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Var(s) => write!(f, "${s}"),
             Self::Ctrl(c) => c.fmt(f),
+            Self::Quote => '"'.fmt(f),
             Self::DotDot => "..".fmt(f),
             Self::Dot => ".".fmt(f),
             Self::Def => "def".fmt(f),

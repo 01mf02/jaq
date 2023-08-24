@@ -61,11 +61,17 @@ fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error 
 where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
-    let val = select! {
+    let num = select! {
         Token::Num(n) => Filter::Num(n),
+    }
+    .labelled("number");
+
+    let str_ = select! {
         Token::Str(s) => Filter::Str(s),
     }
-    .labelled("value");
+    .labelled("string");
+
+    let str_ = str_.delimited_by(just(Token::Quote), just(Token::Quote));
 
     let ident = select! {
         Token::Ident(ident) => ident,
@@ -110,7 +116,8 @@ where
 
     choice((
         parenthesised,
-        val.map_with_span(|filter, span| (filter, span)),
+        str_.map_with_span(|s, span| (s, span)),
+        num.map_with_span(|num, span| (num, span)),
         array.map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span)),
         object.map_with_span(|obj, span| (Filter::Object(obj), span)),
         call.map_with_span(|(f, args), span| (Filter::Call(f, args), span)),
