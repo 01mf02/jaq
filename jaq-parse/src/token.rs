@@ -32,25 +32,29 @@ impl Delim {
 pub enum Tree {
     Token(Token),
     Delim(Delim, Vec<Spanned<Self>>),
-    String(Spanned<String>, Vec<(Vec<Spanned<Self>>, Spanned<String>)>),
+    String(Spanned<String>, Vec<(Spanned<Self>, Spanned<String>)>),
 }
 
 impl Tree {
     pub fn tokens(self, span: Span) -> Box<dyn Iterator<Item = Spanned<Token>>> {
+        let ft = |(tree, span): Spanned<Self>| tree.tokens(span);
+        let fs = |(s, span): Spanned<String>| (Token::Str(s), span);
         use core::iter::once;
         match self {
             Self::Token(token) => Box::new(once((token, span))),
             Self::Delim(delim, tree) => {
                 let s = (Token::Ctrl(delim.open()), span.start..span.start + 1);
                 let e = (Token::Ctrl(delim.close()), span.end - 1..span.end);
-                let tokens = tree.into_iter().flat_map(|(t, s)| t.tokens(s));
+                let tokens = tree.into_iter().flat_map(ft);
                 Box::new(once(s).chain(tokens).chain(once(e)))
             }
-            Self::String(head, _interpol) => {
+            Self::String(head, tail) => {
                 let s = (Token::Quote, span.start..span.start + 1);
                 let e = (Token::Quote, span.end - 1..span.end);
-                let head = (Token::Str(head.0), head.1);
-                Box::new(once(s).chain(once(head)).chain(once(e)))
+                let tail = tail
+                    .into_iter()
+                    .flat_map(move |(tree, str_)| ft(tree).chain(once(fs(str_))));
+                Box::new(once(s).chain(once(fs(head))).chain(tail).chain(once(e)))
             }
         }
     }
@@ -162,7 +166,10 @@ pub fn tree(
 
     let pair = |s, span| (s, span);
     let chars = || char_().repeated().collect().map_with_span(pair);
-    let interpol = just('\\').ignore_then(paren.clone());
+
+    let pair = |p, span| (Tree::Delim(Delim::Paren, p), span);
+    let interpol = just('\\').ignore_then(paren.clone().map_with_span(pair));
+
     let string = chars()
         .then(interpol.then(chars()).repeated().collect())
         .delimited_by(just('"'), just('"'))
