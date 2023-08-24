@@ -32,6 +32,7 @@ impl Delim {
 pub enum Tree {
     Token(Token),
     Delim(Delim, Vec<Spanned<Self>>),
+    String(Spanned<String>, Vec<(Vec<Spanned<Self>>, Spanned<String>)>),
 }
 
 impl Tree {
@@ -44,6 +45,10 @@ impl Tree {
                 let e = (Token::Ctrl(delim.close()), span.end - 1..span.end);
                 let tokens = tree.into_iter().flat_map(|(t, s)| t.tokens(s));
                 Box::new(once(s).chain(tokens).chain(once(e)))
+            }
+            Self::String(s, _interpol) => {
+                let s = (Token::Str(s.0), s.1);
+                Box::new(once(s))
             }
         }
     }
@@ -151,12 +156,21 @@ pub fn tree(
     let brack = trees.clone().delimited_by(just('['), just(']'));
     let brace = trees.clone().delimited_by(just('{'), just('}'));
 
+    let pair = |s, span| (s, span);
+    let chars = || char_().repeated().collect().map_with_span(pair);
+    let interpol = just('\\').ignore_then(paren.clone());
+    let string = chars()
+        .then(interpol.then(chars()).repeated().collect())
+        .delimited_by(just('"'), just('"'))
+        .labelled("string");
+
     let comment = just("#").then(take_until(just('\n'))).padded();
 
     choice((
         paren.map(|t| Tree::Delim(Delim::Paren, t)),
         brack.map(|t| Tree::Delim(Delim::Brack, t)),
         brace.map(|t| Tree::Delim(Delim::Brace, t)),
+        string.map(|(s, interpol)| Tree::String(s, interpol)),
         token().map(Tree::Token),
     ))
     .padded_by(comment.repeated())
@@ -193,13 +207,6 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         _ => Token::Ident(ident),
     });
 
-    let chars = char_().repeated().collect();
-    //let ipol = just('\\').ignore_then(par.clone());
-    let str_ = chars
-        //.then(ipol.then(str_()).repeated().collect())
-        .delimited_by(just('"'), just('"'))
-        .labelled("string");
-
     // A single token can be one of the above
     ident
         .or(just("..").map(|_| Token::DotDot))
@@ -207,6 +214,5 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         .or(ctrl.map(Token::Ctrl))
         .or(op.map(Token::Op))
         .or(var.map(Token::Var))
-        .or(str_.map(Token::Str))
         .or(num().map(Token::Num))
 }
