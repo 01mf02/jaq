@@ -26,11 +26,8 @@ impl<A, N> Call<A, N> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def {
-    pub call: Call<Arg>,
-    /// Definitions at the top of the filter
-    pub defs: Vec<Self>,
-    /// Body of the filter, e.g. `[.[] | f`.
-    pub body: Spanned<Filter>,
+    pub lhs: Call<Arg>,
+    pub rhs: Main,
 }
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
@@ -68,6 +65,12 @@ impl Arg {
     }
 }
 
-// TODO: rename to Body?
 /// (Potentially empty) sequence of definitions, followed by a filter.
-pub type Main = (Vec<Def>, Spanned<Filter>);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug)]
+pub struct Main {
+    /// Definitions at the top of the filter
+    pub defs: Vec<Def>,
+    /// Body of the filter, e.g. `[.[] | f`.
+    pub body: Spanned<Filter>,
+}
