@@ -35,13 +35,11 @@ where
 }
 
 fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
-    let comment = just("#").then(take_until(just('\n'))).padded();
-
-    token::token()
-        .padded_by(comment.repeated())
-        .map_with_span(|tok, span| (tok, span))
-        .padded()
+    recursive(token::tree)
+        .map_with_span(|tree, span| tree.tokens(span))
         .repeated()
+        .flatten()
+        .collect()
 }
 
 /// Parse a string with a given parser.

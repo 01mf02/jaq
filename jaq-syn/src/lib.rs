@@ -15,7 +15,8 @@ pub use def::{Arg, Def, Main};
 pub use ops::{MathOp, OrdOp};
 use path::Path;
 
-type Span = core::ops::Range<usize>;
+/// Position information.
+pub type Span = core::ops::Range<usize>;
 
 /// An object with position information.
 pub type Spanned<T> = (T, Span);

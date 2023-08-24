@@ -7,7 +7,9 @@ fn main() {
     let buffer = std::fs::File::create(dest_path).unwrap();
 
     let std = include_str!("src/std.jq");
-    let std = jaq_parse::parse(std, jaq_parse::defs()).0.unwrap();
+    let (std, errs) = jaq_parse::parse(std, jaq_parse::defs());
+    assert_eq!(errs, Vec::new());
+    let std = std.unwrap();
     bincode::serialize_into(buffer, &std).unwrap();
 }
 
