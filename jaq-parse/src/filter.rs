@@ -67,11 +67,7 @@ where
     .labelled("number");
 
     let str_ = super::path::str_(filter.clone());
-
-    let ident = select! {
-        Token::Ident(ident) => ident,
-    }
-    .labelled("identifier");
+    let call = super::path::call(filter.clone());
 
     // Atoms can also just be normal filters, but surrounded with parentheses
     let parenthesised = filter
@@ -100,8 +96,6 @@ where
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
-    let call = ident.then(super::args(filter));
-
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
         nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
@@ -115,7 +109,7 @@ where
         num.map_with_span(|num, span| (Filter::Num(num), span)),
         array.map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span)),
         object.map_with_span(|obj, span| (Filter::Object(obj), span)),
-        call.map_with_span(|(f, args), span| (Filter::Call(f, args), span)),
+        call.map_with_span(|call, span| (Filter::from(call), span)),
         variable().map_with_span(|v, span| (Filter::Var(v), span)),
         recurse.map_with_span(|_, span| (Filter::Recurse, span)),
     ))

@@ -8,11 +8,6 @@ fn def<P>(def: P) -> impl Parser<Token, Def, Error = Simple<Token>> + Clone
 where
     P: Parser<Token, Def, Error = Simple<Token>> + Clone,
 {
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
-
     let arg = filter_map(|span, tok| match tok {
         Token::Ident(name) => Ok(Arg::new_filter(name)),
         Token::Var(name) => Ok(Arg::new_var(name)),
@@ -20,18 +15,12 @@ where
     });
 
     just(Token::Def)
-        .ignore_then(ident.labelled("filter name"))
-        .then(super::args(arg).labelled("filter args"))
+        .ignore_then(super::path::call(arg))
         .then_ignore(just(Token::Ctrl(':')))
         .then(def.repeated().collect())
         .then(filter())
         .then_ignore(just(Token::Ctrl(';')))
-        .map(|(((name, args), defs), body)| Def {
-            name,
-            args,
-            defs,
-            body,
-        })
+        .map(|((call, defs), body)| Def { call, defs, body })
         .labelled("definition")
 }
 

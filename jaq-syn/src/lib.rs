@@ -11,7 +11,7 @@ mod ops;
 pub mod path;
 pub mod test;
 
-pub use def::{Arg, Def, Main};
+pub use def::{Arg, Call, Def, Main};
 pub use ops::{MathOp, OrdOp};
 use path::{Path, Str};
 

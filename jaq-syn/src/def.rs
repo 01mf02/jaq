@@ -4,14 +4,29 @@ use alloc::{string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug)]
+pub struct Call<A, N = String> {
+    /// Name of the filter, e.g. `map`
+    pub name: N,
+    /// Arguments of the filter, e.g. `["f"]`
+    pub args: Vec<A>,
+}
+
+impl<A, N> Call<A, N> {
+    pub fn map_args<B>(self, f: impl FnMut(A) -> B) -> Call<B, N> {
+        Call {
+            name: self.name,
+            args: self.args.into_iter().map(f).collect(),
+        }
+    }
+}
+
 /// A definition, such as `def map(f): [.[] | f];`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def {
-    /// Name of the filter, e.g. `map`
-    pub name: String,
-    /// Arguments of the filter, e.g. `["f"]`
-    pub args: Vec<Arg>,
+    pub call: Call<Arg>,
     /// Definitions at the top of the filter
     pub defs: Vec<Self>,
     /// Body of the filter, e.g. `[.[] | f`.

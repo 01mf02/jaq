@@ -221,8 +221,8 @@ impl Ctx {
         // generate a fresh definition ID
         let id: DefId = self.defs.0.len();
         self.defs.0.push(Def {
-            name: def.name,
-            args: def.args,
+            name: def.call.name,
+            args: def.call.args,
             children: Vec::new(),
             ancestors: ancestors.clone(),
             // after MIR creation, we have to set all filters i with ctx.recursive[i] to defs[i].recursive

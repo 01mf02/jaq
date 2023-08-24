@@ -1,4 +1,5 @@
 //! Value access and iteration.
+use crate::Call;
 use alloc::{string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,9 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct Str<T> {
+    /// optional filter that is applied to the output of interpolated filters
+    /// (`tostring` if not given)
+    pub fmt: Option<Call<T>>,
     /// the longest prefix of the string until the first interpolation
     pub head: String,
     /// sequence of interpolated filters followed by strings
@@ -17,6 +21,7 @@ impl<T> Str<T> {
     /// Apply a function to the interpolated filters.
     pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Str<U> {
         Str {
+            fmt: self.fmt.map(|fmt| fmt.map_args(&mut f)),
             head: self.head,
             tail: self.tail.into_iter().map(|(x, s)| (f(x), s)).collect(),
         }
@@ -25,8 +30,11 @@ impl<T> Str<T> {
 
 impl<T> From<String> for Str<T> {
     fn from(head: String) -> Self {
-        let tail = Vec::new();
-        Self { head, tail }
+        Self {
+            fmt: None,
+            head,
+            tail: Vec::new(),
+        }
     }
 }
 

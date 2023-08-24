@@ -1,7 +1,7 @@
 use super::Token;
 use chumsky::prelude::*;
 use jaq_syn::path::{Opt, Part, Path, Str};
-use jaq_syn::Spanned;
+use jaq_syn::{Call, Spanned};
 
 fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     just(Token::Ctrl('?')).or_not().map(|q| match q {
@@ -10,18 +10,34 @@ fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     })
 }
 
+pub fn call<T, P>(expr: P) -> impl Parser<Token, Call<T>, Error = P::Error> + Clone
+where
+    P: Parser<Token, T, Error = Simple<Token>> + Clone,
+{
+    select! {
+        Token::Ident(ident) => ident,
+    }
+    .labelled("filter name")
+    .then(super::args(expr).labelled("filter args"))
+    .map(|(name, args)| Call { name, args })
+}
+
 pub fn str_<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
 where
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
+    //.filter(|fmt| fmt.name.starts_with('@'));
+    let fmt = call(expr.clone()).or_not();
+
     let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
     let str_ = select! {
         Token::Str(s) => s,
     };
-    str_.then(parenthesised.then(str_).repeated())
+    fmt.then(str_)
+        .then(parenthesised.then(str_).repeated())
         .delimited_by(just(Token::Quote), just(Token::Quote))
-        .map(|(head, tail)| Str { head, tail })
+        .map(|((fmt, head), tail)| Str { fmt, head, tail })
         .labelled("string")
 }
 

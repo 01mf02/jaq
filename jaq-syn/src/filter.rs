@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{MathOp, OrdOp, Path, Span, Spanned, Str};
+use crate::{Call, MathOp, OrdOp, Path, Span, Spanned, Str};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 #[cfg(feature = "serde")]
@@ -146,6 +146,12 @@ pub enum Filter<C = String, V = String, Num = String> {
 impl From<Str<Spanned<Filter>>> for Filter {
     fn from(s: Str<Spanned<Filter>>) -> Self {
         Self::Str(s)
+    }
+}
+
+impl From<Call<Spanned<Filter>>> for Filter {
+    fn from(c: Call<Spanned<Filter>>) -> Self {
+        Self::Call(c.name, c.args)
     }
 }
 
