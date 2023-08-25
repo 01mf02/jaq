@@ -143,8 +143,7 @@ impl Ctx {
     fn filter(&mut self, f: MirFilter, id: DefId, mut view: View, defs: &mir::Defs) -> Filter {
         let get = |f, ctx: &mut Self| Box::new(ctx.filter(f, id, view.clone(), defs));
         let of_str = |s: Str<_>, ctx: &mut Self| {
-            // TODO: call to_string_or_clone!
-            let fmt = s.fmt.map_or(Filter::Id, |fmt| *get(fmt, ctx));
+            let fmt = s.fmt.map_or(Filter::ToString, |fmt| *get(fmt, ctx));
             s.tail.into_iter().fold(Filter::Str(s.head), |acc, (f, s)| {
                 let add = |x, y| Filter::Math(Box::new(x), MathOp::Add, Box::new(y));
                 let f = Filter::Pipe(Box::new(*get(f, ctx)), false, Box::new(fmt.clone()));
