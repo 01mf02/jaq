@@ -9,8 +9,7 @@ use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
-use jaq_syn::path::Str;
-use jaq_syn::MathOp;
+use jaq_syn::{MathOp, Str};
 
 #[derive(Debug, Clone, Default)]
 struct View {
@@ -143,15 +142,15 @@ impl Ctx {
     fn filter(&mut self, f: MirFilter, id: DefId, mut view: View, defs: &mir::Defs) -> Filter {
         let get = |f, ctx: &mut Self| Box::new(ctx.filter(f, id, view.clone(), defs));
         let of_str = |s: Str<_>, ctx: &mut Self| {
-            let fmt = s.fmt.map_or(Filter::ToString, |fmt| *get(fmt, ctx));
-            s.tail.into_iter().fold(Filter::Str(s.head), |acc, (f, s)| {
-                let add = |x, y| Filter::Math(Box::new(x), MathOp::Add, Box::new(y));
-                let f = Filter::Pipe(Box::new(*get(f, ctx)), false, Box::new(fmt.clone()));
-                let mut sum = add(acc, f);
-                if !s.is_empty() {
-                    sum = add(sum, Filter::Str(s));
-                }
-                sum
+            let fmt = s.fmt.map_or(Filter::ToString, |fmt| *get(*fmt, ctx));
+            use jaq_syn::string::Part;
+            let mut iter = s.parts.into_iter().rev().map(|part| match part {
+                Part::Str(s) => Filter::Str(s),
+                Part::Fun(f) => Filter::Pipe(Box::new(*get(f, ctx)), false, Box::new(fmt.clone())),
+            });
+            let last = iter.next();
+            iter.fold(last.unwrap_or_else(|| Filter::Str("".into())), |acc, x| {
+                Filter::Math(Box::new(x), MathOp::Add, Box::new(acc))
             })
         };
         use mir::Filter as Expr;

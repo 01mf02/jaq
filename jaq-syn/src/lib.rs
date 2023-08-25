@@ -9,11 +9,13 @@ mod def;
 pub mod filter;
 mod ops;
 pub mod path;
+pub mod string;
 pub mod test;
 
 pub use def::{Arg, Call, Def, Main};
 pub use ops::{MathOp, OrdOp};
-use path::{Path, Str};
+use path::Path;
+pub use string::Str;
 
 /// Position information.
 pub type Span = core::ops::Range<usize>;

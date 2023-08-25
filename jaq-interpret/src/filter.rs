@@ -26,6 +26,7 @@ pub enum Ast {
     #[default]
     Id,
     ToString,
+
     Int(isize),
     Float(f64),
     Str(String),
