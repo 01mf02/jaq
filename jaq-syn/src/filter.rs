@@ -111,7 +111,7 @@ pub enum Filter<C = String, V = String, Num = String> {
     /// Integer or floating-point number.
     Num(Num),
     /// String
-    Str(Str<Spanned<Self>>),
+    Str(Box<Str<Spanned<Self>>>),
     /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
     /// Object, specifying its key-value pairs
@@ -145,7 +145,7 @@ pub enum Filter<C = String, V = String, Num = String> {
 
 impl From<Str<Spanned<Filter>>> for Filter {
     fn from(s: Str<Spanned<Filter>>) -> Self {
-        Self::Str(s)
+        Self::Str(Box::new(s))
     }
 }
 

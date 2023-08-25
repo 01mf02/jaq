@@ -24,18 +24,20 @@ where
 
 pub fn str_<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
 where
+    T: From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     //.filter(|fmt| fmt.name.starts_with('@'));
-    let fmt = call(expr.clone()).or_not();
+    let fmt = call(expr.clone()).map_with_span(|x, span| (T::from(x), span));
 
     let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
-    let str_ = select! {
+    let chars = select! {
         Token::Str(s) => s,
     };
-    fmt.then(str_)
-        .then(parenthesised.then(str_).repeated())
+    fmt.or_not()
+        .then(chars)
+        .then(parenthesised.then(chars).repeated())
         .delimited_by(just(Token::Quote), just(Token::Quote))
         .map(|((fmt, head), tail)| Str { fmt, head, tail })
         .labelled("string")
@@ -43,6 +45,7 @@ where
 
 pub fn key<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
 where
+    T: From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     select! {
@@ -52,17 +55,19 @@ where
     .labelled("object key")
 }
 
-pub(crate) fn index<T: From<Str<Spanned<T>>>>(
-    expr: impl Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
-) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = Simple<Token>> + Clone {
+pub fn index<T, P>(expr: P) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = P::Error> + Clone
+where
+    T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
+    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
+{
     key(expr)
         .map_with_span(|id, span| Part::Index((T::from(id), span)))
         .then(opt())
 }
 
-pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
+pub fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
-    T: From<Str<Spanned<T>>>,
+    T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     let range = {

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct Str<T> {
     /// optional filter that is applied to the output of interpolated filters
     /// (`tostring` if not given)
-    pub fmt: Option<Call<T>>,
+    pub fmt: Option<T>,
     /// the longest prefix of the string until the first interpolation
     pub head: String,
     /// sequence of interpolated filters followed by strings
@@ -21,7 +21,7 @@ impl<T> Str<T> {
     /// Apply a function to the interpolated filters.
     pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Str<U> {
         Str {
-            fmt: self.fmt.map(|fmt| fmt.map_args(&mut f)),
+            fmt: self.fmt.map(&mut f),
             head: self.head,
             tail: self.tail.into_iter().map(|(x, s)| (f(x), s)).collect(),
         }

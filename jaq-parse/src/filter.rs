@@ -105,7 +105,7 @@ where
 
     choice((
         parenthesised,
-        str_.map_with_span(|s, span| (Filter::Str(s), span)),
+        str_.map_with_span(|s, span| (Filter::from(s), span)),
         num.map_with_span(|num, span| (Filter::Num(num), span)),
         array.map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span)),
         object.map_with_span(|obj, span| (Filter::Object(obj), span)),

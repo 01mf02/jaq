@@ -144,9 +144,15 @@ impl Ctx {
         let get = |f, ctx: &mut Self| Box::new(ctx.filter(f, id, view.clone(), defs));
         let of_str = |s: Str<_>, ctx: &mut Self| {
             // TODO: call to_string_or_clone!
+            let fmt = s.fmt.map_or(Filter::Id, |fmt| *get(fmt, ctx));
             s.tail.into_iter().fold(Filter::Str(s.head), |acc, (f, s)| {
                 let add = |x, y| Filter::Math(Box::new(x), MathOp::Add, Box::new(y));
-                add(add(acc, *get(f, ctx)), Filter::Str(s))
+                let f = Filter::Pipe(Box::new(*get(f, ctx)), false, Box::new(fmt.clone()));
+                let mut sum = add(acc, f);
+                if !s.is_empty() {
+                    sum = add(sum, Filter::Str(s));
+                }
+                sum
             })
         };
         use mir::Filter as Expr;
@@ -252,7 +258,7 @@ impl Ctx {
             Expr::Id => Filter::Id,
             Expr::Num(mir::Num::Float(f)) => Filter::Float(f),
             Expr::Num(mir::Num::Int(i)) => Filter::Int(i),
-            Expr::Str(s) => of_str(s, self),
+            Expr::Str(s) => of_str(*s, self),
             Expr::Array(a) => {
                 Filter::Array(a.map_or_else(|| Box::new(Filter::empty()), |a| get(*a, self)))
             }
