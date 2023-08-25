@@ -1,7 +1,7 @@
 use super::{filter::filter, Token};
 use alloc::vec::Vec;
 use chumsky::prelude::*;
-use jaq_syn::{Arg, Def, Main, Call};
+use jaq_syn::{Arg, Call, Def, Main};
 
 /// A (potentially empty) parenthesised and `;`-separated sequence of arguments.
 fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone

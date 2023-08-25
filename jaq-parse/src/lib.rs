@@ -9,8 +9,8 @@ mod def;
 mod filter;
 mod path;
 mod prec_climb;
-mod token;
 mod string;
+mod token;
 
 use jaq_syn as syn;
 

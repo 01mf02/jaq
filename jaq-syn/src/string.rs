@@ -1,5 +1,4 @@
 /// Interpolated strings.
-
 use alloc::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -20,6 +19,14 @@ impl<T> Part<T> {
         match self {
             Self::Str(s) => Part::Str(s),
             Self::Fun(x) => Part::Fun(f(x)),
+        }
+    }
+
+    /// Returns true if the part is an empty constant string.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Str(s) if s.is_empty() => true,
+            _ => false,
         }
     }
 }

@@ -15,19 +15,16 @@ where
     let chars = select! {
         Token::Str(s) => s,
     };
-    let parts = chars
-        .then(parenthesised.then(chars).repeated())
-        .map(|(head, tail)| {
-            use core::iter::once;
-            use jaq_syn::string::Part;
-            let tail = tail
-                .into_iter()
-                .flat_map(|(f, s)| [Part::Fun(f), Part::Str(s)]);
-            once(Part::Str(head)).chain(tail).collect()
-        });
+    let parts = chars.then(parenthesised.then(chars).repeated());
+    let parts = parts.map(|(head, tail)| {
+        use core::iter::once;
+        use jaq_syn::string::Part::{Fun, Str};
+        let tail = tail.into_iter().flat_map(|(f, s)| [Fun(f), Str(s)]);
+        let parts = once(Str(head)).chain(tail);
+        parts.filter(|p| !p.is_empty()).collect()
+    });
     fmt.or_not()
         .then(parts.delimited_by(just(Token::Quote), just(Token::Quote)))
         .map(|(fmt, parts)| Str { fmt, parts })
         .labelled("string")
 }
-
