@@ -1,7 +1,30 @@
 use super::{filter::filter, Token};
 use alloc::vec::Vec;
 use chumsky::prelude::*;
-use jaq_syn::{Arg, Def, Main};
+use jaq_syn::{Arg, Def, Main, Call};
+
+/// A (potentially empty) parenthesised and `;`-separated sequence of arguments.
+fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
+where
+    P: Parser<Token, T> + Clone,
+{
+    arg.separated_by(just(Token::Ctrl(';')))
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+        .or_not()
+        .map(Option::unwrap_or_default)
+}
+
+pub fn call<T, P>(expr: P) -> impl Parser<Token, Call<T>, Error = P::Error> + Clone
+where
+    P: Parser<Token, T, Error = Simple<Token>> + Clone,
+{
+    select! {
+        Token::Ident(ident) => ident,
+    }
+    .labelled("filter name")
+    .then(args(expr).labelled("filter args"))
+    .map(|(name, args)| Call { name, args })
+}
 
 /// Parser for a single definition.
 fn def<P>(def: P) -> impl Parser<Token, Def, Error = Simple<Token>> + Clone
@@ -16,7 +39,7 @@ where
     let defs = def.repeated().collect();
 
     just(Token::Def)
-        .ignore_then(super::path::call(arg))
+        .ignore_then(call(arg))
         .then_ignore(just(Token::Ctrl(':')))
         .then(defs.then(filter()).map(|(defs, body)| Main { defs, body }))
         .then_ignore(just(Token::Ctrl(';')))

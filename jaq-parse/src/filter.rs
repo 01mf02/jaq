@@ -66,8 +66,8 @@ where
     }
     .labelled("number");
 
-    let str_ = super::path::str_(filter.clone());
-    let call = super::path::call(filter.clone());
+    let str_ = super::string::str_(filter.clone());
+    let call = super::def::call(filter.clone());
 
     // Atoms can also just be normal filters, but surrounded with parentheses
     let parenthesised = filter

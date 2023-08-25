@@ -10,47 +10,6 @@ fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     })
 }
 
-pub fn call<T, P>(expr: P) -> impl Parser<Token, Call<T>, Error = P::Error> + Clone
-where
-    P: Parser<Token, T, Error = Simple<Token>> + Clone,
-{
-    select! {
-        Token::Ident(ident) => ident,
-    }
-    .labelled("filter name")
-    .then(super::args(expr).labelled("filter args"))
-    .map(|(name, args)| Call { name, args })
-}
-
-pub fn str_<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
-where
-    T: From<Call<Spanned<T>>>,
-    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
-{
-    //.filter(|fmt| fmt.name.starts_with('@'));
-    let fmt = call(expr.clone()).map_with_span(|x, span| ((T::from(x), span)).into());
-
-    let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
-
-    let chars = select! {
-        Token::Str(s) => s,
-    };
-    let parts = chars
-        .then(parenthesised.then(chars).repeated())
-        .map(|(head, tail)| {
-            use core::iter::once;
-            use jaq_syn::string::Part;
-            let tail = tail
-                .into_iter()
-                .flat_map(|(f, s)| [Part::Fun(f), Part::Str(s)]);
-            once(Part::Str(head)).chain(tail).collect()
-        });
-    fmt.or_not()
-        .then(parts.delimited_by(just(Token::Quote), just(Token::Quote)))
-        .map(|(fmt, parts)| Str { fmt, parts })
-        .labelled("string")
-}
-
 pub fn key<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
 where
     T: From<Call<Spanned<T>>>,
@@ -59,7 +18,7 @@ where
     select! {
         Token::Ident(s) => Str::from(s),
     }
-    .or(str_(expr))
+    .or(super::string::str_(expr))
     .labelled("object key")
 }
 
