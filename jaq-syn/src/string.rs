@@ -25,8 +25,8 @@ impl<T> Part<T> {
     /// Returns true if the part is an empty constant string.
     pub fn is_empty(&self) -> bool {
         match self {
-            Self::Str(s) if s.is_empty() => true,
-            _ => false,
+            Self::Str(s) => s.is_empty(),
+            Self::Fun(_) => false,
         }
     }
 }
