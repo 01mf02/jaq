@@ -7,8 +7,14 @@ where
     T: From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
-    //.filter(|fmt| fmt.name.starts_with('@'));
-    let fmt = super::def::call(expr.clone()).map_with_span(|x, span| ((T::from(x), span)).into());
+    let call = |name| Call {
+        name,
+        args: Default::default(),
+    };
+    let ident = select! {
+        Token::Ident(ident) if ident.starts_with('@') => ident,
+    };
+    let fmt = ident.map_with_span(move |x, span| ((T::from(call(x)), span)).into());
 
     let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
