@@ -105,6 +105,26 @@ fn precedence() {
     give(json!(null), "2 * 3 + 1", json!(7));
 }
 
+yields!(interpolation, r#"1 | "yields \(.+1)!""#, "yields 2!");
+// this diverges from jq, which yields ["2 2", "3 2", "2 4", "3 4"],
+// probably due to different order of evaluation addition
+yields!(
+    interpolation_many,
+    r#"2 | ["\(., .+1) \(., .*2)"]"#,
+    ["2 2", "2 4", "3 2", "3 4"]
+);
+// this does not work in jq, because jq does not allow for defining formatters
+yields!(
+    interpolation_fmt,
+    r#"def @say: "say " + .; @say "I \("disco"), you \("party")""#,
+    "I say disco, you say party"
+);
+yields!(
+    interpolation_nested,
+    r#""Here \("be \("nestings")")""#,
+    "Here be nestings"
+);
+
 yields!(
     obj_trailing_comma,
     "{a:1, b:2, c:3,}",
