@@ -190,7 +190,7 @@ Here is an overview that summarises:
 - [x] if-then-else (`if .a < .b then .a else .b end`)
 - [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
 - [x] Error handling (`try ... catch ...`) (see the [differences from jq](#error-handling))
-- [ ] String interpolation
+- [x] String interpolation (`"The successor of \(.) is \(.+1)."`)
 - [x] Format strings (`@json`, `@text`, `@csv`, `@tsv`, `@html`, `@sh`, `@base64`, `@base64d`)
 
 
