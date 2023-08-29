@@ -388,6 +388,7 @@ yields!(
     r#""XYxyXYxy" | gsub("(?<upper>[A-Z])(?<lower>[a-z])"; .lower + .upper)"#,
     "XxYyXxYy"
 );
+// this diverges from jq, which yields ["XxYy", "!XxYy", "Xx!Yy", "!Xx!Yy"]
 yields!(
     gsub_many,
     r#""XxYy" | [gsub("(?<upper>[A-Z])"; .upper, "!" + .upper)]"#,
