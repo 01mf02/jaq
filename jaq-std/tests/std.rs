@@ -388,10 +388,8 @@ yields!(
     r#""XYxyXYxy" | gsub("(?<upper>[A-Z])(?<lower>[a-z])"; .lower + .upper)"#,
     "XxYyXxYy"
 );
-/*
 yields!(
     gsub_many,
     r#""XxYy" | [gsub("(?<upper>[A-Z])"; .upper, "!" + .upper)]"#,
     ["XxYy", "Xx!Yy", "!XxYy", "!Xx!Yy"]
 );
-*/
