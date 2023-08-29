@@ -1,4 +1,4 @@
-/// Interpolated strings.
+//! Interpolated strings.
 use alloc::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

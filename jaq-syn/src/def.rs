@@ -4,6 +4,7 @@ use alloc::{string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Call to a filter identified by a name type `N` with arguments of type `A`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct Call<A, N = String> {
@@ -14,6 +15,7 @@ pub struct Call<A, N = String> {
 }
 
 impl<A, N> Call<A, N> {
+    /// Apply a function to the call arguments.
     pub fn map_args<B>(self, f: impl FnMut(A) -> B) -> Call<B, N> {
         Call {
             name: self.name,
@@ -26,7 +28,9 @@ impl<A, N> Call<A, N> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def {
+    /// left-hand side, i.e. what shall be defined, e.g. `map(f)`
     pub lhs: Call<Arg>,
+    /// right-hand side, i.e. what the LHS should be defined as, e.g. `[.[] | f]`
     pub rhs: Main,
 }
 
