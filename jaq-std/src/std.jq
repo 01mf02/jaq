@@ -129,8 +129,10 @@ def capture(re; flags): matches(re; flags)[] | capture_of_match;
 def split (re; flags): split_(re; flags + "g");
 def splits(re; flags): split(re; flags)[];
 
-def sub(re; f; flags): reduce split_matches(re; flags)[] as $x
-  (""; . + if $x | isstring then $x else $x | capture_of_match | f end);
+def sub(re; f; flags):
+  def handle: if isarray then capture_of_match | f end;
+  reduce split_matches(re; flags)[] as $x (""; . + ($x | handle));
+
 def gsub(re; f; flags): sub(re; f; "g" + flags);
 
 def    test(re):    test(re; "");
