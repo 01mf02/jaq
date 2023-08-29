@@ -14,7 +14,7 @@ where
     let ident = select! {
         Token::Ident(ident) if ident.starts_with('@') => ident,
     };
-    let fmt = ident.map_with_span(move |x, span| ((T::from(call(x)), span)).into());
+    let fmt = ident.map_with_span(move |x, span| (T::from(call(x)), span).into());
 
     let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
 
