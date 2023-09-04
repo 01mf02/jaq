@@ -378,23 +378,19 @@ fn while_until() {
     );
 }
 
+yields!(sub, r#""XYxyXYxy" | sub("x";"Q")"#, "XYQyXYxy");
+yields!(gsub, r#""XYxyXYxy" | gsub("x";"Q")"#, "XYQyXYQy");
+yields!(isub, r#""XYxyXYxy" | sub("x";"Q";"i")"#, "QYxyXYxy");
+yields!(gisub, r#""XYxyXYxy" | gsub("x";"Q";"i")"#, "QYQyQYQy");
+// swap adjacent occurrences of upper- and lower-case characters
 yields!(
-    sub,
-    r#""XYZxyzXYZxyz" | sub("x";"Q")"#,
-    json!("XYZQyzXYZxyz")
+    gsub_swap,
+    r#""XYxyXYxy" | gsub("(?<upper>[A-Z])(?<lower>[a-z])"; .lower + .upper)"#,
+    "XxYyXxYy"
 );
+// this diverges from jq, which yields ["XxYy", "!XxYy", "Xx!Yy", "!Xx!Yy"]
 yields!(
-    sub_flags,
-    r#""XYZxyzXYZxyz" | sub("x";"Q";"i")"#,
-    json!("QYZxyzXYZxyz")
-);
-yields!(
-    gsub,
-    r#""XYZxyzXYZxyz" | gsub("x";"Q")"#,
-    json!("XYZQyzXYZQyz")
-);
-yields!(
-    gsub_flags,
-    r#""XYZxyzXYZxyz" | gsub("x";"Q";"i")"#,
-    json!("QYZQyzQYZQyz")
+    gsub_many,
+    r#""XxYy" | [gsub("(?<upper>[A-Z])"; .upper, "!" + .upper)]"#,
+    ["XxYy", "Xx!Yy", "!XxYy", "!Xx!Yy"]
 );
