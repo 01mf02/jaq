@@ -25,6 +25,8 @@ impl Owned {
 pub enum Ast {
     #[default]
     Id,
+    ToString,
+
     Int(isize),
     Float(f64),
     Str(String),
@@ -161,6 +163,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
         let w = move |f: &'a Ast| Ref(f, self.1);
         match &self.0 {
             Ast::Id => box_once(Ok(cv.1)),
+            Ast::ToString => box_once(Ok(Val::str(cv.1.to_string_or_clone()))),
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
             Ast::Str(s) => box_once(Ok(Val::str(s.clone()))),
@@ -267,6 +270,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
         let err = box_once(Err(Error::PathExp));
         let w = move |f: &'a Ast| Ref(f, self.1);
         match self.0 {
+            Ast::ToString => err,
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,

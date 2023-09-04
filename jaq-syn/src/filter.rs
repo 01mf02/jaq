@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{MathOp, OrdOp, Path, Span, Spanned};
+use crate::{Call, MathOp, OrdOp, Path, Span, Spanned, Str};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 #[cfg(feature = "serde")]
@@ -60,7 +60,7 @@ pub enum KeyVal<T> {
     Filter(T, T),
     /// Key is a string, and value is an optional filter, e.g. `{a: 1, b}`
     /// (this is equivalent to `{("a"): 1, ("b"): .b}`)
-    Str(String, Option<T>),
+    Str(Str<T>, Option<T>),
 }
 
 impl<F> KeyVal<F> {
@@ -68,7 +68,7 @@ impl<F> KeyVal<F> {
     pub fn map<G>(self, mut f: impl FnMut(F) -> G) -> KeyVal<G> {
         match self {
             Self::Filter(k, v) => KeyVal::Filter(f(k), f(v)),
-            Self::Str(k, v) => KeyVal::Str(k, v.map(f)),
+            Self::Str(k, v) => KeyVal::Str(k.map(&mut f), v.map(f)),
         }
     }
 }
@@ -111,7 +111,7 @@ pub enum Filter<C = String, V = String, Num = String> {
     /// Integer or floating-point number.
     Num(Num),
     /// String
-    Str(String),
+    Str(Box<Str<Spanned<Self>>>),
     /// Array, empty if `None`
     Array(Option<Box<Spanned<Self>>>),
     /// Object, specifying its key-value pairs
@@ -143,9 +143,15 @@ pub enum Filter<C = String, V = String, Num = String> {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }
 
-impl From<String> for Filter {
-    fn from(s: String) -> Self {
-        Self::Str(s)
+impl From<Str<Spanned<Filter>>> for Filter {
+    fn from(s: Str<Spanned<Filter>>) -> Self {
+        Self::Str(Box::new(s))
+    }
+}
+
+impl From<Call<Spanned<Filter>>> for Filter {
+    fn from(c: Call<Spanned<Filter>>) -> Self {
+        Self::Call(c.name, c.args)
     }
 }
 

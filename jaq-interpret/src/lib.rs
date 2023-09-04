@@ -122,9 +122,9 @@ impl<'a> Ctx<'a> {
 
 impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn compile(&mut self, (defs, body): jaq_syn::Main) -> Filter {
-        self.insert_defs(defs);
-        self.root_filter(body);
+    pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
+        self.insert_defs(main.defs);
+        self.root_filter(main.body);
 
         if !self.errs.is_empty() {
             return Default::default();

@@ -61,16 +61,13 @@ fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error 
 where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
-    let val = select! {
-        Token::Num(n) => Filter::Num(n),
-        Token::Str(s) => Filter::Str(s),
+    let num = select! {
+        Token::Num(n) => n,
     }
-    .labelled("value");
+    .labelled("number");
 
-    let ident = select! {
-        Token::Ident(ident) => ident,
-    }
-    .labelled("identifier");
+    let str_ = super::string::str_(filter.clone());
+    let call = super::def::call(filter.clone());
 
     // Atoms can also just be normal filters, but surrounded with parentheses
     let parenthesised = filter
@@ -85,7 +82,7 @@ where
         .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
 
     let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
-    let key_str = super::path::key()
+    let key_str = super::path::key(filter.clone())
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
     let key_filter = parenthesised
@@ -99,8 +96,6 @@ where
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
-    let call = ident.then(super::args(filter));
-
     let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
     let strategy = |open, close, others| {
         nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
@@ -110,10 +105,11 @@ where
 
     choice((
         parenthesised,
-        val.map_with_span(|filter, span| (filter, span)),
+        str_.map_with_span(|s, span| (Filter::from(s), span)),
+        num.map_with_span(|num, span| (Filter::Num(num), span)),
         array.map_with_span(|arr, span| (Filter::Array(arr.map(Box::new)), span)),
         object.map_with_span(|obj, span| (Filter::Object(obj), span)),
-        call.map_with_span(|(f, args), span| (Filter::Call(f, args), span)),
+        call.map_with_span(|call, span| (Filter::from(call), span)),
         variable().map_with_span(|v, span| (Filter::Var(v), span)),
         recurse.map_with_span(|_, span| (Filter::Recurse, span)),
     ))
@@ -230,8 +226,9 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
 
     // e.g. `.[].a` or `.a`
     let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
-    let id_path = super::path::index().or_not().chain(atom_path());
-    let id_with_path = id.then(id_path.collect());
+    let index = super::path::index(with_comma.clone());
+    let index_path = index.or_not().chain(atom_path());
+    let id_with_path = id.then(index_path.collect());
 
     let path = atom_with_path.or(id_with_path);
 

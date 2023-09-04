@@ -9,13 +9,16 @@ mod def;
 pub mod filter;
 mod ops;
 pub mod path;
+pub mod string;
 pub mod test;
 
-pub use def::{Arg, Def, Main};
+pub use def::{Arg, Call, Def, Main};
 pub use ops::{MathOp, OrdOp};
 use path::Path;
+pub use string::Str;
 
-type Span = core::ops::Range<usize>;
+/// Position information.
+pub type Span = core::ops::Range<usize>;
 
 /// An object with position information.
 pub type Spanned<T> = (T, Span);

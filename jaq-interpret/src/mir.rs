@@ -45,6 +45,7 @@ pub type Filter = jaq_syn::filter::Filter<Call, VarIdx, Num>;
 
 #[derive(Debug)]
 pub struct Def {
+    // TODO: convert name and args to Call
     pub name: String,
     pub args: Vec<Arg>,
     pub children: Vec<DefId>,
@@ -221,8 +222,8 @@ impl Ctx {
         // generate a fresh definition ID
         let id: DefId = self.defs.0.len();
         self.defs.0.push(Def {
-            name: def.name,
-            args: def.args,
+            name: def.lhs.name,
+            args: def.lhs.args,
             children: Vec::new(),
             ancestors: ancestors.clone(),
             // after MIR creation, we have to set all filters i with ctx.recursive[i] to defs[i].recursive
@@ -238,11 +239,11 @@ impl Ctx {
 
         ancestors.push(id);
 
-        for d in def.defs {
+        for d in def.rhs.defs {
             self.def(ancestors.clone(), d);
         }
 
-        self.defs.0[id].body = self.filter(id, Vec::new(), def.body);
+        self.defs.0[id].body = self.filter(id, Vec::new(), def.rhs.body);
     }
 
     fn filter(&mut self, id: DefId, mut vars: Vec<String>, f: HirFilter) -> MirFilter {
@@ -330,7 +331,7 @@ impl Ctx {
                 self.errs.push((Error::Num(n), f.1.clone()));
                 n
             })),
-            Expr::Str(s) => Filter::Str(s),
+            Expr::Str(s) => Filter::Str(Box::new((*s).map(|f| *get(f, self)))),
             Expr::Array(a) => Filter::Array(a.map(|a| get(*a, self))),
             Expr::Object(o) => {
                 Filter::Object(o.into_iter().map(|kv| kv.map(|f| *get(f, self))).collect())

@@ -9,6 +9,7 @@ mod def;
 mod filter;
 mod path;
 mod prec_climb;
+mod string;
 mod token;
 
 use jaq_syn as syn;
@@ -23,25 +24,12 @@ use syn::Spanned;
 /// Lex/parse error.
 pub type Error = Simple<String>;
 
-/// A (potentially empty) parenthesised and `;`-separated sequence of arguments.
-fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
-where
-    P: Parser<Token, T> + Clone,
-{
-    arg.separated_by(just(Token::Ctrl(';')))
-        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-        .or_not()
-        .map(Option::unwrap_or_default)
-}
-
 fn lex() -> impl Parser<char, Vec<Spanned<Token>>, Error = Simple<char>> {
-    let comment = just("#").then(take_until(just('\n'))).padded();
-
-    token::token()
-        .padded_by(comment.repeated())
-        .map_with_span(|tok, span| (tok, span))
-        .padded()
+    recursive(token::tree)
+        .map_with_span(|tree, span| tree.tokens(span))
         .repeated()
+        .flatten()
+        .collect()
 }
 
 /// Parse a string with a given parser.

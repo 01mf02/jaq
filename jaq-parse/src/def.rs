@@ -1,37 +1,49 @@
 use super::{filter::filter, Token};
 use alloc::vec::Vec;
 use chumsky::prelude::*;
-use jaq_syn::{Arg, Def, Main};
+use jaq_syn::{Arg, Call, Def, Main};
+
+/// A (potentially empty) parenthesised and `;`-separated sequence of arguments.
+fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
+where
+    P: Parser<Token, T> + Clone,
+{
+    arg.separated_by(just(Token::Ctrl(';')))
+        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+        .or_not()
+        .map(Option::unwrap_or_default)
+}
+
+pub fn call<T, P>(expr: P) -> impl Parser<Token, Call<T>, Error = P::Error> + Clone
+where
+    P: Parser<Token, T, Error = Simple<Token>> + Clone,
+{
+    select! {
+        Token::Ident(ident) => ident,
+    }
+    .labelled("filter name")
+    .then(args(expr).labelled("filter args"))
+    .map(|(name, args)| Call { name, args })
+}
 
 /// Parser for a single definition.
 fn def<P>(def: P) -> impl Parser<Token, Def, Error = Simple<Token>> + Clone
 where
     P: Parser<Token, Def, Error = Simple<Token>> + Clone,
 {
-    let ident = filter_map(|span, tok| match tok {
-        Token::Ident(ident) => Ok(ident),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
+    let arg = select! {
+        Token::Ident(name) => Arg::new_filter(name),
+        Token::Var(name) => Arg::new_var(name),
+    };
 
-    let arg = filter_map(|span, tok| match tok {
-        Token::Ident(name) => Ok(Arg::new_filter(name)),
-        Token::Var(name) => Ok(Arg::new_var(name)),
-        _ => Err(Simple::expected_input_found(span, Vec::new(), Some(tok))),
-    });
+    let defs = def.repeated().collect();
 
     just(Token::Def)
-        .ignore_then(ident.labelled("filter name"))
-        .then(super::args(arg).labelled("filter args"))
+        .ignore_then(call(arg))
         .then_ignore(just(Token::Ctrl(':')))
-        .then(def.repeated().collect())
-        .then(filter())
+        .then(defs.then(filter()).map(|(defs, body)| Main { defs, body }))
         .then_ignore(just(Token::Ctrl(';')))
-        .map(|(((name, args), defs), body)| Def {
-            name,
-            args,
-            defs,
-            body,
-        })
+        .map(|(lhs, rhs)| Def { lhs, rhs })
         .labelled("definition")
 }
 
@@ -42,5 +54,7 @@ pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
 
 /// Parser for a (potentially empty) sequence of definitions, followed by a filter.
 pub fn main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
-    defs().then(filter())
+    defs()
+        .then(filter())
+        .map(|(defs, body)| Main { defs, body })
 }

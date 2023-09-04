@@ -1,6 +1,64 @@
-use alloc::string::String;
+use alloc::{boxed::Box, string::String, vec::Vec};
 use chumsky::prelude::*;
 use core::fmt;
+use jaq_syn::{Span, Spanned};
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Delim {
+    Paren, // ( ... )
+    Brack, // [ ... ]
+    Brace, // { ... }
+}
+
+impl Delim {
+    fn open(&self) -> char {
+        match self {
+            Self::Paren => '(',
+            Self::Brack => '[',
+            Self::Brace => '{',
+        }
+    }
+
+    fn close(&self) -> char {
+        match self {
+            Self::Paren => ')',
+            Self::Brack => ']',
+            Self::Brace => '}',
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Tree {
+    Token(Token),
+    Delim(Delim, Vec<Spanned<Self>>),
+    String(Spanned<String>, Vec<(Spanned<Self>, Spanned<String>)>),
+}
+
+impl Tree {
+    pub fn tokens(self, span: Span) -> Box<dyn Iterator<Item = Spanned<Token>>> {
+        let ft = |(tree, span): Spanned<Self>| tree.tokens(span);
+        let fs = |(s, span): Spanned<String>| (Token::Str(s), span);
+        use core::iter::once;
+        match self {
+            Self::Token(token) => Box::new(once((token, span))),
+            Self::Delim(delim, tree) => {
+                let s = (Token::Ctrl(delim.open()), span.start..span.start + 1);
+                let e = (Token::Ctrl(delim.close()), span.end - 1..span.end);
+                let tokens = tree.into_iter().flat_map(ft);
+                Box::new(once(s).chain(tokens).chain(once(e)))
+            }
+            Self::String(head, tail) => {
+                let s = (Token::Quote, span.start..span.start + 1);
+                let e = (Token::Quote, span.end - 1..span.end);
+                let tail = tail
+                    .into_iter()
+                    .flat_map(move |(tree, str_)| ft(tree).chain(once(fs(str_))));
+                Box::new(once(s).chain(once(fs(head))).chain(tail).chain(once(e)))
+            }
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Token {
@@ -10,6 +68,7 @@ pub enum Token {
     Ident(String),
     Var(String),
     Ctrl(char),
+    Quote,
     DotDot,
     Dot,
     Def,
@@ -34,6 +93,7 @@ impl fmt::Display for Token {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Var(s) => write!(f, "${s}"),
             Self::Ctrl(c) => c.fmt(f),
+            Self::Quote => '"'.fmt(f),
             Self::DotDot => "..".fmt(f),
             Self::Dot => ".".fmt(f),
             Self::Def => "def".fmt(f),
@@ -69,7 +129,7 @@ fn num() -> impl Parser<char, String, Error = Simple<char>> {
 }
 
 // A parser for strings; adapted from Chumsky's JSON example parser.
-fn str_() -> impl Parser<char, String, Error = Simple<char>> {
+fn char_() -> impl Parser<char, char, Error = Simple<char>> {
     let unicode = filter(|c: &char| c.is_ascii_hexdigit())
         .repeated()
         .exactly(4)
@@ -93,11 +153,40 @@ fn str_() -> impl Parser<char, String, Error = Simple<char>> {
         just('u').ignore_then(unicode),
     )));
 
-    just('"')
-        .ignore_then(filter(|c| *c != '\\' && *c != '"').or(escape).repeated())
-        .then_ignore(just('"'))
-        .collect()
-        .labelled("string")
+    filter(|c| *c != '\\' && *c != '"').or(escape)
+}
+
+pub fn tree(
+    tree: impl Parser<char, Tree, Error = Simple<char>> + Clone,
+) -> impl Parser<char, Tree, Error = Simple<char>> {
+    let trees = tree.map_with_span(|t, span| (t, span)).repeated().collect();
+    let paren = trees.clone().delimited_by(just('('), just(')'));
+    let brack = trees.clone().delimited_by(just('['), just(']'));
+    let brace = trees.clone().delimited_by(just('{'), just('}'));
+
+    let pair = |s, span| (s, span);
+    let chars = || char_().repeated().collect().map_with_span(pair);
+
+    let pair = |p, span| (Tree::Delim(Delim::Paren, p), span);
+    let interpol = just('\\').ignore_then(paren.clone().map_with_span(pair));
+
+    let string = chars()
+        .then(interpol.then(chars()).repeated().collect())
+        .delimited_by(just('"'), just('"'))
+        .labelled("string");
+
+    let comment = just("#").then(take_until(just('\n'))).padded();
+
+    choice((
+        paren.map(|t| Tree::Delim(Delim::Paren, t)),
+        brack.map(|t| Tree::Delim(Delim::Brack, t)),
+        brace.map(|t| Tree::Delim(Delim::Brace, t)),
+        string.map(|(s, interpol)| Tree::String(s, interpol)),
+        token().map(Tree::Token),
+    ))
+    .padded_by(comment.repeated())
+    .padded()
+    //.recover_with(skip_then_retry_until([]))
 }
 
 pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
@@ -106,8 +195,8 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
 
     let var = just('$').ignore_then(text::ident());
 
-    // A parser for control characters (delimiters, semicolons, etc.)
-    let ctrl = one_of("{}()[]:;,?");
+    // A parser for control characters (colons, semicolons, etc.)
+    let ctrl = one_of(":;,?");
 
     // A parser for identifiers and keywords
     let ident = just('@').or_not().chain::<char, _, _>(text::ident());
@@ -137,6 +226,4 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         .or(op.map(Token::Op))
         .or(var.map(Token::Var))
         .or(num().map(Token::Num))
-        .or(str_().map(Token::Str))
-        .recover_with(skip_then_retry_until([]))
 }

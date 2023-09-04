@@ -1,8 +1,7 @@
 use super::Token;
-use alloc::string::String;
 use chumsky::prelude::*;
 use jaq_syn::path::{Opt, Part, Path};
-use jaq_syn::Spanned;
+use jaq_syn::{Call, Spanned, Str};
 
 fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     just(Token::Ctrl('?')).or_not().map(|q| match q {
@@ -11,24 +10,31 @@ fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     })
 }
 
-pub(crate) fn key() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
+pub fn key<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
+where
+    T: From<Call<Spanned<T>>>,
+    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
+{
     select! {
-        Token::Ident(s) => s,
-        Token::Str(s) => s,
+        Token::Ident(s) => Str::from(s),
     }
+    .or(super::string::str_(expr))
     .labelled("object key")
 }
 
-pub(crate) fn index<T: From<String>>(
-) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = Simple<Token>> + Clone {
-    key()
+pub fn index<T, P>(expr: P) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = P::Error> + Clone
+where
+    T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
+    P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
+{
+    key(expr)
         .map_with_span(|id, span| Part::Index((T::from(id), span)))
         .then(opt())
 }
 
-pub(crate) fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
+pub fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
-    T: From<String>,
+    T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     let range = {
@@ -39,7 +45,7 @@ where
             Some(e2) => Part::Range(Some(e1), e2),
         });
         let starts_with_colon = colon
-            .ignore_then(expr)
+            .ignore_then(expr.clone())
             .map(|e2| Part::Range(None, Some(e2)));
 
         starts_with_expr
@@ -53,7 +59,7 @@ where
         .then(opt())
         .repeated();
 
-    let dot_id = just(Token::Dot).ignore_then(index());
+    let dot_id = just(Token::Dot).ignore_then(index(expr));
 
     ranges
         .clone()

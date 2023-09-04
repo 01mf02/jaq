@@ -4,18 +4,34 @@ use alloc::{string::String, vec::Vec};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Call to a filter identified by a name type `N` with arguments of type `A`.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug)]
+pub struct Call<A, N = String> {
+    /// Name of the filter, e.g. `map`
+    pub name: N,
+    /// Arguments of the filter, e.g. `["f"]`
+    pub args: Vec<A>,
+}
+
+impl<A, N> Call<A, N> {
+    /// Apply a function to the call arguments.
+    pub fn map_args<B>(self, f: impl FnMut(A) -> B) -> Call<B, N> {
+        Call {
+            name: self.name,
+            args: self.args.into_iter().map(f).collect(),
+        }
+    }
+}
+
 /// A definition, such as `def map(f): [.[] | f];`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Def {
-    /// Name of the filter, e.g. `map`
-    pub name: String,
-    /// Arguments of the filter, e.g. `["f"]`
-    pub args: Vec<Arg>,
-    /// Definitions at the top of the filter
-    pub defs: Vec<Self>,
-    /// Body of the filter, e.g. `[.[] | f`.
-    pub body: Spanned<Filter>,
+    /// left-hand side, i.e. what shall be defined, e.g. `map(f)`
+    pub lhs: Call<Arg>,
+    /// right-hand side, i.e. what the LHS should be defined as, e.g. `[.[] | f]`
+    pub rhs: Main,
 }
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
@@ -53,6 +69,12 @@ impl Arg {
     }
 }
 
-// TODO: rename to Body?
 /// (Potentially empty) sequence of definitions, followed by a filter.
-pub type Main = (Vec<Def>, Spanned<Filter>);
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug)]
+pub struct Main {
+    /// Definitions at the top of the filter
+    pub defs: Vec<Def>,
+    /// Body of the filter, e.g. `[.[] | f`.
+    pub body: Spanned<Filter>,
+}
