@@ -177,6 +177,10 @@ pub fn tree(
 
     let comment = just("#").then(take_until(just('\n'))).padded();
 
+    let strategy = |open, close, others| {
+        nested_delimiters(open, close, others, |_span| Tree::Token(Token::Dot))
+    };
+
     choice((
         paren.map(|t| Tree::Delim(Delim::Paren, t)),
         brack.map(|t| Tree::Delim(Delim::Brack, t)),
@@ -184,9 +188,11 @@ pub fn tree(
         string.map(|(s, interpol)| Tree::String(s, interpol)),
         token().map(Tree::Token),
     ))
+    .recover_with(strategy('(', ')', [('[', ']'), ('{', '}')]))
+    .recover_with(strategy('[', ']', [('{', '}'), ('(', ')')]))
+    .recover_with(strategy('{', '}', [('(', ')'), ('[', ']')]))
     .padded_by(comment.repeated())
     .padded()
-    //.recover_with(skip_then_retry_until([]))
 }
 
 pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {

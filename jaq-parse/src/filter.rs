@@ -96,13 +96,6 @@ where
         .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
         .collect();
 
-    let delim = |open, close| (Token::Ctrl(open), Token::Ctrl(close));
-    let strategy = |open, close, others| {
-        nested_delimiters(Token::Ctrl(open), Token::Ctrl(close), others, |span| {
-            (Filter::Id, span)
-        })
-    };
-
     choice((
         parenthesised,
         str_.map_with_span(|s, span| (Filter::from(s), span)),
@@ -113,9 +106,6 @@ where
         variable().map_with_span(|v, span| (Filter::Var(v), span)),
         recurse.map_with_span(|_, span| (Filter::Recurse, span)),
     ))
-    .recover_with(strategy('(', ')', [delim('[', ']'), delim('{', '}')]))
-    .recover_with(strategy('[', ']', [delim('{', '}'), delim('(', ')')]))
-    .recover_with(strategy('{', '}', [delim('(', ')'), delim('[', ']')]))
 }
 
 fn neg<P>(prev: P) -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone
