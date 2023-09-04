@@ -378,7 +378,7 @@ pub trait FilterT<'a>: Clone + 'a {
             Box::new(l.map(move |l| (l, r[0].clone())))
         } else {
             use itertools::Itertools;
-            Box::new(l.into_iter().cartesian_product(r)) as Box<dyn Iterator<Item = _>>
+            Box::new(l.cartesian_product(r)) as Box<dyn Iterator<Item = _>>
         }
     }
 
