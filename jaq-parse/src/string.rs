@@ -1,4 +1,4 @@
-use super::Token;
+use super::{Delim, Token};
 use chumsky::prelude::*;
 use jaq_syn::{Call, Spanned, Str};
 
@@ -16,12 +16,10 @@ where
     };
     let fmt = ident.map_with_span(move |x, span| (T::from(call(x)), span).into());
 
-    let parenthesised = expr.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
-
     let chars = select! {
         Token::Str(s) => s,
     };
-    let parts = chars.then(parenthesised.then(chars).repeated());
+    let parts = chars.then(Delim::Paren.around(expr).then(chars).repeated());
     let parts = parts.map(|(head, tail)| {
         use core::iter::once;
         use jaq_syn::string::Part::{Fun, Str};

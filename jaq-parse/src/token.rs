@@ -3,7 +3,7 @@ use chumsky::prelude::*;
 use core::fmt;
 use jaq_syn::{Span, Spanned};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Delim {
     Paren, // ( ... )
     Brack, // [ ... ]
@@ -26,6 +26,14 @@ impl Delim {
             Self::Brace => '}',
         }
     }
+
+    /// Parse some tokens surrounded by the delimiters.
+    pub fn around<T, P>(self, f: P) -> impl Parser<Token, T, Error = P::Error> + Clone
+    where
+        P: Parser<Token, T> + Clone,
+    {
+        f.delimited_by(just(Token::Open(self)), just(Token::Close(self)))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -43,8 +51,8 @@ impl Tree {
         match self {
             Self::Token(token) => Box::new(once((token, span))),
             Self::Delim(delim, tree) => {
-                let s = (Token::Ctrl(delim.open()), span.start..span.start + 1);
-                let e = (Token::Ctrl(delim.close()), span.end - 1..span.end);
+                let s = (Token::Open(delim), span.start..span.start + 1);
+                let e = (Token::Close(delim), span.end - 1..span.end);
                 let tokens = tree.into_iter().flat_map(ft);
                 Box::new(once(s).chain(tokens).chain(once(e)))
             }
@@ -67,10 +75,15 @@ pub enum Token {
     Op(String),
     Ident(String),
     Var(String),
-    Ctrl(char),
+    Open(Delim),
+    Close(Delim),
     Quote,
     DotDot,
     Dot,
+    Colon,
+    Semicolon,
+    Comma,
+    Question,
     Def,
     If,
     Then,
@@ -92,10 +105,15 @@ impl fmt::Display for Token {
         match self {
             Self::Num(s) | Self::Str(s) | Self::Op(s) | Self::Ident(s) => s.fmt(f),
             Self::Var(s) => write!(f, "${s}"),
-            Self::Ctrl(c) => c.fmt(f),
+            Self::Open(delim) => delim.open().fmt(f),
+            Self::Close(delim) => delim.close().fmt(f),
             Self::Quote => '"'.fmt(f),
             Self::DotDot => "..".fmt(f),
-            Self::Dot => ".".fmt(f),
+            Self::Dot => '.'.fmt(f),
+            Self::Colon => ':'.fmt(f),
+            Self::Semicolon => ';'.fmt(f),
+            Self::Comma => ','.fmt(f),
+            Self::Question => '?'.fmt(f),
             Self::Def => "def".fmt(f),
             Self::If => "if".fmt(f),
             Self::Then => "then".fmt(f),
@@ -201,9 +219,6 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
 
     let var = just('$').ignore_then(text::ident());
 
-    // A parser for control characters (colons, semicolons, etc.)
-    let ctrl = one_of(":;,?");
-
     // A parser for identifiers and keywords
     let ident = just('@').or_not().chain::<char, _, _>(text::ident());
     let ident = ident.collect().map(|ident: String| match ident.as_str() {
@@ -224,12 +239,16 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         _ => Token::Ident(ident),
     });
 
-    // A single token can be one of the above
-    ident
-        .or(just("..").map(|_| Token::DotDot))
-        .or(just('.').map(|_| Token::Dot))
-        .or(ctrl.map(Token::Ctrl))
-        .or(op.map(Token::Op))
-        .or(var.map(Token::Var))
-        .or(num().map(Token::Num))
+    choice((
+        ident,
+        just("..").to(Token::DotDot),
+        just('.').to(Token::Dot),
+        just(':').to(Token::Colon),
+        just(';').to(Token::Semicolon),
+        just(',').to(Token::Comma),
+        just('?').to(Token::Question),
+        op.map(Token::Op),
+        var.map(Token::Var),
+        num().map(Token::Num),
+    ))
 }

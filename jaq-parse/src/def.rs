@@ -1,4 +1,4 @@
-use super::{filter::filter, Token};
+use super::{filter::filter, Delim, Token};
 use alloc::vec::Vec;
 use chumsky::prelude::*;
 use jaq_syn::{Arg, Call, Def, Main};
@@ -8,8 +8,8 @@ fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
 where
     P: Parser<Token, T> + Clone,
 {
-    arg.separated_by(just(Token::Ctrl(';')))
-        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
+    Delim::Paren
+        .around(arg.separated_by(just(Token::Semicolon)))
         .or_not()
         .map(Option::unwrap_or_default)
 }
@@ -40,9 +40,9 @@ where
 
     just(Token::Def)
         .ignore_then(call(arg))
-        .then_ignore(just(Token::Ctrl(':')))
+        .then_ignore(just(Token::Colon))
         .then(defs.then(filter()).map(|(defs, body)| Main { defs, body }))
-        .then_ignore(just(Token::Ctrl(';')))
+        .then_ignore(just(Token::Semicolon))
         .map(|(lhs, rhs)| Def { lhs, rhs })
         .labelled("definition")
 }

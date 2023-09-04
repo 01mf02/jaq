@@ -1,4 +1,4 @@
-use super::{prec_climb, Token};
+use super::{prec_climb, Delim, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use jaq_syn::filter::{AssignOp, BinaryOp, Filter, Fold, FoldType, KeyVal};
@@ -31,7 +31,7 @@ where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
     let arg = || filter.clone().map(Box::new);
-    let args = arg().then_ignore(just(Token::Ctrl(';'))).then(arg());
+    let args = arg().then_ignore(just(Token::Semicolon)).then(arg());
     let inner = select! {
         Token::Reduce => FoldType::Reduce,
         Token::For => FoldType::For,
@@ -41,7 +41,7 @@ where
         .then(arg())
         .then_ignore(just(Token::As))
         .then(variable())
-        .then(args.delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
+        .then(Delim::Paren.around(args))
         .map(|(((inner, xs), x), (init, f))| (inner, Fold { xs, x, init, f }))
         .map_with_span(|(inner, fold), span| (Filter::Fold(inner, fold), span))
 }
@@ -70,18 +70,13 @@ where
     let call = super::def::call(filter.clone());
 
     // Atoms can also just be normal filters, but surrounded with parentheses
-    let parenthesised = filter
-        .clone()
-        .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')));
+    let parenthesised = Delim::Paren.around(filter.clone());
 
     let recurse = just(Token::DotDot);
 
-    let array = filter
-        .clone()
-        .or_not()
-        .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
+    let array = Delim::Brack.around(filter.clone().or_not());
 
-    let is_val = just(Token::Ctrl(':')).ignore_then(no_comma);
+    let is_val = just(Token::Colon).ignore_then(no_comma);
     let key_str = super::path::key(filter.clone())
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
@@ -89,12 +84,9 @@ where
         .clone()
         .then(is_val)
         .map(|(key, val)| KeyVal::Filter(key, val));
-    let object = key_str
-        .or(key_filter)
-        .separated_by(just(Token::Ctrl(',')))
-        .allow_trailing()
-        .delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}')))
-        .collect();
+    let obj_kv = key_str.or(key_filter);
+    let obj_kvs = obj_kv.separated_by(just(Token::Comma)).allow_trailing();
+    let object = Delim::Brace.around(obj_kvs).collect();
 
     choice((
         parenthesised,
@@ -231,7 +223,7 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
     .boxed();
 
     let try_ = named
-        .then(just(Token::Ctrl('?')).repeated().collect::<Vec<_>>())
+        .then(just(Token::Question).repeated().collect::<Vec<_>>())
         .map_with_span(|(f, try_), span| {
             if try_.is_empty() {
                 f
@@ -244,7 +236,7 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
     let tc = recursive(|f| try_catch(f).or(neg));
 
     let op = binary_op().boxed();
-    let comma = just(Token::Ctrl(',')).to(BinaryOp::Comma);
+    let comma = just(Token::Comma).to(BinaryOp::Comma);
 
     sans_comma.define(climb(tc.clone(), op.clone()));
     with_comma.define(climb(tc, op.or(comma)));

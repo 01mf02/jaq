@@ -15,7 +15,7 @@ mod token;
 use jaq_syn as syn;
 
 pub use def::{defs, main};
-use token::Token;
+use token::{Delim, Token};
 
 use alloc::{string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;

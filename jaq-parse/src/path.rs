@@ -1,10 +1,10 @@
-use super::Token;
+use super::{Delim, Token};
 use chumsky::prelude::*;
 use jaq_syn::path::{Opt, Part, Path};
 use jaq_syn::{Call, Spanned, Str};
 
 fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
-    just(Token::Ctrl('?')).or_not().map(|q| match q {
+    just(Token::Question).or_not().map(|q| match q {
         Some(_) => Opt::Optional,
         None => Opt::Essential,
     })
@@ -38,13 +38,12 @@ where
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     let range = {
-        let colon = just(Token::Ctrl(':'));
-        let e2 = colon.clone().ignore_then(expr.clone().or_not());
+        let e2 = just(Token::Colon).ignore_then(expr.clone().or_not());
         let starts_with_expr = expr.clone().then(e2.or_not()).map(|(e1, e2)| match e2 {
             None => Part::Index(e1),
             Some(e2) => Part::Range(Some(e1), e2),
         });
-        let starts_with_colon = colon
+        let starts_with_colon = just(Token::Colon)
             .ignore_then(expr.clone())
             .map(|e2| Part::Range(None, Some(e2)));
 
@@ -54,10 +53,7 @@ where
             .map(|o| o.unwrap_or(Part::Range(None, None)))
     };
 
-    let ranges = range
-        .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')))
-        .then(opt())
-        .repeated();
+    let ranges = Delim::Brack.around(range).then(opt()).repeated();
 
     let dot_id = just(Token::Dot).ignore_then(index(expr));
 
