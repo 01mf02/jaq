@@ -44,8 +44,7 @@ This should allow users proficient in jq to easily use jaq.
 [jq]: https://jqlang.github.io/jq/
 [jql]: https://github.com/yamafaktory/jql
 
-[^jacques]:
-  I wanted to create a tool that should be discreet and obliging, like a good waiter.
+[^jacques]: I wanted to create a tool that should be discreet and obliging, like a good waiter.
   And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
   Later, I found out about the old French word *jacquet*, meaning "squirrel",
   which makes for a nice *ex post* inspiration for the name.
