@@ -185,7 +185,7 @@ where
 fn to_sh(v: &Val) -> Result<String, Error> {
     let fail = || format!("cannot escape for shell: {v}");
     Ok(match v {
-        Val::Str(s) => format!("'{}'", s.replace('\'', r#"'\''"#)),
+        Val::Str(s) => format!("'{}'", s.replace('\'', r"'\''")),
         Val::Arr(_) | Val::Obj(_) => return Err(Error::str(fail())),
         v => v.to_string(),
     })
