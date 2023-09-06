@@ -17,7 +17,7 @@ jaq focusses on three goals:
 
   * `nan > nan` is false, while `nan < nan` is true.
   * `[[]] | implode` crashes jq, and this was not fixed at the time of writing despite
-    [being known since five years](https://github.com/stedolan/jq/issues/1160).
+    [being known since five years](https://github.com/jqlang/jq/issues/1160).
   * The [jq manual] claims that `limit(n; exp)` "extracts up to `n` outputs from `exp`".
     This holds for values of `n > 1`, e.g. `jq -n '[limit(2; 1, 2, 3)]'` yields
     `[1, 2]`, but when `n == 0`, `jq -n '[limit(0; 1, 2, 3)]'` yields `[1]` instead of `[]`.
@@ -27,7 +27,7 @@ jaq focusses on three goals:
   </details>
 * **Performance**:
   I created jaq originally because I was bothered by
-  [jq's long start-up time](https://github.com/stedolan/jq/issues/1411),
+  [jq's long start-up time](https://github.com/jqlang/jq/issues/1411),
   which amounts to about 50ms on my machine.
   This can particularly show when processing a large number of small files.
   jaq starts up about 30 times faster than jq and
@@ -41,7 +41,7 @@ I drew inspiration from another Rust program, namely [jql].
 However, unlike jql, jaq aims to closely imitate jq's syntax and semantics.
 This should allow users proficient in jq to easily use jaq.
 
-[jq]: https://stedolan.github.io/jq/
+[jq]: https://jqlang.github.io/jq/
 [jql]: https://github.com/yamafaktory/jql
 
 
@@ -88,7 +88,7 @@ You should obtain the same outputs by replacing jaq with jq.
 If not, your filing an issue would be appreciated. :)
 The syntax is documented in the [jq manual].
 
-[jq manual]: https://stedolan.github.io/jq/manual/v1.6/
+[jq manual]: https://jqlang.github.io/jq/manual/v1.6/
 
 Access a field:
 
@@ -167,7 +167,7 @@ faster than jq 1.6 on *all* benchmarks.
 gojq is faster than jaq only on one benchmark, namely "tree-flatten"
 (due to implementing the filter `flatten` natively instead of by definition).
 
-[jq-cff5336]: https://github.com/stedolan/jq/tree/cff5336ec71b6fee396a95bb0e4bea365e0cd1e8
+[jq-cff5336]: https://github.com/jqlang/jq/tree/cff5336ec71b6fee396a95bb0e4bea365e0cd1e8
 [gojq]: https://github.com/itchyny/gojq
 
 
