@@ -5,40 +5,41 @@
 # Example usage:
 #
 #     ./bench.sh target/release/jaq jq
-#
-# Make sure that you are running a version of jq newer than 1.6,
-# otherwise this benchmark will likely take a looooooooong time.
 
 TIME='timeout 10 /usr/bin/time -f %U'
-NA='echo N/A'
 
-echo -n '|Benchmark|n'
-for j in $@; do echo -n '|' $j; done
-echo '|'
-echo -n '|-|-:'
-for j in $@; do echo -n '|-:'; done
-echo '|'
-
-echo -n '|empty|512'
+echo -n '{"name": "empty", "n": 512, "time": {'
 for j in $@; do
-  echo -n '|' $($TIME bash -c "for n in {1..512}; do $j -n 'empty'; done" 2>&1 || $NA)
+  t=$($TIME bash -c "for n in {1..512}; do $j -n 'empty'; done" 2>&1)
+  [ $j != $1 ] && echo -n ', '
+  echo -n '"'$j'": ['$t']'
 done
-echo '|'
+echo '}}'
 
-echo -n '|bf-fib|13'
+echo -n '{"name": "bf-fib", "n": 13, "time": {'
 for j in $@; do
-  echo -n '|' $($TIME $j -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null || $NA)
+  t=$($TIME $j -sRrf examples/bf.jq examples/fib.bf 2>&1 > /dev/null)
+  [ $j != $1 ] && echo -n ', '
+  echo -n '"'$j'": ['$t']'
 done
-echo '|'
+echo '}}'
 
 while read -r line; do
   b=`echo $line | $1 -r .name`
   n=`echo $line | $1 .n`
-  echo -n "|$b|$n"
+  echo -n '{"name": "'$b'", "n": '$n', "time": {'
   for j in $@; do
-    echo -n '|' $(echo $n | $TIME $j "$(cat examples/$b.jq) | length" 2>&1 > /dev/null || $NA)
+    [ $j != $1 ] && echo -n ', '
+    echo -n '"'$j'": ['
+    for i in `seq 3`; do
+      t=$(echo $n | $TIME $j "$(cat examples/$b.jq) | length" 2>&1 > /dev/null)
+      [ -z "$t" ] && break # terminate on timeout
+      [ $i -ne 1 ] && echo -n ', '
+      echo -n $t
+    done
+    echo -n ']'
   done
-  echo '|'
+  echo '}}'
 done <examples/benches.json
 # 2^16 =   65536
 # 2^17 =  131072

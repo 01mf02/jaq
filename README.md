@@ -140,32 +140,44 @@ see [`bench.sh`](bench.sh) for details.
 
 [jq-cff5336] was compiled manually with disabled assertion checking,
 by adding `-DNDEBUG` to `DEFS` in `Makefile`.
-I generated the benchmark data with `bench.sh target/release/jaq jq-cff5336 gojq jq`,
-followed by `pandoc -t gfm`.
+I generated the benchmark data with `bench.sh target/release/jaq jq-cff5336 gojq jq > bench.json`
+on a Linux system with an AMD Ryzen 5 5500U.
+I then processed the results with a "one-liner" (stretching the term and the line a bit):
 
-Table: Evaluation results in seconds ("N/A" if more than 10 seconds).
+    jq -rs '.[] | "|`\(.name)`|\(.n)|" + ([.time[] | min | (.*1000|round)? // "N/A"] | min as $total_min | map(if . == $total_min then "**\(.)**" else "\(.)" end) | join("|"))' bench.json
 
-| Benchmark    |       n | jaq-0.9.0 | jq-cff5336 | gojq-0.12.9 | jq-1.6 |
-| ------------ | ------: | --------: | ---------: | ----------: | -----: |
-| empty        |     512 |      0.83 |       1.25 |        0.96 |    N/A |
-| bf-fib       |      13 |      0.92 |       1.30 |        2.52 |   3.16 |
-| reverse      | 1048576 |      0.08 |       1.09 |        1.16 |   1.54 |
-| sort         | 1048576 |      0.20 |       1.53 |        1.77 |   1.81 |
-| add          | 1048576 |      0.96 |       1.06 |        2.51 |   1.69 |
-| kv           |  131072 |      0.33 |       0.25 |        0.49 |   0.49 |
-| kv-update    |  131072 |      0.38 |       0.67 |         N/A |    N/A |
-| kv-entries   |  131072 |      1.23 |       1.29 |        2.23 |   2.50 |
-| ex-implode   | 1048576 |      1.32 |       1.59 |        1.73 |   2.77 |
-| reduce       | 1048576 |      1.60 |       1.34 |         N/A |   1.92 |
-| tree-flatten |      17 |      0.71 |       0.54 |        0.03 |   1.95 |
-| tree-update  |      17 |      0.47 |       1.43 |        4.58 |   2.73 |
-| to-fromjson  |   65536 |      0.09 |       1.59 |        0.16 |   1.69 |
+(Of course, you can also use jaq here instead of jq.)
+Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
-The results show that jaq is
-faster than jq-cff5336 on ten out of thirteen benchmarks and
-faster than jq 1.6 on *all* benchmarks.
-gojq is faster than jaq only on one benchmark, namely "tree-flatten"
-(due to implementing the filter `flatten` natively instead of by definition).
+Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
+
+| Benchmark      |       n | jaq-1.0 | jq-cff5336 | gojq-0.12.13 | jq-1.6 |
+| -------------- | ------: | ------: | ---------: | -----------: | -----: |
+| `empty`        |     512 | **540** |        650 |          580 |   8400 |
+| `bf-fib`       |      13 | **380** |        590 |          850 |   1430 |
+| `reverse`      | 1048576 |  **30** |        490 |          300 |    640 |
+| `sort`         | 1048576 | **100** |        440 |          600 |    680 |
+| `group-by`     | 1048576 | **380** |       1600 |         1710 |   2790 |
+| `min-max`      | 1048576 | **180** |        290 |          270 |    350 |
+| `add`          | 1048576 |     450 |    **440** |         1500 |    740 |
+| `kv`           |  131072 |     140 |     **90** |          230 |    200 |
+| `kv-update`    |  131072 | **170** |        300 |          530 |    N/A |
+| `kv-entries`   |  131072 | **560** |        610 |          840 |   1120 |
+| `ex-implode`   | 1048576 |     740 |        720 |      **690** |   1080 |
+| `reduce`       | 1048576 |     710 |    **570** |          N/A |    860 |
+| `try-catch`    | 1048576 | **150** |        440 |          530 |    670 |
+| `tree-flatten` |      17 |     440 |        230 |        **0** |    490 |
+| `tree-update`  |      17 | **270** |        600 |         1820 |   1180 |
+| `tree-paths`   |      17 |    1430 |    **240** |          930 |    460 |
+| `to-fromjson`  |   65536 |  **40** |        320 |          110 |    390 |
+| `ack`          |       7 |     470 |    **410** |         1070 |    620 |
+
+The results show that
+jaq-1.0 is fastest on 11 benchmarks, whereas
+jq-cff5336 is fastest on 5 benchmarks and
+gojq-0.12.13 is fastest on 2 benchmarks.
+jq 1.6 is slowest on all benchmarks.
+gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [jq-cff5336]: https://github.com/jqlang/jq/tree/cff5336ec71b6fee396a95bb0e4bea365e0cd1e8
 [gojq]: https://github.com/itchyny/gojq
