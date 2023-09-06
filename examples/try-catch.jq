@@ -1,1 +1,1 @@
-range(.) | try error catch empty
+[range(.) | try error catch .]
