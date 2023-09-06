@@ -5,7 +5,7 @@
 [![Documentation](https://docs.rs/jaq-interpret/badge.svg)](https://docs.rs/jaq-interpret)
 [![Rust 1.62+](https://img.shields.io/badge/rust-1.62+-orange.svg)](https://www.rust-lang.org)
 
-jaq is a clone of the JSON data processing tool [jq].
+jaq (pronounced like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
 jaq focusses on three goals:
@@ -43,6 +43,12 @@ This should allow users proficient in jq to easily use jaq.
 
 [jq]: https://jqlang.github.io/jq/
 [jql]: https://github.com/yamafaktory/jql
+
+[^jacques]:
+  I wanted to create a tool that should be discreet and obliging, like a good waiter.
+  And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
+  Later, I found out about the old French word *jacquet*, meaning "squirrel",
+  which makes for a nice *ex post* inspiration for the name.
 
 
 
