@@ -1,0 +1,1 @@
+[range(.)] | min, max
