@@ -1,6 +1,6 @@
 [package]
 name = "jaq-parse"
-version = "1.0.0-gamma"
+version = "1.0.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -12,4 +12,4 @@ categories = ["parser-implementations"]
 
 [dependencies]
 chumsky = { version = "0.9.0", default-features = false }
-jaq-syn = { version = "1.0.0-gamma", path = "../jaq-syn" }
+jaq-syn = { version = "1.0.0", path = "../jaq-syn" }

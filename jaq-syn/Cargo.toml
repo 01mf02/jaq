@@ -1,6 +1,6 @@
 [package]
 name = "jaq-syn"
-version = "1.0.0-gamma"
+version = "1.0.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
