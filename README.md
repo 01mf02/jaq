@@ -143,10 +143,9 @@ interpreting a Brainfuck script that produces `n` Fibonacci numbers.
 The other benchmarks evaluate various filters with `n` as input;
 see [`bench.sh`](bench.sh) for details.
 
-[jq-cff5336] was compiled manually with disabled assertion checking,
-by adding `-DNDEBUG` to `DEFS` in `Makefile`.
-I generated the benchmark data with `bench.sh target/release/jaq jq-cff5336 gojq jq > bench.json`
-on a Linux system with an AMD Ryzen 5 5500U.
+I generated the benchmark data with
+`bench.sh target/release/jaq jq-1.7 gojq-0.12.13 jq-1.6 | tee bench.json`
+on a Linux system with an AMD Ryzen 5 5500U.[^binaries]
 I then processed the results with a "one-liner" (stretching the term and the line a bit):
 
     jq -rs '.[] | "|`\(.name)`|\(.n)|" + ([.time[] | min | (.*1000|round)? // "N/A"] | min as $total_min | map(if . == $total_min then "**\(.)**" else "\(.)" end) | join("|"))' bench.json
@@ -154,37 +153,40 @@ I then processed the results with a "one-liner" (stretching the term and the lin
 (Of course, you can also use jaq here instead of jq.)
 Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
+[^binaries]:
+  The binaries for jq-1.7 and gojq-0.12.13 were retrieved from their GitHub release pages,
+  the binary for jq-1.6 was installed from the standard Ubuntu repository.
+
 Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
 
-| Benchmark      |       n | jaq-1.0 | jq-cff5336 | gojq-0.12.13 | jq-1.6 |
-| -------------- | ------: | ------: | ---------: | -----------: | -----: |
-| `empty`        |     512 | **540** |        650 |          580 |   8400 |
-| `bf-fib`       |      13 | **380** |        590 |          850 |   1430 |
-| `reverse`      | 1048576 |  **30** |        490 |          300 |    640 |
-| `sort`         | 1048576 | **100** |        440 |          600 |    680 |
-| `group-by`     | 1048576 | **380** |       1600 |         1710 |   2790 |
-| `min-max`      | 1048576 | **180** |        290 |          270 |    350 |
-| `add`          | 1048576 |     450 |    **440** |         1500 |    740 |
-| `kv`           |  131072 |     140 |     **90** |          230 |    200 |
-| `kv-update`    |  131072 | **170** |        300 |          530 |    N/A |
-| `kv-entries`   |  131072 | **560** |        610 |          840 |   1120 |
-| `ex-implode`   | 1048576 |     740 |        720 |      **690** |   1080 |
-| `reduce`       | 1048576 |     710 |    **570** |          N/A |    860 |
-| `try-catch`    | 1048576 | **150** |        440 |          530 |    670 |
-| `tree-flatten` |      17 |     440 |        230 |        **0** |    490 |
-| `tree-update`  |      17 | **270** |        600 |         1820 |   1180 |
-| `tree-paths`   |      17 |    1430 |    **240** |          930 |    460 |
-| `to-fromjson`  |   65536 |  **40** |        320 |          110 |    390 |
-| `ack`          |       7 |     470 |    **410** |         1070 |    620 |
+| Benchmark      |       n | jaq-1.0 |  jq-1.7 | gojq-0.12.13 | jq-1.6 |
+| -------------- | ------: | ------: | ------: | -----------: | -----: |
+| `empty`        |     512 | **550** |     610 |          570 |   8450 |
+| `bf-fib`       |      13 | **380** |    1290 |         1050 |   1430 |
+| `reverse`      | 1048576 |  **20** |     690 |          320 |    650 |
+| `sort`         | 1048576 | **100** |     540 |          550 |    660 |
+| `group-by`     | 1048576 | **380** |    1880 |         1690 |   2790 |
+| `min-max`      | 1048576 | **180** |     340 |          300 |    350 |
+| `add`          | 1048576 | **460** |     640 |         1430 |    740 |
+| `kv`           |  131072 | **140** | **140** |          240 |    200 |
+| `kv-update`    |  131072 | **160** |     550 |          550 |    N/A |
+| `kv-entries`   |  131072 | **550** |    1160 |          780 |   1110 |
+| `ex-implode`   | 1048576 |     730 |    1130 |      **690** |   1100 |
+| `reduce`       | 1048576 | **700** |     890 |          N/A |    850 |
+| `try-catch`    | 1048576 | **150** |     330 |          530 |    680 |
+| `tree-flatten` |      17 |     430 |     360 |        **0** |    480 |
+| `tree-update`  |      17 | **270** |     970 |         1830 |   1180 |
+| `tree-paths`   |      17 |    1420 | **360** |          890 |    480 |
+| `to-fromjson`  |   65536 |  **30** |     370 |          110 |    390 |
+| `ack`          |       7 | **500** |     690 |         1070 |    620 |
 
 The results show that
-jaq-1.0 is fastest on 11 benchmarks, whereas
-jq-cff5336 is fastest on 5 benchmarks and
+jaq-1.0 is fastest on 15 benchmarks, whereas
+jq-1.7 is fastest on 2 benchmarks and
 gojq-0.12.13 is fastest on 2 benchmarks.
-jq 1.6 is slowest on all benchmarks.
+jq-1.6 is slowest on all benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
-[jq-cff5336]: https://github.com/jqlang/jq/tree/cff5336ec71b6fee396a95bb0e4bea365e0cd1e8
 [gojq]: https://github.com/itchyny/gojq
 
 
@@ -430,7 +432,7 @@ because JSON does not support encoding these values as numbers.
 
 jaq preserves fractional numbers coming from JSON data perfectly
 (as long as they are not used in some arithmetic operation),
-whereas jq may silently convert to 64-bit floating-point numbers:
+whereas jq 1.6 may silently convert to 64-bit floating-point numbers:
 
     $ echo '1e500' | jq '.'
     1.7976931348623157e+308
@@ -444,9 +446,8 @@ Therefore, unlike jq 1.6, jaq satisfies the following paragraph in the [jq manua
 > This is particularly important when dealing with numbers which can't be
 > losslessly converted to an IEEE754 double precision representation.
 
-Please note that newer development versions of jq (e.g. commit cff5336)
-seem to preserve the literal decimal representation,
-even if it is not stated in the manual.
+Please note that newer versions of jq, e.g. 1.7,
+seem to preserve the literal decimal representation as well.
 
 
 ## Assignments
