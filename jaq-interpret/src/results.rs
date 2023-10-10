@@ -85,12 +85,12 @@ pub(crate) fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
 }
 
 // if `inner` is true, output intermediate results
-pub(crate) fn fold<'a, T: Clone + 'a, E: Clone + 'a>(
+pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
     inner: bool,
     xs: List<'a, Result<T, E>>,
-    init: Results<'a, T, E>,
-    f: impl Fn(T, T) -> Results<'a, T, E> + 'a,
-) -> impl Iterator<Item = Result<T, E>> + 'a {
+    init: Results<'a, U, E>,
+    f: impl Fn(T, U) -> Results<'a, U, E> + 'a,
+) -> impl Iterator<Item = Result<U, E>> + 'a {
     let mut stack = Vec::from([(xs, init.peekable())]);
     core::iter::from_fn(move || loop {
         let (mut xs, mut vs) = stack.pop()?;
@@ -107,7 +107,7 @@ pub(crate) fn fold<'a, T: Clone + 'a, E: Clone + 'a>(
 
         let x = match xs.next() {
             Some(Ok(x)) => x,
-            e @ Some(Err(_)) => return e,
+            Some(Err(e)) => return Some(Err(e)),
             None => return Some(Ok(v)),
         };
 
