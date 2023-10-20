@@ -10,13 +10,18 @@ use jaq_syn::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Default, Clone)]
-pub struct Owned(Ast, Vec<(usize, Ast)>);
+pub struct Owned(Ast, Vec<Def>);
 
 #[derive(Debug, Copy, Clone)]
-pub struct Ref<'a>(&'a Ast, &'a [(usize, Ast)]);
+pub struct Ref<'a>(&'a Ast, &'a [Def]);
+
+#[derive(Debug, Clone)]
+pub struct Def {
+    pub rhs: Ast,
+}
 
 impl Owned {
-    pub(crate) fn new(main: Ast, recs: Vec<(usize, Ast)>) -> Self {
+    pub(crate) fn new(main: Ast, recs: Vec<Def>) -> Self {
         Self(main, recs)
     }
 }
@@ -81,6 +86,7 @@ pub enum Ast {
     Call {
         skip: usize,
         id: usize,
+        args: Vec<Self>,
     },
 
     Native(Native, Vec<Self>),
@@ -93,6 +99,25 @@ pub trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
 impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
+
+/// Enhance the context `ctx` with variables bound to the outputs of `args` executed on `cv`,
+/// and return the enhanced contexts together with the original value of `cv`.
+///
+/// This is used when we call filters with variable arguments.
+fn bind_vars<'a, F, I>(mut args: I, ctx: Ctx<'a>, cv: Cv<'a>) -> Results<'a, Cv<'a>, Error>
+where
+    F: FilterT<'a>,
+    I: Iterator<Item = F> + Clone + 'a,
+{
+    match args.next() {
+        Some(arg) => flat_map_with(
+            arg.run(cv.clone()),
+            (ctx, cv, args),
+            |y, (ctx, cv, args)| then(y, |y| bind_vars(args, ctx.cons_var(y), cv)),
+        ),
+        None => box_once(Ok((ctx, cv.1))),
+    }
+}
 
 fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
     let xs = rc_lazy_list::List::from_iter(xs);
@@ -133,7 +158,7 @@ impl core::fmt::Debug for Native {
 
 /// Arguments passed to a native filter.
 #[derive(Copy, Clone)]
-pub struct Args<'a>(&'a [Ast], &'a [(usize, Ast)]);
+pub struct Args<'a>(&'a [Ast], &'a [Def]);
 
 impl<'a> Args<'a> {
     /// Obtain the n-th argument passed to the filter, crash if it is not given.
@@ -257,10 +282,11 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Recurse(f) => w(f).recurse(true, true, cv),
 
             Ast::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
-            Ast::Call { skip, id } => Box::new(crate::LazyIter::new(move || {
-                let (save, rec) = &self.1[*id];
-                //std::dbg!(save, skip, &cv.0.vars, &cv.0.clone().save_skip_vars(*save, *skip).vars);
-                w(rec).run((cv.0.save_skip_vars(*save, *skip), cv.1))
+            Ast::Call { skip, id, args } => Box::new(crate::LazyIter::new(move || {
+                let def = &self.1[*id];
+                let ctx = cv.0.clone().skip_vars(*skip);
+                let ctxs = bind_vars(args.iter().map(w), ctx, cv);
+                ctxs.flat_map(move |cv| then(cv, |cv| w(&def.rhs).run(cv)))
             })),
 
             Ast::Native(Native { run, .. }, args) => (run)(Args(args, self.1), cv),
@@ -309,9 +335,14 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Recurse(l) => w(l).recurse_update(cv, f),
 
             Ast::Var(_) => err,
-            Ast::Call { skip, id } => {
-                let (save, rec) = &self.1[*id];
-                w(rec).update((cv.0.save_skip_vars(*save, *skip), cv.1), f)
+            Ast::Call { skip, id, args } => {
+                let def = &self.1[*id];
+                let ctx = cv.0.clone().skip_vars(*skip);
+                let init = box_once(Ok(cv.1.clone()));
+                let ctxs = rc_lazy_list::List::from_iter(bind_vars(args.iter().map(w), ctx, cv));
+                Box::new(fold(false, ctxs, init, move |cv, v| {
+                    w(&def.rhs).update((cv.0, v), f.clone())
+                }))
             }
 
             Ast::Native(Native { update, .. }, args) => (update)(Args(args, self.1), cv, f),
