@@ -15,6 +15,12 @@ yields!(
     [[0, 1], [1, 2], [2, 3]]
 );
 
+yields!(
+    rec_update,
+    "def upto($x): .[$x], (if $x > 0 then upto($x-1) else empty end); [1, 2, 3, 4] | upto(1) |= .+1",
+    [2, 3, 3, 4]
+);
+
 #[test]
 fn ascii() {
     give(json!("aAaAäの"), "ascii_upcase", json!("AAAAäの"));
