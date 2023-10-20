@@ -1,4 +1,4 @@
-use crate::box_iter::box_once;
+use crate::box_iter::{box_once, flat_map_with};
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
@@ -355,21 +355,7 @@ pub trait FilterT<'a>: Clone + 'a {
     where
         F: Fn(Cv<'a>, Val) -> Results<'a, T, Error> + 'a,
     {
-        let mut l = self.run(cv.clone());
-
-        // if we expect at most one element from the left side,
-        // we do not need to clone the input value to run the right side;
-        // this can have a significant impact on performance!
-        if l.size_hint().1 == Some(1) {
-            if let Some(y) = l.next() {
-                // the Rust documentation states that
-                // "a buggy iterator may yield [..] more than the upper bound of elements",
-                // but so far, it seems that all iterators here are not buggy :)
-                assert!(l.next().is_none());
-                return then(y, |y| f(cv, y));
-            }
-        };
-        Box::new(l.flat_map(move |y| then(y, |y| f(cv.clone(), y))))
+        flat_map_with(self.run(cv.clone()), cv, move |y, cv| then(y, |y| f(cv, y)))
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
