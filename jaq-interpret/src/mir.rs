@@ -55,10 +55,6 @@ pub struct Def {
 }
 
 impl Def {
-    pub fn arity(&self) -> usize {
-        self.args.len()
-    }
-
     /// Return the indices of variable and nonvariable arguments of the definition.
     ///
     /// Example: if we have the arguments $f; g; $h; i, then we obtain
