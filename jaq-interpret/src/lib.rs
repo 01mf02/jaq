@@ -92,32 +92,15 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// Remove the `skip` most recent variable bindings.
+    fn skip_vars(mut self, skip: usize) -> Self {
+        self.vars = self.vars.skip(skip).clone();
+        self
+    }
+
     /// Return remaining input values.
     pub fn inputs(&self) -> &'a Inputs<'a> {
         self.inputs
-    }
-
-    /// Obtain and remove the `save` most recent variable bindings,
-    /// then remove additional `skip` most recent bindings,
-    /// finally add the original `save` bindings.
-    ///
-    /// This seemingly complicated behaviour stems from
-    /// calls to recursive filters with `save` variable arguments.
-    /// To call such a filter, we have to first produce the
-    /// argument values and save them in the context.
-    /// Next, we have to remove `skip` variables that might have been bound
-    /// by the last call to the recursive filter.
-    /// Finally, we add the `save` arguments to the context again,
-    /// so that the recursive filter can start again with the same context length.
-    fn save_skip_vars(mut self, save: usize, skip: usize) -> Self {
-        self.vars = if save == 0 {
-            self.vars.skip(skip).clone()
-        } else {
-            let (saved, rest) = self.vars.pop_many(save);
-            let saved = saved.into_iter().rev().cloned();
-            rest.skip(skip).clone().cons_many(saved)
-        };
-        self
     }
 }
 

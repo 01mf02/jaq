@@ -60,7 +60,7 @@ pub fn root_def(defs: &mir::Defs) -> filter::Owned {
     let view = View::default();
     let f = ctx.def(root_id, view, defs);
     let recs = ctx.recs.into_iter();
-    let recs = recs.map(|rec| (defs.get(rec.id).arity(), rec.filter));
+    let recs = recs.map(|rec| (filter::Def { rhs: rec.filter }));
     filter::Owned::new(f, recs.collect())
 }
 
@@ -184,24 +184,16 @@ impl Ctx {
                 let var_args = var_arg_idxs.iter().map(|i| args[*i].clone());
                 let nonvar_args = nonvar_arg_idxs.iter().map(|i| args[*i].clone());
 
-                let var_args: Vec<_> = var_args
-                    .map(|a| {
-                        //std::dbg!(&view, self.vars);
-                        let arg = self.filter(a, id, view.clone(), defs);
-                        self.vars += 1;
-                        // TODO: increase view.vars? probably not ...
-                        arg
-                    })
-                    .collect();
-                self.vars -= var_args.len();
-
                 //std::dbg!(id);
 
                 assert!(sorted_and_unique(
                     view.recs.iter().map(|ridx| self.recs[*ridx].id)
                 ));
                 // recursion!
-                let out = if let Some(rec_idx) = view.find_rec(did, &self.recs) {
+                let filter = if let Some(rec_idx) = view.find_rec(did, &self.recs) {
+                    let var_args = var_args
+                        .map(|a| self.filter(a, id, view.clone(), defs))
+                        .collect();
                     //std::dbg!("call a recursive filter!", did);
                     //  std::dbg!(&self.recs);
                     //  std::dbg!(&view.recs);
@@ -211,17 +203,27 @@ impl Ctx {
                     Filter::Call {
                         id: rec_idx,
                         skip: self.vars - vars_len,
+                        args: var_args,
                     }
                 } else {
-                    self.nonrec_call(id, did, &view, nonvar_args, defs)
+                    let var_args: Vec<_> = var_args
+                        .map(|a| {
+                            //std::dbg!(&view, self.vars);
+                            let arg = self.filter(a, id, view.clone(), defs);
+                            self.vars += 1;
+                            // TODO: increase view.vars? probably not ...
+                            arg
+                        })
+                        .collect();
+                    self.vars -= var_args.len();
+
+                    // here, we revert the order, because leftmost variable arguments are bound first, which means
+                    // they will appear *outermost* in the filter, thus have to be added *last* to the filter
+                    let out = self.nonrec_call(id, did, &view, nonvar_args, defs);
+                    var_args.into_iter().rev().fold(out, |acc, arg| {
+                        Filter::Pipe(Box::new(arg), true, Box::new(acc))
+                    })
                 };
-
-                // here, we revert the order, because leftmost variable arguments are bound first, which means
-                // they will appear *outermost* in the filter, thus have to be added *last* to the filter
-
-                let filter = var_args.into_iter().rev().fold(out, |acc, arg| {
-                    Filter::Pipe(Box::new(arg), true, Box::new(acc))
-                });
 
                 // std::dbg!("return from filter construction");
                 self.args.truncate(self.args.len() - nonvar_arg_idxs.len());
