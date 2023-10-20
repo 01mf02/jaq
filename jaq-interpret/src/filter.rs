@@ -1,4 +1,4 @@
-use crate::box_iter::{box_once, flat_map_with};
+use crate::box_iter::{box_once, flat_map_with, map_with};
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
@@ -361,7 +361,7 @@ pub trait FilterT<'a>: Clone + 'a {
     /// Run `self` and `r` and return the cartesian product of their outputs.
     fn cartesian(self, r: Self, cv: Cv<'a>) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
         flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
-            flat_map_with(r.clone().run(cv), l, |r, l| box_once((l, r)))
+            map_with(r.clone().run(cv), l, |r, l| (l, r))
         })
     }
 
