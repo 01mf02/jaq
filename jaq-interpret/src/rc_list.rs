@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 #[derive(Clone, Debug)]
 pub enum RcList<T> {
     Nil,
@@ -22,9 +20,11 @@ impl<T> RcList<T> {
         Self::Cons(x, alloc::rc::Rc::new(self))
     }
 
+    /*
     pub fn cons_many(self, iter: impl IntoIterator<Item = T>) -> Self {
         iter.into_iter().fold(self, |acc, x| acc.cons(x))
     }
+    */
 
     pub fn get(&self, mut n: usize) -> Option<&T> {
         let mut ctx = self;
@@ -37,29 +37,6 @@ impl<T> RcList<T> {
             }
         }
         None
-    }
-
-    fn pop(&self) -> Option<(&T, &Self)> {
-        match self {
-            Self::Cons(x, xs) => Some((x, xs)),
-            Self::Nil => None,
-        }
-    }
-
-    pub fn pop_many(&self, n: usize) -> (Vec<&T>, &Self) {
-        let mut out = Vec::with_capacity(n);
-
-        let mut ctx = self;
-        for _ in 0..n {
-            match ctx.pop() {
-                Some((x, xs)) => {
-                    out.push(x);
-                    ctx = xs
-                }
-                None => return (out, &Self::Nil),
-            }
-        }
-        (out, ctx)
     }
 
     pub fn skip(&self, n: usize) -> &Self {
@@ -90,10 +67,6 @@ fn test() {
 
     let l = RcList::new().cons(2).cons(1).cons(0);
     eq(&l, vec![0, 1, 2]);
-
-    let (popped, rest) = l.pop_many(2);
-    assert_eq!(popped, vec![&0, &1]);
-    eq(rest, vec![2]);
 
     eq(l.skip(0), vec![0, 1, 2]);
     eq(l.skip(1), vec![1, 2]);
