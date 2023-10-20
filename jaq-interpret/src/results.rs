@@ -1,14 +1,12 @@
 //! Functions on iterators over results.
 
+/// TODO for v2.0: remove this from `results`
+pub use crate::box_iter::box_once;
+use crate::box_iter::BoxIter;
 use crate::rc_lazy_list::List;
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 
-type Results<'a, T, E> = Box<dyn Iterator<Item = Result<T, E>> + 'a>;
-
-/// Return a boxed iterator that yields a single element.
-pub fn box_once<'a, T: 'a>(x: T) -> Box<dyn Iterator<Item = T> + 'a> {
-    Box::new(core::iter::once(x))
-}
+type Results<'a, T, E> = BoxIter<'a, Result<T, E>>;
 
 /// If `x` is an `Err`, return it as iterator, else apply `f` to `x` and return its output.
 pub fn then<'a, T, U: 'a, E: 'a>(

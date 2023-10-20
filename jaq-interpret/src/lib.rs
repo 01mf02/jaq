@@ -46,6 +46,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod box_iter;
 pub mod error;
 mod filter;
 mod lazy_iter;

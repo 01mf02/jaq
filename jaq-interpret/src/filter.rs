@@ -1,5 +1,6 @@
+use crate::box_iter::box_once;
 use crate::path::{self, Path};
-use crate::results::{box_once, fold, recurse, then};
+use crate::results::{fold, recurse, then};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
@@ -115,7 +116,7 @@ pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> V
 impl Native {
     /// Create a native filter from a run function, without support for updates.
     pub const fn new(run: RunPtr) -> Self {
-        Self::with_update(run, |_, _, _| crate::results::box_once(Err(Error::PathExp)))
+        Self::with_update(run, |_, _, _| box_once(Err(Error::PathExp)))
     }
 
     /// Create a native filter from a run function and an update function (used for `filter |= ...`).
