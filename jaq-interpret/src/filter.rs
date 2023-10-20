@@ -360,16 +360,9 @@ pub trait FilterT<'a>: Clone + 'a {
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
     fn cartesian(self, r: Self, cv: Cv<'a>) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
-        let l = self.run(cv.clone());
-        let r: Vec<_> = r.run(cv).collect();
-        if r.len() == 1 {
-            // this special case is to avoid cloning the left-hand side,
-            // which massively improves performance of filters like `add`
-            Box::new(l.map(move |l| (l, r[0].clone())))
-        } else {
-            use itertools::Itertools;
-            Box::new(l.cartesian_product(r)) as Box<dyn Iterator<Item = _>>
-        }
+        flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
+            flat_map_with(r.clone().run(cv), l, |r, l| box_once((l, r)))
+        })
     }
 
     /// Return the output of `recurse(f)` if `inner` and `outer` are true.
