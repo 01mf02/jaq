@@ -1,6 +1,6 @@
 use crate::box_iter::box_once;
 use crate::path::{self, Path};
-use crate::results::{fold, recurse, then};
+use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
@@ -351,7 +351,10 @@ pub trait FilterT<'a>: Clone + 'a {
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
     /// In that case, we can consume `cv` instead of cloning it.
-    fn pipe(self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
+    fn pipe<T: 'a, F>(self, cv: Cv<'a>, f: F) -> Results<'a, T, Error>
+    where
+        F: Fn(Cv<'a>, Val) -> Results<'a, T, Error> + 'a,
+    {
         let mut l = self.run(cv.clone());
 
         // if we expect at most one element from the left side,

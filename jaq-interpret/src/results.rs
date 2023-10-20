@@ -6,7 +6,7 @@ use crate::box_iter::BoxIter;
 use crate::rc_lazy_list::List;
 use alloc::vec::Vec;
 
-type Results<'a, T, E> = BoxIter<'a, Result<T, E>>;
+pub type Results<'a, T, E> = BoxIter<'a, Result<T, E>>;
 
 /// If `x` is an `Err`, return it as iterator, else apply `f` to `x` and return its output.
 pub fn then<'a, T, U: 'a, E: 'a>(
