@@ -194,6 +194,11 @@ fn limit() {
     give(json!(null), "[limit(-1; 0, 1)]", json!([]));
 }
 
+// the following tests show that sums are evaluated lazily
+// (otherwise this would not terminate)
+yields!(limit_inf_suml, "[limit(3; recurse(.+1) + 0)]", [0, 1, 2]);
+yields!(limit_inf_sumr, "[limit(3; 0 + recurse(.+1))]", [0, 1, 2]);
+
 yields!(min_empty, "[] | min_by(.)", json!(null));
 // when output is equal, min_by selects the left element and max_by the right one
 yields!(

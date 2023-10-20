@@ -1,5 +1,6 @@
+use crate::box_iter::{box_once, flat_map_with, map_with};
 use crate::path::{self, Path};
-use crate::results::{box_once, fold, recurse, then};
+use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
@@ -115,7 +116,7 @@ pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> V
 impl Native {
     /// Create a native filter from a run function, without support for updates.
     pub const fn new(run: RunPtr) -> Self {
-        Self::with_update(run, |_, _, _| crate::results::box_once(Err(Error::PathExp)))
+        Self::with_update(run, |_, _, _| box_once(Err(Error::PathExp)))
     }
 
     /// Create a native filter from a run function and an update function (used for `filter |= ...`).
@@ -350,36 +351,18 @@ pub trait FilterT<'a>: Clone + 'a {
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
     /// In that case, we can consume `cv` instead of cloning it.
-    fn pipe(self, cv: Cv<'a>, f: impl Fn(Cv<'a>, Val) -> ValRs<'a> + 'a) -> ValRs<'a> {
-        let mut l = self.run(cv.clone());
-
-        // if we expect at most one element from the left side,
-        // we do not need to clone the input value to run the right side;
-        // this can have a significant impact on performance!
-        if l.size_hint().1 == Some(1) {
-            if let Some(y) = l.next() {
-                // the Rust documentation states that
-                // "a buggy iterator may yield [..] more than the upper bound of elements",
-                // but so far, it seems that all iterators here are not buggy :)
-                assert!(l.next().is_none());
-                return then(y, |y| f(cv, y));
-            }
-        };
-        Box::new(l.flat_map(move |y| then(y, |y| f(cv.clone(), y))))
+    fn pipe<T: 'a, F>(self, cv: Cv<'a>, f: F) -> Results<'a, T, Error>
+    where
+        F: Fn(Cv<'a>, Val) -> Results<'a, T, Error> + 'a,
+    {
+        flat_map_with(self.run(cv.clone()), cv, move |y, cv| then(y, |y| f(cv, y)))
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
     fn cartesian(self, r: Self, cv: Cv<'a>) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
-        let l = self.run(cv.clone());
-        let r: Vec<_> = r.run(cv).collect();
-        if r.len() == 1 {
-            // this special case is to avoid cloning the left-hand side,
-            // which massively improves performance of filters like `add`
-            Box::new(l.map(move |l| (l, r[0].clone())))
-        } else {
-            use itertools::Itertools;
-            Box::new(l.cartesian_product(r)) as Box<dyn Iterator<Item = _>>
-        }
+        flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
+            map_with(r.clone().run(cv), l, |r, l| (l, r))
+        })
     }
 
     /// Return the output of `recurse(f)` if `inner` and `outer` are true.
