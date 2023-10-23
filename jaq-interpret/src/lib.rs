@@ -81,16 +81,35 @@ type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 ///
 /// In the first two cases, we bind the outputs of `f` to a variable `$x`.
 /// In the third case, we bind `f` to a filter `fx`
-enum Bind<V, F> {
+#[derive(Debug, Clone)]
+pub(crate) enum Bind<V, F> {
     Var(V),
     Fun(F),
+}
+
+impl<T> Bind<T, T> {
+    fn map<U>(self, f: impl FnOnce(T) -> U) -> Bind<U, U> {
+        match self {
+            Self::Var(x) => Bind::Var(f(x)),
+            Self::Fun(x) => Bind::Fun(f(x)),
+        }
+    }
+}
+
+impl<V, F> Bind<V, F> {
+    fn as_deref(&self) -> Bind<&V, &F> {
+        match self {
+            Self::Var(x) => Bind::Var(x),
+            Self::Fun(x) => Bind::Fun(x),
+        }
+    }
 }
 
 /// Filter execution context.
 #[derive(Clone)]
 pub struct Ctx<'a> {
     /// variable bindings
-    vars: RcList<Bind<Val, (filter::Ref<'a>, Self)>>,
+    vars: RcList<Bind<Val, (&'a filter::Ast, Self)>>,
     inputs: &'a Inputs<'a>,
 }
 
@@ -104,6 +123,11 @@ impl<'a> Ctx<'a> {
     /// Add a new variable binding.
     pub(crate) fn cons_var(mut self, x: Val) -> Self {
         self.vars = self.vars.cons(Bind::Var(x));
+        self
+    }
+
+    pub(crate) fn cons_fun(mut self, f: (&'a filter::Ast, Self)) -> Self {
+        self.vars = self.vars.cons(Bind::Fun(f));
         self
     }
 

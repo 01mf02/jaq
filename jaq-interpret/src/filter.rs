@@ -16,7 +16,7 @@ pub struct Owned(Ast, Vec<Def>);
 pub struct Ref<'a>(&'a Ast, &'a [Def]);
 
 #[derive(Debug, Clone)]
-pub struct Def {
+pub(crate) struct Def {
     pub rhs: Ast,
 }
 
@@ -28,7 +28,7 @@ impl Owned {
 
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug, Default)]
-pub enum Ast {
+pub(crate) enum Ast {
     #[default]
     Id,
     ToString,
@@ -86,7 +86,7 @@ pub enum Ast {
     Call {
         skip: usize,
         id: usize,
-        args: Vec<Self>,
+        args: Vec<Bind<Self, Self>>,
     },
 
     Native(Native, Vec<Self>),
@@ -104,17 +104,17 @@ dyn_clone::clone_trait_object!(<'a> Update<'a>);
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
-fn bind_vars<'a, F, I>(mut args: I, ctx: Ctx<'a>, cv: Cv<'a>) -> Results<'a, Cv<'a>, Error>
+fn bind_vars<'a, I>(mut args: I, ctx: Ctx<'a>, cv: Cv<'a>) -> Results<'a, Cv<'a>, Error>
 where
-    F: FilterT<'a>,
-    I: Iterator<Item = F> + Clone + 'a,
+    I: Iterator<Item = Bind<Ref<'a>, Ref<'a>>> + Clone + 'a,
 {
     match args.next() {
-        Some(arg) => flat_map_with(
+        Some(Bind::Var(arg)) => flat_map_with(
             arg.run(cv.clone()),
             (ctx, cv, args),
             |y, (ctx, cv, args)| then(y, |y| bind_vars(args, ctx.cons_var(y), cv)),
         ),
+        Some(Bind::Fun(Ref(arg, _defs))) => bind_vars(args, ctx.cons_fun((arg, cv.0.clone())), cv),
         None => box_once(Ok((ctx, cv.1))),
     }
 }
@@ -283,12 +283,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => f.0.run((f.1.clone(), cv.1)),
+                Bind::Fun(f) => w(f.0).run((f.1.clone(), cv.1)),
             },
             Ast::Call { skip, id, args } => Box::new(crate::LazyIter::new(move || {
                 let def = &self.1[*id];
                 let ctx = cv.0.clone().skip_vars(*skip);
-                let ctxs = bind_vars(args.iter().map(w), ctx, cv);
+                let ctxs = bind_vars(args.iter().map(move |a| a.as_deref().map(w)), ctx, cv);
                 ctxs.flat_map(move |cv| then(cv, |cv| w(&def.rhs).run(cv)))
             })),
 
@@ -339,13 +339,14 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
-                Bind::Fun(l) => l.0.update((l.1.clone(), cv.1), f),
+                Bind::Fun(l) => w(l.0).update((l.1.clone(), cv.1), f),
             },
             Ast::Call { skip, id, args } => {
                 let def = &self.1[*id];
                 let ctx = cv.0.clone().skip_vars(*skip);
                 let init = box_once(Ok(cv.1.clone()));
-                let ctxs = rc_lazy_list::List::from_iter(bind_vars(args.iter().map(w), ctx, cv));
+                let ctxs = bind_vars(args.iter().map(move |a| a.as_deref().map(w)), ctx, cv);
+                let ctxs = rc_lazy_list::List::from_iter(ctxs);
                 Box::new(fold(false, ctxs, init, move |cv, v| {
                     w(&def.rhs).update((cv.0, v), f.clone())
                 }))

@@ -7,6 +7,7 @@
 use crate::filter::{self, Ast as Filter};
 use crate::mir::{self, DefId, MirFilter};
 use crate::path::{self, Path};
+use crate::Bind;
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 use jaq_syn::{MathOp, Str};
@@ -192,7 +193,7 @@ impl Ctx {
                 // recursion!
                 let filter = if let Some(rec_idx) = view.find_rec(did, &self.recs) {
                     let var_args = var_args
-                        .map(|a| self.filter(a, id, view.clone(), defs))
+                        .map(|a| Bind::Var(self.filter(a, id, view.clone(), defs)))
                         .collect();
                     //std::dbg!("call a recursive filter!", did);
                     //  std::dbg!(&self.recs);
