@@ -71,24 +71,39 @@ use rc_list::List as RcList;
 
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
+/// Binding of a value or a filter.
+///
+/// In jq, we can bind filters in three different ways:
+///
+/// 1. `f as $x | ...`
+/// 2. `def g($x): ...; g(f)`
+/// 3. `def g(fx): ...; g(f)`
+///
+/// In the first two cases, we bind the outputs of `f` to a variable `$x`.
+/// In the third case, we bind `f` to a filter `fx`
+enum Bind<V, F> {
+    Var(V),
+    Fun(F),
+}
+
 /// Filter execution context.
 #[derive(Clone)]
 pub struct Ctx<'a> {
     /// variable bindings
-    vars: RcList<Val>,
+    vars: RcList<Bind<Val, (filter::Ref<'a>, Self)>>,
     inputs: &'a Inputs<'a>,
 }
 
 impl<'a> Ctx<'a> {
     /// Construct a context.
     pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'a Inputs<'a>) -> Self {
-        let vars = RcList::new().extend(vars);
+        let vars = RcList::new().extend(vars.into_iter().map(Bind::Var));
         Self { vars, inputs }
     }
 
     /// Add a new variable binding.
     pub(crate) fn cons_var(mut self, x: Val) -> Self {
-        self.vars = self.vars.cons(x);
+        self.vars = self.vars.cons(Bind::Var(x));
         self
     }
 

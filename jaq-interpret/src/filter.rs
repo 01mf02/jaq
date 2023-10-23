@@ -2,7 +2,7 @@ use crate::box_iter::{box_once, flat_map_with, map_with};
 use crate::path::{self, Path};
 use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
-use crate::{rc_lazy_list, Ctx, Error};
+use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
@@ -281,7 +281,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             }
             Ast::Recurse(f) => w(f).recurse(true, true, cv),
 
-            Ast::Var(v) => box_once(Ok(cv.0.vars.get(*v).unwrap().clone())),
+            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
+                Bind::Var(v) => box_once(Ok(v.clone())),
+                Bind::Fun(f) => f.0.run((f.1.clone(), cv.1)),
+            },
             Ast::Call { skip, id, args } => Box::new(crate::LazyIter::new(move || {
                 let def = &self.1[*id];
                 let ctx = cv.0.clone().skip_vars(*skip);
@@ -334,7 +337,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             }),
             Ast::Recurse(l) => w(l).recurse_update(cv, f),
 
-            Ast::Var(_) => err,
+            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
+                Bind::Var(_) => err,
+                Bind::Fun(l) => l.0.update((l.1.clone(), cv.1), f),
+            },
             Ast::Call { skip, id, args } => {
                 let def = &self.1[*id];
                 let ctx = cv.0.clone().skip_vars(*skip);
