@@ -1,61 +1,73 @@
-#[derive(Clone, Debug)]
-pub enum RcList<T> {
+#[derive(Debug)]
+pub struct List<T>(alloc::rc::Rc<Node<T>>);
+
+#[derive(Debug)]
+enum Node<T> {
     Nil,
-    Cons(T, alloc::rc::Rc<Self>),
+    Cons(T, List<T>),
 }
 
-impl<T> Default for RcList<T> {
+impl<T> Clone for List<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> Default for List<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T> RcList<T> {
+impl<T> List<T> {
+    /// Return an empty list.
     pub fn new() -> Self {
-        Self::Nil
+        Self(Node::Nil.into())
     }
 
-    /// Append a new element to the beginning of the list.
+    /// Append a new element to the list.
     pub fn cons(self, x: T) -> Self {
-        Self::Cons(x, alloc::rc::Rc::new(self))
+        Self(Node::Cons(x, self).into())
     }
 
-    /*
-    pub fn cons_many(self, iter: impl IntoIterator<Item = T>) -> Self {
+    /// Repeatedly add elements to the list.
+    pub fn extend(self, iter: impl IntoIterator<Item = T>) -> Self {
         iter.into_iter().fold(self, |acc, x| acc.cons(x))
     }
-    */
 
-    pub fn get(&self, mut n: usize) -> Option<&T> {
-        let mut ctx = self;
-        while let Self::Cons(x, xs) = ctx {
-            if n == 0 {
-                return Some(x);
-            } else {
-                n -= 1;
-                ctx = xs;
-            }
+    /// Return the element most recently added to the list.
+    pub fn head(&self) -> Option<&T> {
+        match &*self.0 {
+            Node::Nil => None,
+            Node::Cons(x, _) => Some(x),
         }
-        None
     }
 
+    /// Get the `n`-th element from the list, starting from the most recently added.
+    pub fn get(&self, n: usize) -> Option<&T> {
+        self.skip(n).head()
+    }
+
+    /// Remove the `n` top values from the list.
+    ///
+    /// If `n` is greater than the number of list elements, return nil.
     pub fn skip(&self, n: usize) -> &Self {
-        let mut ctx = self;
+        let mut cur = self;
         for _ in 0..n {
-            match ctx {
-                Self::Cons(_, xs) => ctx = xs,
-                Self::Nil => return &Self::Nil,
+            match &*cur.0 {
+                Node::Cons(_, xs) => cur = xs,
+                Node::Nil => break,
             }
         }
-        ctx
+        cur
     }
 
     #[cfg(test)]
     fn iter(&self) -> impl Iterator<Item = &T> {
         use alloc::boxed::Box;
-        match self {
-            Self::Cons(x, xs) => Box::new(core::iter::once(x).chain(xs.iter())),
-            Self::Nil => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
+        match &*self.0 {
+            Node::Cons(x, xs) => Box::new(core::iter::once(x).chain(xs.iter())),
+            Node::Nil => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
         }
     }
 }
@@ -63,9 +75,9 @@ impl<T> RcList<T> {
 #[test]
 fn test() {
     use alloc::{vec, vec::Vec};
-    let eq = |l: &RcList<_>, a| assert_eq!(l.iter().cloned().collect::<Vec<_>>(), a);
+    let eq = |l: &List<_>, a| assert_eq!(l.iter().cloned().collect::<Vec<_>>(), a);
 
-    let l = RcList::new().cons(2).cons(1).cons(0);
+    let l = List::new().cons(2).cons(1).cons(0);
     eq(&l, vec![0, 1, 2]);
 
     eq(l.skip(0), vec![0, 1, 2]);

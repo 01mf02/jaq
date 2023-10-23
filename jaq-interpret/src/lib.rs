@@ -67,7 +67,7 @@ pub use val::{Val, ValR, ValRs};
 
 use alloc::string::String;
 use lazy_iter::LazyIter;
-use rc_list::RcList;
+use rc_list::List as RcList;
 
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
@@ -82,7 +82,7 @@ pub struct Ctx<'a> {
 impl<'a> Ctx<'a> {
     /// Construct a context.
     pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'a Inputs<'a>) -> Self {
-        let vars = vars.into_iter().fold(RcList::Nil, |acc, v| acc.cons(v));
+        let vars = RcList::new().extend(vars);
         Self { vars, inputs }
     }
 
