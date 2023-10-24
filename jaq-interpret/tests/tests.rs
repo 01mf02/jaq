@@ -248,6 +248,8 @@ fn eq() {
     give(json!({"a": 1, "b": 2}), ". == {b: 2, a: 1}", json!(true));
 }
 
+yields!(def_var_filter, "def f($a; b): $a+b; f(1; 2)", 3);
+
 #[test]
 fn vars() {
     give(json!(1), " 2  as $x | . + $x", json!(3));
