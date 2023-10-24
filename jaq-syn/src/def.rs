@@ -27,7 +27,7 @@ impl<A, N> Call<A, N> {
 
 /// A definition, such as `def map(f): [.[] | f];`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Def<Rhs = Main> {
     /// left-hand side, i.e. what shall be defined, e.g. `map(f)`
     pub lhs: Call,
@@ -118,7 +118,7 @@ impl<V: Deref, F: Deref> Arg<V, F> {
 
 /// (Potentially empty) sequence of definitions, followed by a filter.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Main<F = Filter> {
     /// Definitions at the top of the filter
     pub defs: Vec<Def<Self>>,
