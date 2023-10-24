@@ -61,7 +61,6 @@ mod val;
 
 pub use error::Error;
 pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
-pub use mir::Ctx as ParseCtx;
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs};
 
@@ -110,17 +109,75 @@ impl<'a> Ctx<'a> {
     }
 }
 
+use alloc::vec::Vec;
+use jaq_syn::Spanned;
+pub struct ParseCtx {
+    /// errors occurred during transformation
+    // TODO for v2.0: remove this and make it a function
+    pub errs: Vec<Spanned<mir::Error>>,
+    native: Vec<(String, usize, filter::Native)>,
+    def: jaq_syn::Def,
+}
+
 impl ParseCtx {
+    /// Initialise new context with list of global variables.
+    ///
+    /// When running a filter produced by this context,
+    /// values corresponding to the variables have to be supplied in the execution context.
+    pub fn new(vars: Vec<String>) -> Self {
+        use alloc::string::ToString;
+        let def = jaq_syn::Def {
+            lhs: jaq_syn::Call {
+                name: "$".to_string(),
+                args: vars.into_iter().map(Bind::Var).collect(),
+            },
+            rhs: jaq_syn::Main {
+                defs: Vec::new(),
+                body: (jaq_syn::filter::Filter::Id, 0..0),
+            },
+        };
+
+        Self {
+            errs: Vec::new(),
+            native: Vec::new(),
+            def,
+        }
+    }
+
+    /// Add a native filter with given name and arity.
+    pub fn insert_native(&mut self, name: String, arity: usize, f: filter::Native) {
+        self.native.push((name, arity, f))
+    }
+
+    /// Add native filters with given names and arities.
+    pub fn insert_natives<I>(&mut self, natives: I)
+    where
+        I: IntoIterator<Item = (String, usize, filter::Native)>,
+    {
+        self.native.extend(natives)
+    }
+
+    /// Import parsed definitions, such as obtained from the standard library.
+    ///
+    /// Errors that might occur include undefined variables, for example.
+    pub fn insert_defs(&mut self, defs: impl IntoIterator<Item = jaq_syn::Def>) {
+        self.def.rhs.defs.extend(defs);
+    }
+
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
-        self.insert_defs(main.defs);
-        self.root_filter(main.body);
+        let mut mctx = mir::Ctx::default();
+        mctx.native = self.native.clone();
+        self.def.rhs.defs.extend(main.defs);
+        self.def.rhs.body = main.body;
+        let def = mctx.def(self.def.clone());
+        self.errs = mctx.errs;
 
         if !self.errs.is_empty() {
             return Default::default();
         }
-        //std::dbg!("before LIR");
-        lir::root_def(&self.defs)
+
+        lir::root_def(def)
     }
 
     /// Compile and run a filter on given input, panic if it does not compile or yield the given output.
