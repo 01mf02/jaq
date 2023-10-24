@@ -61,7 +61,12 @@ pub fn root_def(defs: &mir::Defs) -> filter::Owned {
     let view = View::default();
     let f = ctx.def(root_id, view, defs);
     let recs = ctx.recs.into_iter();
-    let recs = recs.map(|rec| (filter::Def { rhs: rec.filter }));
+    let recs = recs.map(|rec| {
+        filter::Def {
+            rec: true,
+            rhs: rec.filter,
+        }
+    });
     filter::Owned::new(f, recs.collect())
 }
 

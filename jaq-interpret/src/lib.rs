@@ -66,44 +66,11 @@ pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs};
 
 use alloc::string::String;
+use jaq_syn::Arg as Bind;
 use lazy_iter::LazyIter;
 use rc_list::List as RcList;
 
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
-
-/// Binding of a value or a filter.
-///
-/// In jq, we can bind filters in three different ways:
-///
-/// 1. `f as $x | ...`
-/// 2. `def g($x): ...; g(f)`
-/// 3. `def g(fx): ...; g(f)`
-///
-/// In the first two cases, we bind the outputs of `f` to a variable `$x`.
-/// In the third case, we bind `f` to a filter `fx`
-#[derive(Debug, Clone)]
-pub(crate) enum Bind<V, F> {
-    Var(V),
-    Fun(F),
-}
-
-impl<T> Bind<T, T> {
-    fn map<U>(self, f: impl FnOnce(T) -> U) -> Bind<U, U> {
-        match self {
-            Self::Var(x) => Bind::Var(f(x)),
-            Self::Fun(x) => Bind::Fun(f(x)),
-        }
-    }
-}
-
-impl<V, F> Bind<V, F> {
-    fn as_deref(&self) -> Bind<&V, &F> {
-        match self {
-            Self::Var(x) => Bind::Var(x),
-            Self::Fun(x) => Bind::Fun(x),
-        }
-    }
-}
 
 /// Filter execution context.
 #[derive(Clone)]

@@ -17,6 +17,7 @@ pub struct Ref<'a>(&'a Ast, &'a [Def]);
 
 #[derive(Debug, Clone)]
 pub(crate) struct Def {
+    pub rec: bool,
     pub rhs: Ast,
 }
 
@@ -119,7 +120,10 @@ where
     }
 }
 
-fn reduce<'a>(xs: ValRs<'a>, init: Val, f: impl Fn(Val, Val) -> ValRs<'a> + 'a) -> ValRs {
+fn reduce<'a, T: Clone + 'a, F>(xs: Results<'a, T, Error>, init: Val, f: F) -> ValRs
+where
+    F: Fn(T, Val) -> ValRs<'a> + 'a,
+{
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(false, xs, box_once(Ok(init)), f))
 }
@@ -285,12 +289,17 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 Bind::Var(v) => box_once(Ok(v.clone())),
                 Bind::Fun(f) => w(f.0).run((f.1.clone(), cv.1)),
             },
-            Ast::Call { skip, id, args } => Box::new(crate::LazyIter::new(move || {
+            Ast::Call { skip, id, args } => {
                 let def = &self.1[*id];
                 let ctx = cv.0.clone().skip_vars(*skip);
-                let ctxs = bind_vars(args.iter().map(move |a| a.as_deref().map(w)), ctx, cv);
-                ctxs.flat_map(move |cv| then(cv, |cv| w(&def.rhs).run(cv)))
-            })),
+                let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
+                let f = move || cvs.flat_map(move |cv| then(cv, |cv| w(&def.rhs).run(cv)));
+                if def.rec {
+                    Box::new(crate::LazyIter::new(f))
+                } else {
+                    Box::new(f())
+                }
+            }
 
             Ast::Native(Native { run, .. }, args) => (run)(Args(args, self.1), cv),
         }
@@ -343,13 +352,11 @@ impl<'a> FilterT<'a> for Ref<'a> {
             },
             Ast::Call { skip, id, args } => {
                 let def = &self.1[*id];
+                let rhs = w(&def.rhs);
+                let init = cv.1.clone();
                 let ctx = cv.0.clone().skip_vars(*skip);
-                let init = box_once(Ok(cv.1.clone()));
-                let ctxs = bind_vars(args.iter().map(move |a| a.as_deref().map(w)), ctx, cv);
-                let ctxs = rc_lazy_list::List::from_iter(ctxs);
-                Box::new(fold(false, ctxs, init, move |cv, v| {
-                    w(&def.rhs).update((cv.0, v), f.clone())
-                }))
+                let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
+                reduce(cvs, init, move |cv, v| rhs.update((cv.0, v), f.clone()))
             }
 
             Ast::Native(Native { update, .. }, args) => (update)(Args(args, self.1), cv, f),
