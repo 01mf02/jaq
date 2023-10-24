@@ -54,7 +54,6 @@ impl Ctx {
     fn def(&mut self, def: mir::Def) {
         let id = AbsId(self.defs.len());
         self.defs.push(Def {
-            // TODO: set rec!
             rec: false,
             rhs: Filter::default(),
         });
