@@ -301,7 +301,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 }
             }
 
-            Ast::Native(Native { run, .. }, args) => (run)(Args(&args, self.1), cv),
+            Ast::Native(Native { run, .. }, args) => (run)(Args(args, self.1), cv),
         }
     }
 
@@ -358,7 +358,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 reduce(cvs, init, move |cv, v| def.update((cv.0, v), f.clone()))
             }
 
-            Ast::Native(Native { update, .. }, args) => (update)(Args(&args, self.1), cv, f),
+            Ast::Native(Native { update, .. }, args) => (update)(Args(args, self.1), cv, f),
         }
     }
 }

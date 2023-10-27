@@ -171,7 +171,7 @@ impl Ctx {
                         let v = match v {
                             None => self.id_of_ast(Filter::Path(
                                 IDENTITY,
-                                Path::from(path::Part::Index(k.clone())),
+                                Path::from(path::Part::Index(k)),
                             )),
                             Some(v) => get(v, self),
                         };
