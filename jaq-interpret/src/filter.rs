@@ -125,22 +125,17 @@ fn obj_cart<'a, I>(mut args: I, cv: Cv<'a>, prev: ObjVec) -> BoxIter<'a, ObjVec>
 where
     I: Iterator<Item = (Ref<'a>, Ref<'a>)> + Clone + 'a,
 {
-    match args.next() {
-        Some((l, r)) => flat_map_with(
-            l.run(cv.clone()),
-            (args, cv, prev),
-            move |l, (args, cv, prev)| {
-                flat_map_with(
-                    r.run(cv.clone()),
-                    (l, args, cv, prev),
-                    |r, (l, args, cv, mut prev)| {
-                        prev.push((l, r));
-                        obj_cart(args, cv, prev)
-                    },
-                )
-            },
-        ),
-        None => box_once(prev),
+    if let Some((l, r)) = args.next() {
+        let iter = l.run(cv.clone());
+        flat_map_with(iter, (args, cv, prev), move |l, (args, cv, prev)| {
+            let iter = r.run(cv.clone());
+            flat_map_with(iter, (l, args, cv, prev), |r, (l, args, cv, mut prev)| {
+                prev.push((l, r));
+                obj_cart(args, cv, prev)
+            })
+        })
+    } else {
+        box_once(prev)
     }
 }
 
