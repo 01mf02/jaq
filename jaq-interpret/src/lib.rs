@@ -64,7 +64,7 @@ pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs};
 
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
 use lazy_iter::LazyIter;
 use rc_list::List as RcList;
@@ -109,12 +109,13 @@ impl<'a> Ctx<'a> {
     }
 }
 
-use alloc::vec::Vec;
-use jaq_syn::Spanned;
+/// Combined MIR/LIR compilation.
+///
+/// This allows to go from a parsed filter to a filter executable by this crate.
 pub struct ParseCtx {
     /// errors occurred during transformation
     // TODO for v2.0: remove this and make it a function
-    pub errs: Vec<Spanned<mir::Error>>,
+    pub errs: Vec<jaq_syn::Spanned<mir::Error>>,
     native: Vec<(String, usize, filter::Native)>,
     def: jaq_syn::Def,
 }
