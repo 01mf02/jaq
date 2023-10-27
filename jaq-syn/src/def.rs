@@ -48,11 +48,14 @@ pub struct Def<Rhs = Main> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Arg<V = String, F = V> {
+    /// binding to a variable
     Var(V),
+    /// binding to a filter
     Fun(F),
 }
 
 impl<T> Arg<T, T> {
+    /// Apply a function to both binding types.
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Arg<U, U> {
         match self {
             Self::Var(x) => Arg::Var(f(x)),
@@ -62,6 +65,7 @@ impl<T> Arg<T, T> {
 }
 
 impl<V, F> Arg<V, F> {
+    /// Move references inward.
     pub fn as_ref(&self) -> Arg<&V, &F> {
         match self {
             Self::Var(x) => Arg::Var(x),
@@ -71,6 +75,7 @@ impl<V, F> Arg<V, F> {
 }
 
 impl<V: Deref, F: Deref> Arg<V, F> {
+    /// Move references inward, while deferencing content.
     pub fn as_deref(&self) -> Arg<&<V as Deref>::Target, &<F as Deref>::Target> {
         match self {
             Self::Var(x) => Arg::Var(x),
