@@ -1,14 +1,11 @@
 //! Low-level Intermediate Representation of filters.
 
-use crate::filter::{self, Ast as Filter, Def};
+use crate::filter::{self, AbsId, Ast as Filter, Def};
 use crate::mir::{self, MirFilter, RelId, Relative};
 use crate::path::{self, Path};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 use jaq_syn::{MathOp, Str};
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct AbsId(usize);
 
 #[derive(Default)]
 pub struct Ctx {
@@ -54,7 +51,6 @@ impl Ctx {
     fn def(&mut self, def: mir::Def) {
         let id = AbsId(self.defs.len());
         self.defs.push(Def {
-            rec: false,
             rhs: Filter::default(),
         });
         self.callable.push(Callable {
@@ -96,13 +92,12 @@ impl Ctx {
                     mir::Call::Def { id, skip } => {
                         let callable = self.get_callable(id);
                         let args = callable.sig.args.iter().zip(args);
-                        let args = args.map(|(ty, a)| ty.as_ref().map(|_| a)).collect();
-                        let id = callable.id;
-                        if callable.typ == Relative::Parent {
-                            self.get_def(id).rec = true;
-                        }
-                        let AbsId(id) = id;
-                        Filter::Call { skip, args, id }
+                        Filter::Call(filter::Call {
+                            id: callable.id,
+                            rec: callable.typ == Relative::Parent,
+                            skip,
+                            args: args.map(|(ty, a)| ty.as_ref().map(|_| a)).collect(),
+                        })
                     }
                 }
             }

@@ -15,10 +15,20 @@ pub struct Owned(Ast, Vec<Def>);
 #[derive(Debug, Copy, Clone)]
 pub struct Ref<'a>(&'a Ast, &'a [Def]);
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct AbsId(pub usize);
+
 #[derive(Debug, Clone)]
 pub(crate) struct Def {
-    pub rec: bool,
     pub rhs: Ast,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Call {
+    pub id: AbsId,
+    pub rec: bool,
+    pub skip: usize,
+    pub args: Vec<Bind<Ast, Ast>>,
 }
 
 impl Owned {
@@ -84,11 +94,7 @@ pub(crate) enum Ast {
     Recurse(Box<Self>),
 
     Var(usize),
-    Call {
-        skip: usize,
-        id: usize,
-        args: Vec<Bind<Self, Self>>,
-    },
+    Call(Call),
 
     Native(Native, Vec<Self>),
 }
@@ -289,12 +295,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 Bind::Var(v) => box_once(Ok(v.clone())),
                 Bind::Fun(f) => w(f.0).run((f.1.clone(), cv.1)),
             },
-            Ast::Call { skip, id, args } => {
-                let def = &self.1[*id];
-                let ctx = cv.0.clone().skip_vars(*skip);
-                let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
+            Ast::Call(call) => {
+                let def = &self.1[call.id.0];
+                let ctx = cv.0.clone().skip_vars(call.skip);
+                let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 let f = move || cvs.flat_map(move |cv| then(cv, |cv| w(&def.rhs).run(cv)));
-                if def.rec {
+                if call.rec {
                     Box::new(crate::LazyIter::new(f))
                 } else {
                     Box::new(f())
@@ -350,12 +356,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 Bind::Var(_) => err,
                 Bind::Fun(l) => w(l.0).update((l.1.clone(), cv.1), f),
             },
-            Ast::Call { skip, id, args } => {
-                let def = &self.1[*id];
+            Ast::Call(call) => {
+                let def = &self.1[call.id.0];
                 let rhs = w(&def.rhs);
                 let init = cv.1.clone();
-                let ctx = cv.0.clone().skip_vars(*skip);
-                let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
+                let ctx = cv.0.clone().skip_vars(call.skip);
+                let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 reduce(cvs, init, move |cv, v| rhs.update((cv.0, v), f.clone()))
             }
 
