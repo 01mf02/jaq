@@ -298,7 +298,6 @@ dependencies = [
  "dyn-clone",
  "hifijson",
  "indexmap",
- "itertools",
  "jaq-parse",
  "jaq-syn",
  "once_cell",

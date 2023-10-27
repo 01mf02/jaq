@@ -1,4 +1,4 @@
-use crate::box_iter::{box_once, flat_map_with, map_with};
+use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
@@ -120,6 +120,30 @@ where
     }
 }
 
+type ObjVec = Vec<(ValR, ValR)>;
+fn obj_cart<'a, I>(mut args: I, cv: Cv<'a>, prev: ObjVec) -> BoxIter<'a, ObjVec>
+where
+    I: Iterator<Item = (Ref<'a>, Ref<'a>)> + Clone + 'a,
+{
+    match args.next() {
+        Some((l, r)) => flat_map_with(
+            l.run(cv.clone()),
+            (args, cv, prev),
+            move |l, (args, cv, prev)| {
+                flat_map_with(
+                    r.run(cv.clone()),
+                    (l, args, cv, prev),
+                    |r, (l, args, cv, mut prev)| {
+                        prev.push((l, r));
+                        obj_cart(args, cv, prev)
+                    },
+                )
+            },
+        ),
+        None => box_once(prev),
+    }
+}
+
 fn reduce<'a, T: Clone + 'a, F>(xs: Results<'a, T, Error>, init: Val, f: F) -> ValRs
 where
     F: Fn(T, Val) -> ValRs<'a> + 'a,
@@ -188,7 +212,6 @@ impl<'a> FilterT<'a> for &'a Owned {
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::once;
-        use itertools::Itertools;
         // wrap a filter AST with the filter definitions
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1[self.0 .0] {
@@ -200,15 +223,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Array(f) => box_once(w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)),
             Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Ast::Object(o) => Box::new(
-                o.iter()
-                    .map(|(k, v)| Self::cartesian(w(k), w(v), cv.clone()).collect::<Vec<_>>())
-                    .multi_cartesian_product()
-                    .map(|kvs| {
-                        kvs.into_iter()
-                            .map(|(k, v)| Ok((k?.to_str()?, v?)))
-                            .collect::<Result<_, _>>()
-                            .map(Val::obj)
-                    }),
+                obj_cart(o.iter().map(move |(k, v)| (w(k), w(v))), cv, Vec::new()).map(|kvs| {
+                    kvs.into_iter()
+                        .map(|(k, v)| Ok((k?.to_str()?, v?)))
+                        .collect::<Result<_, _>>()
+                        .map(Val::obj)
+                }),
             ),
             Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
                 y.map_or_else(

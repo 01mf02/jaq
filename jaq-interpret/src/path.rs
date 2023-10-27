@@ -202,8 +202,8 @@ fn prod<'a, T: 'a + Clone>(
     l: impl Iterator<Item = T> + 'a,
     r: impl Iterator<Item = T> + 'a,
 ) -> impl Iterator<Item = (T, T)> + 'a {
-    use itertools::Itertools;
-    l.cartesian_product(r.collect::<Vec<T>>())
+    let r: Vec<_> = r.collect();
+    l.flat_map(move |l| r.clone().into_iter().map(move |r| (l.clone(), r)))
 }
 
 fn skip_take(from: usize, until: usize) -> (usize, usize) {

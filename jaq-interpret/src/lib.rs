@@ -191,6 +191,7 @@ impl ParseCtx {
 
         let inputs = RcIter::new(core::iter::empty());
         let out = f.run((Ctx::new([], &inputs), x));
-        itertools::assert_equal(out, ys);
+
+        assert!(out.eq(ys))
     }
 }
