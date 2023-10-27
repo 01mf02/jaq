@@ -31,8 +31,6 @@ pub fn root_def(def: mir::Def) -> filter::Owned {
     filter::Owned::new(id, ctx.defs)
 }
 
-// TODO: remove itertools dependency
-
 impl Ctx {
     fn init_constants(&mut self) {
         for (f, id) in [(Filter::Id, IDENTITY), (Filter::ToString, TOSTRING)] {
