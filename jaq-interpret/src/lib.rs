@@ -75,7 +75,7 @@ type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 #[derive(Clone)]
 pub struct Ctx<'a> {
     /// variable bindings
-    vars: RcList<Bind<Val, (&'a filter::Ast, Self)>>,
+    vars: RcList<Bind<Val, (filter::Id, Self)>>,
     inputs: &'a Inputs<'a>,
 }
 
@@ -93,7 +93,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Add a new filter binding.
-    pub(crate) fn cons_fun(mut self, f: (&'a filter::Ast, Self)) -> Self {
+    pub(crate) fn cons_fun(mut self, f: (filter::Id, Self)) -> Self {
         self.vars = self.vars.cons(Bind::Fun(f));
         self
     }
