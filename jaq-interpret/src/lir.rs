@@ -40,13 +40,13 @@ impl Ctx {
             assert_eq!(id, id_);
         }
 
-        let empty = self.empty();
-        let empty_id = self.id_of_ast(empty);
-        assert_eq!(empty_id, EMPTY);
-
         let arr_obj = self.arr_obj_elems();
         let arr_obj_id = self.id_of_ast(arr_obj);
         assert_eq!(arr_obj_id, ARR_OBJ_ELEMS);
+
+        let empty = self.empty();
+        let empty_id = self.id_of_ast(empty);
+        assert_eq!(empty_id, EMPTY);
     }
 
     /// `{}[]` returns zero values.
