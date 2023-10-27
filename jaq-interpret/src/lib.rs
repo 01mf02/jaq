@@ -92,6 +92,7 @@ impl<'a> Ctx<'a> {
         self
     }
 
+    /// Add a new filter binding.
     pub(crate) fn cons_fun(mut self, f: (&'a filter::Ast, Self)) -> Self {
         self.vars = self.vars.cons(Bind::Fun(f));
         self
