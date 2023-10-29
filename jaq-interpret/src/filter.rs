@@ -234,10 +234,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Neg(f) => Box::new(w(f).run(cv).map(|v| -v?)),
 
             // `l | r`
-            Ast::Pipe(l, false, r) => Box::new(
-                w(l).run((cv.0.clone(), cv.1))
-                    .flat_map(move |y| then(y, |y| w(r).run((cv.0.clone(), y)))),
-            ),
+            Ast::Pipe(l, false, r) => {
+                let l = w(l).run((cv.0.clone(), cv.1));
+                flat_map_with(l, cv.0, move |y, ctx| then(y, |y| w(r).run((ctx, y))))
+            }
             // `l as $x | r`
             Ast::Pipe(l, true, r) => w(l).pipe(cv, move |cv, y| w(r).run((cv.0.cons_var(y), cv.1))),
 
