@@ -467,7 +467,7 @@ fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Re
     Ok(y)
 }
 
-fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
+fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
     use ariadne::{Color, Fmt, Label, Report, ReportKind};
     use chumsky::error::SimpleReason;
 
