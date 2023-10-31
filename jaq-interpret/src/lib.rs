@@ -166,6 +166,18 @@ impl ParseCtx {
         self.def.rhs.defs.extend(defs);
     }
 
+    /// Insert a root definition.
+    #[deprecated(since="1.1", note="use `insert_defs` instead")]
+    pub fn root_def(&mut self, def: jaq_syn::Def) {
+        self.def.rhs.defs.push(def);
+    }
+
+    /// Insert a root filter.
+    #[deprecated(since="1.1", note="this call has no effect")]
+    pub fn root_filter(&mut self, filter: jaq_syn::Spanned<jaq_syn::filter::Filter>) {
+        self.def.rhs.body = filter;
+    }
+
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
         let mut mctx = mir::Ctx::default();
