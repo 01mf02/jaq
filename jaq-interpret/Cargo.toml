@@ -1,6 +1,6 @@
 [package]
 name = "jaq-interpret"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -16,7 +16,7 @@ default = ["std", "hifijson", "serde_json"]
 std = []
 
 [dependencies]
-jaq-syn = { version = "1.0.0", path = "../jaq-syn" }
+jaq-syn = { version = "1.1.0", path = "../jaq-syn" }
 ahash = "0.7.6"
 dyn-clone = "1.0"
 hifijson = { version = "0.2.0", optional = true }

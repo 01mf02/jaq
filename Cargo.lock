@@ -252,7 +252,7 @@ checksum = "62b02a5381cc465bd3041d84623d0fa3b66738b52b8e2fc3bab8ad63ab032f4a"
 
 [[package]]
 name = "jaq"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "ariadne",
  "atty",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-interpret"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "ahash",
  "dyn-clone",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-syn"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "serde",
 ]
