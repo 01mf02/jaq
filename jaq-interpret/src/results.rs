@@ -1,6 +1,6 @@
 //! Functions on iterators over results.
 
-/// TODO for v2.0: remove this from `results`
+// TODO for v2.0: remove this from `results`
 pub use crate::box_iter::box_once;
 use crate::box_iter::BoxIter;
 use crate::rc_lazy_list::List;
