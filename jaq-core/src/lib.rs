@@ -17,8 +17,7 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, rc::Rc, vec::Vec};
 use jaq_interpret::results::{box_once, run_if_ok, then};
-use jaq_interpret::{Ctx, FilterT, Native, RunPtr, UpdatePtr};
-use jaq_interpret::{Error, Val, ValR, ValRs};
+use jaq_interpret::{Error, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs};
 
 /// Return the minimal set of named filters available in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
@@ -481,7 +480,10 @@ const MATH: &[(&str, usize, RunPtr)] = &[
 ];
 
 #[cfg(feature = "regex")]
-fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: (Ctx<'a>, Val)) -> ValRs<'a> {
+type Cv<'a> = (jaq_interpret::Ctx<'a>, Val);
+
+#[cfg(feature = "regex")]
+fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {
     let re_flags = re.cartesian(flags, (cv.0, cv.1.clone()));
 
     Box::new(re_flags.map(move |(re, flags)| {
