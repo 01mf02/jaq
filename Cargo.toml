@@ -7,6 +7,7 @@ members = [
     "jaq-std",
     "jaq",
 ]
+resolver = "2"
 
 [profile.release]
 strip = true
