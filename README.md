@@ -521,9 +521,8 @@ grows the stack in jaq (leading to a stack overflow), while it does not in jq.
 As a remedy, jaq provides `recurse` as core filter,
 which tries to avoid growing the stack if possible.
 
-Compared to jq, jaq imposes an important syntactic restriction on recursive filters,
-namely that *recursive filters may only have variable arguments*.
-That is, in jaq, we cannot define a filter like:
+Since jaq 1.1, recursive filters can also have non-variable arguments, like in jq.
+For example:
 
     def f(a): a, f(1+a);
 
