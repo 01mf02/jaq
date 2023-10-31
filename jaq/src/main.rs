@@ -434,18 +434,20 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
     match val {
         Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
         _ => {
+            let value = serde_json::Value::from(val);
+
             // this looks ugly, but it is hard to abstract over the `Formatter` because
             // we cannot create a `Box<dyn Formatter>` because
             // Rust says that the `Formatter` trait is not "object safe"
             if cli.compact {
                 ColoredFormatter::new(CompactFormatter).write_colored_json(
-                    &val.into(),
+                    &value,
                     writer,
                     cli.color_mode(),
                 )
             } else {
                 ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(
-                    &val.into(),
+                    &value,
                     writer,
                     cli.color_mode(),
                 )
