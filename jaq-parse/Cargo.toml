@@ -11,5 +11,5 @@ keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
 
 [dependencies]
-chumsky = { version = "0.9.0", default-features = false }
+chumsky = { version = "0.9.3", default-features = false }
 jaq-syn = { version = "1.0.0", path = "../jaq-syn" }
