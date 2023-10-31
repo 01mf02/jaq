@@ -285,9 +285,7 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     //
     // This implements a ~10x faster version of:
     // ~~~ text
-    // range(min; max):
-    //   min as $min | max as $max | $min | select(. < $max) |
-    //   recurse(.+1 | select(. < $max))
+    // range($min; $max): $min | while(. < $max; .+1)
     // ~~~
     ("range", 2, |args, cv| {
         let prod = args.get(0).cartesian(args.get(1), cv);
