@@ -139,7 +139,7 @@ fn real_main() -> Result<ExitCode, Error> {
             if let Some(filter) = args.next() {
                 parse(filter, vars)?
             } else {
-                Default::default()
+                Filter::default()
             }
         }
     };
