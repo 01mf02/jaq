@@ -61,18 +61,18 @@ impl Val {
     }
 
     /// Construct an array value.
-    pub fn arr(v: Vec<Val>) -> Self {
+    pub fn arr(v: Vec<Self>) -> Self {
         Self::Arr(v.into())
     }
 
     /// Construct an object value.
-    pub fn obj(m: Map<Rc<String>, Val>) -> Self {
+    pub fn obj(m: Map<Rc<String>, Self>) -> Self {
         Self::Obj(m.into())
     }
 
     /// True if the value is neither null nor false.
     pub fn as_bool(&self) -> bool {
-        !matches!(self, Val::Null | Val::Bool(false))
+        !matches!(self, Self::Null | Self::Bool(false))
     }
 
     /// If the value is integer, return it, else fail.
@@ -120,7 +120,7 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    pub fn into_arr(self) -> Result<Rc<Vec<Val>>, Error> {
+    pub fn into_arr(self) -> Result<Rc<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Type(self, Type::Arr)),
@@ -128,7 +128,7 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    pub fn as_arr(&self) -> Result<&Rc<Vec<Val>>, Error> {
+    pub fn as_arr(&self) -> Result<&Rc<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::Type(self.clone(), Type::Arr)),
@@ -167,7 +167,7 @@ impl Val {
     /// Return any `key` for which `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
-    pub fn keys_unsorted(&self) -> Result<Vec<Val>, Error> {
+    pub fn keys_unsorted(&self) -> Result<Vec<Self>, Error> {
         match self {
             Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
             Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),
@@ -178,7 +178,7 @@ impl Val {
     /// Return the elements of an array or the values of an object (omitting its keys).
     ///
     /// Fail on any other value.
-    pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Val>>, Error> {
+    pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
@@ -186,16 +186,16 @@ impl Val {
         }
     }
 
-    pub(crate) fn try_map<I: Iterator<Item = ValR>>(self, f: impl Fn(Val) -> I) -> ValR {
+    pub(crate) fn try_map<I: Iterator<Item = ValR>>(self, f: impl Fn(Self) -> I) -> ValR {
         Ok(match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
-                Val::arr(iter.collect::<Result<_, _>>()?)
+                Self::arr(iter.collect::<Result<_, _>>()?)
             }
             Self::Obj(o) => {
                 let iter = rc_unwrap_or_clone(o).into_iter();
                 let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
-                Val::obj(iter.collect::<Result<_, _>>()?)
+                Self::obj(iter.collect::<Result<_, _>>()?)
             }
             v => v,
         })
@@ -226,14 +226,14 @@ impl Val {
     }
 
     /// Apply a function to an array.
-    pub fn mutate_arr(self, f: impl Fn(&mut Vec<Val>)) -> ValR {
+    pub fn mutate_arr(self, f: impl Fn(&mut Vec<Self>)) -> ValR {
         let mut a = self.into_arr()?;
         f(Rc::make_mut(&mut a));
         Ok(Self::Arr(a))
     }
 
     /// Apply a fallible function to an array.
-    pub fn try_mutate_arr(self, f: impl Fn(&mut Vec<Val>) -> Result<(), Error>) -> ValR {
+    pub fn try_mutate_arr(self, f: impl Fn(&mut Vec<Self>) -> Result<(), Error>) -> ValR {
         let mut a = self.into_arr()?;
         f(Rc::make_mut(&mut a))?;
         Ok(Self::Arr(a))
@@ -248,9 +248,9 @@ impl Val {
     pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
         use hifijson::{token, Error};
         match token {
-            Token::Null => Ok(Val::Null),
-            Token::True => Ok(Val::Bool(true)),
-            Token::False => Ok(Val::Bool(false)),
+            Token::Null => Ok(Self::Null),
+            Token::True => Ok(Self::Bool(true)),
+            Token::False => Ok(Self::Bool(false)),
             Token::DigitOrMinus => {
                 let (num, parts) = lexer.num_string()?;
                 // if we are dealing with an integer ...
@@ -260,10 +260,10 @@ impl Val {
                         return Ok(Self::Int(i));
                     }
                 }
-                Ok(Val::Num(Rc::new(num.to_string())))
+                Ok(Self::Num(Rc::new(num.to_string())))
             }
-            Token::Quote => Ok(Val::str(lexer.str_string()?.to_string())),
-            Token::LSquare => Ok(Val::arr({
+            Token::Quote => Ok(Self::str(lexer.str_string()?.to_string())),
+            Token::LSquare => Ok(Self::arr({
                 let mut arr = Vec::new();
                 lexer.seq(Token::RSquare, |token, lexer| {
                     arr.push(Self::parse(token, lexer)?);
@@ -271,7 +271,7 @@ impl Val {
                 })?;
                 arr
             })),
-            Token::LCurly => Ok(Val::obj({
+            Token::LCurly => Ok(Self::obj({
                 let mut obj: Map<_, _> = Default::default();
                 lexer.seq(Token::RCurly, |token, lexer| {
                     let key =
@@ -309,7 +309,7 @@ impl From<serde_json::Value> for Val {
 
 #[cfg(feature = "serde_json")]
 impl From<Val> for serde_json::Value {
-    fn from(v: Val) -> serde_json::Value {
+    fn from(v: Val) -> Self {
         use core::str::FromStr;
         use serde_json::Value::*;
         match v {
