@@ -532,26 +532,26 @@ impl fmt::Display for Val {
             Self::Null => "null".fmt(f),
             Self::Bool(b) => b.fmt(f),
             Self::Int(i) => i.fmt(f),
-            Self::Float(x) if x.is_finite() => write!(f, "{:?}", x),
+            Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
             Self::Float(_) => "null".fmt(f),
             Self::Num(n) => n.fmt(f),
-            Self::Str(s) => write!(f, "\"{}\"", s),
+            Self::Str(s) => write!(f, "\"{s}\""),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();
                 if let Some(first) = iter.next() {
                     first.fmt(f)?;
                 };
-                iter.try_for_each(|x| write!(f, ",{}", x))?;
+                iter.try_for_each(|x| write!(f, ",{x}"))?;
                 write!(f, "]")
             }
             Self::Obj(o) => {
                 write!(f, "{{")?;
                 let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
-                    write!(f, "\"{}\":{}", k, v)?;
+                    write!(f, "\"{k}\":{v}")?;
                 }
-                iter.try_for_each(|(k, v)| write!(f, ",\"{}\":{}", k, v))?;
+                iter.try_for_each(|(k, v)| write!(f, ",\"{k}\":{v}"))?;
                 write!(f, "}}")
             }
         }
