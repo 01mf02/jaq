@@ -11,7 +11,7 @@ pub enum Delim {
 }
 
 impl Delim {
-    fn open(&self) -> char {
+    fn open(self) -> char {
         match self {
             Self::Paren => '(',
             Self::Brack => '[',
@@ -19,7 +19,7 @@ impl Delim {
         }
     }
 
-    fn close(&self) -> char {
+    fn close(self) -> char {
         match self {
             Self::Paren => ')',
             Self::Brack => ']',
