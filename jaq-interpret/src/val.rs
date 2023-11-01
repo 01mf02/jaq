@@ -135,7 +135,7 @@ impl Val {
         }
     }
 
-    /// Try to parse a string to a [Self::Float], else return [Self::Null].
+    /// Try to parse a string to a [`Self::Float`], else return [`Self::Null`].
     pub fn from_dec_str(n: &str) -> Self {
         n.parse().map_or(Self::Null, Self::Float)
     }
@@ -206,7 +206,7 @@ impl Val {
     /// * every element in the array `b` is contained in some element of the array `a`,
     /// * for every key-value pair `k, v` in `b`,
     ///   there is a key-value pair `k, v'` in `a` such that `v'` contains `v`, or
-    /// * `a equals `b`.
+    /// * `a` equals `b`.
     pub fn contains(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.contains(&**r),
