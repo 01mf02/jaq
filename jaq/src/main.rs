@@ -357,8 +357,10 @@ impl Termination for Error {
             Self::FalseOrNull => 1,
             Self::Io(prefix, e) => {
                 eprint!("Error: ");
-                prefix.into_iter().for_each(|p| eprint!("{}: ", p));
-                eprintln!("{}", e);
+                if let Some(p) = prefix {
+                    eprint!("{p}: ");
+                }
+                eprintln!("{e}");
                 2
             }
             Self::Persist(e) => {
