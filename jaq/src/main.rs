@@ -507,14 +507,15 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
         format!("{found}{when}, expected {expected}",)
     };
 
-    let label = match e.reason() {
-        SimpleReason::Custom(msg) => msg.clone(),
-        _ => format!(
+    let label = if let SimpleReason::Custom(msg) = e.reason() {
+        msg.clone()
+    } else {
+        format!(
             "Unexpected {}",
             e.found()
                 .map(|c| format!("token {}", c.fg(red)))
                 .unwrap_or_else(|| "end of input".to_string())
-        ),
+        )
     };
 
     let report = Report::build(ReportKind::Error, (), e.span().start)
