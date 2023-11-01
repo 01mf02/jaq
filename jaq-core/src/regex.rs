@@ -108,7 +108,7 @@ pub struct Match {
 
 impl Match {
     pub fn new<'a>(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
-        Match {
+        Self {
             offset: bc.char_of_byte(m.start()),
             length: m.as_str().chars().count(),
             string: m.as_str().to_string(),
@@ -120,13 +120,13 @@ impl Match {
 impl From<Match> for Val {
     fn from(m: crate::regex::Match) -> Self {
         let obj = [
-            ("offset", Val::Int(m.offset as isize)),
-            ("length", Val::Int(m.length as isize)),
-            ("string", Val::str(m.string)),
-            ("name", m.name.map(Val::str).unwrap_or(Val::Null)),
+            ("offset", Self::Int(m.offset as isize)),
+            ("length", Self::Int(m.length as isize)),
+            ("string", Self::str(m.string)),
+            ("name", m.name.map(Self::str).unwrap_or(Self::Null)),
         ];
-        let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
-        Val::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
+        let obj = obj.into_iter().filter(|(_, v)| *v != Self::Null);
+        Self::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
     }
 }
 

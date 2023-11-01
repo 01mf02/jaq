@@ -186,7 +186,7 @@ impl<F> Part<F> {
 
 impl<F> From<Part<F>> for Path<F> {
     fn from(p: Part<F>) -> Self {
-        Path(Vec::from([(p, Opt::Essential)]))
+        Self(Vec::from([(p, Opt::Essential)]))
     }
 }
 
