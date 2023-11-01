@@ -1,7 +1,7 @@
 //! Helpers to interface with the `regex` crate.
 
 use alloc::string::{String, ToString};
-use alloc::{format, rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 use jaq_interpret::{Error, Val};
 
 #[derive(Default)]
@@ -136,8 +136,8 @@ impl From<Match> for Val {
 /// 1. output strings that do *not* match the regex, and
 /// 2. output the matches.
 pub fn regex(s: &str, re: &str, flags: &str, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
-    let fail_flag = |e| Error::str(format!("invalid regex flag: {e}"));
-    let fail_re = |e| Error::str(format!("invalid regex: {e}"));
+    let fail_flag = |e| Error::str(&format_args!("invalid regex flag: {e}"));
+    let fail_re = |e| Error::str(&format_args!("invalid regex: {e}"));
     let flags = Flags::new(flags).map_err(fail_flag)?;
     let re = flags.regex(re).map_err(fail_re)?;
     let (split, matches) = sm;
