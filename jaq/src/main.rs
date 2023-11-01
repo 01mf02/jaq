@@ -225,7 +225,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
 fn args_named(var_val: &[(String, Val)]) -> Val {
     let named = var_val
         .iter()
-        .map(|(var, val)| (var.to_owned().into(), val.clone()));
+        .map(|(var, val)| (var.clone().into(), val.clone()));
     let args = std::iter::once(("named".to_string().into(), Val::obj(named.collect())));
     Val::obj(args.collect())
 }
