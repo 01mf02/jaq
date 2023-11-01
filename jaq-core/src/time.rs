@@ -10,7 +10,7 @@ pub fn from_iso8601(s: &str) -> ValR {
         .map_err(|e| Error::str(&format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
     let epoch_s = datetime.unix_timestamp();
     if s.contains('.') {
-        let seconds = epoch_s as f64 + (datetime.nanosecond() as f64 * 1e-9_f64);
+        let seconds = epoch_s as f64 + (f64::from(datetime.nanosecond()) * 1e-9_f64);
         Ok(Val::Float(seconds))
     } else {
         isize::try_from(epoch_s)
