@@ -368,7 +368,7 @@ impl Termination for Error {
                 2
             }
             Self::Chumsky(e) => {
-                for err in e.into_iter() {
+                for err in e {
                     report(err.error)
                         .eprint(ariadne::Source::from(err.filter))
                         .unwrap();
