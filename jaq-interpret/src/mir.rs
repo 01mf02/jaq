@@ -38,9 +38,11 @@ pub enum Num {
 impl Num {
     fn parse(n: &str) -> Result<Self, Self> {
         if n.contains(['.', 'e', 'E']) {
-            n.parse::<f64>().map(Num::Float).map_err(|_| Num::Float(0.))
+            n.parse::<f64>()
+                .map(Num::Float)
+                .map_err(|_| Self::Float(0.))
         } else {
-            n.parse::<isize>().map(Num::Int).map_err(|_| Num::Int(0))
+            n.parse::<isize>().map(Num::Int).map_err(|_| Self::Int(0))
         }
     }
 }
