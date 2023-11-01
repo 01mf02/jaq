@@ -51,7 +51,7 @@ pub(crate) fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
                 None => continue,
                 Some(Ok(v)) => {
                     if iter.peek().is_some() {
-                        stack.push(iter)
+                        stack.push(iter);
                     }
                     break v;
                 }
