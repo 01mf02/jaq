@@ -180,7 +180,7 @@ pub fn tree(
     let trees = tree.map_with_span(|t, span| (t, span)).repeated().collect();
     let paren = trees.clone().delimited_by(just('('), just(')'));
     let brack = trees.clone().delimited_by(just('['), just(']'));
-    let brace = trees.clone().delimited_by(just('{'), just('}'));
+    let brace = trees.delimited_by(just('{'), just('}'));
 
     let pair = |s, span| (s, span);
     let chars = || char_().repeated().collect().map_with_span(pair);
