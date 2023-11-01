@@ -364,7 +364,7 @@ impl Termination for Error {
                 2
             }
             Self::Persist(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 2
             }
             Self::Chumsky(e) => {
@@ -377,11 +377,11 @@ impl Termination for Error {
             }
             Self::NoOutput => 4,
             Self::Parse(e) => {
-                eprintln!("Error: failed to parse: {}", e);
+                eprintln!("Error: failed to parse: {e}");
                 5
             }
             Self::Jaq(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 5
             }
         };
@@ -489,7 +489,7 @@ fn report(e: chumsky::error::Simple<String>) -> ariadne::Report {
             "Unexpected end of input"
         };
         let when = if let Some(label) = e.label() {
-            format!(" while parsing {}", label)
+            format!(" while parsing {label}")
         } else {
             String::new()
         };
@@ -560,7 +560,7 @@ fn run_tests(file: std::fs::File) -> ExitCode {
     for test in tests {
         println!("Testing {}", test.filter);
         match run_test(test) {
-            Err(e) => eprintln!("{:?}", e),
+            Err(e) => eprintln!("{e:?}"),
             Ok((expect, obtain)) if expect != obtain => {
                 eprintln!("expected {expect}, obtained {obtain}",);
             }
