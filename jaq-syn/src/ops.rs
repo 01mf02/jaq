@@ -23,11 +23,7 @@ impl MathOp {
     /// Perform the arithmetic operation on the given inputs.
     pub fn run<I, O>(&self, l: I, r: I) -> O
     where
-        I: Add<Output = O>,
-        I: Sub<Output = O>,
-        I: Mul<Output = O>,
-        I: Div<Output = O>,
-        I: Rem<Output = O>,
+        I: Add<Output = O> + Sub<Output = O> + Mul<Output = O> + Div<Output = O> + Rem<Output = O>,
     {
         match self {
             Self::Add => l + r,
