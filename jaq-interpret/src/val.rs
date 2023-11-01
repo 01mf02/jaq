@@ -540,7 +540,7 @@ impl fmt::Display for Val {
                 write!(f, "[")?;
                 let mut iter = a.iter();
                 if let Some(first) = iter.next() {
-                    first.fmt(f)?
+                    first.fmt(f)?;
                 };
                 iter.try_for_each(|x| write!(f, ",{}", x))?;
                 write!(f, "]")

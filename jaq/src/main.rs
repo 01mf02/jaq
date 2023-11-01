@@ -449,11 +449,11 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
                     writer,
                     cli.color_mode(),
                 )
-            }?
+            }?;
         }
     };
     if !cli.join_output {
-        writeln!(writer)?
+        writeln!(writer)?;
     }
     Ok(())
 }
