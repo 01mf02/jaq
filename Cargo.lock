@@ -198,9 +198,9 @@ checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "colored_json"
-version = "3.3.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4948aed0a773db233baf8997302da553ad285be28464c36584944a66ab107db2"
+checksum = "66203a5372a3ffbef29a90b4f8ed98eae3be5662bc7922c7dee1cb57bd40f9a8"
 dependencies = [
  "is-terminal",
  "serde",
