@@ -11,12 +11,9 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
-    - uses: dtolnay/rust-toolchain@1.65
     - name: Build
       run: cargo build --verbose
     - name: Check (without default features)

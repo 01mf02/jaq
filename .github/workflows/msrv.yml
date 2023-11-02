@@ -1,0 +1,15 @@
+name: Check build with MSRV (minimal supported Rust version)
+
+on:
+  push:
+    paths:
+      - 'Cargo.lock'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: dtolnay/rust-toolchain@1.65
+    - name: Build
+      run: cargo build --verbose
