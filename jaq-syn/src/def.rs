@@ -75,7 +75,7 @@ impl<V, F> Arg<V, F> {
 }
 
 impl<V: Deref, F: Deref> Arg<V, F> {
-    /// Move references inward, while deferencing content.
+    /// Move references inward, while dereferencing content.
     pub fn as_deref(&self) -> Arg<&<V as Deref>::Target, &<F as Deref>::Target> {
         match self {
             Self::Var(x) => Arg::Var(x),

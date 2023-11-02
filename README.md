@@ -8,7 +8,7 @@
 jaq (pronounced like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
-jaq focusses on three goals:
+jaq focuses on three goals:
 
 * **Correctness**:
   jaq aims to provide a more correct and predictable implementation of jq,
@@ -668,7 +668,7 @@ loops
 however doesn't interrupt the `f` stream, but instead sends _each_
 error value emitted to the `g` filter; the result is a stream of
 values emitted from `f` with values emitted from `g` interspersed
-where errors ocurred.
+where errors occurred.
 
 Consider the following example: this expression is `true` in jq,
 because the first `error(2)` interrupts the stream:
