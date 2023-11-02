@@ -441,7 +441,6 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
             // we cannot create a `Box<dyn Formatter>` because
             // Rust says that the `Formatter` trait is not "object safe"
             if cli.compact {
-
                 ColoredFormatter::new(CompactFormatter).write_colored_json(&val, writer, mode)
             } else {
                 ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(&val, writer, mode)
