@@ -9,6 +9,7 @@ description = "Parser for the jaq language"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
+rust-version = "1.64"
 
 [dependencies]
 chumsky = { version = "0.9.0", default-features = false }

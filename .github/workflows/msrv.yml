@@ -1,6 +1,7 @@
 name: Build with MSRV (minimal supported Rust version)
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'Cargo.lock'
@@ -10,13 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+
     - uses: dtolnay/rust-toolchain@1.63
     - name: Check jaq-core
       working-directory: jaq-core
       run: cargo check
+
+    - uses: dtolnay/rust-toolchain@1.64
     - name: Check jaq-std
       working-directory: jaq-std
       run: cargo check
-    - uses: dtolnay/rust-toolchain@1.64
     - name: Build
       run: cargo build --verbose
