@@ -55,7 +55,7 @@ impl Error {
     }
 
     /// Build an error from something that can be converted to a string.
-    pub fn str(s: &impl ToString) -> Self {
+    pub fn str(s: impl ToString) -> Self {
         Self::Val(Val::str(s.to_string()))
     }
 }

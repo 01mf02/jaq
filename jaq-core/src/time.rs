@@ -7,7 +7,7 @@ pub fn from_iso8601(s: &str) -> ValR {
     use time::format_description::well_known::Iso8601;
     use time::OffsetDateTime;
     let datetime = OffsetDateTime::parse(s, &Iso8601::DEFAULT)
-        .map_err(|e| Error::str(&format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
+        .map_err(|e| Error::str(format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
     let epoch_s = datetime.unix_timestamp();
     if s.contains('.') {
         let seconds = epoch_s as f64 + (f64::from(datetime.nanosecond()) * 1e-9_f64);
@@ -29,16 +29,8 @@ pub fn to_iso8601(v: &Val) -> Result<String, Error> {
         })
         .encode();
 
-    let fail1 = |e| {
-        Error::str(&format_args!(
-            "cannot format {v} as ISO-8601 timestamp: {e}"
-        ))
-    };
-    let fail2 = |e| {
-        Error::str(&format_args!(
-            "cannot format {v} as ISO-8601 timestamp: {e}"
-        ))
-    };
+    let fail1 = |e| Error::str(format_args!("cannot format {v} as ISO-8601 timestamp: {e}"));
+    let fail2 = |e| Error::str(format_args!("cannot format {v} as ISO-8601 timestamp: {e}"));
 
     match v {
         Val::Num(n) => to_iso8601(&Val::from_dec_str(n)),
