@@ -55,18 +55,14 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
 
 fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
     fs.iter()
-        .map(|(name, arity, f)| ((*name).to_string(), *arity, Native::new(*f)))
+        .map(|&(name, arity, f)| (name.to_string(), arity, Native::new(f)))
 }
 
 fn upd<'a>(
     fs: &'a [(&str, usize, RunPtr, UpdatePtr)],
 ) -> impl Iterator<Item = (String, usize, Native)> + 'a {
-    fs.iter().map(|(name, arity, run, update)| {
-        (
-            (*name).to_string(),
-            *arity,
-            Native::with_update(*run, *update),
-        )
+    fs.iter().map(|&(name, arity, run, update)| {
+        (name.to_string(), arity, Native::with_update(run, update))
     })
 }
 
