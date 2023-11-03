@@ -1,8 +1,11 @@
-name: Rust
+name: Build and run tests
 
 on:
   push:
     branches: [ main ]
+    paths:
+      - '**.rs'
+      - '**/Cargo.*'
   pull_request:
     branches: [ main ]
 
@@ -16,10 +19,16 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
-    - name: Check (without default features)
+    - name: Check jaq-interpret without default features
+      working-directory: jaq-interpret
+      run: cargo check --no-default-features
+    - name: Check jaq-core without default features
       working-directory: jaq-core
       run: cargo check --no-default-features
-    - name: Lint
+    - name: Check jaq-std without default features
+      working-directory: jaq-std
+      run: cargo check --no-default-features
+    - name: Clippy
       run: cargo clippy -- -Dwarnings
     - name: Run tests
       run: cargo test --verbose
