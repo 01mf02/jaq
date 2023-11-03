@@ -185,7 +185,8 @@ fn to_sh(v: &Val) -> Result<String, Error> {
     Ok(match v {
         Val::Str(s) => format!("'{}'", s.replace('\'', r"'\''")),
         Val::Arr(_) | Val::Obj(_) => {
-            return Err(Error::str(format_args!("cannot escape for shell: {v}")))
+            let err = Error::str(format_args!("cannot escape for shell: {v}"));
+            return Err(err);
         }
         v => v.to_string(),
     })
@@ -196,9 +197,8 @@ fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
         Val::Null => "".to_owned(),
         Val::Str(s) => f(s),
         Val::Arr(_) | Val::Obj(_) => {
-            return Err(Error::str(format_args!(
-                "invalid value in a table row: {v}"
-            )))
+            let err = Error::str(format_args!("invalid value in a table row: {v}"));
+            return Err(err);
         }
         v => v.to_string(),
     })
