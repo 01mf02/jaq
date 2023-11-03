@@ -8,6 +8,7 @@ readme = "../README.md"
 description = "Default native filters for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
+rust-version = "1.63"
 
 [features]
 default = ["std", "format", "log", "math", "parse_json", "regex", "time"]
@@ -19,7 +20,7 @@ parse_json = ["hifijson"]
 [dependencies]
 jaq-interpret = { version = "1.0.0", path = "../jaq-interpret" }
 hifijson = { version = "0.2.0", optional = true }
-time = { version = "0.3.22", optional = true, features = ["formatting", "parsing"] }
+time = { version = "0.3.20", optional = true, features = ["formatting", "parsing"] }
 regex = { version = "1.9", optional = true }
 log = { version = "0.4.17", optional = true }
 libm = { version = "0.2.7", optional = true }
