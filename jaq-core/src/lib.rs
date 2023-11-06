@@ -55,14 +55,14 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
 
 fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
     fs.iter()
-        .map(|(name, arity, f)| (name.to_string(), *arity, Native::new(*f)))
+        .map(|&(name, arity, f)| (name.to_string(), arity, Native::new(f)))
 }
 
 fn upd<'a>(
     fs: &'a [(&str, usize, RunPtr, UpdatePtr)],
 ) -> impl Iterator<Item = (String, usize, Native)> + 'a {
-    fs.iter().map(|(name, arity, run, update)| {
-        (name.to_string(), *arity, Native::with_update(*run, *update))
+    fs.iter().map(|&(name, arity, run, update)| {
+        (name.to_string(), arity, Native::with_update(run, update))
     })
 }
 
@@ -79,7 +79,7 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 fn length(v: &Val) -> ValR {
     match v {
         Val::Null => Ok(Val::Int(0)),
-        Val::Bool(_) => Err(Error::str(format!("{v} has no length"))),
+        Val::Bool(_) => Err(Error::str(format_args!("{v} has no length"))),
         Val::Int(i) => Ok(Val::Int(i.abs())),
         Val::Num(n) => length(&Val::from_dec_str(n)),
         Val::Float(f) => Ok(Val::Float(f.abs())),
@@ -159,7 +159,7 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
     // conversion from isize to u32 may fail on 64-bit systems for high values of c
     let u = u32::try_from(i).map_err(Error::str)?;
     // may fail e.g. on `[1114112] | implode`
-    char::from_u32(u).ok_or(Error::str(format!("cannot use {u} as character")))
+    char::from_u32(u).ok_or_else(|| Error::str(format_args!("cannot use {u} as character")))
 }
 
 /// Split a string by a given separator string.
@@ -182,20 +182,24 @@ where
 }
 
 fn to_sh(v: &Val) -> Result<String, Error> {
-    let fail = || format!("cannot escape for shell: {v}");
     Ok(match v {
         Val::Str(s) => format!("'{}'", s.replace('\'', r"'\''")),
-        Val::Arr(_) | Val::Obj(_) => return Err(Error::str(fail())),
+        Val::Arr(_) | Val::Obj(_) => {
+            let err = Error::str(format_args!("cannot escape for shell: {v}"));
+            return Err(err);
+        }
         v => v.to_string(),
     })
 }
 
 fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
-    let fail = || format!("invalid value in a table row: {v}");
     Ok(match v {
         Val::Null => "".to_owned(),
         Val::Str(s) => f(s),
-        Val::Arr(_) | Val::Obj(_) => return Err(Error::str(fail())),
+        Val::Arr(_) | Val::Obj(_) => {
+            let err = Error::str(format_args!("invalid value in a table row: {v}"));
+            return Err(err);
+        }
         v => v.to_string(),
     })
 }
@@ -357,7 +361,7 @@ fn from_json(s: &str) -> ValR {
     use hifijson::token::Lex;
     lexer
         .exactly_one(Val::parse)
-        .map_err(|e| Error::str(format!("cannot parse {s} as JSON: {e}")))
+        .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
 }
 
 #[cfg(feature = "parse_json")]

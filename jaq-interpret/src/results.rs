@@ -51,7 +51,7 @@ pub(crate) fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
                 None => continue,
                 Some(Ok(v)) => {
                     if iter.peek().is_some() {
-                        stack.push(iter)
+                        stack.push(iter);
                     }
                     break v;
                 }
@@ -114,9 +114,9 @@ pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
             // `foreach`
             stack.push((xs, f(x, v.clone()).peekable()));
             return Some(Ok(v));
-        } else {
-            // `reduce`
-            stack.push((xs, f(x, v).peekable()))
         }
+
+        // `reduce`
+        stack.push((xs, f(x, v).peekable()));
     })
 }

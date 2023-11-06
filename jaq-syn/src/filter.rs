@@ -143,14 +143,14 @@ pub enum Filter<C = String, V = String, Num = String> {
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }
 
-impl From<Str<Spanned<Filter>>> for Filter {
-    fn from(s: Str<Spanned<Filter>>) -> Self {
+impl From<Str<Spanned<Self>>> for Filter {
+    fn from(s: Str<Spanned<Self>>) -> Self {
         Self::Str(Box::new(s))
     }
 }
 
-impl From<Call<Spanned<Filter>>> for Filter {
-    fn from(c: Call<Spanned<Filter>>) -> Self {
+impl From<Call<Spanned<Self>>> for Filter {
+    fn from(c: Call<Spanned<Self>>) -> Self {
         Self::Call(c.name, c.args)
     }
 }
@@ -159,7 +159,7 @@ impl Filter {
     /// Create a binary expression, such as `1 + 2`.
     pub fn binary(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
-        (Filter::Binary(Box::new(a), op, Box::new(b)), span)
+        (Self::Binary(Box::new(a), op, Box::new(b)), span)
     }
 
     /// Create a path expression, such as `keys[]` or `.a.b`.
@@ -170,7 +170,7 @@ impl Filter {
         if path.is_empty() {
             f
         } else {
-            (Filter::Path(Box::new(f), path), span)
+            (Self::Path(Box::new(f), path), span)
         }
     }
 }

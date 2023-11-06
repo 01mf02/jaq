@@ -1,7 +1,7 @@
 //! Helpers to interface with the `regex` crate.
 
 use alloc::string::{String, ToString};
-use alloc::{format, rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 use jaq_interpret::{Error, Val};
 
 #[derive(Default)]
@@ -108,7 +108,7 @@ pub struct Match {
 
 impl Match {
     pub fn new<'a>(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
-        Match {
+        Self {
             offset: bc.char_of_byte(m.start()),
             length: m.as_str().chars().count(),
             string: m.as_str().to_string(),
@@ -120,13 +120,13 @@ impl Match {
 impl From<Match> for Val {
     fn from(m: crate::regex::Match) -> Self {
         let obj = [
-            ("offset", Val::Int(m.offset as isize)),
-            ("length", Val::Int(m.length as isize)),
-            ("string", Val::str(m.string)),
-            ("name", m.name.map(Val::str).unwrap_or(Val::Null)),
+            ("offset", Self::Int(m.offset as isize)),
+            ("length", Self::Int(m.length as isize)),
+            ("string", Self::str(m.string)),
+            ("name", m.name.map(Self::str).unwrap_or(Self::Null)),
         ];
-        let obj = obj.into_iter().filter(|(_, v)| *v != Val::Null);
-        Val::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
+        let obj = obj.into_iter().filter(|(_, v)| *v != Self::Null);
+        Self::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
     }
 }
 
@@ -136,8 +136,8 @@ impl From<Match> for Val {
 /// 1. output strings that do *not* match the regex, and
 /// 2. output the matches.
 pub fn regex(s: &str, re: &str, flags: &str, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
-    let fail_flag = |e| Error::str(format!("invalid regex flag: {e}"));
-    let fail_re = |e| Error::str(format!("invalid regex: {e}"));
+    let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
+    let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
     let flags = Flags::new(flags).map_err(fail_flag)?;
     let re = flags.regex(re).map_err(fail_re)?;
     let (split, matches) = sm;

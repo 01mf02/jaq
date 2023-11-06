@@ -148,7 +148,7 @@ impl ParseCtx {
 
     /// Add a native filter with given name and arity.
     pub fn insert_native(&mut self, name: String, arity: usize, f: filter::Native) {
-        self.native.push((name, arity, f))
+        self.native.push((name, arity, f));
     }
 
     /// Add native filters with given names and arities.
@@ -156,7 +156,7 @@ impl ParseCtx {
     where
         I: IntoIterator<Item = (String, usize, filter::Native)>,
     {
-        self.native.extend(natives)
+        self.native.extend(natives);
     }
 
     /// Import parsed definitions, such as obtained from the standard library.
@@ -204,6 +204,6 @@ impl ParseCtx {
         let inputs = RcIter::new(core::iter::empty());
         let out = f.run((Ctx::new([], &inputs), x));
 
-        assert!(out.eq(ys))
+        assert!(out.eq(ys));
     }
 }

@@ -11,7 +11,7 @@ pub enum Delim {
 }
 
 impl Delim {
-    fn open(&self) -> char {
+    fn open(self) -> char {
         match self {
             Self::Paren => '(',
             Self::Brack => '[',
@@ -19,7 +19,7 @@ impl Delim {
         }
     }
 
-    fn close(&self) -> char {
+    fn close(self) -> char {
         match self {
             Self::Paren => ')',
             Self::Brack => ']',
@@ -180,7 +180,7 @@ pub fn tree(
     let trees = tree.map_with_span(|t, span| (t, span)).repeated().collect();
     let paren = trees.clone().delimited_by(just('('), just(')'));
     let brack = trees.clone().delimited_by(just('['), just(']'));
-    let brace = trees.clone().delimited_by(just('{'), just('}'));
+    let brace = trees.delimited_by(just('{'), just('}'));
 
     let pair = |s, span| (s, span);
     let chars = || char_().repeated().collect().map_with_span(pair);

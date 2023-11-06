@@ -139,7 +139,7 @@ fn real_main() -> Result<ExitCode, Error> {
             if let Some(filter) = args.next() {
                 parse(filter, vars)?
             } else {
-                Default::default()
+                Filter::default()
             }
         }
     };
@@ -225,7 +225,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
 fn args_named(var_val: &[(String, Val)]) -> Val {
     let named = var_val
         .iter()
-        .map(|(var, val)| (var.to_owned().into(), val.clone()));
+        .map(|(var, val)| (var.clone().into(), val.clone()));
     let args = std::iter::once(("named".to_string().into(), Val::obj(named.collect())));
     Val::obj(args.collect())
 }
@@ -357,16 +357,18 @@ impl Termination for Error {
             Self::FalseOrNull => 1,
             Self::Io(prefix, e) => {
                 eprint!("Error: ");
-                prefix.into_iter().for_each(|p| eprint!("{}: ", p));
-                eprintln!("{}", e);
+                if let Some(p) = prefix {
+                    eprint!("{p}: ");
+                }
+                eprintln!("{e}");
                 2
             }
             Self::Persist(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 2
             }
             Self::Chumsky(e) => {
-                for err in e.into_iter() {
+                for err in e {
                     report(err.error)
                         .eprint(ariadne::Source::from(err.filter))
                         .unwrap();
@@ -375,11 +377,11 @@ impl Termination for Error {
             }
             Self::NoOutput => 4,
             Self::Parse(e) => {
-                eprintln!("Error: failed to parse: {}", e);
+                eprintln!("Error: failed to parse: {e}");
                 5
             }
             Self::Jaq(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 5
             }
         };
@@ -444,11 +446,11 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
                 ColoredFormatter::new(CompactFormatter).write_colored_json(&val, writer, mode)
             } else {
                 ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(&val, writer, mode)
-            }?
+            }?;
         }
     };
     if !cli.join_output {
-        writeln!(writer)?
+        writeln!(writer)?;
     }
     Ok(())
 }
@@ -482,7 +484,7 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
             "Unexpected end of input"
         };
         let when = if let Some(label) = e.label() {
-            format!(" while parsing {}", label)
+            format!(" while parsing {label}")
         } else {
             String::new()
         };
@@ -500,14 +502,15 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
         format!("{found}{when}, expected {expected}",)
     };
 
-    let label = match e.reason() {
-        SimpleReason::Custom(msg) => msg.clone(),
-        _ => format!(
+    let label = if let SimpleReason::Custom(msg) = e.reason() {
+        msg.clone()
+    } else {
+        format!(
             "Unexpected {}",
             e.found()
                 .map(|c| format!("token {}", c.fg(red)))
                 .unwrap_or_else(|| "end of input".to_string())
-        ),
+        )
     };
 
     let report = Report::build(ReportKind::Error, (), e.span().start)
@@ -553,7 +556,7 @@ fn run_tests(file: std::fs::File) -> ExitCode {
     for test in tests {
         println!("Testing {}", test.filter);
         match run_test(test) {
-            Err(e) => eprintln!("{:?}", e),
+            Err(e) => eprintln!("{e:?}"),
             Ok((expect, obtain)) if expect != obtain => {
                 eprintln!("expected {expect}, obtained {obtain}",);
             }

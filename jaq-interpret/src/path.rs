@@ -91,7 +91,7 @@ impl Part<Vec<Val>> {
                 Val::Obj(ref mut o) => {
                     let o = Rc::make_mut(o);
                     for i in indices.iter() {
-                        use indexmap::map::Entry::*;
+                        use indexmap::map::Entry::{Occupied, Vacant};
                         match (i, opt) {
                             (Val::Str(s), _) => match o.entry(Rc::clone(s)) {
                                 Occupied(mut e) => {
@@ -172,7 +172,7 @@ impl<F> Path<F> {
 
 impl<F> Part<F> {
     fn eval<'a>(&'a self, run: impl Fn(&'a F) -> ValRs<'a>) -> Result<Part<Vec<Val>>, Error> {
-        use Part::*;
+        use Part::{Index, Range};
         match self {
             Index(i) => Ok(Index(run(i).collect::<Result<_, _>>()?)),
             Range(from, until) => {
@@ -186,7 +186,7 @@ impl<F> Part<F> {
 
 impl<F> From<Part<F>> for Path<F> {
     fn from(p: Part<F>) -> Self {
-        Path(Vec::from([(p, Opt::Essential)]))
+        Self(Vec::from([(p, Opt::Essential)]))
     }
 }
 

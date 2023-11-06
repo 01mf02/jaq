@@ -77,7 +77,7 @@ where
     let array = Delim::Brack.around(filter.clone().or_not());
 
     let is_val = just(Token::Colon).ignore_then(no_comma);
-    let key_str = super::path::key(filter.clone())
+    let key_str = super::path::key(filter)
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
     let key_filter = parenthesised
