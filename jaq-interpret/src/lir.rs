@@ -7,7 +7,6 @@ use alloc::vec::Vec;
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 use jaq_syn::{MathOp, Str};
 
-#[derive(Default)]
 pub struct Ctx {
     defs: Vec<Filter>,
     callable: Vec<Callable>,
@@ -26,27 +25,35 @@ const EMPTY: AbsId = AbsId(ARR_OBJ_ELEMS.0 + 2);
 
 pub fn root_def(def: mir::Def) -> filter::Owned {
     let mut ctx = Ctx::default();
-    ctx.init_constants();
     let id = ctx.def(def);
     filter::Owned::new(id, ctx.defs)
 }
 
-impl Ctx {
-    fn init_constants(&mut self) {
+impl Default for Ctx {
+    fn default() -> Self {
+        let mut ctx = Self {
+            defs: Vec::new(),
+            callable: Vec::new(),
+        };
+
         for (f, id) in [(Filter::Id, IDENTITY), (Filter::ToString, TOSTRING)] {
-            let id_ = self.id_of_ast(f);
+            let id_ = ctx.id_of_ast(f);
             assert_eq!(id, id_);
         }
 
-        let arr_obj = self.arr_obj_elems();
-        let arr_obj_id = self.id_of_ast(arr_obj);
+        let arr_obj = ctx.arr_obj_elems();
+        let arr_obj_id = ctx.id_of_ast(arr_obj);
         assert_eq!(arr_obj_id, ARR_OBJ_ELEMS);
 
-        let empty = self.empty();
-        let empty_id = self.id_of_ast(empty);
+        let empty = ctx.empty();
+        let empty_id = ctx.id_of_ast(empty);
         assert_eq!(empty_id, EMPTY);
-    }
 
+        ctx
+    }
+}
+
+impl Ctx {
     /// `{}[]` returns zero values.
     fn empty(&mut self) -> Filter {
         // `{}`
