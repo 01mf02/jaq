@@ -177,10 +177,10 @@ fn char_() -> impl Parser<char, char, Error = Simple<char>> {
 pub fn tree(
     tree: impl Parser<char, Tree, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Tree, Error = Simple<char>> {
-    let trees = tree.map_with_span(|t, span| (t, span)).repeated().collect();
-    let paren = trees.clone().delimited_by(just('('), just(')'));
-    let brack = trees.clone().delimited_by(just('['), just(']'));
-    let brace = trees.delimited_by(just('{'), just('}'));
+    let trees = || tree.clone().map_with_span(|t, span| (t, span)).repeated();
+    let paren = trees().delimited_by(just('('), just(')'));
+    let brack = trees().delimited_by(just('['), just(']'));
+    let brace = trees().delimited_by(just('{'), just('}'));
 
     let pair = |s, span| (s, span);
     let chars = || char_().repeated().collect().map_with_span(pair);
