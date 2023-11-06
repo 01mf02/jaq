@@ -1,6 +1,6 @@
 [package]
 name = "jaq-core"
-version = "1.0.0"
+version = "1.0.1"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
