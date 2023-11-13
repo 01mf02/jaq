@@ -66,11 +66,12 @@ def tonumber: if isnumber then . else fromjson end;
 
 # Generators
 def range(x): range(0; x);
-def repeat(g): [g] | recurse(.) | .[];
+def repeat(f): def rec: f, rec; rec;
+def recurse(f): def rec: ., (f | rec); rec;
 def recurse: recurse(.[]?);
 def recurse(f; cond): recurse(f | select(cond));
-def while(cond; update): recurse_inner(if cond then update else empty end);
-def until(cond; update): recurse_outer(if cond then empty else update end);
+def while(cond; update): def rec: if cond then ., (update | rec) else empty end; rec;
+def until(cond; update): def rec: if cond then . else update | rec end; rec;
 
 # Iterators
 def map(f): [.[] | f];
