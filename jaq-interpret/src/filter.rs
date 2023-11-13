@@ -17,10 +17,20 @@ pub struct Ref<'a>(Id, &'a [Ast]);
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Id(pub usize);
 
+#[derive(Copy, Clone, Debug)]
+pub struct Tailrec(pub bool);
+
+#[derive(Clone, Debug)]
+pub enum CallTyp {
+    /// is the filter called from inside itself?
+    Inside(Option<Tailrec>),
+    Outside(Tailrec),
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Call {
     pub id: Id,
-    pub rec: bool,
+    pub typ: CallTyp,
     pub skip: usize,
     pub args: Vec<Bind<Id, Id>>,
 }
@@ -309,7 +319,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let ctx = cv.0.clone().skip_vars(call.skip);
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 let f = move || cvs.flat_map(move |cv| then(cv, |cv| def.run(cv)));
-                if call.rec {
+                if matches!(call.typ, CallTyp::Inside(_)) {
                     Box::new(crate::LazyIter::new(f))
                 } else {
                     Box::new(f())

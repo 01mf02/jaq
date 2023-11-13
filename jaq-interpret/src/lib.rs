@@ -49,6 +49,7 @@ extern crate std;
 mod box_iter;
 pub mod error;
 mod filter;
+mod hir;
 mod lazy_iter;
 mod lir;
 mod mir;
@@ -116,7 +117,7 @@ impl<'a> Ctx<'a> {
 pub struct ParseCtx {
     /// errors occurred during transformation
     // TODO for v2.0: remove this and make it a function
-    pub errs: Vec<jaq_syn::Spanned<mir::Error>>,
+    pub errs: Vec<jaq_syn::Spanned<hir::Error>>,
     native: Vec<(String, usize, filter::Native)>,
     def: jaq_syn::Def,
 }
@@ -180,7 +181,7 @@ impl ParseCtx {
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
-        let mut mctx = mir::Ctx::default();
+        let mut mctx = hir::Ctx::default();
         mctx.native = self.native.clone();
         self.def.rhs.defs.extend(main.defs);
         self.def.rhs.body = main.body;
@@ -190,6 +191,9 @@ impl ParseCtx {
         if !self.errs.is_empty() {
             return Default::default();
         }
+        let mut hctx = mir::Ctx::default();
+        //std::dbg!(&def);
+        let def = hctx.def(def, Default::default());
 
         lir::root_def(def)
     }
