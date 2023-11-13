@@ -24,7 +24,7 @@ pub enum Error {
     /// `0 |= .+1`
     PathExp,
 
-    Tailrec(crate::filter::Id, Val),
+    Tailrec(crate::filter::Id, crate::Vars, Val),
 }
 
 /// Types and sets of types.

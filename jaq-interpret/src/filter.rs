@@ -321,16 +321,17 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => w(&f.0).run((f.1.clone(), cv.1)),
+                Bind::Fun(f) => w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);
                 let ctx = cv.0.clone().skip_vars(call.skip);
+                let inputs = cv.0.inputs;
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 use crate::{LazyIter, Stack};
                 let catch = move |r| match r {
                     Ok(x) => Ok(Ok(x)),
-                    Err(Error::Tailrec(id, cv)) if id == call.id => Err(def.run(todo!())),
+                    Err(Error::Tailrec(id, vars, v)) if id == call.id => Err(def.run((Ctx { inputs, vars }, v))),
                     Err(e) => Ok(Err(e)),
                 };
                 let tailrec = |init| Box::new(Stack::new(Vec::from([init]), catch));
@@ -344,7 +345,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                         tailrec(Box::new(LazyIter::new(move || run_cvs(def, cvs))))
                     }
                     CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.flat_map(move |cv| {
-                        then(cv, |cv| box_once(Err(Error::Tailrec(call.id, cv.1))))
+                        then(cv, |cv| box_once(Err(Error::Tailrec(call.id, cv.0.vars, cv.1))))
                     })),
                     // non-TR call in non-TR filter
                     CallTyp::Inside(None) => Box::new(LazyIter::new(move || run_cvs(def, cvs))),
@@ -398,7 +399,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
-                Bind::Fun(l) => w(&l.0).update((l.1.clone(), cv.1), f),
+                Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);

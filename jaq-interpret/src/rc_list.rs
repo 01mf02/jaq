@@ -1,7 +1,7 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct List<T>(alloc::rc::Rc<Node<T>>);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum Node<T> {
     Nil,
     Cons(T, List<T>),
