@@ -70,6 +70,7 @@ use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
 use lazy_iter::LazyIter;
 use rc_list::List as RcList;
+use stack::Stack;
 
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 

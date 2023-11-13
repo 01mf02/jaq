@@ -23,7 +23,12 @@ pub struct Tailrec(pub bool);
 #[derive(Clone, Debug)]
 pub enum CallTyp {
     /// is the filter called from inside itself?
+    /// if None, then the called filter is not tail-recursive
+    /// if Some(tr), then the called filter is tail-recursive,
+    /// and tr indicates if the call is tail-recursive
     Inside(Option<Tailrec>),
+    /// is the filter called from outside?
+    /// Tailrec indicates whether the filter is tail-recursive
     Outside(Tailrec),
 }
 
@@ -128,6 +133,10 @@ where
         Some(Bind::Fun(Ref(arg, _defs))) => bind_vars(args, ctx.cons_fun((arg, cv.0.clone())), cv),
         None => box_once(Ok((ctx, cv.1))),
     }
+}
+
+fn run_cvs<'a>(f: Ref<'a>, cvs: Results<'a, Cv<'a>, Error>) -> impl Iterator<Item = ValR> + 'a {
+    cvs.flat_map(move |cv| then(cv, |cv| f.run(cv)))
 }
 
 type ObjVec = Vec<(ValR, ValR)>;
@@ -318,11 +327,27 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let def = w(&call.id);
                 let ctx = cv.0.clone().skip_vars(call.skip);
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
-                let f = move || cvs.flat_map(move |cv| then(cv, |cv| def.run(cv)));
-                if matches!(call.typ, CallTyp::Inside(_)) {
-                    Box::new(crate::LazyIter::new(f))
-                } else {
-                    Box::new(f())
+                use crate::{LazyIter, Stack};
+                let catch = move |r| match r {
+                    Ok(x) => Ok(Ok(x)),
+                    Err(Error::Tailrec(id, cv)) if id == call.id => Err(def.run(todo!())),
+                    Err(e) => Ok(Err(e)),
+                };
+                let tailrec = |init| Box::new(Stack::new(Vec::from([init]), catch));
+                match call.typ {
+                    CallTyp::Outside(Tailrec(false)) => Box::new(run_cvs(def, cvs)),
+                    CallTyp::Outside(Tailrec(true)) => {
+                        tailrec(Box::new(run_cvs(def, cvs)) as Results<_, _>)
+                    }
+                    // non-TR call in a TR filter
+                    CallTyp::Inside(Some(Tailrec(false))) => {
+                        tailrec(Box::new(LazyIter::new(move || run_cvs(def, cvs))))
+                    }
+                    CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.flat_map(move |cv| {
+                        then(cv, |cv| box_once(Err(Error::Tailrec(call.id, cv.1))))
+                    })),
+                    // non-TR call in non-TR filter
+                    CallTyp::Inside(None) => Box::new(LazyIter::new(move || run_cvs(def, cvs))),
                 }
             }
 

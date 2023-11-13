@@ -149,7 +149,7 @@ impl Ctx {
                             // call from outside
                             None => CallTyp::Outside(Tailrec(callable.rec.tailrec)),
                             // call from inside
-                            Some(Tailrec(true)) if callable.rec.rec => CallTyp::Inside(None),
+                            Some(Tailrec(false)) if !callable.rec.tailrec => CallTyp::Inside(None),
                             Some(_) => CallTyp::Inside(rec),
                         };
                         Filter::Call(filter::Call {
