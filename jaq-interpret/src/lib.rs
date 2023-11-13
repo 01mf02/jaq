@@ -58,6 +58,7 @@ mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
 pub mod results;
+mod stack;
 mod val;
 
 pub use error::Error;
