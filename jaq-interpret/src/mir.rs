@@ -146,9 +146,9 @@ impl Ctx {
             }
 
             Expr::Fold(typ, Fold { xs, x, init, f }) => {
-                let xs = get(self, *xs, tr.clone());
-                let init = get(self, *init, tr.clone());
-                let f = get(self, *f, tr);
+                let xs = get(self, *xs, notr());
+                let init = get(self, *init, notr());
+                let f = get(self, *f, notr());
                 Expr::Fold(typ, Fold { xs, x, init, f })
             }
             Expr::Id => Expr::Id,
