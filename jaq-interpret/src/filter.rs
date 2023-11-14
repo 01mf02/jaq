@@ -1,7 +1,7 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Results};
 use crate::val::{Val, ValR, ValRs};
-use crate::{rc_lazy_list, Bind, Ctx, Error};
+use crate::{rc_lazy_list, Bind, Ctx, Error, LazyIter};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
@@ -115,6 +115,10 @@ pub trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
 impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
+
+fn lazy_once<'a, T: 'a>(f: impl FnOnce() -> T + 'a) -> BoxIter<'a, T> {
+    Box::new(LazyIter::new(|| core::iter::once(f())))
+}
 
 /// Enhance the context `ctx` with variables bound to the outputs of `args` executed on `cv`,
 /// and return the enhanced contexts together with the original value of `cv`.
@@ -230,11 +234,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1[self.0 .0] {
             Ast::Id => box_once(Ok(cv.1)),
-            Ast::ToString => box_once(Ok(Val::str(cv.1.to_string_or_clone()))),
+            Ast::ToString => lazy_once(move || Ok(Val::str(cv.1.to_string_or_clone()))),
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
-            Ast::Str(s) => box_once(Ok(Val::str(s.clone()))),
-            Ast::Array(f) => box_once(w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)),
+            Ast::Str(s) => lazy_once(move || Ok(Val::str(s.clone()))),
+            Ast::Array(f) => {
+                lazy_once(move || w(f).run(cv).collect::<Result<_, _>>().map(Val::arr))
+            }
             Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Ast::Object(o) => Box::new(
                 obj_cart(o.iter().map(move |(k, v)| (w(k), w(v))), cv, Vec::new()).map(|kvs| {
@@ -328,13 +334,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let ctx = cv.0.clone().skip_vars(call.skip);
                 let inputs = cv.0.inputs;
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
-                use crate::{LazyIter, Stack};
                 let catch = move |r| match r {
-                    Ok(x) => Ok(Ok(x)),
-                    Err(Error::Tailrec(id, vars, v)) if id == call.id => Err(def.run((Ctx { inputs, vars }, v))),
-                    Err(e) => Ok(Err(e)),
+                    Err(Error::Tailrec(id, vars, v)) if id == call.id => {
+                        Err(def.run((Ctx { inputs, vars }, v)))
+                    }
+                    Ok(_) | Err(_) => Ok(r),
                 };
-                let tailrec = |init| Box::new(Stack::new(Vec::from([init]), catch));
+                let tailrec = |init| Box::new(crate::Stack::new(Vec::from([init]), catch));
                 match call.typ {
                     CallTyp::Outside(Tailrec(false)) => Box::new(run_cvs(def, cvs)),
                     CallTyp::Outside(Tailrec(true)) => {
@@ -345,7 +351,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                         tailrec(Box::new(LazyIter::new(move || run_cvs(def, cvs))))
                     }
                     CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.flat_map(move |cv| {
-                        then(cv, |cv| box_once(Err(Error::Tailrec(call.id, cv.0.vars, cv.1))))
+                        then(cv, |cv| {
+                            box_once(Err(Error::Tailrec(call.id, cv.0.vars, cv.1)))
+                        })
                     })),
                     // non-TR call in non-TR filter
                     CallTyp::Inside(None) => Box::new(LazyIter::new(move || run_cvs(def, cvs))),

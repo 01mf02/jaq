@@ -9,6 +9,8 @@ use serde_json::json;
 
 yields!(repeat, "def r(f): f, r(f); [limit(3; r(1, 2))]", [1, 2, 1]);
 
+yields!(lazy_array, "def f: 1, [f]; limit(1; f)", 1);
+
 yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
 
 yields!(
