@@ -354,8 +354,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                         tailrec(Box::new(LazyIter::new(move || run_cvs(def, cvs))))
                     }
                     CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.map(move |cv| {
-                        let cv = cv?;
-                        Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1)))
+                        cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
                     })),
                     // non-TR call in non-TR filter
                     CallTyp::Inside(None) => Box::new(LazyIter::new(move || run_cvs(def, cvs))),
