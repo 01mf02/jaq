@@ -24,7 +24,11 @@ pub enum Error {
     /// `0 |= .+1`
     PathExp,
 
-    Tailrec(crate::filter::Id, crate::Vars, Val),
+    /// Tail-recursive call.
+    ///
+    /// This is used internally to execute tail-recursive filters.
+    /// If this can be observed by users, then this is a bug.
+    TailCall(crate::filter::TailCall),
 }
 
 /// Types and sets of types.
@@ -72,7 +76,7 @@ impl fmt::Display for Error {
             Self::Index(v, i) => write!(f, "cannot index {v} with {i}"),
             Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),
             Self::PathExp => write!(f, "invalid path expression"),
-            Self::Tailrec(..) => panic!(),
+            Self::TailCall(_) => panic!(),
         }
     }
 }

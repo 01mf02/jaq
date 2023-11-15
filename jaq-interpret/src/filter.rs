@@ -32,6 +32,9 @@ pub enum CallTyp {
     Outside(Tailrec),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TailCall(Id, crate::Vars, Val);
+
 #[derive(Clone, Debug)]
 pub(crate) struct Call {
     pub id: Id,
@@ -335,7 +338,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let inputs = cv.0.inputs;
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 let catch = move |r| match r {
-                    Err(Error::Tailrec(id, vars, v)) if id == call.id => {
+                    Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
                         Err(def.run((Ctx { inputs, vars }, v)))
                     }
                     Ok(_) | Err(_) => Ok(r),
@@ -350,10 +353,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     CallTyp::Inside(Some(Tailrec(false))) => {
                         tailrec(Box::new(LazyIter::new(move || run_cvs(def, cvs))))
                     }
-                    CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.flat_map(move |cv| {
-                        then(cv, |cv| {
-                            box_once(Err(Error::Tailrec(call.id, cv.0.vars, cv.1)))
-                        })
+                    CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.map(move |cv| {
+                        let cv = cv?;
+                        Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1)))
                     })),
                     // non-TR call in non-TR filter
                     CallTyp::Inside(None) => Box::new(LazyIter::new(move || run_cvs(def, cvs))),
