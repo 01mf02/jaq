@@ -119,10 +119,6 @@ impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
 
 dyn_clone::clone_trait_object!(<'a> Update<'a>);
 
-fn lazy_once<'a, T: 'a>(f: impl FnOnce() -> T + 'a) -> BoxIter<'a, T> {
-    Box::new(LazyIter::new(|| core::iter::once(f())))
-}
-
 /// Enhance the context `ctx` with variables bound to the outputs of `args` executed on `cv`,
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
@@ -232,18 +228,18 @@ impl<'a> FilterT<'a> for &'a Owned {
 
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
-        use core::iter::once;
+        use core::iter::{once, once_with};
         // wrap a filter AST with the filter definitions
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1[self.0 .0] {
             Ast::Id => box_once(Ok(cv.1)),
-            Ast::ToString => lazy_once(move || Ok(Val::str(cv.1.to_string_or_clone()))),
+            Ast::ToString => Box::new(once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))),
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
-            Ast::Str(s) => lazy_once(move || Ok(Val::str(s.clone()))),
-            Ast::Array(f) => {
-                lazy_once(move || w(f).run(cv).collect::<Result<_, _>>().map(Val::arr))
-            }
+            Ast::Str(s) => Box::new(once_with(move || Ok(Val::str(s.clone())))),
+            Ast::Array(f) => Box::new(once_with(move || {
+                w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)
+            })),
             Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Ast::Object(o) => Box::new(
                 obj_cart(o.iter().map(move |(k, v)| (w(k), w(v))), cv, Vec::new()).map(|kvs| {
