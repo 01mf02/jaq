@@ -50,7 +50,6 @@ mod box_iter;
 pub mod error;
 mod filter;
 mod hir;
-mod lazy_iter;
 mod lir;
 mod mir;
 mod path;
@@ -68,7 +67,6 @@ pub use val::{Val, ValR, ValRs};
 
 use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
-use lazy_iter::LazyIter;
 use rc_list::List as RcList;
 use stack::Stack;
 

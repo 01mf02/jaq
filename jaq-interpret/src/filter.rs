@@ -1,7 +1,7 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Fold, Results};
 use crate::val::{Val, ValR, ValRs};
-use crate::{rc_lazy_list, Bind, Ctx, Error, LazyIter};
+use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
@@ -343,13 +343,15 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     }
                     // non-TR call in a TR filter
                     CallTyp::Inside(Some(Tailrec(false))) => {
-                        tailrec(Box::new(LazyIter::new(move || run_cvs(def, cvs))))
+                        tailrec(Box::new(once_with(move || run_cvs(def, cvs)).flatten()))
                     }
                     CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.map(move |cv| {
                         cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
                     })),
                     // non-TR call in non-TR filter
-                    CallTyp::Inside(None) => Box::new(LazyIter::new(move || run_cvs(def, cvs))),
+                    CallTyp::Inside(None) => {
+                        Box::new(once_with(move || run_cvs(def, cvs)).flatten())
+                    }
                 }
             }
 
