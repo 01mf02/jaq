@@ -1,5 +1,5 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::results::{fold, recurse, then, Results};
+use crate::results::{fold, recurse, then, Fold, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Bind, Ctx, Error, LazyIter};
 use alloc::{boxed::Box, string::String, vec::Vec};
@@ -164,7 +164,7 @@ where
     F: Fn(T, Val) -> ValRs<'a> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
-    Box::new(fold(false, xs, box_once(Ok(init)), f))
+    Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
 type Cv<'c> = (Ctx<'c>, Val);
@@ -310,14 +310,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let xs = rc_lazy_list::List::from_iter(w(xs).run(cv.clone()));
                 let init = w(init).run(cv.clone());
                 let f = move |x, v| w(f).run((cv.0.clone().cons_var(x), v));
+                use Fold::{Input, Output};
                 match typ {
-                    FoldType::Reduce => Box::new(fold(false, xs, init, f)),
-                    FoldType::For => Box::new(fold(true, xs, init, f)),
-                    FoldType::Foreach => {
-                        Box::new(init.flat_map(move |i| {
-                            fold(true, xs.clone(), box_once(i), f.clone()).skip(1)
-                        }))
-                    }
+                    FoldType::Reduce => Box::new(fold(false, xs, Output(init), f)),
+                    FoldType::For => Box::new(fold(true, xs, Output(init), f)),
+                    FoldType::Foreach => Box::new(init.flat_map(move |i| {
+                        then(i, |i| Box::new(fold(true, xs.clone(), Input(i), f.clone())))
+                    })),
                 }
             }
 
