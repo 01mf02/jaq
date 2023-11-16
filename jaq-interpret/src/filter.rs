@@ -447,12 +447,14 @@ pub trait FilterT<'a>: Clone + 'a {
     /// if `inner` is true, it returns values for which `f` yields at least one output, and
     /// if `outer` is true, it returns values for which `f` yields no output.
     /// This is useful to implement `while` and `until`.
+    #[deprecated(since = "1.2.0")]
     fn recurse(self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
         let f = move |v| self.clone().run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
 
     /// Return the output of `recurse(l) |= f`.
+    #[deprecated(since = "1.2.0")]
     fn recurse_update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
         Box::new(f(cv.1).flat_map(move |v| {
