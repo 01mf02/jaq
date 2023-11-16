@@ -327,18 +327,17 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let ctx = cv.0.clone().skip_vars(call.skip);
                 let inputs = cv.0.inputs;
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
-                let catch = move |r| match r {
-                    Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
-                        Err(def.run((Ctx { inputs, vars }, v)))
-                    }
-                    Ok(_) | Err(_) => Ok(r),
-                };
                 match call.typ {
                     CallTyp::Normal => Box::new(run_cvs(def, cvs)),
-                    CallTyp::Catch => {
-                        let init: Results<_, _> = Box::new(run_cvs(def, cvs));
-                        Box::new(crate::Stack::new(Vec::from([init]), catch))
-                    }
+                    CallTyp::Catch => Box::new(crate::Stack::new(
+                        Vec::from([Box::new(run_cvs(def, cvs)) as Results<_, _>]),
+                        move |r| match r {
+                            Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
+                                Err(def.run((Ctx { inputs, vars }, v)))
+                            }
+                            Ok(_) | Err(_) => Ok(r),
+                        },
+                    )),
                     CallTyp::Throw => Box::new(cvs.map(move |cv| {
                         cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
                     })),
