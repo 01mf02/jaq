@@ -22,17 +22,12 @@ pub struct Tailrec(pub bool);
 
 #[derive(Clone, Debug)]
 pub enum CallTyp {
+    /// everything that is not tail-recursive
     Normal,
+    /// set up a tail-recursion handler
     Catch,
+    /// throw a tail-recursion exception to be caught by the handler
     Throw,
-    /// is the filter called from inside itself?
-    /// if None, then the called filter is not tail-recursive
-    /// if Some(tr), then the called filter is tail-recursive,
-    /// and tr indicates if the call is tail-recursive
-    Inside(Option<Tailrec>),
-    /// is the filter called from outside?
-    /// Tailrec indicates whether the filter is tail-recursive
-    Outside(Tailrec),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

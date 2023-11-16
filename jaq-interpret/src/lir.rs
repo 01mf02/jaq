@@ -81,7 +81,7 @@ impl Ctx {
         let path = Filter::Path(IDENTITY, Path(Vec::from([path])));
 
         // `..`
-        let f = recurse(CallTyp::Inside(Some(Tailrec(true))));
+        let f = recurse(CallTyp::Throw);
         // .[]? | ..
         let pipe = Filter::Pipe(self.id_of_ast(path), false, self.id_of_ast(f));
         // ., (.[]? | ..)
@@ -207,7 +207,7 @@ impl Ctx {
             }
             Expr::Try(f) => Filter::Try(get(*f, self), EMPTY),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
-            Expr::Recurse => recurse(CallTyp::Outside(Tailrec(true))),
+            Expr::Recurse => recurse(CallTyp::Catch),
 
             Expr::Binary(l, op, r) => {
                 let (l, r) = (get(*l, self), get(*r, self));
