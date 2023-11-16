@@ -333,10 +333,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     }
                     Ok(_) | Err(_) => Ok(r),
                 };
-                let tailrec = |init| Box::new(crate::Stack::new(Vec::from([init]), catch));
                 match call.typ {
                     CallTyp::Normal => Box::new(run_cvs(def, cvs)),
-                    CallTyp::Catch => tailrec(Box::new(run_cvs(def, cvs)) as Results<_, _>),
+                    CallTyp::Catch => {
+                        let init: Results<_, _> = Box::new(run_cvs(def, cvs));
+                        Box::new(crate::Stack::new(Vec::from([init]), catch))
+                    }
                     CallTyp::Throw => Box::new(cvs.map(move |cv| {
                         cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
                     })),
