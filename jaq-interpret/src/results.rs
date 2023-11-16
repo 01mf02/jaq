@@ -3,7 +3,6 @@
 // TODO for v2.0: remove this from `results`
 pub use crate::box_iter::box_once;
 use crate::box_iter::BoxIter;
-use crate::rc_lazy_list::List;
 use alloc::vec::Vec;
 
 /// A boxed iterator over `Result`s.
@@ -94,7 +93,7 @@ pub(crate) enum Fold<'a, U, E> {
 // if `inner` is true, output intermediate results
 pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
     inner: bool,
-    xs: List<'a, Result<T, E>>,
+    xs: impl Iterator<Item = Result<T, E>> + Clone + 'a,
     init: Fold<'a, U, E>,
     f: impl Fn(T, U) -> Results<'a, U, E> + 'a,
 ) -> impl Iterator<Item = Result<U, E>> + 'a {
