@@ -103,8 +103,6 @@ pub(crate) enum Ast {
     Math(Id, MathOp, Id),
     Ord(Id, OrdOp, Id),
 
-    Recurse(Id),
-
     Var(usize),
     Call(Call),
 
@@ -322,7 +320,6 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     }
                 }
             }
-            Ast::Recurse(f) => w(f).recurse(true, true, cv),
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
@@ -400,7 +397,6 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Ite(if_, then_, else_) => reduce(w(if_).run(cv.clone()), cv.1, move |x, v| {
                 w(if x.as_bool() { then_ } else { else_ }).update((cv.0.clone(), v), f.clone())
             }),
-            Ast::Recurse(l) => w(l).recurse_update(cv, f),
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,

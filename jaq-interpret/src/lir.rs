@@ -20,8 +20,8 @@ pub struct Callable {
 
 const IDENTITY: AbsId = AbsId(0);
 const TOSTRING: AbsId = AbsId(IDENTITY.0 + 1);
-const ARR_OBJ_ELEMS: AbsId = AbsId(TOSTRING.0 + 1);
-const EMPTY: AbsId = AbsId(ARR_OBJ_ELEMS.0 + 2);
+const EMPTY: AbsId = AbsId(TOSTRING.0 + 2);
+const RECURSE: AbsId = AbsId(EMPTY.0 + 4);
 
 pub fn root_def(def: mir::Def) -> filter::Owned {
     let mut ctx = Ctx::default();
@@ -41,16 +41,26 @@ impl Default for Ctx {
             assert_eq!(id, id_);
         }
 
-        let arr_obj = ctx.arr_obj_elems();
-        let arr_obj_id = ctx.id_of_ast(arr_obj);
-        assert_eq!(arr_obj_id, ARR_OBJ_ELEMS);
-
         let empty = ctx.empty();
         let empty_id = ctx.id_of_ast(empty);
         assert_eq!(empty_id, EMPTY);
 
+        let recurse = ctx.recurse();
+        let recurse_id = ctx.id_of_ast(recurse);
+        assert_eq!(recurse_id, RECURSE);
+
         ctx
     }
+}
+
+/// Construct a call to `..`.
+fn recurse(typ: CallTyp) -> Filter {
+    Filter::Call(filter::Call {
+        id: RECURSE,
+        typ,
+        skip: 0,
+        args: Vec::new(),
+    })
 }
 
 impl Ctx {
@@ -63,14 +73,19 @@ impl Ctx {
         Filter::Path(self.id_of_ast(obj), Path(Vec::from([path])))
     }
 
-    /// `.[]?` returns array/object elements or nothing instead
-    ///
-    /// `..`, also known as `recurse/0`, is defined as `recurse(.[]?)`
-    fn arr_obj_elems(&mut self) -> Filter {
+    /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`
+    fn recurse(&mut self) -> Filter {
         // `[]?`
         let path = (path::Part::Range(None, None), path::Opt::Optional);
-        // `.[]?`
-        Filter::Path(IDENTITY, Path(Vec::from([path])))
+        // `.[]?` (returns array/object elements or nothing instead)
+        let path = Filter::Path(IDENTITY, Path(Vec::from([path])));
+
+        // `..`
+        let f = recurse(CallTyp::Inside(Some(Tailrec(true))));
+        // .[]? | ..
+        let pipe = Filter::Pipe(self.id_of_ast(path), false, self.id_of_ast(f));
+        // ., (.[]? | ..)
+        Filter::Comma(IDENTITY, self.id_of_ast(pipe))
     }
 
     fn get_callable(&self, hir::RelId(id): hir::RelId) -> &Callable {
@@ -191,7 +206,7 @@ impl Ctx {
             }
             Expr::Try(f) => Filter::Try(get(*f, self), EMPTY),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
-            Expr::Recurse => Filter::Recurse(ARR_OBJ_ELEMS),
+            Expr::Recurse => recurse(CallTyp::Outside(Tailrec(true))),
 
             Expr::Binary(l, op, r) => {
                 let (l, r) = (get(*l, self), get(*r, self));
