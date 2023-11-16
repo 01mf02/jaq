@@ -22,6 +22,9 @@ pub struct Tailrec(pub bool);
 
 #[derive(Clone, Debug)]
 pub enum CallTyp {
+    Normal,
+    Catch,
+    Throw,
     /// is the filter called from inside itself?
     /// if None, then the called filter is not tail-recursive
     /// if Some(tr), then the called filter is tail-recursive,
@@ -337,15 +340,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 };
                 let tailrec = |init| Box::new(crate::Stack::new(Vec::from([init]), catch));
                 match call.typ {
-                    // non-TR call in non-TR filter
-                    CallTyp::Outside(Tailrec(false)) | CallTyp::Inside(None) => {
-                        Box::new(run_cvs(def, cvs))
-                    }
-                    // non-TR call in a TR filter
-                    CallTyp::Outside(Tailrec(true)) | CallTyp::Inside(Some(Tailrec(false))) => {
-                        tailrec(Box::new(run_cvs(def, cvs)) as Results<_, _>)
-                    }
-                    CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.map(move |cv| {
+                    CallTyp::Normal => Box::new(run_cvs(def, cvs)),
+                    CallTyp::Catch => tailrec(Box::new(run_cvs(def, cvs)) as Results<_, _>),
+                    CallTyp::Throw => Box::new(cvs.map(move |cv| {
                         cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
                     })),
                 }

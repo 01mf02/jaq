@@ -161,11 +161,12 @@ impl Ctx {
                         let callable = self.get_callable(id);
                         let args = callable.sig.args.iter().zip(args);
                         let typ = match rec {
-                            // call from outside
-                            None => CallTyp::Outside(Tailrec(callable.rec.tailrec)),
-                            // call from inside
-                            Some(Tailrec(false)) if !callable.rec.tailrec => CallTyp::Inside(None),
-                            Some(_) => CallTyp::Inside(rec),
+                            // TR call from inside itself
+                            Some(Tailrec(true)) => CallTyp::Throw,
+                            // call from outside or non-TR call from inside a TR filter
+                            None | Some(Tailrec(false)) if callable.rec.tailrec => CallTyp::Catch,
+                            // call from outside or non-TR call from inside a non-TR filter
+                            None | Some(Tailrec(false)) => CallTyp::Normal,
                         };
                         Filter::Call(filter::Call {
                             id: callable.id,
