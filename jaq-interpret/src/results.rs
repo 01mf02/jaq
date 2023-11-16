@@ -105,6 +105,7 @@ pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
             Fold::Output(mut ys) => match ys.next() {
                 None => continue,
                 Some(y) => {
+                    // do not grow the stack if the output is empty
                     if ys.size_hint() != (0, Some(0)) {
                         stack.push((xs.clone(), Fold::Output(ys)));
                     }
