@@ -337,21 +337,17 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 };
                 let tailrec = |init| Box::new(crate::Stack::new(Vec::from([init]), catch));
                 match call.typ {
-                    CallTyp::Outside(Tailrec(false)) => Box::new(run_cvs(def, cvs)),
-                    CallTyp::Outside(Tailrec(true)) => {
-                        tailrec(Box::new(run_cvs(def, cvs)) as Results<_, _>)
+                    // non-TR call in non-TR filter
+                    CallTyp::Outside(Tailrec(false)) | CallTyp::Inside(None) => {
+                        Box::new(run_cvs(def, cvs))
                     }
                     // non-TR call in a TR filter
-                    CallTyp::Inside(Some(Tailrec(false))) => {
-                        tailrec(Box::new(once_with(move || run_cvs(def, cvs)).flatten()))
+                    CallTyp::Outside(Tailrec(true)) | CallTyp::Inside(Some(Tailrec(false))) => {
+                        tailrec(Box::new(run_cvs(def, cvs)) as Results<_, _>)
                     }
                     CallTyp::Inside(Some(Tailrec(true))) => Box::new(cvs.map(move |cv| {
                         cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
                     })),
-                    // non-TR call in non-TR filter
-                    CallTyp::Inside(None) => {
-                        Box::new(once_with(move || run_cvs(def, cvs)).flatten())
-                    }
                 }
             }
 
