@@ -208,6 +208,8 @@ yields!(
     json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
 );
 
+yields!(range_many, "[range(-1, 1; 0, 2)]", json!([-1, -1, 0, 1, 1]));
+
 #[test]
 fn range_reverse() {
     give(json!(null), "[range(1, 2)]", json!([0, 0, 1]));

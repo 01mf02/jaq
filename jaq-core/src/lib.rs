@@ -281,18 +281,6 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         let pos = |n: isize| n.try_into().unwrap_or(0usize);
         Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
     }),
-    // `range(min; max)` returns all integers `n` with `min <= n < max`.
-    //
-    // This implements a ~10x faster version of:
-    // ~~~ text
-    // range($min; $max): $min | while(. < $max; .+1)
-    // ~~~
-    ("range", 2, |args, cv| {
-        let prod = args.get(0).cartesian(args.get(1), cv);
-        let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
-        let f = |(l, u)| (l..u).map(|i| Ok(Val::Int(i)));
-        Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
-    }),
     ("startswith", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
         Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.as_str()?.starts_with(&**k?.as_str()?)))))
