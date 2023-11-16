@@ -703,15 +703,6 @@ In jaq however, this holds:
   in jq, `join(x)` converts all elements of the input array to strings and intersperses them with `x`, whereas
   in jaq, `join(x)` simply calculates `x0 + x + x1 + x + ... + xn`.
   When all elements of the input array and `x` are strings, jq and jaq yield the same output.
-* Ranges:
-  The filter `range(m; n)` constructs a sequence of numbers `m, m+1, ...`,
-  where any number must be smaller than `n`.
-  In jq,  `m` and `n` can be floating-point numbers, whereas
-  in jaq, `m` and `n` must be integers.
-  This is to avoid potential numerical stability problems.
-  That means that unlike in jq, you cannot use
-  `range(m; infinite)` to generate the infinite sequence `m, m+1, ...`.
-  However, you can use `m | recurse(.+1)` to achieve the same in jaq.
 
 
 
