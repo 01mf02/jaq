@@ -35,6 +35,7 @@ pub fn run_if_ok<'a, T, E>(x: T, e: &mut Option<E>, f: &impl Fn(T) -> Results<'a
     }
 }
 
+// TODO for v2.0: remove this
 // if `inner` is true, output values that yield non-empty output;
 // if `outer` is true, output values that yield     empty output
 pub(crate) fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
@@ -90,7 +91,7 @@ pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
     init: Results<'a, U, E>,
     f: impl Fn(T, U) -> Results<'a, U, E> + 'a,
 ) -> impl Iterator<Item = Result<U, E>> + 'a {
-    let mut stack = Vec::from([(xs, init.peekable())]);
+    let mut stack = Vec::from([(xs, init)]);
     core::iter::from_fn(move || loop {
         let (mut xs, mut vs) = stack.pop()?;
         let v = match vs.next() {
@@ -100,7 +101,7 @@ pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
         };
 
         // this `if` avoids growing the stack unnecessarily
-        if vs.peek().is_some() {
+        if vs.size_hint() != (0, Some(0)) {
             stack.push((xs.clone(), vs));
         }
 
@@ -112,11 +113,11 @@ pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
 
         if inner {
             // `foreach`
-            stack.push((xs, f(x, v.clone()).peekable()));
+            stack.push((xs, f(x, v.clone())));
             return Some(Ok(v));
         }
 
         // `reduce`
-        stack.push((xs, f(x, v).peekable()));
+        stack.push((xs, f(x, v)));
     })
 }
