@@ -71,7 +71,13 @@ def recurse: recurse(.[]?);
 def recurse(f; cond): recurse(f | select(cond));
 def while(cond; update): def rec: if cond then ., (update | rec) else empty end; rec;
 def until(cond; update): def rec: if cond then . else update | rec end; rec;
-def range($from; $to): $from | while(. < $to; .+1);
+
+# Ranges
+def range($from; $to; $by): $from |
+   if $by > 0 then while(. < $to; . + $by)
+   else            while(. > $to; . + $by)
+   end;
+def range($from; $to): $from | while(. < $to; . + 1);
 def range(x): range(0; x);
 
 # Iterators
