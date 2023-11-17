@@ -208,12 +208,25 @@ yields!(
     json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
 );
 
+yields!(range_many, "[range(-1, 1; 0, 2)]", json!([-1, -1, 0, 1, 1]));
+
 #[test]
 fn range_reverse() {
     give(json!(null), "[range(1, 2)]", json!([0, 0, 1]));
 
     give(json!(3), "[range(.)] | reverse", json!([2, 1, 0]));
 }
+
+yields!(
+    recurse_update,
+    "[0, [1, 2], 3] | recurse |= (.+1)? // .",
+    json!([1, [2, 3], 4])
+);
+
+// the following tests show that sums are evaluated lazily
+// (otherwise this would not terminate)
+yields!(limit_inf_suml, "[limit(3; recurse(.+1) + 0)]", [0, 1, 2]);
+yields!(limit_inf_sumr, "[limit(3; 0 + recurse(.+1))]", [0, 1, 2]);
 
 #[test]
 fn recurse() {
@@ -241,6 +254,40 @@ fn recurse() {
     // jq fails here with: "Cannot index number with number"
     give(x.clone(), f, y);
 }
+
+yields!(
+    recurse3,
+    "[1 | recurse(if . < 3 then .+1 else empty end)]",
+    [1, 2, 3]
+);
+yields!(
+    reduce_recurse,
+    "reduce recurse(if . == 1000 then empty else .+1 end) as $x (0; . + $x)",
+    500500
+);
+
+const RECURSE_PATHS: &str = "def paths:
+  { x: ., p: [] } |
+  recurse((.x | keys_unsorted?)[] as $k | .x |= .[$k] | .p += [$k]) |
+  .p | if . == [] then empty else . end;";
+
+yields!(
+    recurse_paths,
+    &(RECURSE_PATHS.to_owned() + "{a: [1, [2]], b: {c: 3}} | [paths]"),
+    json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
+);
+
+const RECURSE_FLATTEN: &str = "def flatten($d):
+  [ { d: $d, x: . } |
+    recurse(if .d >= 0 and ([] <= .x and .x < {}) then { d: .d - 1, x: .x[] } else empty end) |
+    if .d < 0 or (.x < [] or {} <= .x) then .x else empty end
+  ];";
+
+yields!(
+    recurse_flatten,
+    &(RECURSE_FLATTEN.to_owned() + "[[[1], 2], 3] | flatten(1)"),
+    json!([[1], 2, 3])
+);
 
 #[test]
 fn repeat() {

@@ -281,24 +281,6 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         let pos = |n: isize| n.try_into().unwrap_or(0usize);
         Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
     }),
-    // `range(min; max)` returns all integers `n` with `min <= n < max`.
-    //
-    // This implements a ~10x faster version of:
-    // ~~~ text
-    // range($min; $max): $min | while(. < $max; .+1)
-    // ~~~
-    ("range", 2, |args, cv| {
-        let prod = args.get(0).cartesian(args.get(1), cv);
-        let ranges = prod.map(|(l, u)| Ok((l?.as_int()?, u?.as_int()?)));
-        let f = |(l, u)| (l..u).map(|i| Ok(Val::Int(i)));
-        Box::new(ranges.flat_map(move |range| then(range, |lu| Box::new(f(lu)))))
-    }),
-    ("recurse_inner", 1, |args, cv| {
-        args.get(0).recurse(true, false, cv)
-    }),
-    ("recurse_outer", 1, |args, cv| {
-        args.get(0).recurse(false, true, cv)
-    }),
     ("startswith", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
         Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.as_str()?.starts_with(&**k?.as_str()?)))))
@@ -529,12 +511,6 @@ const CORE_UPDATE: &[(&str, usize, RunPtr, UpdatePtr)] = &[
         0,
         |_, cv| box_once(Err(Error::Val(cv.1))),
         |_, cv, _| box_once(Err(Error::Val(cv.1))),
-    ),
-    (
-        "recurse",
-        1,
-        |args, cv| args.get(0).recurse(true, true, cv),
-        |args, cv, f| args.get(0).recurse_update(cv, f),
     ),
 ];
 

@@ -514,12 +514,7 @@ That is, a filter such as `recurse` can be defined in jaq:
 
     def recurse(f): def r: ., (f | r); r;
 
-However, note that unlike jq, jaq does not optimise tail calls.
-Therefore, using the above definition of `recurse`, e.g. by `last(recurse(.))`,
-grows the stack in jaq (leading to a stack overflow), while it does not in jq.
-As a remedy, jaq provides `recurse` as core filter,
-which tries to avoid growing the stack if possible.
-
+Since jaq 1.2, jaq optimises tail calls, like jq.
 Since jaq 1.1, recursive filters can also have non-variable arguments, like in jq.
 For example:
 
@@ -708,15 +703,6 @@ In jaq however, this holds:
   in jq, `join(x)` converts all elements of the input array to strings and intersperses them with `x`, whereas
   in jaq, `join(x)` simply calculates `x0 + x + x1 + x + ... + xn`.
   When all elements of the input array and `x` are strings, jq and jaq yield the same output.
-* Ranges:
-  The filter `range(m; n)` constructs a sequence of numbers `m, m+1, ...`,
-  where any number must be smaller than `n`.
-  In jq,  `m` and `n` can be floating-point numbers, whereas
-  in jaq, `m` and `n` must be integers.
-  This is to avoid potential numerical stability problems.
-  That means that unlike in jq, you cannot use
-  `range(m; infinite)` to generate the infinite sequence `m, m+1, ...`.
-  However, you can use `m | recurse(.+1)` to achieve the same in jaq.
 
 
 

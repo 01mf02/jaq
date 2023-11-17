@@ -1,5 +1,5 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::results::{fold, recurse, then, Results};
+use crate::results::{fold, recurse, then, Fold, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
@@ -18,9 +18,22 @@ pub struct Ref<'a>(Id, &'a [Ast]);
 pub struct Id(pub usize);
 
 #[derive(Clone, Debug)]
+pub enum CallTyp {
+    /// everything that is not tail-recursive
+    Normal,
+    /// set up a tail-recursion handler
+    Catch,
+    /// throw a tail-recursion exception to be caught by the handler
+    Throw,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TailCall(Id, crate::Vars, Val);
+
+#[derive(Clone, Debug)]
 pub(crate) struct Call {
     pub id: Id,
-    pub rec: bool,
+    pub typ: CallTyp,
     pub skip: usize,
     pub args: Vec<Bind<Id, Id>>,
 }
@@ -85,8 +98,6 @@ pub(crate) enum Ast {
     Math(Id, MathOp, Id),
     Ord(Id, OrdOp, Id),
 
-    Recurse(Id),
-
     Var(usize),
     Call(Call),
 
@@ -120,6 +131,10 @@ where
     }
 }
 
+fn run_cvs<'a>(f: Ref<'a>, cvs: Results<'a, Cv<'a>, Error>) -> impl Iterator<Item = ValR> + 'a {
+    cvs.flat_map(move |cv| then(cv, |cv| f.run(cv)))
+}
+
 type ObjVec = Vec<(ValR, ValR)>;
 fn obj_cart<'a, I>(mut args: I, cv: Cv<'a>, prev: ObjVec) -> BoxIter<'a, ObjVec>
 where
@@ -144,7 +159,7 @@ where
     F: Fn(T, Val) -> ValRs<'a> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
-    Box::new(fold(false, xs, box_once(Ok(init)), f))
+    Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
 type Cv<'c> = (Ctx<'c>, Val);
@@ -206,16 +221,18 @@ impl<'a> FilterT<'a> for &'a Owned {
 
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
-        use core::iter::once;
+        use core::iter::{once, once_with};
         // wrap a filter AST with the filter definitions
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1[self.0 .0] {
             Ast::Id => box_once(Ok(cv.1)),
-            Ast::ToString => box_once(Ok(Val::str(cv.1.to_string_or_clone()))),
+            Ast::ToString => Box::new(once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))),
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
-            Ast::Str(s) => box_once(Ok(Val::str(s.clone()))),
-            Ast::Array(f) => box_once(w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)),
+            Ast::Str(s) => Box::new(once_with(move || Ok(Val::str(s.clone())))),
+            Ast::Array(f) => Box::new(once_with(move || {
+                w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)
+            })),
             Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
             Ast::Object(o) => Box::new(
                 obj_cart(o.iter().map(move |(k, v)| (w(k), w(v))), cv, Vec::new()).map(|kvs| {
@@ -288,31 +305,39 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let xs = rc_lazy_list::List::from_iter(w(xs).run(cv.clone()));
                 let init = w(init).run(cv.clone());
                 let f = move |x, v| w(f).run((cv.0.clone().cons_var(x), v));
+                use Fold::{Input, Output};
                 match typ {
-                    FoldType::Reduce => Box::new(fold(false, xs, init, f)),
-                    FoldType::For => Box::new(fold(true, xs, init, f)),
-                    FoldType::Foreach => {
-                        Box::new(init.flat_map(move |i| {
-                            fold(true, xs.clone(), box_once(i), f.clone()).skip(1)
-                        }))
-                    }
+                    FoldType::Reduce => Box::new(fold(false, xs, Output(init), f)),
+                    FoldType::For => Box::new(fold(true, xs, Output(init), f)),
+                    FoldType::Foreach => Box::new(init.flat_map(move |i| {
+                        then(i, |i| Box::new(fold(true, xs.clone(), Input(i), f.clone())))
+                    })),
                 }
             }
-            Ast::Recurse(f) => w(f).recurse(true, true, cv),
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => w(&f.0).run((f.1.clone(), cv.1)),
+                Bind::Fun(f) => w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);
                 let ctx = cv.0.clone().skip_vars(call.skip);
+                let inputs = cv.0.inputs;
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
-                let f = move || cvs.flat_map(move |cv| then(cv, |cv| def.run(cv)));
-                if call.rec {
-                    Box::new(crate::LazyIter::new(f))
-                } else {
-                    Box::new(f())
+                match call.typ {
+                    CallTyp::Normal => Box::new(run_cvs(def, cvs)),
+                    CallTyp::Catch => Box::new(crate::Stack::new(
+                        Vec::from([Box::new(run_cvs(def, cvs)) as Results<_, _>]),
+                        move |r| match r {
+                            Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
+                                Err(def.run((Ctx { inputs, vars }, v)))
+                            }
+                            Ok(_) | Err(_) => Ok(r),
+                        },
+                    )),
+                    CallTyp::Throw => Box::new(cvs.map(move |cv| {
+                        cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
+                    })),
                 }
             }
 
@@ -359,11 +384,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Ite(if_, then_, else_) => reduce(w(if_).run(cv.clone()), cv.1, move |x, v| {
                 w(if x.as_bool() { then_ } else { else_ }).update((cv.0.clone(), v), f.clone())
             }),
-            Ast::Recurse(l) => w(l).recurse_update(cv, f),
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
-                Bind::Fun(l) => w(&l.0).update((l.1.clone(), cv.1), f),
+                Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);
@@ -410,12 +434,14 @@ pub trait FilterT<'a>: Clone + 'a {
     /// if `inner` is true, it returns values for which `f` yields at least one output, and
     /// if `outer` is true, it returns values for which `f` yields no output.
     /// This is useful to implement `while` and `until`.
+    #[deprecated(since = "1.2.0")]
     fn recurse(self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
         let f = move |v| self.clone().run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
 
     /// Return the output of `recurse(l) |= f`.
+    #[deprecated(since = "1.2.0")]
     fn recurse_update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
         Box::new(f(cv.1).flat_map(move |v| {

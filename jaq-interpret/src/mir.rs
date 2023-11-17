@@ -1,4 +1,4 @@
-//! Mid-level Intermediate Representation of definitions and filters.
+//! High-level Intermediate Representation of definitions and filters.
 //!
 //! This is quite close to the output of parsing,
 //! but replaces names by unique integers.
@@ -11,16 +11,14 @@ use core::fmt;
 use jaq_syn::filter::{BinaryOp, Filter as Expr, Fold};
 use jaq_syn::{Arg, Spanned};
 
-// TODO: remove MirFilter
-pub type MirFilter = Spanned<Filter>;
 pub type Filter = jaq_syn::filter::Filter<Call, VarIdx, Num>;
 pub type Main = jaq_syn::Main<Filter>;
 pub type Def = jaq_syn::Def<Main>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct RelId(pub usize);
-type VarIdx = usize;
-type ArgIdx = usize;
+pub type VarIdx = usize;
+pub type ArgIdx = usize;
 
 #[derive(Debug, Clone)]
 pub enum Call {

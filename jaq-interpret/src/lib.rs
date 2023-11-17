@@ -49,14 +49,15 @@ extern crate std;
 mod box_iter;
 pub mod error;
 mod filter;
-mod lazy_iter;
 mod lir;
 mod mir;
+mod mir2;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
 pub mod results;
+mod stack;
 mod val;
 
 pub use error::Error;
@@ -66,42 +67,56 @@ pub use val::{Val, ValR, ValRs};
 
 use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
-use lazy_iter::LazyIter;
+use mir as hir;
 use rc_list::List as RcList;
+use stack::Stack;
 
+/// variable bindings
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Vars(RcList<Bind<Val, (filter::Id, Self)>>);
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
+
+impl Vars {
+    fn get(&self, i: usize) -> Option<&Bind<Val, (filter::Id, Self)>> {
+        self.0.get(i)
+    }
+}
 
 /// Filter execution context.
 #[derive(Clone)]
 pub struct Ctx<'a> {
-    /// variable bindings
-    vars: RcList<Bind<Val, (filter::Id, Self)>>,
+    vars: Vars,
     inputs: &'a Inputs<'a>,
 }
 
 impl<'a> Ctx<'a> {
     /// Construct a context.
     pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'a Inputs<'a>) -> Self {
-        let vars = RcList::new().extend(vars.into_iter().map(Bind::Var));
+        let vars = Vars(RcList::new().extend(vars.into_iter().map(Bind::Var)));
         Self { vars, inputs }
     }
 
     /// Add a new variable binding.
     pub(crate) fn cons_var(mut self, x: Val) -> Self {
-        self.vars = self.vars.cons(Bind::Var(x));
+        self.vars.0 = self.vars.0.cons(Bind::Var(x));
         self
     }
 
     /// Add a new filter binding.
-    pub(crate) fn cons_fun(mut self, f: (filter::Id, Self)) -> Self {
-        self.vars = self.vars.cons(Bind::Fun(f));
+    pub(crate) fn cons_fun(mut self, (f, ctx): (filter::Id, Self)) -> Self {
+        self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
         self
     }
 
     /// Remove the `skip` most recent variable bindings.
     fn skip_vars(mut self, skip: usize) -> Self {
-        self.vars = self.vars.skip(skip).clone();
+        self.vars.0 = self.vars.0.skip(skip).clone();
         self
+    }
+
+    fn with_vars(&self, vars: Vars) -> Self {
+        let inputs = self.inputs;
+        Self { vars, inputs }
     }
 
     /// Return remaining input values.
@@ -110,13 +125,13 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// Combined MIR/LIR compilation.
+/// Compile parsed to executable filters.
 ///
 /// This allows to go from a parsed filter to a filter executable by this crate.
 pub struct ParseCtx {
     /// errors occurred during transformation
     // TODO for v2.0: remove this and make it a function
-    pub errs: Vec<jaq_syn::Spanned<mir::Error>>,
+    pub errs: Vec<jaq_syn::Spanned<hir::Error>>,
     native: Vec<(String, usize, filter::Native)>,
     def: jaq_syn::Def,
 }
@@ -180,16 +195,19 @@ impl ParseCtx {
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
-        let mut mctx = mir::Ctx::default();
-        mctx.native = self.native.clone();
+        let mut hctx = hir::Ctx::default();
+        hctx.native = self.native.clone();
         self.def.rhs.defs.extend(main.defs);
         self.def.rhs.body = main.body;
-        let def = mctx.def(self.def.clone());
-        self.errs = mctx.errs;
+        let def = hctx.def(self.def.clone());
+        self.errs = hctx.errs;
 
         if !self.errs.is_empty() {
             return Default::default();
         }
+        let mut mctx = mir2::Ctx::default();
+        //std::dbg!(&def);
+        let def = mctx.def(def, Default::default());
 
         lir::root_def(def)
     }

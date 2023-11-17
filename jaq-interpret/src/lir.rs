@@ -1,52 +1,69 @@
 //! Low-level Intermediate Representation of filters.
 
-use crate::filter::{self, Ast as Filter, Id as AbsId};
-use crate::mir::{self, MirFilter, RelId, Relative};
+use crate::filter::{self, Ast as Filter, CallTyp, Id as AbsId};
 use crate::path::{self, Path};
+use crate::{hir, mir2 as mir};
 use alloc::vec::Vec;
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
-use jaq_syn::{MathOp, Str};
+use jaq_syn::{MathOp, Spanned, Str};
 
-#[derive(Default)]
 pub struct Ctx {
     defs: Vec<Filter>,
     callable: Vec<Callable>,
 }
 
 pub struct Callable {
-    typ: Relative,
     sig: jaq_syn::Call,
     id: AbsId,
+    tailrec: bool,
 }
 
 const IDENTITY: AbsId = AbsId(0);
 const TOSTRING: AbsId = AbsId(IDENTITY.0 + 1);
-const ARR_OBJ_ELEMS: AbsId = AbsId(TOSTRING.0 + 1);
-const EMPTY: AbsId = AbsId(ARR_OBJ_ELEMS.0 + 2);
+const EMPTY: AbsId = AbsId(TOSTRING.0 + 2);
+const RECURSE: AbsId = AbsId(EMPTY.0 + 4);
 
 pub fn root_def(def: mir::Def) -> filter::Owned {
     let mut ctx = Ctx::default();
-    ctx.init_constants();
     let id = ctx.def(def);
     filter::Owned::new(id, ctx.defs)
 }
 
-impl Ctx {
-    fn init_constants(&mut self) {
+impl Default for Ctx {
+    fn default() -> Self {
+        let mut ctx = Self {
+            defs: Vec::new(),
+            callable: Vec::new(),
+        };
+
         for (f, id) in [(Filter::Id, IDENTITY), (Filter::ToString, TOSTRING)] {
-            let id_ = self.id_of_ast(f);
+            let id_ = ctx.id_of_ast(f);
             assert_eq!(id, id_);
         }
 
-        let arr_obj = self.arr_obj_elems();
-        let arr_obj_id = self.id_of_ast(arr_obj);
-        assert_eq!(arr_obj_id, ARR_OBJ_ELEMS);
-
-        let empty = self.empty();
-        let empty_id = self.id_of_ast(empty);
+        let empty = ctx.empty();
+        let empty_id = ctx.id_of_ast(empty);
         assert_eq!(empty_id, EMPTY);
-    }
 
+        let recurse = ctx.recurse();
+        let recurse_id = ctx.id_of_ast(recurse);
+        assert_eq!(recurse_id, RECURSE);
+
+        ctx
+    }
+}
+
+/// Construct a call to `..`.
+fn recurse(typ: CallTyp) -> Filter {
+    Filter::Call(filter::Call {
+        id: RECURSE,
+        typ,
+        skip: 0,
+        args: Vec::new(),
+    })
+}
+
+impl Ctx {
     /// `{}[]` returns zero values.
     fn empty(&mut self) -> Filter {
         // `{}`
@@ -56,17 +73,22 @@ impl Ctx {
         Filter::Path(self.id_of_ast(obj), Path(Vec::from([path])))
     }
 
-    /// `.[]?` returns array/object elements or nothing instead
-    ///
-    /// `..`, also known as `recurse/0`, is defined as `recurse(.[]?)`
-    fn arr_obj_elems(&mut self) -> Filter {
+    /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`
+    fn recurse(&mut self) -> Filter {
         // `[]?`
         let path = (path::Part::Range(None, None), path::Opt::Optional);
-        // `.[]?`
-        Filter::Path(IDENTITY, Path(Vec::from([path])))
+        // `.[]?` (returns array/object elements or nothing instead)
+        let path = Filter::Path(IDENTITY, Path(Vec::from([path])));
+
+        // `..`
+        let f = recurse(CallTyp::Throw);
+        // .[]? | ..
+        let pipe = Filter::Pipe(self.id_of_ast(path), false, self.id_of_ast(f));
+        // ., (.[]? | ..)
+        Filter::Comma(IDENTITY, self.id_of_ast(pipe))
     }
 
-    fn get_callable(&self, RelId(id): RelId) -> &Callable {
+    fn get_callable(&self, hir::RelId(id): hir::RelId) -> &Callable {
         &self.callable[id]
     }
 
@@ -81,9 +103,7 @@ impl Ctx {
         });
         let body = self.filter(main.body);
 
-        self.callable
-            .drain(self.callable.len() - defs_len..)
-            .for_each(|callable| assert_eq!(callable.typ, Relative::Sibling));
+        self.callable.drain(self.callable.len() - defs_len..);
 
         body
     }
@@ -92,14 +112,13 @@ impl Ctx {
         let id = AbsId(self.defs.len());
         self.defs.push(Filter::default());
         self.callable.push(Callable {
-            typ: Relative::Parent,
             sig: def.lhs.clone(),
             id,
+            tailrec: def.tailrec,
         });
         *self.get_def(id) = self.main(def.rhs);
         let last = self.callable.last_mut().unwrap();
         assert!(last.id == id);
-        last.typ = Relative::Sibling;
         id
     }
 
@@ -110,7 +129,7 @@ impl Ctx {
     }
 
     /// Convert a MIR filter to a LIR filter.
-    fn filter(&mut self, f: MirFilter) -> Filter {
+    fn filter(&mut self, f: Spanned<mir::Filter>) -> Filter {
         let get = |f, ctx: &mut Self| {
             let f = ctx.filter(f);
             ctx.id_of_ast(f)
@@ -138,12 +157,21 @@ impl Ctx {
                     mir::Call::Arg(a) if args.is_empty() => Filter::Var(a),
                     mir::Call::Arg(_) => panic!("higher-order argument encountered"),
                     mir::Call::Native(n) => Filter::Native(n, args),
-                    mir::Call::Def { id, skip } => {
+                    mir::Call::Def { id, skip, tail } => {
                         let callable = self.get_callable(id);
                         let args = callable.sig.args.iter().zip(args);
+                        let typ = match (tail, callable.tailrec) {
+                            // TR call from inside itself
+                            (true, true) => CallTyp::Throw,
+                            (true, false) => panic!("TR call from inside a non-TR filter"),
+                            // call from outside or non-TR call from inside a TR filter
+                            (false, true) => CallTyp::Catch,
+                            // call from outside or non-TR call from inside a non-TR filter
+                            (false, false) => CallTyp::Normal,
+                        };
                         Filter::Call(filter::Call {
                             id: callable.id,
-                            rec: callable.typ == Relative::Parent,
+                            typ,
                             skip,
                             args: args.map(|(ty, a)| ty.as_ref().map(|_| a)).collect(),
                         })
@@ -156,8 +184,8 @@ impl Ctx {
             }
 
             Expr::Id => Filter::Id,
-            Expr::Num(mir::Num::Float(f)) => Filter::Float(f),
-            Expr::Num(mir::Num::Int(i)) => Filter::Int(i),
+            Expr::Num(hir::Num::Float(f)) => Filter::Float(f),
+            Expr::Num(hir::Num::Int(i)) => Filter::Int(i),
             Expr::Str(s) => of_str(*s, self),
             Expr::Array(a) => Filter::Array(a.map_or(EMPTY, |a| get(*a, self))),
             Expr::Object(o) => {
@@ -180,7 +208,7 @@ impl Ctx {
             }
             Expr::Try(f) => Filter::Try(get(*f, self), EMPTY),
             Expr::Neg(f) => Filter::Neg(get(*f, self)),
-            Expr::Recurse => Filter::Recurse(ARR_OBJ_ELEMS),
+            Expr::Recurse => recurse(CallTyp::Catch),
 
             Expr::Binary(l, op, r) => {
                 let (l, r) = (get(*l, self), get(*r, self));

@@ -65,12 +65,20 @@ def tostring: if isstring then . else   tojson end;
 def tonumber: if isnumber then . else fromjson end;
 
 # Generators
-def range(x): range(0; x);
-def repeat(g): [g] | recurse(.) | .[];
+def repeat(f): def rec: f, rec; rec;
+def recurse(f): def rec: ., (f | rec); rec;
 def recurse: recurse(.[]?);
 def recurse(f; cond): recurse(f | select(cond));
-def while(cond; update): recurse_inner(if cond then update else empty end);
-def until(cond; update): recurse_outer(if cond then empty else update end);
+def while(cond; update): def rec: if cond then ., (update | rec) else empty end; rec;
+def until(cond; update): def rec: if cond then . else update | rec end; rec;
+
+# Ranges
+def range($from; $to; $by): $from |
+   if $by > 0 then while(. < $to; . + $by)
+   else            while(. > $to; . + $by)
+   end;
+def range($from; $to): $from | while(. < $to; . + 1);
+def range(x): range(0; x);
 
 # Iterators
 def map(f): [.[] | f];
@@ -99,7 +107,9 @@ def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;
 
 # Paths
-def paths: def rec: [(keys?)[] as $k | [$k], [$k] + (.[$k] | rec[])]; rec[];
+def paths:
+  def rec($p): $p, ((keys?)[] as $k | .[$k] | rec($p + [$k]));
+  (keys?)[] as $k | .[$k] | rec([$k]);
 
 # Predicates
 def isempty(g): first((g | false), true);
