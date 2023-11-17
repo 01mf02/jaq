@@ -158,32 +158,32 @@ Finally, I concatenated the table header with the output and piped it through `p
 
 Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
 
-| Benchmark      |       n | jaq-1.0 |  jq-1.7 | gojq-0.12.13 | jq-1.6 |
+| Benchmark      |       n | jaq-1.2 |  jq-1.7 | gojq-0.12.13 | jq-1.6 |
 | -------------- | ------: | ------: | ------: | -----------: | -----: |
-| `empty`        |     512 | **550** |     610 |          570 |   8450 |
-| `bf-fib`       |      13 | **380** |    1290 |         1050 |   1430 |
-| `reverse`      | 1048576 |  **20** |     690 |          320 |    650 |
-| `sort`         | 1048576 | **100** |     540 |          550 |    660 |
-| `group-by`     | 1048576 | **380** |    1880 |         1690 |   2790 |
-| `min-max`      | 1048576 | **180** |     340 |          300 |    350 |
-| `add`          | 1048576 | **460** |     640 |         1430 |    740 |
-| `kv`           |  131072 | **140** | **140** |          240 |    200 |
-| `kv-update`    |  131072 | **160** |     550 |          550 |    N/A |
-| `kv-entries`   |  131072 | **550** |    1160 |          780 |   1110 |
-| `ex-implode`   | 1048576 |     730 |    1130 |      **690** |   1100 |
-| `reduce`       | 1048576 | **700** |     890 |          N/A |    850 |
-| `try-catch`    | 1048576 | **150** |     330 |          530 |    680 |
-| `tree-flatten` |      17 |     430 |     360 |        **0** |    480 |
-| `tree-update`  |      17 | **270** |     970 |         1830 |   1180 |
-| `tree-paths`   |      17 |    1420 | **360** |          890 |    480 |
-| `to-fromjson`  |   65536 |  **30** |     370 |          110 |    390 |
-| `ack`          |       7 | **500** |     690 |         1070 |    620 |
+| `empty`        |     512 | **650** |     790 |          740 |   8340 |
+| `bf-fib`       |      13 | **410** |    1280 |          820 |   1420 |
+| `reverse`      | 1048576 |  **60** |     680 |          310 |    630 |
+| `sort`         | 1048576 | **140** |     530 |          600 |    670 |
+| `group-by`     | 1048576 | **420** |    1850 |         1680 |   2830 |
+| `min-max`      | 1048576 | **220** |     320 |          290 |    310 |
+| `add`          | 1048576 | **480** |     650 |         1540 |    750 |
+| `kv`           |  131072 |     160 | **150** |          250 |    200 |
+| `kv-update`    |  131072 | **190** |     530 |          570 |    N/A |
+| `kv-entries`   |  131072 | **580** |    1170 |          820 |   1110 |
+| `ex-implode`   | 1048576 | **460** |    1110 |          740 |   1080 |
+| `reduce`       | 1048576 | **740** |     880 |          N/A |    850 |
+| `try-catch`    | 1048576 | **180** |     330 |          480 |    650 |
+| `tree-flatten` |      17 |     650 |     360 |        **0** |    480 |
+| `tree-update`  |      17 | **450** |     980 |         1850 |   1180 |
+| `tree-paths`   |      17 |     450 | **380** |          920 |    470 |
+| `to-fromjson`  |   65536 |  **40** |     370 |          100 |    380 |
+| `ack`          |       7 | **570** |     680 |         1090 |    610 |
+| `range-prop`   |     128 | **260** |     310 |          320 |    580 |
 
 The results show that
-jaq-1.0 is fastest on 15 benchmarks, whereas
+jaq-1.2 is fastest on 16 benchmarks, whereas
 jq-1.7 is fastest on 2 benchmarks and
-gojq-0.12.13 is fastest on 2 benchmarks.
-jq-1.6 is slowest on all benchmarks.
+gojq-0.12.13 is fastest on 1 benchmark.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [gojq]: https://github.com/itchyny/gojq
