@@ -125,7 +125,7 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// Combined MIR/LIR compilation.
+/// Compile parsed to executable filters.
 ///
 /// This allows to go from a parsed filter to a filter executable by this crate.
 pub struct ParseCtx {
