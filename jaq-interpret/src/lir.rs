@@ -2,7 +2,7 @@
 
 use crate::filter::{self, Ast as Filter, CallTyp, Id as AbsId};
 use crate::path::{self, Path};
-use crate::{hir, mir2 as mir};
+use crate::{hir, mir};
 use alloc::vec::Vec;
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 use jaq_syn::{MathOp, Spanned, Str};

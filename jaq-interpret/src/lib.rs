@@ -49,9 +49,9 @@ extern crate std;
 mod box_iter;
 pub mod error;
 mod filter;
+mod hir;
 mod lir;
 mod mir;
-mod mir2;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -67,7 +67,6 @@ pub use val::{Val, ValR, ValRs};
 
 use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
-use mir as hir;
 use rc_list::List as RcList;
 use stack::Stack;
 
@@ -205,7 +204,7 @@ impl ParseCtx {
         if !self.errs.is_empty() {
             return Default::default();
         }
-        let mut mctx = mir2::Ctx::default();
+        let mut mctx = mir::Ctx::default();
         //std::dbg!(&def);
         let def = mctx.def(def, Default::default());
 
