@@ -1,6 +1,6 @@
 //! Low-level Intermediate Representation of filters.
 
-use crate::filter::{self, Ast as Filter, CallTyp, Id as AbsId, Tailrec};
+use crate::filter::{self, Ast as Filter, CallTyp, Id as AbsId};
 use crate::path::{self, Path};
 use crate::{hir, mir};
 use alloc::vec::Vec;
@@ -15,7 +15,7 @@ pub struct Ctx {
 pub struct Callable {
     sig: jaq_syn::Call,
     id: AbsId,
-    rec: mir::Rec,
+    tailrec: bool,
 }
 
 const IDENTITY: AbsId = AbsId(0);
@@ -114,7 +114,7 @@ impl Ctx {
         self.callable.push(Callable {
             sig: def.lhs.clone(),
             id,
-            rec: def.rec,
+            tailrec: def.tailrec,
         });
         *self.get_def(id) = self.main(def.rhs);
         let last = self.callable.last_mut().unwrap();
@@ -157,16 +157,17 @@ impl Ctx {
                     mir::Call::Arg(a) if args.is_empty() => Filter::Var(a),
                     mir::Call::Arg(_) => panic!("higher-order argument encountered"),
                     mir::Call::Native(n) => Filter::Native(n, args),
-                    mir::Call::Def { id, skip, rec } => {
+                    mir::Call::Def { id, skip, tail } => {
                         let callable = self.get_callable(id);
                         let args = callable.sig.args.iter().zip(args);
-                        let typ = match rec {
+                        let typ = match (tail, callable.tailrec) {
                             // TR call from inside itself
-                            Some(Tailrec(true)) => CallTyp::Throw,
+                            (true, true) => CallTyp::Throw,
+                            (true, false) => panic!("TR call from inside a non-TR filter"),
                             // call from outside or non-TR call from inside a TR filter
-                            None | Some(Tailrec(false)) if callable.rec.tailrec => CallTyp::Catch,
+                            (false, true) => CallTyp::Catch,
                             // call from outside or non-TR call from inside a non-TR filter
-                            None | Some(Tailrec(false)) => CallTyp::Normal,
+                            (false, false) => CallTyp::Normal,
                         };
                         Filter::Call(filter::Call {
                             id: callable.id,

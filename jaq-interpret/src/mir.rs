@@ -1,4 +1,8 @@
-use crate::filter;
+//! Mid-level Intermediate Representation of definitions and filters.
+//!
+//! This mainly analyses occurrences of recursion, which is
+//! important to efficiently execute tail-recursive filters.
+
 use crate::hir::{self, ArgIdx, Num, RelId, VarIdx};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{BinaryOp, Filter as Expr, Fold};
@@ -14,41 +18,20 @@ pub struct Main {
 pub struct Def {
     pub lhs: jaq_syn::Call,
     pub rhs: Main,
-    pub rec: Rec,
-}
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct Rec {
     /// is the filter tail-recursive?
     pub tailrec: bool,
-    /// is the filter recursive (in a non-tail-recursive way)?
-    pub rec: bool,
-}
-
-impl Rec {
-    pub fn set(&mut self, r: filter::Tailrec) {
-        match r {
-            filter::Tailrec(true) => self.tailrec = true,
-            filter::Tailrec(false) => self.rec = true,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Call {
-    Def {
-        id: RelId,
-        skip: usize,
-        /// None if non-recursive
-        rec: Option<filter::Tailrec>,
-    },
+    Def { id: RelId, skip: usize, tail: bool },
     Arg(ArgIdx),
     Native(crate::filter::Native),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Relative {
-    Parent { rec: Rec },
+    Parent { tailrec: bool },
     Sibling { tailrec: Tailrec },
 }
 
@@ -87,15 +70,13 @@ impl Ctx {
     pub fn def(&mut self, def: hir::Def, mut tr: Tailrec) -> Def {
         //std::dbg!("treating def:", &def.lhs);
         tr.insert(RelId(self.callable.len()));
-        self.callable.push(Relative::Parent {
-            rec: Rec::default(),
-        });
+        self.callable.push(Relative::Parent { tailrec: false });
 
         Def {
             lhs: def.lhs,
             rhs: self.main(def.rhs, tr),
-            rec: match self.callable.pop().unwrap() {
-                Relative::Parent { rec } => rec,
+            tailrec: match self.callable.pop().unwrap() {
+                Relative::Parent { tailrec } => tailrec,
                 _ => panic!(),
             },
         }
@@ -114,18 +95,18 @@ impl Ctx {
                     hir::Call::Arg(a) => Call::Arg(a),
                     hir::Call::Native(n) => Call::Native(n),
                     hir::Call::Def { id, skip } => {
-                        let rec = match &mut self.callable[id.0] {
-                            Relative::Parent { ref mut rec } => {
-                                let tr = filter::Tailrec(tr.contains(&id));
-                                rec.set(tr);
-                                Some(tr)
+                        let tail = match &mut self.callable[id.0] {
+                            Relative::Parent { ref mut tailrec } => {
+                                let tail = tr.contains(&id);
+                                *tailrec = *tailrec || tail;
+                                tail
                             }
                             Relative::Sibling { ref mut tailrec } => {
                                 *tailrec = tailrec.intersection(&tr).cloned().collect();
-                                None
+                                false
                             }
                         };
-                        Call::Def { id, skip, rec }
+                        Call::Def { id, skip, tail }
                     }
                 };
                 Expr::Call(call, args)

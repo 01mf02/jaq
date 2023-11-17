@@ -17,9 +17,6 @@ pub struct Ref<'a>(Id, &'a [Ast]);
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Id(pub usize);
 
-#[derive(Copy, Clone, Debug)]
-pub struct Tailrec(pub bool);
-
 #[derive(Clone, Debug)]
 pub enum CallTyp {
     /// everything that is not tail-recursive

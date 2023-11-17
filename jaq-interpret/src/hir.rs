@@ -1,4 +1,4 @@
-//! Mid-level Intermediate Representation of definitions and filters.
+//! High-level Intermediate Representation of definitions and filters.
 //!
 //! This is quite close to the output of parsing,
 //! but replaces names by unique integers.
