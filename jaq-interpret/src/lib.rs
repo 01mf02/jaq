@@ -72,9 +72,8 @@ use stack::Stack;
 use mir as hir;
 
 /// variable bindings
-// TODO: make this private!
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Vars(RcList<Bind<Val, (filter::Id, Self)>>);
+struct Vars(RcList<Bind<Val, (filter::Id, Self)>>);
 type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
 
 impl Vars {
