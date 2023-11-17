@@ -175,6 +175,28 @@ fn split(s: &str, sep: &str) -> Vec<Val> {
     }
 }
 
+/// This implements a ~10x faster version of:
+/// ~~~ text
+/// def range($from; $to; $by): $from |
+///    if $by > 0 then while(. < $to; . + $by)
+///    else            while(. > $to; . + $by)
+///    end;
+/// ~~~
+fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
+    let positive = by > Val::Int(0);
+    core::iter::from_fn(move || match from.clone() {
+        Ok(x) if (positive && x < to) || (!positive && x > to) => {
+            Some(core::mem::replace(&mut from, x + by.clone()))
+        }
+        Ok(_) => None,
+        e @ Err(_) => {
+            // return None as following value
+            from = Ok(to.clone());
+            Some(e)
+        }
+    })
+}
+
 fn strip<F>(s: &Rc<String>, other: &str, f: F) -> Rc<String>
 where
     F: for<'a> Fn(&'a str, &str) -> Option<&'a str>,
@@ -282,31 +304,11 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         let pos = |n: isize| n.try_into().unwrap_or(0usize);
         Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
     }),
-    // This implements a ~10x faster version of:
-    // ~~~ text
-    // def range($from; $to; $by): $from |
-    //    if $by > 0 then while(. < $to; . + $by)
-    //    else            while(. > $to; . + $by)
-    //    end;
-    // ~~~
     ("range", 3, |args, cv| {
         let (from, to, by) = (args.get(0), args.get(1), args.get(2));
-        Box::new(from.cartesian3(to, by, cv).flat_map(|(mut from, to, by)| {
+        Box::new(from.cartesian3(to, by, cv).flat_map(|(from, to, by)| {
             let to_by = to.and_then(|to| Ok((to, by?)));
-            then(to_by, |(to, by)| {
-                let positive = by > Val::Int(0);
-                Box::new(core::iter::from_fn(move || match from.clone() {
-                    Ok(x) if (positive && x < to) || (!positive && x > to) => {
-                        Some(core::mem::replace(&mut from, x + by.clone()))
-                    }
-                    Ok(_) => None,
-                    e @ Err(_) => {
-                        // return None as following value
-                        from = Ok(to.clone());
-                        Some(e)
-                    }
-                }))
-            })
+            then(to_by, |(to, by)| Box::new(range(from, to, by)))
         }))
     }),
     ("startswith", 1, |args, cv| {
