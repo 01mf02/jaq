@@ -17,9 +17,9 @@ default = ["mimalloc"]
 [dependencies]
 jaq-syn       = { version = "1.1.0", path = "../jaq-syn" }
 jaq-parse     = { version = "1.0.0", path = "../jaq-parse" }
-jaq-interpret = { version = "1.1.1", path = "../jaq-interpret" }
-jaq-core      = { version = "1.0.0", path = "../jaq-core" }
-jaq-std       = { version = "1.0.0", path = "../jaq-std" }
+jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
+jaq-core      = { version = "1.2.0", path = "../jaq-core" }
+jaq-std       = { version = "1.2.0", path = "../jaq-std" }
 ariadne = "0.3.0"
 atty = "0.2"
 chumsky = { version = "0.9.0", default-features = false }
