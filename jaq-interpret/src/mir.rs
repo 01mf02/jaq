@@ -1,164 +1,209 @@
-//! Mid-level Intermediate Representation of definitions and filters.
+//! High-level Intermediate Representation of definitions and filters.
 //!
-//! This mainly analyses occurrences of recursion, which is
-//! important to efficiently execute tail-recursive filters.
+//! This is quite close to the output of parsing,
+//! but replaces names by unique integers.
+//! That way, the subsequent transformation step(s)
+//! always succeed and do not have to fight with shadowing.
 
-use crate::hir::{self, ArgIdx, Num, RelId, VarIdx};
-use alloc::{boxed::Box, vec::Vec};
+use crate::Bind;
+use alloc::{boxed::Box, string::String, vec::Vec};
+use core::fmt;
 use jaq_syn::filter::{BinaryOp, Filter as Expr, Fold};
-use jaq_syn::Spanned;
+use jaq_syn::{Arg, Spanned};
 
 pub type Filter = jaq_syn::filter::Filter<Call, VarIdx, Num>;
+pub type Main = jaq_syn::Main<Filter>;
+pub type Def = jaq_syn::Def<Main>;
 
-pub struct Main {
-    pub defs: Vec<Def>,
-    pub body: Spanned<Filter>,
-}
-
-pub struct Def {
-    pub lhs: jaq_syn::Call,
-    pub rhs: Main,
-    /// is the filter tail-recursive?
-    pub tailrec: bool,
-}
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+pub struct RelId(pub usize);
+pub type VarIdx = usize;
+pub type ArgIdx = usize;
 
 #[derive(Debug, Clone)]
 pub enum Call {
-    Def { id: RelId, skip: usize, tail: bool },
+    Def { id: RelId, skip: usize },
     Arg(ArgIdx),
     Native(crate::filter::Native),
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Num {
+    Float(f64),
+    Int(isize),
+}
+
+impl Num {
+    fn parse(n: &str) -> Result<Self, Self> {
+        if n.contains(['.', 'e', 'E']) {
+            n.parse().map(Num::Float).map_err(|_| Self::Float(0.))
+        } else {
+            n.parse().map(Num::Int).map_err(|_| Self::Int(0))
+        }
+    }
+}
+
+pub enum Error {
+    Undefined(Arg),
+    Num(Num),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Undefined(Bind::Var(_)) => "undefined variable",
+            Self::Undefined(Bind::Fun(_)) => "undefined filter",
+            Self::Num(Num::Float(_)) => "cannot interpret as floating-point number",
+            Self::Num(Num::Int(_)) => "cannot interpret as machine-size integer",
+        }
+        .fmt(f)
+    }
+}
+
+struct Callable {
+    typ: Relative,
+    sig: jaq_syn::Call,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Relative {
-    Parent { tailrec: bool },
-    Sibling { tailrec: Tailrec },
+    Parent,
+    Sibling,
 }
 
+/// Convert variables to indices.
 #[derive(Default)]
 pub struct Ctx {
+    pub errs: Vec<Spanned<Error>>,
     /// accessible defined filters
-    callable: Vec<Relative>,
+    callable: Vec<Callable>,
+    /// accessible native filters
+    pub native: Vec<(String, usize, crate::filter::Native)>,
+    /// locally bound variables (not bound by filter definition)
+    vars: Vec<String>,
 }
 
-/// which filters can be called tail-recursively at the current point
-pub type Tailrec = alloc::collections::BTreeSet<RelId>;
-
 impl Ctx {
-    pub fn main(&mut self, main: hir::Main, tr: Tailrec) -> Main {
-        for _ in &main.defs {
-            self.callable.push(Relative::Sibling {
-                tailrec: tr.clone(),
-            });
-        }
-        //std::dbg!("handle body", &main.body, &self.callable);
-        let body = self.expr(main.body, tr);
-        //std::dbg!("defs: ", &main.defs);
-        let defs = main.defs.into_iter().rev().map(|def| {
-            //std::dbg!("handle def", &def);
-            let bla = match self.callable.pop().unwrap() {
-                Relative::Sibling { tailrec } => tailrec,
-                _ => panic!(),
-            };
-            self.def(def, bla)
+    /// Return all currently bound variables / arguments outside-in.
+    fn bound(&self) -> impl DoubleEndedIterator<Item = Bind<&String, &String>> {
+        let by_def = self.callable.iter().filter_map(|Callable { typ, sig }| {
+            (*typ == Relative::Parent).then_some(sig.args.iter().map(|a| a.as_ref()))
         });
-        let mut defs: Vec<_> = defs.collect();
-        defs.reverse();
-        Main { defs, body }
+        by_def.flatten().chain(self.vars.iter().map(Bind::Var))
     }
 
-    pub fn def(&mut self, def: hir::Def, mut tr: Tailrec) -> Def {
-        //std::dbg!("treating def:", &def.lhs);
-        tr.insert(RelId(self.callable.len()));
-        self.callable.push(Relative::Parent { tailrec: false });
+    fn resolve_call(&self, name: &str, arity: usize) -> Option<Call> {
+        let mut bound = self.vars.len();
 
-        Def {
-            lhs: def.lhs,
-            rhs: self.main(def.rhs, tr),
-            tailrec: match self.callable.pop().unwrap() {
-                Relative::Parent { tailrec } => tailrec,
-                _ => panic!(),
-            },
-        }
-    }
-
-    fn expr(&mut self, f: Spanned<hir::Filter>, tr: Tailrec) -> Spanned<Filter> {
-        // no tail-recursion
-        let notr = Tailrec::default;
-        let get = |ctx: &mut Self, f, tr| Box::new(ctx.expr(f, tr));
-        let result = match f.0 {
-            Expr::Call(call, args) => {
-                let args: Vec<_> = args.into_iter().map(|arg| self.expr(arg, notr())).collect();
-                //std::dbg!(&call);
-                //std::dbg!(&self.callable);
-                let call = match call {
-                    hir::Call::Arg(a) => Call::Arg(a),
-                    hir::Call::Native(n) => Call::Native(n),
-                    hir::Call::Def { id, skip } => {
-                        let tail = match &mut self.callable[id.0] {
-                            Relative::Parent { ref mut tailrec } => {
-                                let tail = tr.contains(&id);
-                                *tailrec = *tailrec || tail;
-                                tail
-                            }
-                            Relative::Sibling { ref mut tailrec } => {
-                                *tailrec = tailrec.intersection(&tr).cloned().collect();
-                                false
-                            }
-                        };
-                        Call::Def { id, skip, tail }
+        for (id, Callable { typ, sig }) in self.callable.iter().enumerate().rev() {
+            let id = RelId(id);
+            if *typ == Relative::Parent {
+                for arg in sig.args.iter().rev() {
+                    if arity == 0 && arg.as_deref() == Bind::Fun(name) {
+                        return Some(Call::Arg(bound));
                     }
-                };
-                Expr::Call(call, args)
+                    bound += 1;
+                }
             }
-            Expr::Var(v) => Expr::Var(v),
-            Expr::Binary(l, BinaryOp::Comma, r) => {
-                let l = get(self, *l, tr.clone());
-                let r = get(self, *r, tr);
-                Expr::Binary(l, BinaryOp::Comma, r)
+            if name == sig.name && arity == sig.args.len() {
+                return Some(Call::Def { id, skip: bound });
             }
-            Expr::Binary(l, op @ (BinaryOp::Alt | BinaryOp::Pipe(_)), r) => {
-                let l = get(self, *l, notr());
-                let r = get(self, *r, tr);
-                Expr::Binary(l, op, r)
-            }
-            Expr::Binary(l, op, r) => {
-                Expr::Binary(get(self, *l, notr()), op, get(self, *r, notr()))
-            }
+        }
 
+        self.native
+            .iter()
+            .find(|(name_, arity_, _)| *name_ == name && *arity_ == arity)
+            .map(|(_, _, native)| Call::Native(native.clone()))
+    }
+
+    pub fn main(&mut self, main: jaq_syn::Main) -> Main {
+        let defs: Vec<_> = main.defs.into_iter().map(|def| self.def(def)).collect();
+        assert!(self.vars.is_empty());
+        let body = self.expr(main.body);
+        assert!(self.vars.is_empty());
+
+        self.callable
+            .drain(self.callable.len() - defs.len()..)
+            .for_each(|callable| assert_eq!(callable.typ, Relative::Sibling));
+
+        jaq_syn::Main { defs, body }
+    }
+
+    pub fn def(&mut self, def: jaq_syn::Def) -> Def {
+        self.callable.push(Callable {
+            typ: Relative::Parent,
+            sig: def.lhs.clone(),
+        });
+        let rhs = self.main(def.rhs);
+        self.callable.last_mut().unwrap().typ = Relative::Sibling;
+        jaq_syn::Def { lhs: def.lhs, rhs }
+    }
+
+    fn expr(&mut self, f: Spanned<Expr>) -> Spanned<Filter> {
+        let get = |ctx: &mut Self, f| Box::new(ctx.expr(f));
+        let undefined = |arg| (Error::Undefined(arg), f.1.clone());
+        let result = match f.0 {
+            Expr::Call(name, args) => {
+                let args: Vec<_> = args.into_iter().map(|arg| self.expr(arg)).collect();
+
+                self.resolve_call(&name, args.len()).map_or_else(
+                    || {
+                        self.errs.push(undefined(Arg::new_filter(name)));
+                        Expr::Id
+                    },
+                    |call| Expr::Call(call, args),
+                )
+            }
+            Expr::Var(v) => {
+                let idx = self.bound().rev().position(|i| i == Bind::Var(&v));
+                Expr::Var(idx.unwrap_or_else(|| {
+                    self.errs.push(undefined(Arg::Var(v)));
+                    0
+                }))
+            }
+            Expr::Binary(l, BinaryOp::Pipe(Some(x)), r) => {
+                let l = get(self, *l);
+                self.vars.push(x.clone());
+                let r = get(self, *r);
+                assert!(self.vars.pop().as_ref() == Some(&x));
+                Expr::Binary(l, BinaryOp::Pipe(Some(x)), r)
+            }
             Expr::Fold(typ, Fold { xs, x, init, f }) => {
-                let xs = get(self, *xs, notr());
-                let init = get(self, *init, notr());
-                let f = get(self, *f, notr());
+                let (xs, init) = (get(self, *xs), get(self, *init));
+                self.vars.push(x.clone());
+                let f = get(self, *f);
+                assert!(self.vars.pop().as_ref() == Some(&x));
                 Expr::Fold(typ, Fold { xs, x, init, f })
             }
             Expr::Id => Expr::Id,
+            Expr::Num(n) => Expr::Num(Num::parse(&n).unwrap_or_else(|n| {
+                self.errs.push((Error::Num(n), f.1.clone()));
+                n
+            })),
+            Expr::Str(s) => Expr::Str(Box::new((*s).map(|f| self.expr(f)))),
+            Expr::Array(a) => Expr::Array(a.map(|a| get(self, *a))),
+            Expr::Object(o) => {
+                Expr::Object(o.into_iter().map(|kv| kv.map(|f| self.expr(f))).collect())
+            }
+            Expr::Try(f) => Expr::Try(get(self, *f)),
+            Expr::Neg(f) => Expr::Neg(get(self, *f)),
             Expr::Recurse => Expr::Recurse,
-            Expr::Num(n) => Expr::Num(n),
-            Expr::Str(s) => Expr::Str(Box::new((*s).map(|f| self.expr(f, notr())))),
-            Expr::Array(a) => Expr::Array(a.map(|a| get(self, *a, notr()))),
-            Expr::Object(o) => Expr::Object(
-                o.into_iter()
-                    .map(|kv| kv.map(|f| self.expr(f, notr())))
-                    .collect(),
-            ),
-            Expr::Try(f) => Expr::Try(get(self, *f, notr())),
-            Expr::Neg(f) => Expr::Neg(get(self, *f, notr())),
 
+            Expr::Binary(l, op, r) => Expr::Binary(get(self, *l), op, get(self, *r)),
             Expr::Ite(if_thens, else_) => {
                 let if_thens = if_thens
                     .into_iter()
-                    .map(|(i, t)| (self.expr(i, notr()), self.expr(t, tr.clone())));
-                Expr::Ite(if_thens.collect(), else_.map(|else_| get(self, *else_, tr)))
+                    .map(|(i, t)| (self.expr(i), self.expr(t)));
+                Expr::Ite(if_thens.collect(), else_.map(|else_| get(self, *else_)))
             }
             Expr::TryCatch(try_, catch_) => {
-                Expr::TryCatch(get(self, *try_, notr()), catch_.map(|c| get(self, *c, tr)))
+                Expr::TryCatch(get(self, *try_), catch_.map(|c| get(self, *c)))
             }
             Expr::Path(f, path) => {
-                let f = get(self, *f, notr());
+                let f = get(self, *f);
                 let path = path
                     .into_iter()
-                    .map(|(p, opt)| (p.map(|p| self.expr(p, notr())), opt));
+                    .map(|(p, opt)| (p.map(|p| self.expr(p)), opt));
                 Expr::Path(f, path.collect())
             }
         };

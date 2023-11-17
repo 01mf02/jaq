@@ -49,9 +49,9 @@ extern crate std;
 mod box_iter;
 pub mod error;
 mod filter;
-mod hir;
 mod lir;
 mod mir;
+mod mir2;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -69,6 +69,7 @@ use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
 use rc_list::List as RcList;
 use stack::Stack;
+use mir as hir;
 
 /// variable bindings
 // TODO: make this private!
@@ -195,19 +196,19 @@ impl ParseCtx {
 
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
-        let mut mctx = hir::Ctx::default();
-        mctx.native = self.native.clone();
+        let mut hctx = hir::Ctx::default();
+        hctx.native = self.native.clone();
         self.def.rhs.defs.extend(main.defs);
         self.def.rhs.body = main.body;
-        let def = mctx.def(self.def.clone());
-        self.errs = mctx.errs;
+        let def = hctx.def(self.def.clone());
+        self.errs = hctx.errs;
 
         if !self.errs.is_empty() {
             return Default::default();
         }
-        let mut hctx = mir::Ctx::default();
+        let mut mctx = mir2::Ctx::default();
         //std::dbg!(&def);
-        let def = hctx.def(def, Default::default());
+        let def = mctx.def(def, Default::default());
 
         lir::root_def(def)
     }
