@@ -403,6 +403,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
 }
 
 /// Function from a value to a stream of value results.
+// TODO for v2.0: Remove `Clone` bound and make sub-trait requiring `Copy` for derived functions
 pub trait FilterT<'a>: Clone + 'a {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
     fn run(self, cv: Cv<'a>) -> ValRs<'a>;
@@ -422,9 +423,19 @@ pub trait FilterT<'a>: Clone + 'a {
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
-    fn cartesian(self, r: Self, cv: Cv<'a>) -> Box<dyn Iterator<Item = (ValR, ValR)> + 'a> {
+    fn cartesian(self, r: Self, cv: Cv<'a>) -> BoxIter<'a, (ValR, ValR)> {
         flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
             map_with(r.clone().run(cv), l, |r, l| (l, r))
+        })
+    }
+
+    /// Run `self`, `m`, and `r`, and return the cartesian product of their outputs.
+    fn cartesian3(self, m: Self, r: Self, cv: Cv<'a>) -> BoxIter<'a, (ValR, ValR, ValR)> {
+        flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
+            let r = r.clone();
+            flat_map_with(m.clone().run(cv.clone()), (l, cv), move |m, (l, cv)| {
+                map_with(r.clone().run(cv), (l, m), |r, (l, m)| (l, m, r))
+            })
         })
     }
 

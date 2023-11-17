@@ -128,21 +128,14 @@ pub(crate) use if_f;
 macro_rules! math_3_ary {
     ($name: expr, $f: ident, $domain1: expr, $domain2: expr, $domain3: expr, $codomain: expr) => {
         ($name, 3, |args, cv| {
-            use itertools::Itertools;
-            let xs = args.get(0).run(cv.clone());
-            let ys: Vec<_> = args.get(1).run(cv.clone()).collect();
-            let zs: Vec<_> = args.get(2).run(cv).collect();
-            Box::new(
-                xs.into_iter()
-                    .cartesian_product(ys)
-                    .cartesian_product(zs)
-                    .map(|((x, y), z)| {
-                        let x = $domain1(&x?)?;
-                        let y = $domain2(&y?)?;
-                        let z = $domain3(&z?)?;
-                        Ok($codomain(libm::$f(x, y, z)))
-                    }),
-            )
+            let (xs, ys, zs) = (args.get(0), args.get(1), args.get(2));
+            Box::new(xs.cartesian3(ys, zs, cv).map(|(x, y, z)| {
+                Ok($codomain(libm::$f(
+                    $domain1(&x?)?,
+                    $domain2(&y?)?,
+                    $domain3(&z?)?,
+                )))
+            }))
         })
     };
 }
