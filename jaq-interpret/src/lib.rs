@@ -67,9 +67,9 @@ pub use val::{Val, ValR, ValRs};
 
 use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;
+use mir as hir;
 use rc_list::List as RcList;
 use stack::Stack;
-use mir as hir;
 
 /// variable bindings
 #[derive(Clone, Debug, PartialEq, Eq)]

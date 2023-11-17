@@ -56,11 +56,11 @@ impl Ctx {
         //std::dbg!("defs: ", &main.defs);
         let defs = main.defs.into_iter().rev().map(|def| {
             //std::dbg!("handle def", &def);
-            let bla = match self.callable.pop().unwrap() {
+            let tailrec = match self.callable.pop().unwrap() {
                 Relative::Sibling { tailrec } => tailrec,
                 _ => panic!(),
             };
-            self.def(def, bla)
+            self.def(def, tailrec)
         });
         let mut defs: Vec<_> = defs.collect();
         defs.reverse();
