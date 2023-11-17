@@ -109,7 +109,9 @@ impl<'a> Ctx<'a> {
 
     /// Remove the `skip` most recent variable bindings.
     fn skip_vars(mut self, skip: usize) -> Self {
-        self.vars.0 = self.vars.0.skip(skip).clone();
+        if skip > 0 {
+            self.vars.0 = self.vars.0.skip(skip).clone();
+        }
         self
     }
 
