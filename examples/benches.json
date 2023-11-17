@@ -7,7 +7,6 @@
 {"name": "kv-update"   , "n":  131072}
 {"name": "kv-entries"  , "n":  131072}
 {"name": "ex-implode"  , "n": 1048576}
-{"name": "range-prop"  , "n":     128}
 {"name": "reduce"      , "n": 1048576}
 {"name": "try-catch"   , "n": 1048576}
 {"name": "tree-flatten", "n":      17}
@@ -15,3 +14,4 @@
 {"name": "tree-paths"  , "n":      17}
 {"name": "to-fromjson" , "n":   65536}
 {"name": "ack"         , "n":       7}
+{"name": "range-prop"  , "n":     128}
