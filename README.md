@@ -30,7 +30,7 @@ jaq focuses on three goals:
   [jq's long start-up time](https://github.com/jqlang/jq/issues/1411),
   which amounts to about 50ms on my machine.
   This can particularly show when processing a large number of small files.
-  jaq starts up about 30 times faster than jq and
+  jaq starts up about 30 times faster than jq 1.6 and
   [outperforms jq also on many other benchmarks](#performance).
 * **Simplicity**:
   jaq aims to have a simple and small implementation, in order to
