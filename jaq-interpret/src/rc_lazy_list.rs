@@ -7,6 +7,17 @@ pub struct List<'a, T>(Rc<Lazy<Node<'a, T>, Eval<'a, T>>>);
 struct Node<'a, T>(Option<(T, List<'a, T>)>);
 type Eval<'a, T> = Box<dyn FnOnce() -> Node<'a, T> + 'a>;
 
+impl<'a, T> Drop for List<'a, T> {
+    fn drop(&mut self) {
+        while let Some((_head, tail)) = Rc::get_mut(&mut self.0)
+            .and_then(Lazy::get_mut)
+            .and_then(|node| node.0.take())
+        {
+            *self = tail;
+        }
+    }
+}
+
 impl<'a, T> Node<'a, T> {
     fn from_iter(mut iter: impl Iterator<Item = T> + 'a) -> Self {
         Self(iter.next().map(|x| (x, List::from_iter(iter))))
