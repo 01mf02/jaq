@@ -309,9 +309,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 match typ {
                     FoldType::Reduce => Box::new(fold(false, xs, Output(init), f)),
                     FoldType::For => Box::new(fold(true, xs, Output(init), f)),
-                    FoldType::Foreach => Box::new(init.flat_map(move |i| {
-                        then(i, |i| Box::new(fold(true, xs.clone(), Input(i), f.clone())))
-                    })),
+                    FoldType::Foreach => flat_map_with(init, xs, move |i, xs| {
+                        then(i, |i| Box::new(fold(true, xs, Input(i), f.clone())))
+                    }),
                 }
             }
 
