@@ -106,14 +106,22 @@ fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
 
     yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
 
-    // TODO: do not use itertools here (to remove dependency)
-    use itertools::Itertools;
-    let grouped = yx
-        .into_iter()
-        .group_by(|(y, _)| y.clone())
-        .into_iter()
-        .map(|(_y, yxs)| Val::arr(yxs.map(|(_y, x)| x).collect()))
-        .collect();
+    let mut grouped = Vec::new();
+    let mut yx = yx.into_iter();
+    if let Some((mut group_y, first_x)) = yx.next() {
+        let mut group = Vec::from([first_x]);
+        for (y, x) in yx {
+            if group_y != y {
+                grouped.push(Val::arr(core::mem::take(&mut group)));
+                group_y = y;
+            }
+            group.push(x);
+        }
+        if !group.is_empty() {
+            grouped.push(Val::arr(group))
+        }
+    }
+
     Ok(Val::arr(grouped))
 }
 
