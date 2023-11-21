@@ -178,17 +178,19 @@ fn split(s: &str, sep: &str) -> Vec<Val> {
 /// This implements a ~10x faster version of:
 /// ~~~ text
 /// def range($from; $to; $by): $from |
-///    if $by > 0 then while(. < $to; . + $by)
-///  elif $by < 0 then while(. > $to; . + $by)
-///    else            while(true   ; . + $by)
+///    if $by > 0 then while(.  < $to; . + $by)
+///  elif $by < 0 then while(.  > $to; . + $by)
+///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
 fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
     let cmp = by.cmp(&Val::Int(0));
     use core::cmp::Ordering::{Equal, Greater, Less};
     core::iter::from_fn(move || match from.clone() {
-        Ok(x) => ((cmp == Greater && x < to) || (cmp == Less && x > to) || cmp == Equal)
-            .then(|| core::mem::replace(&mut from, x + by.clone())),
+        Ok(x) => {
+            ((cmp == Greater && x < to) || (cmp == Less && x > to) || (cmp == Equal && x != to))
+                .then(|| core::mem::replace(&mut from, x + by.clone()))
+        }
         e @ Err(_) => {
             // return None as following value
             from = Ok(to.clone());
