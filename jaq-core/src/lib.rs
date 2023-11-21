@@ -179,13 +179,15 @@ fn split(s: &str, sep: &str) -> Vec<Val> {
 /// ~~~ text
 /// def range($from; $to; $by): $from |
 ///    if $by > 0 then while(. < $to; . + $by)
-///    else            while(. > $to; . + $by)
+///  elif $by < 0 then while(. > $to; . + $by)
+///    else            while(true   ; . + $by)
 ///    end;
 /// ~~~
 fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
-    let positive = by > Val::Int(0);
+    let cmp = by.cmp(&Val::Int(0));
+    use core::cmp::Ordering::{Equal, Greater, Less};
     core::iter::from_fn(move || match from.clone() {
-        Ok(x) if (positive && x < to) || (!positive && x > to) => {
+        Ok(x) if (cmp == Greater && x < to) || (cmp == Less && x > to) || cmp == Equal => {
             Some(core::mem::replace(&mut from, x + by.clone()))
         }
         Ok(_) => None,
