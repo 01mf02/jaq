@@ -99,14 +99,10 @@ fn sort_by<'a>(xs: &mut [Val], f: impl Fn(Val) -> ValRs<'a>) -> Result<(), Error
 
 /// Group an array by the given function.
 fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-    let mut err = None;
-    let mut yx = xs
+    let mut yx: Vec<(Vec<Val>, Val)> = xs
         .into_iter()
-        .map(|x| (run_if_ok(x.clone(), &mut err, &f), x))
-        .collect::<Vec<(Vec<Val>, Val)>>();
-    if let Some(err) = err {
-        return Err(err);
-    }
+        .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
+        .collect::<Result<_, _>>()?;
 
     yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
 
