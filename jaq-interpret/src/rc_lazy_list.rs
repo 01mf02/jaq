@@ -47,7 +47,7 @@ impl<'a, T: Clone + 'a> Iterator for List<'a, T> {
 
 #[test]
 fn drop() {
-    let list = List::from_iter(0 .. 100_000);
+    let list = List::from_iter(0..100_000);
     // clone() ensures that we keep a copy of the whole list around
     // sum() then evaluates the whole list
     assert_eq!(list.clone().sum::<usize>(), 4999950000);
