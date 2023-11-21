@@ -192,7 +192,7 @@ fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
                 .then(|| core::mem::replace(&mut from, x + by.clone()))
         }
         e @ Err(_) => {
-            // return None as following value
+            // return None after the error
             from = Ok(to.clone());
             Some(e)
         }
