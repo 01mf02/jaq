@@ -253,7 +253,7 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         once_with(move || Ok(Val::str(cv.1.to_string())))
     }),
     ("utf8bytelength", 0, |_, cv| {
-        once_with(move || cv.1.as_str().and_then(|s| Ok(Val::Int(s.len() as isize))))
+        once_with(move || cv.1.as_str().map(|s| Val::Int(s.len() as isize)))
     }),
     ("explode", 0, |_, cv| {
         once_with(move || cv.1.as_str().and_then(|s| Ok(Val::arr(explode(s)?))))
