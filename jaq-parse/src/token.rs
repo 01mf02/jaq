@@ -215,7 +215,10 @@ pub fn tree(
 
 pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
-    let op = one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect();
+    let op = one_of("|=!<>+-*/%")
+        .chain::<char, _, _>(just('/').or_not())
+        .chain::<char, _, _>(just('=').or_not())
+        .collect();
 
     let var = just('$').ignore_then(text::ident());
 

@@ -15,6 +15,11 @@ fn update_assign() {
         ".a = .a+.b | ., .a = .a+.b",
         [ab(Some(2)), ab(Some(4))],
     );
+    gives(
+        ab(None),
+        ".a //= .a+.b | ., .a //= .a+.b",
+        [ab(Some(2)), ab(Some(2))],
+    );
     gives(ab(Some(1)), ".a += (.a, .b)", [ab(Some(2)), ab(Some(3))]);
 }
 

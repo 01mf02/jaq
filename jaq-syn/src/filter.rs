@@ -5,7 +5,7 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Assignment operators (`=`, `|=`, `+=`, …)
+/// Assignment operators (`=`, `|=`, `//=`, `+=`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum AssignOp {
@@ -13,6 +13,8 @@ pub enum AssignOp {
     Assign,
     /// Update-assignment operator (`|=`)
     Update,
+    /// Alternation update-assignment operator (`//=`)
+    AltUpdate,
     /// Arithmetic update-assignment operator (`+=`, `-=`, `*=`, `/=`, `%=`, …)
     UpdateWith(MathOp),
 }
@@ -22,6 +24,7 @@ impl fmt::Display for AssignOp {
         match self {
             Self::Assign => "=".fmt(f),
             Self::Update => "|=".fmt(f),
+            Self::AltUpdate => "//=".fmt(f),
             Self::UpdateWith(op) => write!(f, "{op}="),
         }
     }

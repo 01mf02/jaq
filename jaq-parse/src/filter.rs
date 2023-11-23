@@ -162,6 +162,7 @@ fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
         // therefore, we add `,` later
         assign(AssignOp::Assign),
         assign(AssignOp::Update),
+        assign(AssignOp::AltUpdate),
         update_with(MathOp::Add),
         update_with(MathOp::Sub),
         update_with(MathOp::Mul),
