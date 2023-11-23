@@ -115,6 +115,8 @@ pub(crate) enum Ast {
     Assign(Id, Id),
     /// Update-assignment operation (`f |= g`)
     Update(Id, Id),
+    /// Alternation update-assignment operation (`f //= g`)
+    AltUpdate(Id, Id),
     /// Arithmetical update-assignment operation (`f += g`, `f -= g`, `f *= g`,
     /// `f /= g`, `f %= g`, …)
     UpdateMath(Id, MathOp, Id),
@@ -322,6 +324,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(f).run((cv.0.clone(), v))),
             ),
+            Ast::AltUpdate(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(
+                    cv,
+                    Box::new(move |x| box_once(Ok(if x.as_bool() { x } else { y.clone() }))),
+                )
+            }),
             Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
@@ -391,11 +399,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Assign(..) | Ast::Update(..) | Ast::UpdateMath(..) => err,
+            Ast::Assign(..) | Ast::Update(..) | Ast::AltUpdate(..) | Ast::UpdateMath(..) => err,
 
-            // these are up for grabs to implement :)
-            Ast::Try(..) | Ast::Alt(..) => todo!(),
-            Ast::Fold(..) => todo!(),
+            Ast::Try(..) | Ast::Alt(..) => todo!("these are up for grabs to implement :)"),
+            Ast::Fold(..) => todo!("these are up for grabs to implement :)"),
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
