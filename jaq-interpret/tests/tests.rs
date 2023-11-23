@@ -8,9 +8,14 @@ use serde_json::json;
 #[test]
 fn update_assign() {
     let ab = |v| json!({"a": v, "b": 2});
-    gives(ab(1), ".a  = (.a, .b)", [ab(1), ab(2)]);
-    gives(ab(1), ".a |= (.+1, .)", [ab(2)]);
-    gives(ab(1), ".a += (.a, .b)", [ab(2), ab(3)]);
+    gives(ab(Some(1)), ".a  = (.a, .b)", [ab(Some(1)), ab(Some(2))]);
+    gives(ab(Some(1)), ".a |= (.+1, .)", [ab(Some(2))]);
+    gives(
+        ab(None),
+        ".a = .a+.b | ., .a = .a+.b",
+        [ab(Some(2)), ab(Some(4))],
+    );
+    gives(ab(Some(1)), ".a += (.a, .b)", [ab(Some(2)), ab(Some(3))]);
 }
 
 // here, jaq diverges from jq, which returns [3,6,4,8]!
