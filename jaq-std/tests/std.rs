@@ -155,7 +155,8 @@ yields!(
     ["abc", "az", "fax", "foo"]
 );
 
-yields!(last_empty, "last({}[])", json!(null));
+// this diverges from jq, which returns [null]
+yields!(last_empty, "[last({}[])]", json!([]));
 yields!(last_some, "last(1, 2, 3)", 3);
 
 yields!(logb_inf, "infinite | logb | . == infinite", true);

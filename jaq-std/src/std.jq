@@ -92,7 +92,7 @@ def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
 
-def last(g): reduce g as $item (null; $item);
+def last(g): reduce g as $item ([]; [$item]) | .[];
 def nth(n; g): last(limit(n + 1; g));
 
 # Objects <-> Arrays
