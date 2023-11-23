@@ -97,9 +97,9 @@ pub(crate) enum Ast {
 
     Path(Id, crate::path::Path<Id>),
 
+    Assign(Id, Id),
     Update(Id, Id),
     UpdateMath(Id, MathOp, Id),
-    Assign(Id, Id),
 
     Logic(Id, bool, Id),
     Math(Id, MathOp, Id),
@@ -290,15 +290,15 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 })
             }
 
+            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
+            }),
             Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(f).run((cv.0.clone(), v))),
             ),
             Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
-            }),
-            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
-                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
             Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
                 if l.as_bool() == *stop {
@@ -366,7 +366,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
+            Ast::Assign(..) | Ast::Update(..) | Ast::UpdateMath(..) => err,
 
             // these are up for grabs to implement :)
             Ast::Try(..) | Ast::Alt(..) => todo!(),
