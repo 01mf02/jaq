@@ -228,58 +228,69 @@ fn to_csv(vs: &[Val]) -> Result<String, Error> {
     Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join(","))
 }
 
+fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
+    Box::new(core::iter::once_with(f))
+}
+
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
     }),
-    ("length", 0, |_, cv| box_once(length(&cv.1))),
+    ("length", 0, |_, cv| once_with(move || length(&cv.1))),
     ("keys_unsorted", 0, |_, cv| {
-        box_once(cv.1.keys_unsorted().map(Val::arr))
+        once_with(move || cv.1.keys_unsorted().map(Val::arr))
     }),
-    ("floor", 0, |_, cv| box_once(cv.1.round(|f| f.floor()))),
-    ("round", 0, |_, cv| box_once(cv.1.round(|f| f.round()))),
-    ("ceil", 0, |_, cv| box_once(cv.1.round(|f| f.ceil()))),
+    ("floor", 0, |_, cv| {
+        once_with(move || cv.1.round(|f| f.floor()))
+    }),
+    ("round", 0, |_, cv| {
+        once_with(move || cv.1.round(|f| f.round()))
+    }),
+    ("ceil", 0, |_, cv| {
+        once_with(move || cv.1.round(|f| f.ceil()))
+    }),
     ("tojson", 0, |_, cv| {
-        box_once(Ok(Val::str(cv.1.to_string())))
+        once_with(move || Ok(Val::str(cv.1.to_string())))
     }),
     ("utf8bytelength", 0, |_, cv| {
-        then(cv.1.as_str(), |s| box_once(Ok(Val::Int(s.len() as isize))))
+        once_with(move || cv.1.as_str().and_then(|s| Ok(Val::Int(s.len() as isize))))
     }),
     ("explode", 0, |_, cv| {
-        box_once(cv.1.as_str().and_then(|s| Ok(Val::arr(explode(s)?))))
+        once_with(move || cv.1.as_str().and_then(|s| Ok(Val::arr(explode(s)?))))
     }),
     ("implode", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|a| Ok(Val::str(implode(a)?))))
+        once_with(move || cv.1.as_arr().and_then(|a| Ok(Val::str(implode(a)?))))
     }),
     ("ascii_downcase", 0, |_, cv| {
-        box_once(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
+        once_with(move || cv.1.mutate_str(|s| s.make_ascii_lowercase()))
     }),
     ("ascii_upcase", 0, |_, cv| {
-        box_once(cv.1.mutate_str(|s| s.make_ascii_uppercase()))
+        once_with(move || cv.1.mutate_str(|s| s.make_ascii_uppercase()))
     }),
     ("reverse", 0, |_, cv| {
-        box_once(cv.1.mutate_arr(|a| a.reverse()))
+        once_with(move || cv.1.mutate_arr(|a| a.reverse()))
     }),
-    ("sort", 0, |_, cv| box_once(cv.1.mutate_arr(|a| a.sort()))),
+    ("sort", 0, |_, cv| {
+        once_with(move || cv.1.mutate_arr(|a| a.sort()))
+    }),
     ("sort_by", 1, |args, cv| {
-        box_once(cv.1.try_mutate_arr(|arr| sort_by(arr, |v| args.get(0).run((cv.0.clone(), v)))))
+        once_with(move || {
+            cv.1.try_mutate_arr(|arr| sort_by(arr, |v| args.get(0).run((cv.0.clone(), v))))
+        })
     }),
     ("group_by", 1, |args, cv| {
-        then(cv.1.into_arr().map(rc_unwrap_or_clone), |arr| {
-            box_once(group_by(arr, |v| args.get(0).run((cv.0.clone(), v))))
-        })
+        let group = move |arr| group_by(arr, |v| args.get(0).run((cv.0.clone(), v)));
+        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(group))
     }),
     ("min_by", 1, |args, cv| {
-        let f = |v| args.get(0).run((cv.0.clone(), v));
-        then(cv.1.into_arr().map(rc_unwrap_or_clone), |arr| {
-            box_once(cmp_by(arr, f, |my, y| y < my))
-        })
+        let f = move |v| args.get(0).run((cv.0.clone(), v));
+        let cmp = move |arr| cmp_by(arr, f, |my, y| y < my);
+        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(cmp))
     }),
     ("max_by", 1, |args, cv| {
-        let f = |v| args.get(0).run((cv.0.clone(), v));
-        then(cv.1.into_arr().map(rc_unwrap_or_clone), |arr| {
-            box_once(cmp_by(arr, f, |my, y| y >= my))
-        })
+        let f = move |v| args.get(0).run((cv.0.clone(), v));
+        let cmp = move |arr| cmp_by(arr, f, |my, y| y >= my);
+        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(cmp))
     }),
     ("has", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
@@ -294,10 +305,6 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         Box::new(seps.map(move |sep| Ok(Val::arr(split(cv.1.as_str()?, sep?.as_str()?)))))
     }),
     ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
-    ("last", 1, |args, cv| {
-        let last = args.get(0).run(cv).try_fold(None, |_, x| Ok(Some(x?)));
-        then(last, |y| Box::new(y.map(Ok).into_iter()))
-    }),
     ("limit", 2, |args, cv| {
         let n = args.get(0).run(cv.clone()).map(|n| n?.as_int());
         let f = move |n| args.get(1).run(cv.clone()).take(n);
@@ -334,19 +341,24 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         }))
     }),
     ("@text", 0, |_, cv| {
-        box_once(Ok(Val::str(cv.1.to_string_or_clone())))
+        once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))
     }),
-    ("@json", 0, |_, cv| box_once(Ok(Val::str(cv.1.to_string())))),
+    ("@json", 0, |_, cv| {
+        once_with(move || Ok(Val::str(cv.1.to_string())))
+    }),
     ("@sh", 0, |_, cv| {
-        let vs = match &cv.1 {
-            Val::Arr(a) => Box::new(a.iter()),
-            v => box_once(v),
+        let to_shs = |v: &Val| -> Result<Vec<String>, _> {
+            match v {
+                Val::Arr(a) => Box::new(a.iter()),
+                v => box_once(v),
+            }
+            .map(to_sh)
+            .collect()
         };
-        let ss = vs.map(to_sh).collect::<Result<Vec<_>, _>>();
-        box_once(ss.map(|ss| Val::str(ss.join(" "))))
+        once_with(move || to_shs(&cv.1).map(|ss| Val::str(ss.join(" "))))
     }),
     ("@csv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
+        once_with(move || cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
     }),
 ];
 
@@ -360,7 +372,7 @@ fn now() -> Result<f64, Error> {
 }
 
 #[cfg(feature = "std")]
-const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| once_with(|| now().map(Val::Float)))];
 
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
@@ -374,7 +386,7 @@ fn from_json(s: &str) -> ValR {
 
 #[cfg(feature = "parse_json")]
 const PARSE_JSON: &[(&str, usize, RunPtr)] = &[("fromjson", 0, |_, cv| {
-    box_once(cv.1.as_str().and_then(|s| from_json(s)))
+    once_with(move || cv.1.as_str().and_then(|s| from_json(s)))
 })];
 
 #[cfg(feature = "format")]
@@ -393,37 +405,33 @@ fn to_tsv(vs: &[Val]) -> Result<String, Error> {
 #[cfg(feature = "format")]
 const FORMAT: &[(&str, usize, RunPtr)] = &[
     ("@tsv", 0, |_, cv| {
-        box_once(cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
+        once_with(move || cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
     }),
     ("@html", 0, |_, cv| {
-        let s = cv.1.to_string_or_clone();
-        let patterns = ["<", ">", "&", "\'", "\""];
-        let replacements = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-        box_once(Ok(Val::str(replace(&s, &patterns, &replacements))))
+        let pats = ["<", ">", "&", "\'", "\""];
+        let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
+        once_with(move || Ok(Val::str(replace(&cv.1.to_string_or_clone(), &pats, &reps))))
     }),
     ("@uri", 0, |_, cv| {
-        box_once(Ok(Val::str(
-            urlencoding::encode(&cv.1.to_string_or_clone()).into_owned(),
-        )))
+        use urlencoding::encode;
+        once_with(move || Ok(Val::str(encode(&cv.1.to_string_or_clone()).into_owned())))
     }),
     ("@base64", 0, |_, cv| {
-        use base64::{engine::general_purpose, Engine as _};
-        box_once(Ok(Val::str(
-            general_purpose::STANDARD.encode(cv.1.to_string_or_clone()),
-        )))
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        once_with(move || Ok(Val::str(STANDARD.encode(cv.1.to_string_or_clone()))))
     }),
     ("@base64d", 0, |_, cv| {
-        use base64::{engine::general_purpose, Engine as _};
-        box_once(
-            general_purpose::STANDARD
+        use base64::{engine::general_purpose::STANDARD, Engine};
+        once_with(move || {
+            STANDARD
                 .decode(cv.1.to_string_or_clone())
                 .map_err(Error::str)
                 .and_then(|d| {
                     std::str::from_utf8(&d)
                         .map_err(Error::str)
                         .map(|s| Val::str(s.to_owned()))
-                }),
-        )
+                })
+        })
     }),
 ];
 
@@ -522,10 +530,10 @@ const REGEX: &[(&str, usize, RunPtr)] = &[
 #[cfg(feature = "time")]
 const TIME: &[(&str, usize, RunPtr)] = &[
     ("fromdateiso8601", 0, |_, cv| {
-        then(cv.1.as_str(), |s| box_once(time::from_iso8601(s)))
+        once_with(move || cv.1.as_str().and_then(|s| time::from_iso8601(s)))
     }),
     ("todateiso8601", 0, |_, cv| {
-        box_once(time::to_iso8601(&cv.1).map(Val::str))
+        once_with(move || time::to_iso8601(&cv.1).map(Val::str))
     }),
 ];
 
@@ -554,6 +562,6 @@ fn debug<T: core::fmt::Display>(x: T) -> T {
 const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
     "debug",
     0,
-    |_, cv| box_once(Ok(debug(cv.1))),
+    |_, cv| once_with(move || Ok(debug(cv.1))),
     |_, cv, f| f(debug(cv.1)),
 )];
