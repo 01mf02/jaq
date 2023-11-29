@@ -2,6 +2,7 @@
 name = 'jaq/jaq'
 version = '0.1.0'
 description = 'Just another JSON query tool'
+README = "README.md"
 
 # See more keys and definitions at https://docs.wasmer.io/registry/manifest
 

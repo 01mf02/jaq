@@ -77,6 +77,12 @@ jaq should work on any system supported by Rust.
 If it does not, please file an issue.
 
 
+You can also use [Wasmer](https://wasmer.io) to run `jaq` without an
+installation required, using the [jaq/jaq package](https://wasmer.io/jaq/jaq):
+
+    $ echo '{"a": 1, "b": 2}' | wasmer run jaq/jaq
+
+
 ## Binaries
 
 You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
