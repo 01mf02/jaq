@@ -11,4 +11,5 @@ resolver = "2"
 
 [profile.release]
 strip = true
-codegen-units = 1
+opt-level = 'z'
+lto = true
