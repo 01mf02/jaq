@@ -1,6 +1,6 @@
 [package]
 name = 'jaq/jaq'
-version = '0.1.0'
+version = '0.1.1'
 description = 'Just another JSON query tool'
 README = "README.md"
 
