@@ -1,8 +1,9 @@
 [package]
 name = 'jaq/jaq'
-version = '0.1.1'
+version = '0.1.2'
 description = 'Just another JSON query tool'
 README = "README.md"
+repository = "https://github.com/01mf02/jaq"
 
 # See more keys and definitions at https://docs.wasmer.io/registry/manifest
 
