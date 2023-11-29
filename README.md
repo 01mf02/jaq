@@ -80,7 +80,9 @@ If it does not, please file an issue.
 You can also use [Wasmer](https://wasmer.io) to run `jaq` without an
 installation required, using the [jaq/jaq package](https://wasmer.io/jaq/jaq):
 
-    $ echo '{"a": 1, "b": 2}' | wasmer run jaq/jaq
+    $ echo '{"a": 1, "b": 2}' | wasmer run jaq/jaq '.a'
+
+    $ seq 1000 | wasmer run jaq/jaq -- -n 'foreach inputs as $x (0; . + $x)'
 
 
 ## Binaries
