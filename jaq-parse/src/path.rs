@@ -37,7 +37,7 @@ where
     T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
-    let range = {
+    let bare_range = {
         let e2 = just(Token::Colon).ignore_then(expr.clone().or_not());
         let starts_with_expr = expr.clone().then(e2.or_not()).map(|(e1, e2)| match e2 {
             None => Part::Index(e1),
@@ -53,12 +53,14 @@ where
             .map(|o| o.unwrap_or(Part::Range(None, None)))
     };
 
-    let ranges = Delim::Brack.around(range).then(opt()).repeated();
+    let range = Delim::Brack.around(bare_range).then(opt());
+    let ranges = range.clone().repeated();
 
-    let dot_id = just(Token::Dot).ignore_then(index(expr));
+    // e.g. `.a` or `.[]`
+    let dot_path = just(Token::Dot).ignore_then(index(expr).or(range));
 
     ranges
         .clone()
-        .chain(dot_id.chain(ranges).repeated().flatten())
+        .chain(dot_path.chain(ranges).repeated().flatten())
         .collect()
 }
