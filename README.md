@@ -203,7 +203,7 @@ Here is an overview that summarises:
 ## Basics
 
 - [x] Identity (`.`)
-- [x] Recursion (`..`)
+- [x] Recursive descent (`..`)
 - [x] Basic data types (null, boolean, number, string, array, object)
 - [x] if-then-else (`if .a < .b then .a else .b end`)
 - [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
@@ -229,9 +229,9 @@ Here is an overview that summarises:
 - [x] Plain assignment (`=`)
 - [x] Update assignment (`|=`, `+=`, `-=`)
 - [x] Alternation (`//`)
-- [x] Logic (`or`, `and`)
+- [x] Logical (`or`, `and`)
 - [x] Equality and comparison (`.a == .b`, `.a < .b`)
-- [x] Arithmetic (`+`, `-`, `*`, `/`, `%`)
+- [x] Arithmetical (`+`, `-`, `*`, `/`, `%`)
 - [x] Negation (`-`)
 - [x] Error suppression (`?`)
 
@@ -277,7 +277,7 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`, `min`, `max`)
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
 - [x] Universal/existential (`all`, `any`)
-- [x] Recursion (`walk`)
+- [x] Recursive application (`walk`)
 - [x] I/O (`input`)
 - [x] Regular expressions (`test`, `scan`, `match`, `capture`, `splits`, `sub`, `gsub`)
 - [x] Time (`fromdate`, `todate`)
