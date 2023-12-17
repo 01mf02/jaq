@@ -16,6 +16,12 @@ jobs:
     - name: Check jaq-core
       working-directory: jaq-core
       run: cargo check
+    - name: Check jaq-syn
+      working-directory: jaq-syn
+      run: cargo check
+    - name: Check jaq-interpret
+      working-directory: jaq-interpret
+      run: cargo check
 
     - uses: dtolnay/rust-toolchain@1.64
     - name: Check jaq-std
