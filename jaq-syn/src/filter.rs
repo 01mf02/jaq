@@ -16,7 +16,7 @@ pub enum AssignOp {
     /// Alternation update-assignment operator (`//=`)
     AltUpdate,
     /// Arithmetic update-assignment operator (`+=`, `-=`, `*=`, `/=`, `%=`, …)
-    UpdateWith(MathOp),
+    MathUpdate(MathOp),
 }
 
 impl fmt::Display for AssignOp {
@@ -25,7 +25,7 @@ impl fmt::Display for AssignOp {
             Self::Assign => "=".fmt(f),
             Self::Update => "|=".fmt(f),
             Self::AltUpdate => "//=".fmt(f),
-            Self::UpdateWith(op) => write!(f, "{op}="),
+            Self::MathUpdate(op) => write!(f, "{op}="),
         }
     }
 }

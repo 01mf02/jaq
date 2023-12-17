@@ -151,7 +151,7 @@ fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
         .map(BinaryOp::Pipe);
 
     let assign = |op: AssignOp| just(Token::Op(op.to_string())).to(BinaryOp::Assign(op));
-    let update_with = |op: MathOp| assign(AssignOp::UpdateWith(op));
+    let update_with = |op: MathOp| assign(AssignOp::MathUpdate(op));
 
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
     let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));

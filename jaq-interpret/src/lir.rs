@@ -222,7 +222,7 @@ impl Ctx {
                     BinaryOp::Assign(AssignOp::Assign) => Filter::Assign(l, r),
                     BinaryOp::Assign(AssignOp::Update) => Filter::Update(l, r),
                     BinaryOp::Assign(AssignOp::AltUpdate) => Filter::AltUpdate(l, r),
-                    BinaryOp::Assign(AssignOp::UpdateWith(op)) => Filter::UpdateMath(l, op, r),
+                    BinaryOp::Assign(AssignOp::MathUpdate(op)) => Filter::MathUpdate(l, op, r),
                 }
             }
 
