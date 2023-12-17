@@ -3,6 +3,39 @@ use core::ops::{Add, Div, Mul, Rem, Sub};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Binary logical operators (`or`, `and`, …)
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LogicOp {
+    /// Logical disjunction operator (`or`)
+    Or,
+    /// Logical conjunction operator (`and`)
+    And,
+}
+
+impl LogicOp {
+    /// Perform the arithmetical operation on the given inputs, possibly
+    /// short-circuiting.
+    pub fn run(&self, l: bool) -> Result<bool, impl FnMut(bool) -> bool + '_> {
+        match (self, l) {
+            (Self::Or, true) | (Self::And, false) => Ok(l),
+            _ => Err(move |r| match self {
+                Self::Or => l || r,
+                Self::And => l && r,
+            }),
+        }
+    }
+}
+
+impl fmt::Display for LogicOp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Or => "or".fmt(f),
+            Self::And => "and".fmt(f),
+        }
+    }
+}
+
 /// Binary arithmetical operators (`+`, `-`, `*`, `/`, `%`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

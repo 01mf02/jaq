@@ -2,7 +2,7 @@ use super::{prec_climb, Delim, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
 use jaq_syn::filter::{AssignOp, BinaryOp, Filter, Fold, FoldType, KeyVal};
-use jaq_syn::{MathOp, OrdOp, Spanned};
+use jaq_syn::{LogicOp, MathOp, OrdOp, Spanned};
 
 fn variable() -> impl Parser<Token, String, Error = Simple<Token>> + Clone {
     select! {
@@ -121,11 +121,13 @@ impl prec_climb::Op for BinaryOp {
             Self::Comma => 1,
             Self::Assign(_) => 2,
             Self::Alt => 3,
-            Self::Or => Self::Alt.prec() + 1,
-            Self::And => Self::Or.prec() + 1,
-            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::And.prec() + 1,
-            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => Self::And.prec() + 2,
-            Self::Math(MathOp::Add | MathOp::Sub) => Self::And.prec() + 3,
+            Self::Logic(LogicOp::Or) => Self::Alt.prec() + 1,
+            Self::Logic(LogicOp::And) => Self::Logic(LogicOp::Or).prec() + 1,
+            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::Logic(LogicOp::And).prec() + 1,
+            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => {
+                Self::Logic(LogicOp::And).prec() + 2
+            }
+            Self::Math(MathOp::Add | MathOp::Sub) => Self::Logic(LogicOp::And).prec() + 3,
             Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).prec() + 1,
             Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).prec() + 1,
         }
@@ -153,6 +155,7 @@ fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
 
     let ord = |op: OrdOp| just(Token::Op(op.to_string())).to(BinaryOp::Ord(op));
     let math = |op: MathOp| just(Token::Op(op.to_string())).to(BinaryOp::Math(op));
+    let logic = |op: LogicOp| just(Token::Op(op.to_string())).to(BinaryOp::Logic(op));
 
     choice((
         pipe,
@@ -169,8 +172,8 @@ fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
         update_with(MathOp::Div),
         update_with(MathOp::Rem),
         just(Token::Op("//".to_string())).to(BinaryOp::Alt),
-        just(Token::Or).to(BinaryOp::Or),
-        just(Token::And).to(BinaryOp::And),
+        logic(LogicOp::Or),
+        logic(LogicOp::And),
         ord(OrdOp::Eq),
         ord(OrdOp::Ne),
         ord(OrdOp::Lt),

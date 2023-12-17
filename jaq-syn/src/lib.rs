@@ -13,7 +13,7 @@ pub mod string;
 pub mod test;
 
 pub use def::{Arg, Call, Def, Main};
-pub use ops::{MathOp, OrdOp};
+pub use ops::{LogicOp, MathOp, OrdOp};
 use path::Path;
 pub use string::Str;
 

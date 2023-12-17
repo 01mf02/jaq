@@ -5,7 +5,7 @@ use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
-use jaq_syn::{MathOp, OrdOp};
+use jaq_syn::{LogicOp, MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Default, Clone)]
@@ -114,8 +114,8 @@ pub(crate) enum Ast {
     /// `f /= g`, `f %= g`, …)
     UpdateMath(Id, MathOp, Id),
 
-    /// Binary logical operation (`f and g`, `f or g`)
-    Logic(Id, bool, Id),
+    /// Binary logical operation (`f and g`, `f or g`, …)
+    Logic(Id, LogicOp, Id),
     /// Binary arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`,
     /// `f % g`, …)
     Math(Id, MathOp, Id),
@@ -320,13 +320,20 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
-            Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
-                if l.as_bool() == *stop {
-                    box_once(Ok(Val::Bool(*stop)))
-                } else {
-                    Box::new(w(r).run(cv).map(|r| Ok(Val::Bool(r?.as_bool()))))
-                }
-            }),
+            Ast::Logic(l, op, r) => {
+                Box::new(flat_map_with(w(l).run(cv.clone()), cv, move |l, cv| {
+                    then(l, move |l| {
+                        op.run(l.as_bool()).map_or_else(
+                            move |mut run| {
+                                map_with(w(r).run(cv), (), move |r, _| {
+                                    Ok(Val::Bool(run(r?.as_bool())))
+                                })
+                            },
+                            move |x| box_once(Ok(Val::Bool(x))),
+                        )
+                    })
+                }))
+            }
             Ast::Math(l, op, r) => {
                 Box::new(Self::cartesian(w(l), w(r), cv).map(|(x, y)| op.run(x?, y?)))
             }

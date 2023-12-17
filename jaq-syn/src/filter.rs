@@ -1,5 +1,5 @@
 //! Functions from values to streams of values.
-use crate::{Call, MathOp, OrdOp, Path, Span, Spanned, Str};
+use crate::{Call, LogicOp, MathOp, OrdOp, Path, Span, Spanned, Str};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;
 #[cfg(feature = "serde")]
@@ -41,10 +41,8 @@ pub enum BinaryOp {
     Comma,
     /// Alternation operator (`,`)
     Alt,
-    /// Logical disjunction operator (`or`)
-    Or,
-    /// Logical conjunction operator (`and`)
-    And,
+    /// Logicalal operator (`or`, `and`, …)
+    Logic(LogicOp),
     /// Arithmetical operator (`+`, `-`, `*`, `/`, `%`, …)
     Math(MathOp),
     /// Assignment operator (`=`, `|=`, `//=`, `+=`, …)
