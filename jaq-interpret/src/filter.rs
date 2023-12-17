@@ -54,21 +54,34 @@ impl Owned {
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Ast {
+    /// Nullary identity operation (`.`)
     #[default]
     Id,
     ToString,
 
+    /// Integer value literal
     Int(isize),
+    /// Floating point value literal
     Float(f64),
+    /// String value literal
     Str(String),
+    /// Array value literal (`[f]`)
     Array(Id),
+    /// Object value literal (`{}`, `{(f): g, …}`)
     Object(Box<[(Id, Id)]>),
 
+    /// Try-catch (`try f catch g`)
     Try(Id, Id),
+    /// Unary negation operation (`-f`)
     Neg(Id),
+    /// Binary binding operation (`f as $VAR | g`) if identifier (`VAR`) is
+    /// given, otherwise binary application operation (`f | g`)
     Pipe(Id, bool, Id),
+    /// Binary concatenation operation (`f, g`)
     Comma(Id, Id),
+    /// Binary alternation operation (`f // g`)
     Alt(Id, Id),
+    /// If-then-else (`if f then g else h end`)
     Ite(Id, Id, Id),
     /// `reduce`, `for`, and `foreach`
     ///
@@ -95,17 +108,29 @@ pub(crate) enum Ast {
     /// ~~~
     Fold(FoldType, Id, Id, Id),
 
+    /// Path
     Path(Id, crate::path::Path<Id>),
 
+    /// Assignment operation (`f = g`)
     Assign(Id, Id),
+    /// Update-assignment operation (`f |= g`)
     Update(Id, Id),
+    /// Arithmetical update-assignment operation (`f += g`, `f -= g`, `f *= g`,
+    /// `f /= g`, `f %= g`, …)
     UpdateMath(Id, MathOp, Id),
 
+    /// Binary logical operation (`f and g`, `f or g`)
     Logic(Id, bool, Id),
+    /// Binary arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`,
+    /// `f % g`, …)
     Math(Id, MathOp, Id),
+    /// Binary comparative operation (`f < g`, `f <= g`, `f > g`, `f >= g`,
+    /// `f == g`, `f != g`, …)
     Ord(Id, OrdOp, Id),
 
+    /// Bound variable reference (`$x`)
     Var(usize),
+    /// Call to a filter (`filter`, `filter(…)`)
     Call(Call),
 
     Native(Native, Box<[Id]>),

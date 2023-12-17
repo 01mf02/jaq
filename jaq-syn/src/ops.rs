@@ -3,24 +3,24 @@ use core::ops::{Add, Div, Mul, Rem, Sub};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
+/// Binary arithmetical operators (`+`, `-`, `*`, `/`, `%`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MathOp {
-    /// Addition
+    /// Addition operator (`+`)
     Add,
-    /// Subtraction
+    /// Subtraction operator (`-`)
     Sub,
-    /// Multiplication
+    /// Multiplication operator (`*`)
     Mul,
-    /// Division
+    /// Division operator (`/`)
     Div,
-    /// Remainder
+    /// Remainder operator (`%`)
     Rem,
 }
 
 impl MathOp {
-    /// Perform the arithmetic operation on the given inputs.
+    /// Perform the arithmetical operation on the given inputs.
     pub fn run<I, O>(&self, l: I, r: I) -> O
     where
         I: Add<Output = O> + Sub<Output = O> + Mul<Output = O> + Div<Output = O> + Rem<Output = O>,
@@ -47,26 +47,26 @@ impl fmt::Display for MathOp {
     }
 }
 
-/// An operation that orders two values, such as `<`, `<=`, `>`, `>=`, `==`, `!=`.
+/// Binary comparative operators (`<`, `<=`, `>`, `>=`, `==`, `!=`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum OrdOp {
-    /// Less-than (<).
+    /// Less-than operation (`<`).
     Lt,
-    /// Less-than or equal (<=).
+    /// Less-than or equal-to operation (`<=`).
     Le,
-    /// Greater-than (>).
+    /// Greater-than operation (`>`).
     Gt,
-    /// Greater-than or equal (>=).
+    /// Greater-than or equal-to operation (`>=`).
     Ge,
-    /// Equals (=).
+    /// Equal-to operation (`=`).
     Eq,
-    /// Not equals (!=).
+    /// Not equal-to operation (`!=`).
     Ne,
 }
 
 impl OrdOp {
-    /// Perform the ordering operation on the given inputs.
+    /// Perform the comparative operation on the given inputs.
     pub fn run<I: PartialOrd + PartialEq>(&self, l: &I, r: &I) -> bool {
         match self {
             Self::Gt => l > r,

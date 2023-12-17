@@ -5,15 +5,15 @@ use core::fmt;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Assignment operators, such as `=`, `|=` (update), and `+=`, `-=`, ...
+/// Assignment operators (`=`, `|=`, `+=`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum AssignOp {
-    /// `=`
+    /// Assignment operator (`=`)
     Assign,
-    /// `|=`
+    /// Update-assignment operator (`|=`)
     Update,
-    /// `+=`, `-=`, `*=`, `/=`, `%=`
+    /// Arithmetic update-assignment operator (`+=`, `-=`, `*=`, `/=`, `%=`, …)
     UpdateWith(MathOp),
 }
 
@@ -27,25 +27,26 @@ impl fmt::Display for AssignOp {
     }
 }
 
-/// Binary operators, such as `|`, `,`, `//`, ...
+/// Binary operators (`|`, `,`, `//`, `or`, `and`, `+=`, …, `=`, …, `<`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum BinaryOp {
-    /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
+    /// Binding operator (`EXP as $x | EXP`) if identifier (`x`) is given,
+    /// otherwise application operator (`EXP | EXP`)
     Pipe(Option<String>),
-    /// Concatenation, i.e. `l, r`
+    /// Concatenation operator (`,`)
     Comma,
-    /// Alternation, i.e. `l // r`
+    /// Alternation operator (`,`)
     Alt,
-    /// Logical disjunction, i.e. `l or r`
+    /// Logical disjunction operator (`or`)
     Or,
-    /// Logical conjunction, i.e. `l and r`
+    /// Logical conjunction operator (`and`)
     And,
-    /// Arithmetic operation, e.g. `l + r`, `l - r`, ...
+    /// Arithmetical operator (`+`, `-`, `*`, `/`, `%`, …)
     Math(MathOp),
-    /// Assignment, i.e. `l = r`, `l |= r`, `l += r`, `l -= r`, ...
+    /// Assignment operator (`=`, `|=`, `//=`, `+=`, …)
     Assign(AssignOp),
-    /// Ordering operation, e.g. `l == r`, `l <= r`, ...
+    /// Comparative operator (`<`, `<=`, `>`, `>=`, `==`, `!=`, …)
     Ord(OrdOp),
 }
 
@@ -91,11 +92,11 @@ pub struct Fold<F> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
 pub enum FoldType {
-    /// return only the final value of fold
+    /// Return only the final value of fold
     Reduce,
-    /// return initial, intermediate, and final values of fold
+    /// Return initial, intermediate, and final values of fold
     For,
-    /// return intermediate and final values of fold
+    /// Return intermediate and final values of fold
     Foreach,
 }
 
@@ -103,43 +104,47 @@ pub enum FoldType {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum Filter<C = String, V = String, Num = String> {
-    /// Call to another filter, e.g. `map(.+1)`
+    /// Call to another filter (`FILTER(…)`), e.g. `map(.+1)`
     Call(C, Vec<Spanned<Self>>),
-    /// Variable, such as $x (without leading '$')
+    /// Variable (`$x`), only storing identifier (`x`)
     Var(V),
 
     /// Integer or floating-point number.
     Num(Num),
     /// String
     Str(Box<Str<Spanned<Self>>>),
-    /// Array, empty if `None`
+    /// Array (`[…]`), empty if `None` (`[]`)
     Array(Option<Box<Spanned<Self>>>),
-    /// Object, specifying its key-value pairs
+    /// Object (`{…}`), specifying its key-value pairs
     Object(Vec<KeyVal<Spanned<Self>>>),
 
-    /// Identity, i.e. `.`
+    /// Nullary identity operation (`.`)
     Id,
-    /// Path such as `.`, `.a`, `.[][]."b"`
+    /// Path, e.g. `.`, `.a`, and `.[][]."b"`
     Path(Box<Spanned<Self>>, Path<Self>),
-    /// If-then-else
+    /// If-then-else (`if EXP then EXP else EXP end`) if alternative expression
+    /// is given, otherwise if-then (`if EXP then EXP end`)
     Ite(
         Vec<(Spanned<Self>, Spanned<Self>)>,
         Option<Box<Spanned<Self>>>,
     ),
-    /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
+    /// Folding filters, such as `reduce` (`reduce f as $x (g; h)`) and
+    /// `foreach` (`foreach f as $x (g; h; i)`), e.g.
+    /// `reduce .[] as $x (0; .+$x)`
     ///
     /// The first field indicates whether to yield intermediate results
     /// (`false` for `reduce` and `true` for `foreach`).
     Fold(FoldType, Fold<Box<Spanned<Self>>>),
-    /// `try` and optional `catch`
+    /// Try-catch (`try EXP catch EXP`) if handler expression is given,
+    /// otherwise try (`try EXP`)
     TryCatch(Box<Spanned<Self>>, Option<Box<Spanned<Self>>>),
-    /// Error suppression, e.g. `keys?`
+    /// Error suppression (`EXP?`), e.g. `keys?`
     Try(Box<Spanned<Self>>),
-    /// Negation
+    /// Unary negation operation (`-EXP`)
     Neg(Box<Spanned<Self>>),
-    /// Recursion (`..`)
+    /// Nullary recursive descent operation (`..`)
     Recurse,
-    /// Binary operation, such as `0, 1`, `[] | .[]`, `.[] += 1`, `0 == 0`, ...
+    /// Binary operation, e.g. `0, 1`, `[] | .[]`, `.[] += 1`, `0 == 0`, …
     Binary(Box<Spanned<Self>>, BinaryOp, Box<Spanned<Self>>),
 }
 
@@ -156,13 +161,13 @@ impl From<Call<Spanned<Self>>> for Filter {
 }
 
 impl Filter {
-    /// Create a binary expression, such as `1 + 2`.
+    /// Create a binary operation expression, e.g. `1 + 2`, …
     pub fn binary(a: Spanned<Self>, op: BinaryOp, b: Spanned<Self>) -> Spanned<Self> {
         let span = a.1.start..b.1.end;
         (Self::Binary(Box::new(a), op, Box::new(b)), span)
     }
 
-    /// Create a path expression, such as `keys[]` or `.a.b`.
+    /// Create a path expression, e.g. `keys[]`, `.a.b`, …
     ///
     /// Here, `f` is a filter on whose output the path is executed on,
     /// such as `keys` and `.` in the example above.
