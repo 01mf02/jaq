@@ -375,6 +375,18 @@ impl core::ops::Sub for Val {
     }
 }
 
+fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
+    let l = Rc::make_mut(l);
+    let r = rc_unwrap_or_clone(r).into_iter();
+    r.for_each(|(k, v)| match (l.get_mut(&k), v) {
+        (Some(Val::Obj(l)), Val::Obj(r)) => obj_merge(l, r),
+        (Some(l), r) => *l = r,
+        (None, r) => {
+            l.insert(k, r);
+        }
+    })
+}
+
 impl core::ops::Mul for Val {
     type Output = ValR;
     fn mul(self, rhs: Self) -> Self::Output {
@@ -389,6 +401,10 @@ impl core::ops::Mul for Val {
             (Str(_), Int(_)) | (Int(_), Str(_)) => Ok(Null),
             (Num(n), r) => Self::from_dec_str(&n) * r,
             (l, Num(n)) => l * Self::from_dec_str(&n),
+            (Obj(mut l), Obj(r)) => {
+                obj_merge(&mut l, r);
+                Ok(Obj(l))
+            }
             (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
         }
     }

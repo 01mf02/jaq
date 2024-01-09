@@ -99,25 +99,29 @@ fn sort_by<'a>(xs: &mut [Val], f: impl Fn(Val) -> ValRs<'a>) -> Result<(), Error
 
 /// Group an array by the given function.
 fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-    let mut err = None;
-    let mut yx = xs
+    let mut yx: Vec<(Vec<Val>, Val)> = xs
         .into_iter()
-        .map(|x| (run_if_ok(x.clone(), &mut err, &f), x))
-        .collect::<Vec<(Vec<Val>, Val)>>();
-    if let Some(err) = err {
-        return Err(err);
-    }
+        .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
+        .collect::<Result<_, _>>()?;
 
     yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
 
-    // TODO: do not use itertools here (to remove dependency)
-    use itertools::Itertools;
-    let grouped = yx
-        .into_iter()
-        .group_by(|(y, _)| y.clone())
-        .into_iter()
-        .map(|(_y, yxs)| Val::arr(yxs.map(|(_y, x)| x).collect()))
-        .collect();
+    let mut grouped = Vec::new();
+    let mut yx = yx.into_iter();
+    if let Some((mut group_y, first_x)) = yx.next() {
+        let mut group = Vec::from([first_x]);
+        for (y, x) in yx {
+            if group_y != y {
+                grouped.push(Val::arr(core::mem::take(&mut group)));
+                group_y = y;
+            }
+            group.push(x);
+        }
+        if !group.is_empty() {
+            grouped.push(Val::arr(group))
+        }
+    }
+
     Ok(Val::arr(grouped))
 }
 
@@ -372,7 +376,16 @@ fn now() -> Result<f64, Error> {
 }
 
 #[cfg(feature = "std")]
-const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| once_with(|| now().map(Val::Float)))];
+const STD: &[(&str, usize, RunPtr)] = &[
+    ("env", 0, |_, _| {
+        box_once(Ok(Val::obj(
+            std::env::vars()
+                .map(|(k, v)| (Rc::new(k), Val::str(v)))
+                .collect(),
+        )))
+    }),
+    ("now", 0, |_, _| once_with(|| now().map(Val::Float))),
+];
 
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
