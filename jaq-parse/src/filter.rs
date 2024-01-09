@@ -208,9 +208,8 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
 
     // e.g. `.[].a` or `.a`
     let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
-    let index = super::path::index(with_comma.clone());
-    let index_path = index.or_not().chain(atom_path());
-    let id_with_path = id.then(index_path.collect());
+    let id_path = super::path::part(with_comma.clone()).chain(atom_path());
+    let id_with_path = id.then(id_path.or_not().flatten());
 
     let path = atom_with_path.or(id_with_path);
 
