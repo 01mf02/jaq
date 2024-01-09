@@ -378,11 +378,8 @@ fn now() -> Result<f64, Error> {
 #[cfg(feature = "std")]
 const STD: &[(&str, usize, RunPtr)] = &[
     ("env", 0, |_, _| {
-        box_once(Ok(Val::obj(
-            std::env::vars()
-                .map(|(k, v)| (Rc::new(k), Val::str(v)))
-                .collect(),
-        )))
+        let vars = std::env::vars().map(|(k, v)| (Rc::new(k), Val::str(v)));
+        once_with(|| Ok(Val::obj(vars.collect())))
     }),
     ("now", 0, |_, _| once_with(|| now().map(Val::Float))),
 ];
