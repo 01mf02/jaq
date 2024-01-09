@@ -360,7 +360,16 @@ fn now() -> Result<f64, Error> {
 }
 
 #[cfg(feature = "std")]
-const STD: &[(&str, usize, RunPtr)] = &[("now", 0, |_, _| box_once(now().map(Val::Float)))];
+const STD: &[(&str, usize, RunPtr)] = &[
+    ("env", 0, |_, _| {
+        box_once(Ok(Val::obj(
+            std::env::vars()
+                .map(|(k, v)| (Rc::new(k), Val::str(v)))
+                .collect(),
+        )))
+    }),
+    ("now", 0, |_, _| box_once(now().map(Val::Float))),
+];
 
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
