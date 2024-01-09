@@ -50,6 +50,7 @@ where
         .map(|o| o.unwrap_or(Part::Range(None, None)))
 }
 
+/// A path after an atomic filter (that is not the identity filter).
 pub fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
     T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
@@ -61,6 +62,7 @@ where
     dot_index.or(dot_range).then(opt()).repeated()
 }
 
+/// The first part of a path after an identity filter.
 pub fn part<T, P>(expr: P) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = P::Error> + Clone
 where
     T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
