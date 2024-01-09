@@ -218,14 +218,8 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     })?;
 
     var_val.push(("ARGS".to_string(), args_named(&var_val)));
-    var_val.push((
-        "ENV".to_string(),
-        Val::obj(
-            std::env::vars()
-                .map(|(k, v)| (k.into(), Val::str(v)))
-                .collect(),
-        ),
-    ));
+    let env = std::env::vars().map(|(k, v)| (k.into(), Val::str(v)));
+    var_val.push(("ENV".to_string(), Val::obj(env.collect())));
 
     Ok(var_val)
 }

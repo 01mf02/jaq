@@ -10,7 +10,7 @@ pub fn as_i32(v: &Val) -> Result<i32, Error> {
 macro_rules! math_0_ary {
     ($name: expr, $f: ident, $domain: expr, $codomain: expr) => {
         ($name, 0, |_, cv| {
-            box_once($domain(&cv.1).map(libm::$f).map($codomain))
+            once_with(move || $domain(&cv.1).map(libm::$f).map($codomain))
         })
     };
 }

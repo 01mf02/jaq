@@ -68,13 +68,8 @@ fn explode_implode() {
     give(json!([1114112]), "try implode catch -1", json!(-1));
 }
 
-#[test]
-fn first_last() {
-    gives(json!([]), "first(.[])", []);
-    gives(json!([]), "last(.[])", []);
-    give(json!([1, 2, 3]), "first(.[])", json!(1));
-    give(json!([1, 2, 3]), "last(.[])", json!(3));
-}
+yields!(first_empty, "[first({}[])]", json!([]));
+yields!(first_some, "first(1, 2, 3)", 1);
 
 yields!(
     format_text,
