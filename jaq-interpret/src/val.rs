@@ -389,6 +389,17 @@ impl core::ops::Mul for Val {
             (Str(_), Int(_)) | (Int(_), Str(_)) => Ok(Null),
             (Num(n), r) => Self::from_dec_str(&n) * r,
             (l, Num(n)) => l * Self::from_dec_str(&n),
+            (Obj(mut l), Obj(r)) => {
+                let inner = Rc::make_mut(&mut l);
+                for (k, v) in r.iter() {
+                    let merged = match (inner.get(k), v) {
+                        (Some(nl @ Obj(_)), nr @ Obj(_)) => nl.clone() * nr.clone(),
+                        _ => Ok(v.clone()),
+                    }?;
+                    inner.insert(k.clone(), merged);
+                }
+                Ok(Obj(l))
+            }
             (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
         }
     }

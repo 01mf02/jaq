@@ -54,6 +54,11 @@ fn mul() {
 
     give(json!("Hello"), "0 * .", json!(null));
     give(json!(-1), ". * \"Hello\"", json!(null));
+    give(
+        json!({"k": {"a": 1, "b": 2}}),
+        ". * {k: {a: 0, c: 3}}",
+        json!({"k": {"a": 0, "b": 2, "c": 3}}),
+    );
 }
 
 #[test]
