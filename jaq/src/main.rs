@@ -53,7 +53,7 @@ struct Cli {
 
     /// Print JSON compactly, omitting whitespace
     #[arg(short, long)]
-    compact: bool,
+    compact_output: bool,
 
     /// Do not print a newline after each value
     ///
@@ -444,7 +444,7 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
             // this looks ugly, but it is hard to abstract over the `Formatter` because
             // we cannot create a `Box<dyn Formatter>` because
             // Rust says that the `Formatter` trait is not "object safe"
-            if cli.compact {
+            if cli.compact_output {
                 ColoredFormatter::new(CompactFormatter).write_colored_json(&val, writer, mode)
             } else {
                 ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(&val, writer, mode)
