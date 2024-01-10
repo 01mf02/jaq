@@ -13,7 +13,7 @@ pub fn box_once<'a, T: 'a>(x: T) -> BoxIter<'a, T> {
 pub fn map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
     mut l: impl Iterator<Item = U> + 'a,
     x: T,
-    r: impl Fn(U, T) -> V + 'a,
+    mut r: impl FnMut(U, T) -> V + 'a,
 ) -> BoxIter<'a, V> {
     // this special case is to avoid cloning `x`
     if l.size_hint().1 == Some(1) {
@@ -34,7 +34,7 @@ pub fn map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
 pub fn flat_map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
     mut l: impl Iterator<Item = U> + 'a,
     x: T,
-    r: impl Fn(U, T) -> BoxIter<'a, V> + 'a,
+    mut r: impl FnMut(U, T) -> BoxIter<'a, V> + 'a,
 ) -> BoxIter<'a, V> {
     // this special case is to avoid cloning `x`
     if l.size_hint().1 == Some(1) {

@@ -216,13 +216,13 @@ impl Ctx {
                     BinaryOp::Pipe(bind) => Filter::Pipe(l, bind.is_some(), r),
                     BinaryOp::Comma => Filter::Comma(l, r),
                     BinaryOp::Alt => Filter::Alt(l, r),
-                    BinaryOp::Or => Filter::Logic(l, true, r),
-                    BinaryOp::And => Filter::Logic(l, false, r),
+                    BinaryOp::Logic(op) => Filter::Logic(l, op, r),
                     BinaryOp::Math(op) => Filter::Math(l, op, r),
                     BinaryOp::Ord(op) => Filter::Ord(l, op, r),
                     BinaryOp::Assign(AssignOp::Assign) => Filter::Assign(l, r),
                     BinaryOp::Assign(AssignOp::Update) => Filter::Update(l, r),
-                    BinaryOp::Assign(AssignOp::UpdateWith(op)) => Filter::UpdateMath(l, op, r),
+                    BinaryOp::Assign(AssignOp::AltUpdate) => Filter::AltUpdate(l, r),
+                    BinaryOp::Assign(AssignOp::MathUpdate(op)) => Filter::MathUpdate(l, op, r),
                 }
             }
 

@@ -90,8 +90,6 @@ pub enum Token {
     Elif,
     Else,
     End,
-    Or,
-    And,
     As,
     Reduce,
     For,
@@ -120,8 +118,6 @@ impl fmt::Display for Token {
             Self::Elif => "elif".fmt(f),
             Self::Else => "else".fmt(f),
             Self::End => "end".fmt(f),
-            Self::Or => "or".fmt(f),
-            Self::And => "and".fmt(f),
             Self::As => "as".fmt(f),
             Self::Reduce => "reduce".fmt(f),
             Self::For => "for".fmt(f),
@@ -215,7 +211,10 @@ pub fn tree(
 
 pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
-    let op = one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect();
+    let op = one_of("|=!<>+-*/%")
+        .chain::<char, _, _>(just('/').or_not())
+        .chain::<char, _, _>(just('=').or_not())
+        .collect();
 
     let var = just('$').ignore_then(text::ident());
 
@@ -228,8 +227,7 @@ pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
         "elif" => Token::Elif,
         "else" => Token::Else,
         "end" => Token::End,
-        "or" => Token::Or,
-        "and" => Token::And,
+        "or" | "and" => Token::Op(ident),
         "as" => Token::As,
         "reduce" => Token::Reduce,
         "for" => Token::For,

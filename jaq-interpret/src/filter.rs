@@ -5,7 +5,7 @@ use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
-use jaq_syn::{MathOp, OrdOp};
+use jaq_syn::{LogicOp, MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
@@ -53,21 +53,34 @@ impl Owned {
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Ast {
+    /// Nullary identity operation (`.`)
     #[default]
     Id,
     ToString,
 
+    /// Integer value literal
     Int(isize),
+    /// Floating point value literal
     Float(f64),
+    /// String value literal
     Str(String),
+    /// Array value literal (`[f]`)
     Array(Id),
+    /// Object value literal (`{}`, `{(f): g, …}`)
     Object(Vec<(Id, Id)>),
 
+    /// Try-catch (`try f catch g`)
     Try(Id, Id),
+    /// Unary negation operation (`-f`)
     Neg(Id),
+    /// Binary binding operation (`f as $VAR | g`) if identifier (`VAR`) is
+    /// given, otherwise binary application operation (`f | g`)
     Pipe(Id, bool, Id),
+    /// Binary concatenation operation (`f, g`)
     Comma(Id, Id),
+    /// Binary alternation operation (`f // g`)
     Alt(Id, Id),
+    /// If-then-else (`if f then g else h end`)
     Ite(Id, Id, Id),
     /// `reduce`, `for`, and `foreach`
     ///
@@ -94,17 +107,31 @@ pub(crate) enum Ast {
     /// ~~~
     Fold(FoldType, Id, Id, Id),
 
+    /// Path
     Path(Id, crate::path::Path<Id>),
 
-    Update(Id, Id),
-    UpdateMath(Id, MathOp, Id),
+    /// Assignment operation (`f = g`)
     Assign(Id, Id),
+    /// Update-assignment operation (`f |= g`)
+    Update(Id, Id),
+    /// Alternation update-assignment operation (`f //= g`)
+    AltUpdate(Id, Id),
+    /// Arithmetical update-assignment operation (`f += g`, `f -= g`, `f *= g`,
+    /// `f /= g`, `f %= g`, …)
+    MathUpdate(Id, MathOp, Id),
 
-    Logic(Id, bool, Id),
+    /// Binary logical operation (`f and g`, `f or g`, …)
+    Logic(Id, LogicOp, Id),
+    /// Binary arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`,
+    /// `f % g`, …)
     Math(Id, MathOp, Id),
+    /// Binary comparative operation (`f < g`, `f <= g`, `f > g`, `f >= g`,
+    /// `f == g`, `f != g`, …)
     Ord(Id, OrdOp, Id),
 
+    /// Bound variable reference (`$x`)
     Var(usize),
+    /// Call to a filter (`filter`, `filter(…)`)
     Call(Call),
 
     Native(Native, Vec<Id>),
@@ -283,23 +310,36 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))),
                 )
             }),
+            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
+            }),
             Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(f).run((cv.0.clone(), v))),
             ),
-            Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
+            Ast::AltUpdate(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(
+                    cv,
+                    Box::new(move |x| box_once(Ok(if x.as_bool() { x } else { y.clone() }))),
+                )
+            }),
+            Ast::MathUpdate(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
-            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
-                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
-            }),
-            Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
-                if l.as_bool() == *stop {
-                    box_once(Ok(Val::Bool(*stop)))
-                } else {
-                    Box::new(w(r).run(cv).map(|r| Ok(Val::Bool(r?.as_bool()))))
-                }
-            }),
+            Ast::Logic(l, op, r) => {
+                Box::new(flat_map_with(w(l).run(cv.clone()), cv, move |l, cv| {
+                    then(l, move |l| {
+                        op.run(l.as_bool()).map_or_else(
+                            move |mut run| {
+                                map_with(w(r).run(cv), (), move |r, _| {
+                                    Ok(Val::Bool(run(r?.as_bool())))
+                                })
+                            },
+                            move |x| box_once(Ok(Val::Bool(x))),
+                        )
+                    })
+                }))
+            }
             Ast::Math(l, op, r) => {
                 Box::new(Self::cartesian(w(l), w(r), cv).map(|(x, y)| op.run(x?, y?)))
             }
@@ -359,11 +399,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
+            Ast::Assign(..) | Ast::Update(..) | Ast::AltUpdate(..) | Ast::MathUpdate(..) => err,
 
-            // these are up for grabs to implement :)
-            Ast::Try(..) | Ast::Alt(..) => todo!(),
-            Ast::Fold(..) => todo!(),
+            Ast::Try(..) | Ast::Alt(..) => todo!("these are up for grabs to implement :)"),
+            Ast::Fold(..) => todo!("these are up for grabs to implement :)"),
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => w(l).update(
