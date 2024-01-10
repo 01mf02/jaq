@@ -8,8 +8,14 @@ use jaq_syn::filter::FoldType;
 use jaq_syn::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct Owned(Id, Vec<Ast>);
+
+impl Default for Owned {
+    fn default() -> Self {
+        Self(Id(0), Vec::from([Ast::Id]))
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ref<'a>(Id, &'a [Ast]);
