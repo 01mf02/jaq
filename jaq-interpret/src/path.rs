@@ -1,4 +1,4 @@
-use crate::box_iter::{box_once, flat_map_with, map_with};
+use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::error::{Error, Type};
 use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
@@ -275,11 +275,11 @@ pub fn apply_path<'a, F: Clone + 'a>(
     }
 }
 
-impl<'a, F: Clone + 'a> Part<F> {
-    pub fn eval2(
-        self,
-        run: impl Fn(F) -> ValRs<'a> + 'a,
-    ) -> Box<dyn Iterator<Item = Result<Part<Val>, Error>> + 'a> {
+impl<'a, T: Clone + 'a> Part<T> {
+    pub fn eval2<U: Clone + 'a, E: Clone + 'a, F>(self, run: F) -> BoxIter<'a, Result<Part<U>, E>>
+    where
+        F: Fn(T) -> BoxIter<'a, Result<U, E>> + 'a,
+    {
         use Part::{Index, Range};
         match self {
             Index(i) => Box::new(run(i).map(|i| Ok(Index(i?)))),
