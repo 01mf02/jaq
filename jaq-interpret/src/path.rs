@@ -1,3 +1,4 @@
+use crate::box_iter::{box_once, flat_map_with, map_with};
 use crate::error::{Error, Type};
 use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
@@ -15,58 +16,144 @@ pub enum Part<I> {
 }
 
 impl Path<Vec<Val>> {
-    pub fn collect(&self, v: Val) -> Result<Vec<Val>, Error> {
-        self.0.iter().try_fold(Vec::from([v]), |acc, (part, opt)| {
-            opt.collect(acc.into_iter().flat_map(|x| part.collect(x)))
-        })
-    }
-
     pub fn update<'f>(&self, v: Val, f: impl Fn(Val) -> ValRs<'f> + Copy) -> ValRs<'f> {
         Part::update(self.0.iter(), v, f)
     }
 }
 
-impl Part<Vec<Val>> {
-    pub fn collect(&self, current: Val) -> ValRs {
-        use core::iter::once;
+impl Part<Val> {
+    fn collect(self, current: Val) -> Box<dyn Iterator<Item = ValR>> {
         match self {
-            Self::Index(indices) => match current {
-                Val::Arr(a) => Box::new(indices.iter().map(move |i| {
-                    Ok(abs_index(i.as_int()?, a.len())
+            Self::Index(idx) => box_once(match current {
+                Val::Arr(a) => match idx {
+                    Val::Int(i) => Ok(abs_index(i, a.len())
                         .map(|i| a[i].clone())
-                        .unwrap_or(Val::Null))
-                })),
-                Val::Obj(o) => Box::new(indices.iter().map(move |i| match i {
-                    Val::Str(s) => Ok(o.get(&**s).cloned().unwrap_or(Val::Null)),
+                        .unwrap_or(Val::Null)),
+                    i => Err(Error::Index(Val::Arr(a.clone()), i.clone())),
+                },
+                Val::Obj(o) => match idx {
+                    Val::Str(s) => Ok(o.get(&*s).cloned().unwrap_or(Val::Null)),
                     i => Err(Error::Index(Val::Obj(o.clone()), i.clone())),
-                })),
-                _ => Box::new(once(Err(Error::Type(current, Type::Iter)))),
-            },
+                },
+                _ => Err(Error::Type(current, Type::Iter)),
+            }),
             Self::Range(None, None) => then(current.try_into_iter(), |iter| Box::new(iter.map(Ok))),
-            Self::Range(from, until) => match current {
+            Self::Range(from, upto) => box_once(match current {
                 Val::Arr(a) => {
                     let len = a.len();
-                    let from = rel_bounds(from).map(move |i| Ok(abs_bound(i?, len, 0)));
-                    let until = rel_bounds(until).map(move |i| Ok(abs_bound(i?, len, len)));
-                    Box::new(prod(from, until).map(move |(from, until)| {
-                        let (skip, take) = skip_take(from?, until?);
-                        Ok(Val::arr(a.iter().skip(skip).take(take).cloned().collect()))
-                    }))
+                    let from = from.as_ref().map(|i| i.as_int()).transpose();
+                    let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                    from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+                        let from = abs_bound(from, len, 0);
+                        let upto = abs_bound(upto, len, len);
+                        let (skip, take) = skip_take(from, upto);
+                        Val::arr(a.iter().skip(skip).take(take).cloned().collect())
+                    })
                 }
                 Val::Str(s) => {
                     let len = s.chars().count();
-                    let from = rel_bounds(from).map(move |i| Ok(abs_bound(i?, len, 0)));
-                    let until = rel_bounds(until).map(move |i| Ok(abs_bound(i?, len, len)));
-                    Box::new(prod(from, until).map(move |(from, until)| {
-                        let (skip, take) = skip_take(from?, until?);
-                        Ok(Val::str(s.chars().skip(skip).take(take).collect()))
-                    }))
+                    let from = from.as_ref().map(|i| i.as_int()).transpose();
+                    let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                    from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+                        let from = abs_bound(from, len, 0);
+                        let upto = abs_bound(upto, len, len);
+                        let (skip, take) = skip_take(from, upto);
+                        Val::str(s.chars().skip(skip).take(take).collect())
+                    })
                 }
-                _ => Box::new(once(Err(Error::Type(current, Type::Range)))),
-            },
+                _ => Err(Error::Type(current, Type::Range)),
+            }),
         }
     }
 
+    pub fn update2<'a, 'f, P, F>(mut path: P, v: Val, f: F) -> ValRs<'f>
+    where
+        P: Iterator<Item = &'a (Self, Opt)> + Clone,
+        F: Fn(Val) -> ValRs<'f> + Copy,
+    {
+        if let Some((p, opt)) = path.next() {
+            let f = |v| Self::update2(path.clone(), v, f);
+            Box::new(core::iter::once(p.map(v, *opt, f)))
+        } else {
+            f(v)
+        }
+    }
+
+    pub fn map<F, I>(&self, mut v: Val, opt: Opt, f: F) -> ValR
+    where
+        F: Fn(Val) -> I,
+        I: Iterator<Item = ValR>,
+    {
+        match self {
+            Self::Index(idx) => match v {
+                Val::Obj(ref mut o) => {
+                    let o = Rc::make_mut(o);
+                    use indexmap::map::Entry::{Occupied, Vacant};
+                    let i = match idx {
+                        Val::Str(s) => s,
+                        i => return opt.fail(v, |v| Error::Index(v, i.clone())),
+                    };
+                    match o.entry(Rc::clone(i)) {
+                        Occupied(mut e) => {
+                            match f(e.get().clone()).next().transpose()? {
+                                Some(y) => e.insert(y),
+                                None => e.remove(),
+                            };
+                        }
+                        Vacant(e) => {
+                            if let Some(y) = f(Val::Null).next().transpose()? {
+                                e.insert(y);
+                            }
+                        }
+                    }
+                    Ok(v)
+                }
+                Val::Arr(ref mut a) => {
+                    let a = Rc::make_mut(a);
+                    let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
+                    let i = match idx.as_int().and_then(abs_or) {
+                        Ok(i) => i,
+                        Err(e) => return opt.fail(v, |_| e),
+                    };
+
+                    if let Some(y) = f(a[i].clone()).next().transpose()? {
+                        a[i] = y;
+                    } else {
+                        a.remove(i);
+                    }
+                    Ok(v)
+                }
+                _ => opt.fail(v, |v| Error::Type(v, Type::Iter)),
+            },
+            Self::Range(None, None) => match v.try_map(&f)? {
+                y @ (Val::Arr(_) | Val::Obj(_)) => Ok(y),
+                v => opt.fail(v, |v| Error::Type(v, Type::Iter)),
+            },
+            Self::Range(from, upto) => match v {
+                Val::Arr(ref mut a) => {
+                    let a = Rc::make_mut(a);
+                    let from = from.as_ref().map(|i| i.as_int()).transpose();
+                    let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                    let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
+                        Ok(from_upto) => from_upto,
+                        Err(e) => return opt.fail(v, |_| e),
+                    };
+                    let len = a.len();
+                    let from = abs_bound(from, len, 0);
+                    let upto = abs_bound(upto, len, len);
+                    let (skip, take) = skip_take(from, upto);
+                    let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
+                    let y = f(arr).map(|y| y?.into_arr()).next().transpose()?;
+                    a.splice(skip..skip + take, (*y.unwrap_or_default()).clone());
+                    Ok(v)
+                }
+                _ => opt.fail(v, |v| Error::Type(v, Type::Arr)),
+            },
+        }
+    }
+}
+
+impl Part<Vec<Val>> {
     pub fn update<'a, 'f, P, F>(mut path: P, v: Val, f: F) -> ValRs<'f>
     where
         P: Iterator<Item = &'a (Self, Opt)> + Clone,
@@ -170,7 +257,52 @@ impl<F> Path<F> {
     }
 }
 
+pub fn apply_path<'a, F: Clone + 'a>(
+    mut iter: impl Iterator<Item = (Part<F>, Opt)> + Clone + 'a,
+    run: impl Fn(F) -> ValRs<'a> + Clone + 'a,
+    val: Val,
+) -> ValRs<'a> {
+    if let Some((part, opt)) = iter.next() {
+        let cond = move |v: &ValR| matches!(opt, Opt::Essential) || v.is_ok();
+        let part = flat_map_with(part.eval2(run.clone()), val, move |part, val| {
+            then(part, |part| Box::new(part.collect(val).filter(cond)))
+        });
+        flat_map_with(part, (iter, run), move |v, (iter, run)| {
+            then(v, |v| apply_path(iter, run, v))
+        })
+    } else {
+        box_once(Ok(val))
+    }
+}
+
+impl<'a, F: Clone + 'a> Part<F> {
+    pub fn eval2(
+        self,
+        run: impl Fn(F) -> ValRs<'a> + 'a,
+    ) -> Box<dyn Iterator<Item = Result<Part<Val>, Error>> + 'a> {
+        use Part::{Index, Range};
+        match self {
+            Index(i) => Box::new(run(i).map(|i| Ok(Index(i?)))),
+            Range(None, None) => box_once(Ok(Range(None, None))),
+            Range(Some(from), None) => Box::new(run(from).map(|from| Ok(Range(Some(from?), None)))),
+            Range(None, Some(upto)) => Box::new(run(upto).map(|upto| Ok(Range(None, Some(upto?))))),
+            Range(Some(from), Some(upto)) => flat_map_with(run(from), upto, move |from, upto| {
+                map_with(run(upto), from, move |upto, from| {
+                    Ok(Range(Some(from?), Some(upto?)))
+                })
+            }),
+        }
+    }
+}
+
 impl<F> Part<F> {
+    pub fn as_ref(&self) -> Part<&F> {
+        match self {
+            Self::Index(i) => Part::Index(i),
+            Self::Range(from, upto) => Part::Range(from.as_ref(), upto.as_ref()),
+        }
+    }
+
     fn eval<'a>(&'a self, run: impl Fn(&'a F) -> ValRs<'a>) -> Result<Part<Vec<Val>>, Error> {
         use Part::{Index, Range};
         match self {

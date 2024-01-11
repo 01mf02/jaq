@@ -277,11 +277,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Ite(if_, then_, else_) => w(if_).pipe(cv, move |cv, v| {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
-            Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
-                let outs = w(f).run(cv).map(move |i| path.collect(i?));
-                Box::new(
-                    outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))),
-                )
+            Ast::Path(f, path) => flat_map_with(w(f).run(cv.clone()), cv, move |y, cv| {
+                use crate::path::apply_path;
+                let path = path.0.iter().map(move |(part, opt)| (part.as_ref(), *opt));
+                then(y, |y| apply_path(path, move |f| w(f).run(cv.clone()), y))
             }),
             Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
