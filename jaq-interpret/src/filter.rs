@@ -366,11 +366,29 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => w(l).update(
-                (cv.0.clone(), cv.1),
+                cv.clone(),
                 Box::new(move |v| {
-                    then(path.eval(|i| w(i).run((cv.0.clone(), v.clone()))), |path| {
-                        path.update(v, &f)
-                    })
+                    use crate::path::Path;
+                    let path = path.0.iter().map(|(part, opt)| (part.as_ref(), *opt));
+                    let paths = Path(Vec::new()).combs(path, |i| w(i).run(cv.clone()));
+                    let mut paths = paths.map(|path| {
+                        Ok(Path(
+                            path.0
+                                .into_iter()
+                                .map(|(part, opt)| Ok((part.transpose()?, opt)))
+                                .collect::<Result<_, _>>()?,
+                        ))
+                    });
+                    box_once(paths.try_fold(v, |acc, path| {
+                        let mut path = path?;
+                        if let Some(last) = path.0.pop() {
+                            use crate::path::Part;
+                            Part::update3(path.0.into_iter(), last, acc, &f)
+                        } else {
+                            // should be unreachable
+                            Ok(acc)
+                        }
+                    }))
                 }),
             ),
             Ast::Pipe(l, false, r) => w(l).update(
