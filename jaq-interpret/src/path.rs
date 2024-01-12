@@ -16,16 +16,16 @@ pub enum Part<I> {
 }
 
 impl<'a, U: Clone + 'a> Path<U> {
-    pub fn combs<T: Clone + 'a, I, F>(self, mut iter: I, f: F) -> BoxIter<'a, Self>
+    pub fn combinations<T: Clone + 'a, I, F>(self, mut iter: I, f: F) -> BoxIter<'a, Self>
     where
         I: Iterator<Item = (Part<T>, Opt)> + Clone + 'a,
         F: Fn(T) -> BoxIter<'a, U> + Clone + 'a,
     {
         if let Some((part, opt)) = iter.next() {
-            let parts = part.eval3(f.clone());
+            let parts = part.map_many(f.clone());
             flat_map_with(parts, (self, iter, f), move |part, (mut prev, iter, f)| {
                 prev.0.push((part, opt));
-                prev.combs(iter, f)
+                prev.combinations(iter, f)
             })
         } else {
             box_once(self)
@@ -34,7 +34,21 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl Part<Val> {
-    fn collect(self, current: Val) -> Box<dyn Iterator<Item = ValR>> {
+    pub fn run_path<'a, I>(mut iter: I, val: Val) -> ValRs<'a>
+    where
+        I: Iterator<Item = (Self, Opt)> + Clone + 'a,
+    {
+        if let Some((part, opt)) = iter.next() {
+            let cond = move |v: &ValR| matches!(opt, Opt::Essential) || v.is_ok();
+            flat_map_with(part.run(val).filter(cond), iter, move |v, iter| {
+                then(v, |v| Self::run_path(iter, v))
+            })
+        } else {
+            box_once(Ok(val))
+        }
+    }
+
+    fn run(self, current: Val) -> Box<dyn Iterator<Item = ValR>> {
         match self {
             Self::Index(idx) => box_once(match current {
                 Val::Arr(a) => match idx {
@@ -78,20 +92,20 @@ impl Part<Val> {
         }
     }
 
-    pub fn update3<'f, P, F>(mut iter: P, last: (Self, Opt), v: Val, f: F) -> ValR
+    pub fn update_path<'f, P, F>(mut iter: P, last: (Self, Opt), v: Val, f: F) -> ValR
     where
         P: Iterator<Item = (Self, Opt)> + Clone,
         F: Fn(Val) -> ValRs<'f> + Copy,
     {
         if let Some((part, opt)) = iter.next() {
-            let f = |v| core::iter::once(Self::update3(iter.clone(), last.clone(), v, f));
-            part.map(v, opt, f)
+            let f = |v| core::iter::once(Self::update_path(iter.clone(), last.clone(), v, f));
+            part.update(v, opt, f)
         } else {
-            last.0.map(v, last.1, f)
+            last.0.update(v, last.1, f)
         }
     }
 
-    pub fn map<F, I>(&self, mut v: Val, opt: Opt, f: F) -> ValR
+    fn update<F, I>(&self, mut v: Val, opt: Opt, f: F) -> ValR
     where
         F: Fn(Val) -> I,
         I: Iterator<Item = ValR>,
@@ -165,47 +179,8 @@ impl Part<Val> {
     }
 }
 
-pub fn apply_path<'a, F: Clone + 'a>(
-    mut iter: impl Iterator<Item = (Part<F>, Opt)> + Clone + 'a,
-    run: impl Fn(F) -> ValRs<'a> + Clone + 'a,
-    val: Val,
-) -> ValRs<'a> {
-    if let Some((part, opt)) = iter.next() {
-        let cond = move |v: &ValR| matches!(opt, Opt::Essential) || v.is_ok();
-        let part = flat_map_with(part.eval2(run.clone()), val, move |part, val| {
-            then(part, |part| Box::new(part.collect(val).filter(cond)))
-        });
-        flat_map_with(part, (iter, run), move |v, (iter, run)| {
-            then(v, |v| apply_path(iter, run, v))
-        })
-    } else {
-        box_once(Ok(val))
-    }
-}
-
-// TODO: remove this!
 impl<'a, T: Clone + 'a> Part<T> {
-    pub fn eval2<U: Clone + 'a, E: Clone + 'a, F>(self, run: F) -> BoxIter<'a, Result<Part<U>, E>>
-    where
-        F: Fn(T) -> BoxIter<'a, Result<U, E>> + 'a,
-    {
-        use Part::{Index, Range};
-        match self {
-            Index(i) => Box::new(run(i).map(|i| Ok(Index(i?)))),
-            Range(None, None) => box_once(Ok(Range(None, None))),
-            Range(Some(from), None) => Box::new(run(from).map(|from| Ok(Range(Some(from?), None)))),
-            Range(None, Some(upto)) => Box::new(run(upto).map(|upto| Ok(Range(None, Some(upto?))))),
-            Range(Some(from), Some(upto)) => flat_map_with(run(from), upto, move |from, upto| {
-                map_with(run(upto), from, move |upto, from| {
-                    Ok(Range(Some(from?), Some(upto?)))
-                })
-            }),
-        }
-    }
-}
-
-impl<'a, T: Clone + 'a> Part<T> {
-    pub fn eval3<U: Clone + 'a, F>(self, run: F) -> BoxIter<'a, Part<U>>
+    fn map_many<U: Clone + 'a, F>(self, run: F) -> BoxIter<'a, Part<U>>
     where
         F: Fn(T) -> BoxIter<'a, U> + 'a,
     {
@@ -221,6 +196,16 @@ impl<'a, T: Clone + 'a> Part<T> {
                 })
             }),
         }
+    }
+}
+
+impl<T, E> Path<Result<T, E>> {
+    pub fn transpose(self) -> Result<Path<T>, E> {
+        self.0
+            .into_iter()
+            .map(|(part, opt)| Ok((part.transpose()?, opt)))
+            .collect::<Result<_, _>>()
+            .map(Path)
     }
 }
 

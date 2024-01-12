@@ -278,9 +278,15 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
             Ast::Path(f, path) => flat_map_with(w(f).run(cv.clone()), cv, move |y, cv| {
-                use crate::path::apply_path;
-                let path = path.0.iter().map(move |(part, opt)| (part.as_ref(), *opt));
-                then(y, |y| apply_path(path, move |f| w(f).run(cv.clone()), y))
+                use crate::path::{Part, Path};
+                let path = path.0.iter().map(|(part, opt)| (part.as_ref(), *opt));
+                let paths = Path(Vec::new()).combinations(path, move |i| w(i).run(cv.clone()));
+                let paths = paths.map(|path| path.transpose());
+                then(y, |y| {
+                    flat_map_with(paths, y, |path, y| {
+                        then(path, |path| (Part::run_path(path.0.into_iter(), y)))
+                    })
+                })
             }),
             Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
@@ -370,20 +376,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 Box::new(move |v| {
                     use crate::path::Path;
                     let path = path.0.iter().map(|(part, opt)| (part.as_ref(), *opt));
-                    let paths = Path(Vec::new()).combs(path, |i| w(i).run(cv.clone()));
-                    let mut paths = paths.map(|path| {
-                        Ok(Path(
-                            path.0
-                                .into_iter()
-                                .map(|(part, opt)| Ok((part.transpose()?, opt)))
-                                .collect::<Result<_, _>>()?,
-                        ))
-                    });
-                    box_once(paths.try_fold(v, |acc, path| {
+                    let paths = Path(Vec::new()).combinations(path, |i| w(i).run(cv.clone()));
+                    box_once(paths.map(|path| path.transpose()).try_fold(v, |acc, path| {
                         let mut path = path?;
                         if let Some(last) = path.0.pop() {
                             use crate::path::Part;
-                            Part::update3(path.0.into_iter(), last, acc, &f)
+                            Part::update_path(path.0.into_iter(), last, acc, &f)
                         } else {
                             // should be unreachable
                             Ok(acc)
