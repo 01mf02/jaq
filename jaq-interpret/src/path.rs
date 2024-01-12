@@ -33,21 +33,33 @@ impl<'a, U: Clone + 'a> Path<U> {
     }
 }
 
-impl Part<Val> {
-    pub fn run_path<'a, I>(mut iter: I, val: Val) -> ValRs<'a>
-    where
-        I: Iterator<Item = (Self, Opt)> + Clone + 'a,
-    {
-        if let Some((part, opt)) = iter.next() {
-            let cond = move |v: &ValR| matches!(opt, Opt::Essential) || v.is_ok();
-            flat_map_with(part.run(val).filter(cond), iter, move |v, iter| {
-                then(v, |v| Self::run_path(iter, v))
-            })
-        } else {
-            box_once(Ok(val))
-        }
+pub fn run<'a, I>(mut iter: I, val: Val) -> ValRs<'a>
+where
+    I: Iterator<Item = (Part<Val>, Opt)> + Clone + 'a,
+{
+    if let Some((part, opt)) = iter.next() {
+        let essential = matches!(opt, Opt::Essential);
+        let ys = part.run(val).filter(move |v| essential || v.is_ok());
+        flat_map_with(ys, iter, move |v, iter| then(v, |v| run(iter, v)))
+    } else {
+        box_once(Ok(val))
     }
+}
 
+pub fn update<'f, P, F>(mut iter: P, last: (Part<Val>, Opt), v: Val, f: F) -> ValR
+where
+    P: Iterator<Item = (Part<Val>, Opt)> + Clone,
+    F: Fn(Val) -> ValRs<'f> + Copy,
+{
+    if let Some((part, opt)) = iter.next() {
+        use core::iter::once;
+        part.update(v, opt, |v| once(update(iter.clone(), last.clone(), v, f)))
+    } else {
+        last.0.update(v, last.1, f)
+    }
+}
+
+impl Part<Val> {
     fn run(self, current: Val) -> Box<dyn Iterator<Item = ValR>> {
         match self {
             Self::Index(idx) => box_once(match current {
@@ -89,19 +101,6 @@ impl Part<Val> {
                 }
                 _ => Err(Error::Type(current, Type::Range)),
             }),
-        }
-    }
-
-    pub fn update_path<'f, P, F>(mut iter: P, last: (Self, Opt), v: Val, f: F) -> ValR
-    where
-        P: Iterator<Item = (Self, Opt)> + Clone,
-        F: Fn(Val) -> ValRs<'f> + Copy,
-    {
-        if let Some((part, opt)) = iter.next() {
-            let f = |v| core::iter::once(Self::update_path(iter.clone(), last.clone(), v, f));
-            part.update(v, opt, f)
-        } else {
-            last.0.update(v, last.1, f)
         }
     }
 

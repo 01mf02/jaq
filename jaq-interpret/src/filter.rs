@@ -278,13 +278,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
             Ast::Path(f, path) => flat_map_with(w(f).run(cv.clone()), cv, move |y, cv| {
-                use crate::path::{Part, Path};
+                use crate::path::{self, Path};
                 let path = path.0.iter().map(|(part, opt)| (part.as_ref(), *opt));
                 let paths = Path(Vec::new()).combinations(path, move |i| w(i).run(cv.clone()));
                 let paths = paths.map(|path| path.transpose());
                 then(y, |y| {
                     flat_map_with(paths, y, |path, y| {
-                        then(path, |path| (Part::run_path(path.0.into_iter(), y)))
+                        then(path, |path| (path::run(path.0.into_iter(), y)))
                     })
                 })
             }),
@@ -374,14 +374,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Path(l, path) => w(l).update(
                 cv.clone(),
                 Box::new(move |v| {
-                    use crate::path::Path;
+                    use crate::path::{self, Path};
                     let path = path.0.iter().map(|(part, opt)| (part.as_ref(), *opt));
                     let paths = Path(Vec::new()).combinations(path, |i| w(i).run(cv.clone()));
                     box_once(paths.map(|path| path.transpose()).try_fold(v, |acc, path| {
                         let mut path = path?;
                         if let Some(last) = path.0.pop() {
-                            use crate::path::Part;
-                            Part::update_path(path.0.into_iter(), last, acc, &f)
+                            path::update(path.0.into_iter(), last, acc, &f)
                         } else {
                             // should be unreachable
                             Ok(acc)
