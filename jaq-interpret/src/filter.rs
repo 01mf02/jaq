@@ -297,7 +297,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     )
                 });
                 flat_map_with(w(f).run(cv), path, |y, path| {
-                    let paths = Path(Vec::new()).combinations(path, |f| f());
+                    let paths = Path(Vec::new()).combinations(path);
                     let paths = paths.map(|path| path.transpose());
 
                     then(y, |y| {
@@ -416,7 +416,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 w(l).update(
                     cv,
                     Box::new(move |v| {
-                        let paths = Path(Vec::new()).combinations(path.clone(), |f| f());
+                        let paths = Path(Vec::new()).combinations(path.clone());
                         let mut paths = paths.map(|path| path.transpose());
 
                         box_once(paths.try_fold(v, |acc, path| {

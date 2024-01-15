@@ -16,16 +16,16 @@ pub enum Part<I> {
 }
 
 impl<'a, U: Clone + 'a> Path<U> {
-    pub fn combinations<T: Clone + 'a, I, F>(self, mut iter: I, f: F) -> BoxIter<'a, Self>
+    pub fn combinations<I, F>(self, mut iter: I) -> BoxIter<'a, Self>
     where
-        I: Iterator<Item = (Part<T>, Opt)> + Clone + 'a,
-        F: Fn(T) -> BoxIter<'a, U> + Clone + 'a,
+        I: Iterator<Item = (Part<F>, Opt)> + Clone + 'a,
+        F: FnOnce() -> BoxIter<'a, U> + Clone + 'a,
     {
         if let Some((part, opt)) = iter.next() {
-            let parts = part.map_many(f.clone());
-            flat_map_with(parts, (self, iter, f), move |part, (mut prev, iter, f)| {
+            let parts = part.into_iter();
+            flat_map_with(parts, (self, iter), move |part, (mut prev, iter)| {
                 prev.0.push((part, opt));
-                prev.combinations(iter, f)
+                prev.combinations(iter)
             })
         } else {
             box_once(self)
@@ -178,29 +178,25 @@ impl Part<Val> {
     }
 }
 
-impl<'a, T: Clone + 'a> Part<T> {
-    fn map_many<U: Clone + 'a, F>(self, run: F) -> BoxIter<'a, Part<U>>
-    where
-        F: Fn(T) -> BoxIter<'a, U> + 'a,
-    {
+impl<'a, U: Clone + 'a, F: FnOnce() -> BoxIter<'a, U> + Clone + 'a> Part<F> {
+    fn into_iter(self) -> BoxIter<'a, Part<U>> {
         use Part::{Index, Range};
         match self {
-            Index(i) => Box::new(run(i).map(Index)),
+            Index(i) => Box::new(i().map(Index)),
             Range(None, None) => box_once(Range(None, None)),
-            Range(Some(from), None) => Box::new(run(from).map(|from| Range(Some(from), None))),
-            Range(None, Some(upto)) => Box::new(run(upto).map(|upto| Range(None, Some(upto)))),
-            Range(Some(from), Some(upto)) => flat_map_with(run(from), upto, move |from, upto| {
-                map_with(run(upto), from, move |upto, from| {
+            Range(Some(from), None) => Box::new(from().map(|from| Range(Some(from), None))),
+            Range(None, Some(upto)) => Box::new(upto().map(|upto| Range(None, Some(upto)))),
+            Range(Some(from), Some(upto)) => flat_map_with(from(), upto, move |from, upto| {
+                map_with(upto(), from, move |upto, from| {
                     Range(Some(from), Some(upto))
                 })
             }),
         }
     }
+}
 
-    pub fn map<U, F>(self, f: F) -> Part<U>
-    where
-        F: Fn(T) -> U,
-    {
+impl<T> Part<T> {
+    pub fn map<U, F: Fn(T) -> U>(self, f: F) -> Part<U> {
         use Part::{Index, Range};
         match self {
             Index(i) => Index(f(i)),
