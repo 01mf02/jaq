@@ -134,6 +134,7 @@ impl Part<Val> {
                     Ok(v)
                 }
                 Val::Arr(ref mut a) => {
+                    std::dbg!(Rc::strong_count(&a));
                     let a = Rc::make_mut(a);
                     let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
                     let i = match idx.as_int().and_then(abs_or) {

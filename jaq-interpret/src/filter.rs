@@ -1,4 +1,4 @@
-use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter, IterClone};
+use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Fold, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
@@ -281,9 +281,8 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 use crate::path::{self, Path};
                 let cvc = cv.clone();
                 let path = path.0.iter().map(move |(part, opt)| {
-                    let cvc = cvc.clone();
                     (
-                        part.as_ref().map(move |i| {
+                        part.as_ref().map(|i| {
                             let cvc = cvc.clone();
                             move || w(i).run(cvc.clone())
                         }),
@@ -389,31 +388,22 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Path(l, path) => {
                 use crate::path::{self, Path};
                 let cvc = cv.clone();
-                let iter = path.0.iter().map(move |(p, opt)| (p.as_ref().map(w), *opt));
-                let mut all_once = true;
 
-                let iter = iter.map(move |(part, opt)| {
+                let path = path.0.iter().map(move |(part, opt)| {
                     (
-                        part.map(|i| {
+                        part.as_ref().map(|i| {
                             let cvc = cvc.clone();
-                            let iter_fun = move || i.run(cvc.clone());
-                            all_once = all_once && iter_fun().size_hint().1 == Some(1);
-                            iter_fun
+                            move || w(i).run(cvc.clone())
                         }),
-                        opt,
+                        *opt,
                     )
                 });
-                let path = if all_once {
-                    Box::new(iter.collect::<Vec<_>>().into_iter())
-                } else {
-                    Box::new(iter) as Box<dyn IterClone<_>>
-                };
+                let path: Vec<_> = path.collect();
 
-                std::dbg!(path.size_hint());
                 w(l).update(
                     cv,
                     Box::new(move |v| {
-                        let paths = Path(Vec::new()).combinations(path.clone());
+                        let paths = Path(Vec::new()).combinations(path.clone().into_iter());
                         let mut paths = paths.map(|path| path.transpose());
 
                         box_once(paths.try_fold(v, |acc, path| {
