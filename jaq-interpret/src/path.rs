@@ -19,7 +19,7 @@ impl<'a, U: Clone + 'a> Path<U> {
     pub fn combinations<I, F>(self, mut iter: I) -> BoxIter<'a, Self>
     where
         I: Iterator<Item = (Part<F>, Opt)> + Clone + 'a,
-        F: FnOnce() -> BoxIter<'a, U> + Clone + 'a,
+        F: Fn() -> BoxIter<'a, U> + 'a,
     {
         if let Some((part, opt)) = iter.next() {
             let parts = part.into_iter();
@@ -178,7 +178,7 @@ impl Part<Val> {
     }
 }
 
-impl<'a, U: Clone + 'a, F: FnOnce() -> BoxIter<'a, U> + Clone + 'a> Part<F> {
+impl<'a, U: Clone + 'a, F: Fn() -> BoxIter<'a, U> + 'a> Part<F> {
     fn into_iter(self) -> BoxIter<'a, Part<U>> {
         use Part::{Index, Range};
         match self {
@@ -186,11 +186,11 @@ impl<'a, U: Clone + 'a, F: FnOnce() -> BoxIter<'a, U> + Clone + 'a> Part<F> {
             Range(None, None) => box_once(Range(None, None)),
             Range(Some(from), None) => Box::new(from().map(|from| Range(Some(from), None))),
             Range(None, Some(upto)) => Box::new(upto().map(|upto| Range(None, Some(upto)))),
-            Range(Some(from), Some(upto)) => flat_map_with(from(), upto, move |from, upto| {
+            Range(Some(from), Some(upto)) => Box::new(from().flat_map(move |from| {
                 map_with(upto(), from, move |upto, from| {
                     Range(Some(from), Some(upto))
                 })
-            }),
+            })),
         }
     }
 }

@@ -291,7 +291,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     (
                         part.as_ref().map(move |i| {
                             let cvc = cvc.clone();
-                            move || w(i).run(cvc)
+                            move || w(i).run(cvc.clone())
                         }),
                         *opt,
                     )
@@ -401,7 +401,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     (
                         part.map(|i| {
                             let cvc = cvc.clone();
-                            move || i.run(cvc)
+                            move || i.run(cvc.clone())
                         }),
                         opt,
                     )
