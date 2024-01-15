@@ -1,4 +1,4 @@
-use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
+use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter, IterClone};
 use crate::results::{fold, recurse, then, Fold, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
@@ -225,12 +225,6 @@ impl<'a> FilterT<'a> for &'a Owned {
     }
 }
 
-pub trait IterClone<T>: Iterator<Item = T> + DynClone {}
-
-impl<T, I: Iterator<Item = T> + Clone> IterClone<T> for I {}
-
-dyn_clone::clone_trait_object!(<T> IterClone<T>);
-
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::{once, once_with};
@@ -395,18 +389,21 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Path(l, path) => {
                 use crate::path::{self, Path};
                 let cvc = cv.clone();
-                let iter = path.0.iter();
-                let iter = iter.map(move |(part, opt)| (part.as_ref().map(w), *opt));
+                let iter = path.0.iter().map(move |(p, opt)| (p.as_ref().map(w), *opt));
+                let mut all_once = true;
+
                 let iter = iter.map(move |(part, opt)| {
                     (
                         part.map(|i| {
                             let cvc = cvc.clone();
-                            move || i.run(cvc.clone())
+                            let iter_fun = move || i.run(cvc.clone());
+                            all_once = all_once && iter_fun().size_hint().1 == Some(1);
+                            iter_fun
                         }),
                         opt,
                     )
                 });
-                let path = if iter.size_hint().1 == Some(path.0.len()) {
+                let path = if all_once {
                     Box::new(iter.collect::<Vec<_>>().into_iter())
                 } else {
                     Box::new(iter) as Box<dyn IterClone<_>>

@@ -1,6 +1,13 @@
 use alloc::boxed::Box;
+use dyn_clone::DynClone;
 
 pub type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
+
+pub trait IterClone<T>: Iterator<Item = T> + DynClone {}
+
+impl<T, I: Iterator<Item = T> + Clone> IterClone<T> for I {}
+
+dyn_clone::clone_trait_object!(<T> IterClone<T>);
 
 /// Return a boxed iterator that yields a single element.
 pub fn box_once<'a, T: 'a>(x: T) -> BoxIter<'a, T> {
