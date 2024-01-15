@@ -196,11 +196,11 @@ impl<'a, U: Clone + 'a, F: Fn() -> BoxIter<'a, U> + 'a> Part<F> {
 }
 
 impl<T> Part<T> {
-    pub fn map<U, F: Fn(T) -> U>(self, f: F) -> Part<U> {
+    pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Part<U> {
         use Part::{Index, Range};
         match self {
             Index(i) => Index(f(i)),
-            Range(from, upto) => Range(from.map(&f), upto.map(&f)),
+            Range(from, upto) => Range(from.map(&mut f), upto.map(&mut f)),
         }
     }
 }
