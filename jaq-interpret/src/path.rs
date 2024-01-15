@@ -196,6 +196,17 @@ impl<'a, T: Clone + 'a> Part<T> {
             }),
         }
     }
+
+    pub fn map<U, F>(self, f: F) -> Part<U>
+    where
+        F: Fn(T) -> U,
+    {
+        use Part::{Index, Range};
+        match self {
+            Index(i) => Index(f(i)),
+            Range(from, upto) => Range(from.map(&f), upto.map(&f)),
+        }
+    }
 }
 
 impl<T, E> Path<Result<T, E>> {
