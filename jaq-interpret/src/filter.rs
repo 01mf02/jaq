@@ -225,6 +225,60 @@ impl<'a> FilterT<'a> for &'a Owned {
     }
 }
 
+#[derive(Clone)]
+struct Delay<F>(F);
+
+impl<I: Iterator, F: FnOnce() -> I> IntoIterator for Delay<F> {
+    type Item = I::Item;
+    type IntoIter = I;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0()
+    }
+}
+
+#[derive(Clone)]
+enum Either<L, R> {
+    L(L),
+    R(R),
+}
+
+struct EitherIter<L, R>(Either<L, R>);
+
+impl<L: Iterator, R: Iterator<Item = L::Item>> Iterator for EitherIter<L, R> {
+    type Item = L::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        match &mut self.0 {
+            Either::L(l) => l.next(),
+            Either::R(r) => r.next(),
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match &self.0 {
+            Either::L(l) => l.size_hint(),
+            Either::R(r) => r.size_hint(),
+        }
+    }
+}
+
+impl<L: IntoIterator, R: IntoIterator<Item = L::Item>> IntoIterator for Either<L, R> {
+    type Item = L::Item;
+    type IntoIter = EitherIter<L::IntoIter, R::IntoIter>;
+    fn into_iter(self) -> Self::IntoIter {
+        EitherIter(match self {
+            Self::L(l) => Either::L(l.into_iter()),
+            Self::R(r) => Either::R(r.into_iter()),
+        })
+    }
+}
+
+fn bla<I: Iterator, F: FnOnce() -> I + Clone>(f: F) -> Either<Vec<I::Item>, Delay<F>> {
+    let iter = f.clone()();
+    match iter.size_hint().1 {
+        Some(_) => Either::L(iter.collect::<Vec<_>>()),
+        None => Either::R(Delay(f)),
+    }
+}
+
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::{once, once_with};
@@ -279,18 +333,15 @@ impl<'a> FilterT<'a> for Ref<'a> {
             }),
             Ast::Path(f, path) => {
                 use crate::path::{self, Path};
-                let cvc = cv.clone();
-                let path = path.0.iter().map(move |(part, opt)| {
-                    (
-                        part.as_ref().map(|i| {
-                            let cvc = cvc.clone();
-                            move || w(i).run(cvc.clone())
-                        }),
-                        *opt,
-                    )
-                });
+                let run = |i| {
+                    let cv = cv.clone();
+                    bla(move || w(i).run(cv))
+                };
+                let path = path.0.iter();
+                let path = path.map(move |(part, opt)| (part.as_ref().map(run), *opt));
+                let path: Vec<_> = path.collect();
                 flat_map_with(w(f).run(cv), path, |y, path| {
-                    let paths = Path(Vec::new()).combinations(path);
+                    let paths = Path(Vec::new()).combinations(path.into_iter());
                     let paths = paths.map(|path| path.transpose());
 
                     then(y, |y| {
@@ -387,36 +438,31 @@ impl<'a> FilterT<'a> for Ref<'a> {
 
             Ast::Path(l, path) => {
                 use crate::path::{self, Path};
-                let cvc = cv.clone();
-
-                let path = path.0.iter().map(move |(part, opt)| {
-                    (
-                        part.as_ref().map(|i| {
-                            let cvc = cvc.clone();
-                            move || w(i).run(cvc.clone())
-                        }),
-                        *opt,
-                    )
-                });
+                let run = |i| {
+                    let cv = cv.clone();
+                    bla(move || w(i).run(cv))
+                };
+                let path = path.0.iter();
+                let path = path.map(move |(part, opt)| (part.as_ref().map(run), *opt));
                 let path: Vec<_> = path.collect();
 
-                w(l).update(
-                    cv,
-                    Box::new(move |v| {
-                        let paths = Path(Vec::new()).combinations(path.clone().into_iter());
-                        let mut paths = paths.map(|path| path.transpose());
+                let f = move |v| {
+                    let path = path.clone();
+                    let paths = Path(Vec::new()).combinations(path.into_iter());
+                    let mut paths = paths.map(|path| path.transpose());
 
-                        box_once(paths.try_fold(v, |acc, path| {
-                            let mut path = path?;
-                            if let Some(last) = path.0.pop() {
-                                path::update(path.0.into_iter(), last, acc, &f)
-                            } else {
-                                // should be unreachable
-                                Ok(acc)
-                            }
-                        }))
-                    }),
-                )
+                    box_once(paths.try_fold(v, |acc, path| {
+                        let mut path = path?;
+                        if let Some(last) = path.0.pop() {
+                            path::update(path.0.into_iter(), last, acc, &f)
+                        } else {
+                            // should be unreachable
+                            Ok(acc)
+                        }
+                    }))
+                };
+
+                w(l).update(cv, Box::new(f))
             }
             Ast::Pipe(l, false, r) => w(l).update(
                 (cv.0.clone(), cv.1),
