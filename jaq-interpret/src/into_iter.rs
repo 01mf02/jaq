@@ -1,4 +1,4 @@
-//! Functions and type to deal with `IntoIterator` and `FnOnce() -> Iterator`.
+//! Functions and types for `IntoIterator` and `FnOnce() -> Iterator`.
 
 #[derive(Clone)]
 pub struct Delay<F>(F);
