@@ -278,6 +278,8 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
             Ast::Path(f, path) => {
+                // TODO: a great part of the following code is duplicated in `update()`
+                // it would be great to factor out this part, but I find this quite difficult ...
                 use crate::path::{self, Path};
                 let run = |i| {
                     let cv = cv.clone();
