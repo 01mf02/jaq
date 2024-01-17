@@ -180,10 +180,7 @@ impl Val {
     /// Fail on any other value.
     pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match self {
-            Self::Arr(a) => {
-                std::dbg!(Rc::strong_count(&a));
-                Ok(Box::new(rc_unwrap_or_clone(a).into_iter()))
-            }
+            Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
             _ => Err(Error::Type(self, Type::Iter)),
         }
@@ -192,7 +189,6 @@ impl Val {
     pub(crate) fn try_map<I: Iterator<Item = ValR>>(self, f: impl Fn(Self) -> I) -> ValR {
         Ok(match self {
             Self::Arr(a) => {
-                std::dbg!(Rc::strong_count(&a));
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
                 Self::arr(iter.collect::<Result<_, _>>()?)
             }
