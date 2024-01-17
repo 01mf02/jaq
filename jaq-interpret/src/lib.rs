@@ -51,6 +51,7 @@ pub mod error;
 mod filter;
 mod hir;
 mod lir;
+mod into_iter;
 mod mir;
 mod path;
 mod rc_iter;

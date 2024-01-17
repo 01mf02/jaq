@@ -225,60 +225,6 @@ impl<'a> FilterT<'a> for &'a Owned {
     }
 }
 
-#[derive(Clone)]
-struct Delay<F>(F);
-
-impl<I: Iterator, F: FnOnce() -> I> IntoIterator for Delay<F> {
-    type Item = I::Item;
-    type IntoIter = I;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0()
-    }
-}
-
-#[derive(Clone)]
-enum Either<L, R> {
-    L(L),
-    R(R),
-}
-
-struct EitherIter<L, R>(Either<L, R>);
-
-impl<L: Iterator, R: Iterator<Item = L::Item>> Iterator for EitherIter<L, R> {
-    type Item = L::Item;
-    fn next(&mut self) -> Option<Self::Item> {
-        match &mut self.0 {
-            Either::L(l) => l.next(),
-            Either::R(r) => r.next(),
-        }
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        match &self.0 {
-            Either::L(l) => l.size_hint(),
-            Either::R(r) => r.size_hint(),
-        }
-    }
-}
-
-impl<L: IntoIterator, R: IntoIterator<Item = L::Item>> IntoIterator for Either<L, R> {
-    type Item = L::Item;
-    type IntoIter = EitherIter<L::IntoIter, R::IntoIter>;
-    fn into_iter(self) -> Self::IntoIter {
-        EitherIter(match self {
-            Self::L(l) => Either::L(l.into_iter()),
-            Self::R(r) => Either::R(r.into_iter()),
-        })
-    }
-}
-
-fn bla<I: Iterator, F: FnOnce() -> I + Clone>(f: F) -> Either<Vec<I::Item>, Delay<F>> {
-    let iter = f.clone()();
-    match iter.size_hint().1 {
-        Some(_) => Either::L(iter.collect::<Vec<_>>()),
-        None => Either::R(Delay(f)),
-    }
-}
-
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::{once, once_with};
@@ -335,7 +281,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 use crate::path::{self, Path};
                 let run = |i| {
                     let cv = cv.clone();
-                    bla(move || w(i).run(cv))
+                    crate::into_iter::collect_if_once(move || w(i).run(cv))
                 };
                 let path = path.0.iter();
                 let path = path.map(move |(part, opt)| (part.as_ref().map(run), *opt));
@@ -440,7 +386,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 use crate::path::{self, Path};
                 let run = |i| {
                     let cv = cv.clone();
-                    bla(move || w(i).run(cv))
+                    crate::into_iter::collect_if_once(move || w(i).run(cv))
                 };
                 let path = path.0.iter();
                 let path = path.map(move |(part, opt)| (part.as_ref().map(run), *opt));
