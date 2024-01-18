@@ -372,7 +372,6 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Fold(..) => todo!(),
 
             Ast::Id => f(cv.1),
-
             Ast::Path(l, path) => {
                 let path = path.map_ref(|i| {
                     let cv = cv.clone();
