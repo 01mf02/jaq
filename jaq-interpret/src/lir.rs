@@ -59,7 +59,7 @@ fn recurse(typ: CallTyp) -> Filter {
         id: RECURSE,
         typ,
         skip: 0,
-        args: Vec::new(),
+        args: Default::default(),
     })
 }
 
@@ -67,7 +67,7 @@ impl Ctx {
     /// `{}[]` returns zero values.
     fn empty(&mut self) -> Filter {
         // `{}`
-        let obj = Filter::Object(Vec::new());
+        let obj = Filter::Object(Default::default());
         // `[]`
         let path = (path::Part::Range(None, None), path::Opt::Essential);
         Filter::Path(self.id_of_ast(obj), Path(Vec::from([path])))
@@ -156,7 +156,7 @@ impl Ctx {
                 match call {
                     mir::Call::Arg(a) if args.is_empty() => Filter::Var(a),
                     mir::Call::Arg(_) => panic!("higher-order argument encountered"),
-                    mir::Call::Native(n) => Filter::Native(n, args),
+                    mir::Call::Native(n) => Filter::Native(n, args.into()),
                     mir::Call::Def { id, skip, tail } => {
                         let callable = self.get_callable(id);
                         let args = callable.sig.args.iter().zip(args);

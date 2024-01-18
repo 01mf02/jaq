@@ -9,11 +9,11 @@ use jaq_syn::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
-pub struct Owned(Id, Vec<Ast>);
+pub struct Owned(Id, Box<[Ast]>);
 
 impl Default for Owned {
     fn default() -> Self {
-        Self(Id(0), Vec::from([Ast::Id]))
+        Self(Id(0), Box::new([Ast::Id]))
     }
 }
 
@@ -41,12 +41,12 @@ pub(crate) struct Call {
     pub id: Id,
     pub typ: CallTyp,
     pub skip: usize,
-    pub args: Vec<Bind<Id, Id>>,
+    pub args: Box<[Bind<Id, Id>]>,
 }
 
 impl Owned {
     pub(crate) fn new(main: Id, recs: Vec<Ast>) -> Self {
-        Self(main, recs)
+        Self(main, recs.into())
     }
 }
 
@@ -61,7 +61,7 @@ pub(crate) enum Ast {
     Float(f64),
     Str(String),
     Array(Id),
-    Object(Vec<(Id, Id)>),
+    Object(Box<[(Id, Id)]>),
 
     Try(Id, Id),
     Neg(Id),
@@ -107,7 +107,7 @@ pub(crate) enum Ast {
     Var(usize),
     Call(Call),
 
-    Native(Native, Vec<Id>),
+    Native(Native, Box<[Id]>),
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
