@@ -15,8 +15,16 @@ pub enum Part<I> {
     Range(Option<I>, Option<I>),
 }
 
+impl<'a, U: Clone + 'a, E: Clone + 'a, T: Clone + IntoIterator<Item = Result<U, E>> + 'a> Path<T> {
+    pub fn explode(self) -> impl Iterator<Item = Result<Path<U>, E>> + 'a {
+        Path(Vec::new())
+            .combinations(self.0.into_iter())
+            .map(|path| path.transpose())
+    }
+}
+
 impl<'a, U: Clone + 'a> Path<U> {
-    pub fn combinations<I, F>(self, mut iter: I) -> BoxIter<'a, Self>
+    fn combinations<I, F>(self, mut iter: I) -> BoxIter<'a, Self>
     where
         I: Iterator<Item = (Part<F>, Opt)> + Clone + 'a,
         F: IntoIterator<Item = U> + Clone + 'a,
@@ -33,7 +41,22 @@ impl<'a, U: Clone + 'a> Path<U> {
     }
 }
 
-pub fn run<'a, I>(mut iter: I, val: Val) -> ValRs<'a>
+impl Path<Val> {
+    pub fn run<'a>(self, v: Val) -> ValRs<'a> {
+        run(self.0.into_iter(), v)
+    }
+
+    pub fn update<'a, F: Fn(Val) -> ValRs<'a>>(mut self, v: Val, f: F) -> ValR {
+        if let Some(last) = self.0.pop() {
+            update(self.0.into_iter(), last, v, &f)
+        } else {
+            // should be unreachable
+            Ok(v)
+        }
+    }
+}
+
+fn run<'a, I>(mut iter: I, val: Val) -> ValRs<'a>
 where
     I: Iterator<Item = (Part<Val>, Opt)> + Clone + 'a,
 {
@@ -46,10 +69,10 @@ where
     }
 }
 
-pub fn update<'f, P, F>(mut iter: P, last: (Part<Val>, Opt), v: Val, f: F) -> ValR
+fn update<'f, P, F>(mut iter: P, last: (Part<Val>, Opt), v: Val, f: &F) -> ValR
 where
     P: Iterator<Item = (Part<Val>, Opt)> + Clone,
-    F: Fn(Val) -> ValRs<'f> + Copy,
+    F: Fn(Val) -> ValRs<'f>,
 {
     if let Some((part, opt)) = iter.next() {
         use core::iter::once;
@@ -201,8 +224,16 @@ impl<'a, U: Clone + 'a, F: IntoIterator<Item = U> + Clone + 'a> Part<F> {
     }
 }
 
+impl<T> Path<T> {
+    pub fn map_ref<'a, U>(&'a self, mut f: impl FnMut(&'a T) -> U) -> Path<U> {
+        let path = self.0.iter();
+        let path = path.map(move |(part, opt)| (part.as_ref().map(&mut f), *opt));
+        Path(path.collect())
+    }
+}
+
 impl<T> Part<T> {
-    pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Part<U> {
+    fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Part<U> {
         use Part::{Index, Range};
         match self {
             Index(i) => Index(f(i)),
@@ -212,7 +243,7 @@ impl<T> Part<T> {
 }
 
 impl<T, E> Path<Result<T, E>> {
-    pub fn transpose(self) -> Result<Path<T>, E> {
+    fn transpose(self) -> Result<Path<T>, E> {
         self.0
             .into_iter()
             .map(|(part, opt)| Ok((part.transpose()?, opt)))
@@ -222,7 +253,7 @@ impl<T, E> Path<Result<T, E>> {
 }
 
 impl<T, E> Part<Result<T, E>> {
-    pub fn transpose(self) -> Result<Part<T>, E> {
+    fn transpose(self) -> Result<Part<T>, E> {
         match self {
             Self::Index(i) => Ok(Part::Index(i?)),
             Self::Range(from, upto) => Ok(Part::Range(from.transpose()?, upto.transpose()?)),
@@ -231,7 +262,7 @@ impl<T, E> Part<Result<T, E>> {
 }
 
 impl<F> Part<F> {
-    pub fn as_ref(&self) -> Part<&F> {
+    fn as_ref(&self) -> Part<&F> {
         match self {
             Self::Index(i) => Part::Index(i),
             Self::Range(from, upto) => Part::Range(from.as_ref(), upto.as_ref()),

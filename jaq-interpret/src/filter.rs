@@ -278,24 +278,13 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
             Ast::Path(f, path) => {
-                // TODO: a great part of the following code is duplicated in `update()`
-                // it would be great to factor out this part, but I find this quite difficult ...
-                use crate::path::{self, Path};
-                let run = |i| {
+                let path = path.map_ref(|i| {
                     let cv = cv.clone();
                     crate::into_iter::collect_if_once(move || w(i).run(cv))
-                };
-                let path = path.0.iter();
-                let path = path.map(move |(part, opt)| (part.as_ref().map(run), *opt));
-                let path: Vec<_> = path.collect();
+                });
                 flat_map_with(w(f).run(cv), path, |y, path| {
-                    let paths = Path(Vec::new()).combinations(path.into_iter());
-                    let paths = paths.map(|path| path.transpose());
-
                     then(y, |y| {
-                        flat_map_with(paths, y, |path, y| {
-                            then(path, |path| (path::run(path.0.into_iter(), y)))
-                        })
+                        flat_map_with(path.explode(), y, |path, y| then(path, |path| path.run(y)))
                     })
                 })
             }
@@ -385,31 +374,14 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Id => f(cv.1),
 
             Ast::Path(l, path) => {
-                use crate::path::{self, Path};
-                let run = |i| {
+                let path = path.map_ref(|i| {
                     let cv = cv.clone();
                     crate::into_iter::collect_if_once(move || w(i).run(cv))
-                };
-                let path = path.0.iter();
-                let path = path.map(move |(part, opt)| (part.as_ref().map(run), *opt));
-                let path: Vec<_> = path.collect();
-
+                });
                 let f = move |v| {
-                    let path = path.clone();
-                    let paths = Path(Vec::new()).combinations(path.into_iter());
-                    let mut paths = paths.map(|path| path.transpose());
-
-                    box_once(paths.try_fold(v, |acc, path| {
-                        let mut path = path?;
-                        if let Some(last) = path.0.pop() {
-                            path::update(path.0.into_iter(), last, acc, &f)
-                        } else {
-                            // should be unreachable
-                            Ok(acc)
-                        }
-                    }))
+                    let mut paths = path.clone().explode();
+                    box_once(paths.try_fold(v, |acc, path| path?.update(acc, &f)))
                 };
-
                 w(l).update(cv, Box::new(f))
             }
             Ast::Pipe(l, false, r) => w(l).update(
