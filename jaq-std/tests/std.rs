@@ -232,6 +232,8 @@ yields!(
 yields!(limit_inf_suml, "[limit(3; recurse(.+1) + 0)]", [0, 1, 2]);
 yields!(limit_inf_sumr, "[limit(3; 0 + recurse(.+1))]", [0, 1, 2]);
 
+yields!(limit_inf_path, "[limit(2; [1] | .[repeat(0)])]", [1, 1]);
+
 #[test]
 fn recurse() {
     let x = json!({"a":0,"b":[1]});

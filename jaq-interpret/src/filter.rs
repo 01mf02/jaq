@@ -277,12 +277,18 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Ite(if_, then_, else_) => w(if_).pipe(cv, move |cv, v| {
                 w(if v.as_bool() { then_ } else { else_ }).run(cv)
             }),
-            Ast::Path(f, path) => then(path.eval(|p| w(p).run(cv.clone())), |path| {
-                let outs = w(f).run(cv).map(move |i| path.collect(i?));
-                Box::new(
-                    outs.flat_map(|vals| then(vals, |vals| Box::new(vals.into_iter().map(Ok)))),
-                )
-            }),
+            Ast::Path(f, path) => {
+                let path = path.map_ref(|i| {
+                    let cv = cv.clone();
+                    crate::into_iter::collect_if_once(move || w(i).run(cv))
+                });
+                flat_map_with(w(f).run(cv), path, |y, path| {
+                    then(y, |y| {
+                        flat_map_with(path.explode(), y, |path, y| then(path, |path| path.run(y)))
+                    })
+                })
+            }
+
             Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(f).run((cv.0.clone(), v))),
@@ -366,14 +372,17 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Fold(..) => todo!(),
 
             Ast::Id => f(cv.1),
-            Ast::Path(l, path) => w(l).update(
-                (cv.0.clone(), cv.1),
-                Box::new(move |v| {
-                    then(path.eval(|i| w(i).run((cv.0.clone(), v.clone()))), |path| {
-                        path.update(v, &f)
-                    })
-                }),
-            ),
+            Ast::Path(l, path) => {
+                let path = path.map_ref(|i| {
+                    let cv = cv.clone();
+                    crate::into_iter::collect_if_once(move || w(i).run(cv))
+                });
+                let f = move |v| {
+                    let mut paths = path.clone().explode();
+                    box_once(paths.try_fold(v, |acc, path| path?.update(acc, &f)))
+                };
+                w(l).update(cv, Box::new(f))
+            }
             Ast::Pipe(l, false, r) => w(l).update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(r).update((cv.0.clone(), v), f.clone())),
