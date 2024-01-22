@@ -1,34 +1,18 @@
 use std::{env, fs, io, path, process, str};
 
-fn golden_test(name: &str, args: &[&str]) {
-    if let Err(e) = golden_test_err(name, args) {
-        println!("Error: {}", e);
-    }
-}
-fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
-    let mut test_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    test_dir.extend(["tests", "golden", name]);
-    let in_path = test_dir.join("in.jsonl");
-    let out_path = test_dir.join("out.jsonl");
-    assert!(
-        in_path.exists(),
-        "Input should be at {:?}, but is missing",
-        in_path
-    );
-    assert!(
-        out_path.exists(),
-        "Output should be at {:?}, but is missing",
-        out_path
-    );
-
-    let jaq_out = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
+fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
+    let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
         .args(args)
-        .stdin(fs::File::open(&in_path)?)
-        .output()?;
-    assert!(jaq_out.status.success());
+        .stdin(process::Stdio::piped())
+        .stdout(process::Stdio::piped())
+        .spawn()?;
 
-    let out_ex = fs::read_to_string(out_path)?;
-    let out_act = str::from_utf8(&jaq_out.stdout).expect("invalid UTF-8 in output");
+    use io::Write;
+    child.stdin.take().unwrap().write_all(input.as_bytes())?;
+    let output = child.wait_with_output()?;
+    assert!(output.status.success());
+
+    let out_act = str::from_utf8(&output.stdout).expect("invalid UTF-8 in output");
     // remove '\r' from output for compatibility with Windows
     let out_act = out_act.replace('\r', "");
     if out_ex.trim() != out_act.trim() {
@@ -39,47 +23,62 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
     Ok(())
 }
 
-#[test]
-fn no_args() {
-    golden_test("no_args", &[]);
+macro_rules! test {
+    ($name:ident, $args:expr, $input:expr, $output:expr) => {
+        #[test]
+        fn $name() -> io::Result<()> {
+            golden_test($args, $input, $output)
+        }
+    };
 }
 
-#[test]
-fn arg() {
-    golden_test("arg", &["--arg", "x", "y", "--arg", "a", "b", "$x + $a"]);
-}
+test!(no_args, &[], "[0, 1]", "[\n  0,\n  1\n]");
+test!(one, &["1"], "0", "1");
+test!(sparse, &["."], "[2,3]", "[\n  2,\n  3\n]");
 
-#[test]
-fn one() {
-    golden_test("one", &["1"]);
-}
+test!(
+    arg,
+    &["--arg", "x", "y", "--arg", "a", "b", "$x + $a"],
+    "0",
+    "\"yb\""
+);
 
-#[test]
-fn sparse() {
-    golden_test("sparse", &["."]);
-}
+test!(
+    compact,
+    &["-c", "."],
+    r#"[2,3]
+{"a":1,   "b":["c"   ]}"#,
+    r#"[2,3]
+{"a":1,"b":["c"]}"#
+);
 
-#[test]
-fn compact() {
-    golden_test("compact", &["-c", "."]);
-}
+test!(
+    inputs,
+    &["-c", r#"{".": .}, {input: input}"#],
+    "0\n1\n2\n3",
+    r#"{".":0}
+{"input":1}
+{".":2}
+{"input":3}"#
+);
 
-#[test]
-fn inputs() {
-    golden_test("inputs", &["-c", r#"{".": .}, {input: input}"#]);
-}
+test!(
+    null_input,
+    &["-nc", r#"{".": .}, {inputs: [inputs]}"#],
+    "0\n1\n2\n3",
+    r#"{".":null}
+{"inputs":[0,1,2,3]}"#
+);
 
-#[test]
-fn null_input() {
-    golden_test("null_input", &["-nc", r#"{".": .}, {inputs: [inputs]}"#]);
-}
+const ONE23: &str = "One\nTwo\nThree\n";
 
-#[test]
-fn raw_input() {
-    golden_test("raw_input", &["-R", "."]);
-}
+test!(raw_input_slurp, &["-Rs"], ONE23, r#""One\nTwo\nThree\n""#);
 
-#[test]
-fn raw_input_slurp() {
-    golden_test("raw_input_slurp", &["-Rs", "."]);
-}
+test!(
+    raw_input,
+    &["-R"],
+    ONE23,
+    r#""One"
+"Two"
+"Three""#
+);
