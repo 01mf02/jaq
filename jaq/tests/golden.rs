@@ -40,6 +40,11 @@ fn golden_test_err(name: &str, args: &[&str]) -> io::Result<()> {
 }
 
 #[test]
+fn no_args() {
+    golden_test("no_args", &[]);
+}
+
+#[test]
 fn arg() {
     golden_test("arg", &["--arg", "x", "y", "--arg", "a", "b", "$x + $a"]);
 }
