@@ -92,7 +92,7 @@ def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
 
-def last(g): reduce g as $item ([]; [$item]) | .[];
+def last(g): (reduce g as $item ([]; [$item]))[];
 def nth(n; g): last(limit(n + 1; g));
 
 # Objects <-> Arrays
@@ -120,7 +120,7 @@ def inside(xs): . as $x | xs | contains($x);
 # Walking
 def walk(f): def rec: (.[]? |= rec) | f; rec;
 
-def flatten: [recurse(arrays | .[]) | select(isarray | not)];
+def flatten: [recurse(arrays[]) | select(isarray | not)];
 def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) | add end;
 
 # Regular expressions
