@@ -55,6 +55,14 @@ struct Cli {
     #[arg(short, long)]
     compact_output: bool,
 
+    /// use n spaces for indentation
+    #[arg(long, value_name = "n", default_value_t = 2)]
+    indent: u8,
+
+    /// Use tabs for indentation rather than spaces
+    #[arg(long)]
+    tab: bool,
+
     /// Do not print a newline after each value
     ///
     /// Unlike jq, this does not enable `--raw-output`.
@@ -440,6 +448,11 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
         _ => {
             let val = serde_json::Value::from(val);
             let mode = cli.color_mode();
+            let indent = if cli.tab {
+                String::from("\t")
+            } else {
+                " ".repeat(cli.indent.into())
+            };
 
             // this looks ugly, but it is hard to abstract over the `Formatter` because
             // we cannot create a `Box<dyn Formatter>` because
@@ -447,7 +460,8 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
             if cli.compact_output {
                 ColoredFormatter::new(CompactFormatter).write_colored_json(&val, writer, mode)
             } else {
-                ColoredFormatter::new(PrettyFormatter::new()).write_colored_json(&val, writer, mode)
+                ColoredFormatter::new(PrettyFormatter::with_indent(indent.as_bytes()))
+                    .write_colored_json(&val, writer, mode)
             }?;
         }
     };
