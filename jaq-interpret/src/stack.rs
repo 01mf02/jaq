@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use core::ops::ControlFlow;
 
 pub struct Stack<I, F>(Vec<I>, F);
 
@@ -8,9 +9,9 @@ impl<I, F> Stack<I, F> {
     }
 }
 
-/// If `F` returns `Ok(x)`, then `x` is returned
-/// If `F` returns `Err(iter)`, then the iterator is pushed onto the stack
-impl<I: Iterator, F: Fn(I::Item) -> Result<I::Item, I>> Iterator for Stack<I, F> {
+/// If `F` returns `Break(x)`, then `x` is returned
+/// If `F` returns `Continue(iter)`, then the iterator is pushed onto the stack
+impl<I: Iterator, F: Fn(I::Item) -> ControlFlow<I::Item, I>> Iterator for Stack<I, F> {
     type Item = I::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -24,8 +25,8 @@ impl<I: Iterator, F: Fn(I::Item) -> Result<I::Item, I>> Iterator for Stack<I, F>
                     self.0.push(top);
                 }
                 match self.1(next) {
-                    Ok(next) => return Some(next),
-                    Err(iter) => self.0.push(iter),
+                    ControlFlow::Break(next) => return Some(next),
+                    ControlFlow::Continue(iter) => self.0.push(iter),
                 }
             }
         }

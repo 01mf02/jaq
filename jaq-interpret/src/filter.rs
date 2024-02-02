@@ -3,6 +3,7 @@ use crate::results::{fold, recurse, then, Fold, Results};
 use crate::val::{Val, ValR, ValRs};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
+use core::ops::ControlFlow;
 use dyn_clone::DynClone;
 use jaq_syn::filter::FoldType;
 use jaq_syn::{MathOp, OrdOp};
@@ -342,9 +343,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                         Vec::from([Box::new(run_cvs(def, cvs)) as Results<_, _>]),
                         move |r| match r {
                             Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
-                                Err(def.run((Ctx { inputs, vars }, v)))
+                                ControlFlow::Continue(def.run((Ctx { inputs, vars }, v)))
                             }
-                            Ok(_) | Err(_) => Ok(r),
+                            Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
                     )),
                     CallTyp::Throw => Box::new(cvs.map(move |cv| {
