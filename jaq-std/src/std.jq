@@ -117,6 +117,28 @@ def any: any(.[]; .);
 def in(xs)    : . as $x | xs | has     ($x);
 def inside(xs): . as $x | xs | contains($x);
 
+# Indexing
+def indices($i):
+  def enumerate:
+    . as $thing |
+    if type == "string"
+    then range(length) | [., $thing[.:.+1]]
+    else range(length) | [., $thing[.]]
+    end;
+
+  def windowed($size):
+    if $size <= 0 then empty
+    else . as $array | range(length - $size + 1) | $array[.:. + $size]
+    end;
+
+  if ($i | type) == "array" or (type == "string" and ($i | type) == "string")
+  then [[windowed($i | length)] | enumerate | select(.[1] == $i)[0]]
+  else [enumerate | select(.[1] == $i)[0]]
+  end;
+
+def index($i):  indices($i) | .[0];
+def rindex($i): indices($i) | .[-1:][0];
+
 # Walking
 def walk(f): def rec: (.[]? |= rec) | f; rec;
 
