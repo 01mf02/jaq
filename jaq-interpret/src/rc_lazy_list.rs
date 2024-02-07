@@ -50,7 +50,7 @@ fn drop() {
     let list = List::from_iter(0..100_000);
     // clone() ensures that we keep a copy of the whole list around
     // sum() then evaluates the whole list
-    assert_eq!(list.clone().sum::<usize>(), 4999950000);
+    assert_eq!(list.clone().sum::<u64>(), 4999950000);
     // at the end, a long, fully evaluated list is dropped,
     // which would result in a stack overflow without the custom `Drop` impl
     std::mem::drop(list);
