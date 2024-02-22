@@ -11,6 +11,12 @@ keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
 rust-version = "1.64"
 
+[features]
+default = []
+unstable = ["unstable-flag", "jaq-syn/unstable"]
+unstable-flag = ["jaq-syn/unstable-flag"]
+
 [dependencies]
 chumsky = { version = "0.9.0", default-features = false }
+either = { version = "1.10.0", default-features = false }
 jaq-syn = { version = "1.0.0", path = "../jaq-syn" }

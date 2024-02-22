@@ -1,6 +1,8 @@
 use super::{prec_climb, Delim, Token};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use chumsky::prelude::*;
+use crate::either;
+use either::{ChumskyEither, Left, Right};
 use jaq_syn::filter::{AssignOp, BinaryOp, Filter, Fold, FoldType, KeyVal};
 use jaq_syn::{MathOp, OrdOp, Spanned};
 
@@ -42,7 +44,7 @@ where
         .then_ignore(just(Token::As))
         .then(variable())
         .then(Delim::Paren.around(args))
-        .map(|(((inner, xs), x), (init, f))| (inner, Fold { xs, x, init, f }))
+        .map(|(((inner, xs), x), (init, f))| (inner, Fold::new(xs, x, init, f)))
         .map_with_span(|(inner, fold), span| (Filter::Fold(inner, fold), span))
 }
 
@@ -57,7 +59,11 @@ where
 }
 
 // 'Atoms' are filters that contain no ambiguity
-fn atom<P>(filter: P, no_comma: P) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
+fn atom<P>(
+    unstable: bool,
+    filter: P,
+    no_comma: P,
+) -> impl Parser<Token, Spanned<Filter>, Error = P::Error> + Clone
 where
     P: Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone,
 {
@@ -66,8 +72,8 @@ where
     }
     .labelled("number");
 
-    let str_ = super::string::str_(filter.clone());
-    let call = super::def::call(filter.clone());
+    let str_ = super::string::str_(unstable, filter.clone());
+    let call = super::def::call(unstable, filter.clone());
 
     // Atoms can also just be normal filters, but surrounded with parentheses
     let parenthesised = Delim::Paren.around(filter.clone());
@@ -77,7 +83,7 @@ where
     let array = Delim::Brack.around(filter.clone().or_not());
 
     let is_val = just(Token::Colon).ignore_then(no_comma);
-    let key_str = super::path::key(filter)
+    let key_str = super::path::key(unstable, filter)
         .then(is_val.clone().or_not())
         .map(|(key, val)| KeyVal::Str(key, val));
     let key_filter = parenthesised
@@ -128,6 +134,8 @@ impl prec_climb::Op for BinaryOp {
             Self::Math(MathOp::Add | MathOp::Sub) => Self::And.prec() + 3,
             Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).prec() + 1,
             Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).prec() + 1,
+            #[cfg(feature = "unstable-flag")]
+            _ => unimplemented!(),
         }
     }
 
@@ -142,7 +150,7 @@ impl prec_climb::Output<BinaryOp> for Spanned<Filter> {
     }
 }
 
-fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
+fn binary_op(unstable: bool) -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
     let as_var = just(Token::As).ignore_then(variable()).or_not();
     let pipe = as_var
         .then_ignore(just(Token::Op("|".to_string())))
@@ -162,7 +170,13 @@ fn binary_op() -> impl Parser<Token, BinaryOp, Error = Simple<Token>> + Clone {
         // therefore, we add `,` later
         assign(AssignOp::Assign),
         assign(AssignOp::Update),
-        assign(AssignOp::AltUpdate),
+        #[cfg(feature = "unstable-flag")]
+        ChumskyEither::from(if unstable {
+            #[allow(deprecated)]
+            Right(assign(AssignOp::AltUpdate))
+        } else {
+            Left(crate::fail())
+        }),
         update_with(MathOp::Add),
         update_with(MathOp::Sub),
         update_with(MathOp::Mul),
@@ -196,20 +210,24 @@ where
         .map(|(f, ops)| f.parse(ops))
 }
 
-pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
+pub fn filter(
+    #[cfg(feature = "unstable-flag")] unstable: bool,
+) -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + Clone {
+    #[cfg(not(feature = "unstable-flag"))]
+    let unstable = false;
     // filters that may or may not contain commas on the toplevel,
     // i.e. not inside parentheses
     let mut with_comma = Recursive::declare();
     let mut sans_comma = Recursive::declare();
 
     // e.g. `keys[]`
-    let atom = atom(with_comma.clone(), sans_comma.clone());
-    let atom_path = || super::path::path(with_comma.clone());
+    let atom = atom(unstable, with_comma.clone(), sans_comma.clone());
+    let atom_path = || super::path::path(unstable, with_comma.clone());
     let atom_with_path = atom.then(atom_path().collect());
 
     // e.g. `.[].a` or `.a`
     let id = just(Token::Dot).map_with_span(|_, span| (Filter::Id, span));
-    let id_path = super::path::part(with_comma.clone()).chain(atom_path());
+    let id_path = super::path::part(unstable, with_comma.clone()).chain(atom_path());
     let id_with_path = id.then(id_path.or_not().flatten());
 
     let path = atom_with_path.or(id_with_path);
@@ -235,7 +253,7 @@ pub fn filter() -> impl Parser<Token, Spanned<Filter>, Error = Simple<Token>> + 
     let neg = neg(try_).boxed();
     let tc = recursive(|f| try_catch(f).or(neg));
 
-    let op = binary_op().boxed();
+    let op = binary_op(unstable).boxed();
     let comma = just(Token::Comma).to(BinaryOp::Comma);
 
     sans_comma.define(climb(tc.clone(), op.clone()));

@@ -12,6 +12,8 @@ rust-version = "1.63"
 
 [features]
 default = ["serde"]
+unstable = ["unstable-flag"]
+unstable-flag = []
 
 [dependencies]
 serde = { version = "1.0.137", features = ["derive"], optional = true }

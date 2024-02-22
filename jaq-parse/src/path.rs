@@ -10,7 +10,10 @@ fn opt() -> impl Parser<Token, Opt, Error = Simple<Token>> + Clone {
     })
 }
 
-pub fn key<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
+pub fn key<T, P>(
+    unstable: bool,
+    expr: P,
+) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
 where
     T: From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
@@ -18,16 +21,19 @@ where
     select! {
         Token::Ident(s) => Str::from(s),
     }
-    .or(super::string::str_(expr))
+    .or(super::string::str_(unstable, expr))
     .labelled("object key")
 }
 
-fn index<T, P>(expr: P) -> impl Parser<Token, Part<Spanned<T>>, Error = P::Error> + Clone
+fn index<T, P>(
+    unstable: bool,
+    expr: P,
+) -> impl Parser<Token, Part<Spanned<T>>, Error = P::Error> + Clone
 where
     T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
-    key(expr).map_with_span(|id, span| Part::Index((T::from(id), span)))
+    key(unstable, expr).map_with_span(|id, span| Part::Index((T::from(id), span)))
 }
 
 /// Match `[]`, `[e]`, `[e:]`, `[e:e]`, `[:e]` (all without brackets).
@@ -51,23 +57,26 @@ where
 }
 
 /// A path after an atomic filter (that is not the identity filter).
-pub fn path<T, P>(expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
+pub fn path<T, P>(unstable: bool, expr: P) -> impl Parser<Token, Path<T>, Error = P::Error> + Clone
 where
     T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     let range = Delim::Brack.around(range(expr.clone()));
-    let dot_index = just(Token::Dot).ignore_then(index(expr));
+    let dot_index = just(Token::Dot).ignore_then(index(unstable, expr));
     let dot_range = just(Token::Dot).or_not().ignore_then(range);
     dot_index.or(dot_range).then(opt()).repeated()
 }
 
 /// The first part of a path after an identity filter.
-pub fn part<T, P>(expr: P) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = P::Error> + Clone
+pub fn part<T, P>(
+    unstable: bool,
+    expr: P,
+) -> impl Parser<Token, (Part<Spanned<T>>, Opt), Error = P::Error> + Clone
 where
     T: From<Str<Spanned<T>>> + From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
     let range = Delim::Brack.around(range(expr.clone()));
-    range.or(index(expr)).then(opt())
+    range.or(index(unstable, expr)).then(opt())
 }

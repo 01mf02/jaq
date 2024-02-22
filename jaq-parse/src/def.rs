@@ -4,7 +4,10 @@ use chumsky::prelude::*;
 use jaq_syn::{Arg, Call, Def, Main};
 
 /// A (potentially empty) parenthesised and `;`-separated sequence of arguments.
-fn args<T, P>(arg: P) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
+fn args<T, P>(
+    #[allow(unused_variables)] unstable: bool,
+    arg: P,
+) -> impl Parser<Token, Vec<T>, Error = P::Error> + Clone
 where
     P: Parser<Token, T> + Clone,
 {
@@ -14,7 +17,7 @@ where
         .map(Option::unwrap_or_default)
 }
 
-pub fn call<T, P>(expr: P) -> impl Parser<Token, Call<T>, Error = P::Error> + Clone
+pub fn call<T, P>(unstable: bool, expr: P) -> impl Parser<Token, Call<T>, Error = P::Error> + Clone
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
@@ -22,12 +25,12 @@ where
         Token::Ident(ident) => ident,
     }
     .labelled("filter name")
-    .then(args(expr).labelled("filter args"))
-    .map(|(name, args)| Call { name, args })
+    .then(args(unstable, expr).labelled("filter args"))
+    .map(|(name, args)| Call::new(name, args))
 }
 
 /// Parser for a single definition.
-fn def<P>(def: P) -> impl Parser<Token, Def, Error = Simple<Token>> + Clone
+fn def<P>(unstable: bool, def: P) -> impl Parser<Token, Def, Error = Simple<Token>> + Clone
 where
     P: Parser<Token, Def, Error = Simple<Token>> + Clone,
 {
@@ -39,22 +42,40 @@ where
     let defs = def.repeated().collect();
 
     just(Token::Def)
-        .ignore_then(call(arg))
+        .ignore_then(call(unstable, arg))
         .then_ignore(just(Token::Colon))
-        .then(defs.then(filter()).map(|(defs, body)| Main { defs, body }))
+        .then(
+            defs.then(filter(
+                #[cfg(feature = "unstable-flag")]
+                unstable,
+            ))
+            .map(|(defs, body)| Main::new(defs, body)),
+        )
         .then_ignore(just(Token::Semicolon))
-        .map(|(lhs, rhs)| Def { lhs, rhs })
+        .map(|(lhs, rhs)| Def::new(lhs, rhs))
         .labelled("definition")
 }
 
 /// Parser for a sequence of definitions.
-pub fn defs() -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
-    recursive(def).repeated().collect()
+pub fn defs(
+    #[cfg(feature = "unstable-flag")] unstable: bool,
+) -> impl Parser<Token, Vec<Def>, Error = Simple<Token>> + Clone {
+    #[cfg(not(feature = "unstable-flag"))]
+    let unstable = false;
+    recursive(|p| def(unstable, p)).repeated().collect()
 }
 
 /// Parser for a (potentially empty) sequence of definitions, followed by a filter.
-pub fn main() -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
-    defs()
-        .then(filter())
-        .map(|(defs, body)| Main { defs, body })
+pub fn main(
+    #[cfg(feature = "unstable-flag")] unstable: bool,
+) -> impl Parser<Token, Main, Error = Simple<Token>> + Clone {
+    defs(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+    )
+    .then(filter(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+    ))
+    .map(|(defs, body)| Main::new(defs, body))
 }

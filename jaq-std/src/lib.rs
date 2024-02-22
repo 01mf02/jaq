@@ -17,16 +17,22 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 /// Return the standard library.
-pub fn std() -> Vec<jaq_syn::Def> {
+pub fn std(#[cfg(feature = "unstable-flag")] unstable: bool) -> Vec<jaq_syn::Def> {
     #[cfg(feature = "bincode")]
     {
         // use preparsed standard library
         let std = include_bytes!(concat!(env!("OUT_DIR"), "/std.bin"));
+        #[cfg(feature = "unstable-flag")]
+        let std_unstable = include_bytes!(concat!(env!("OUT_DIR"), "/std-unstable.bin"));
+        #[cfg(feature = "unstable-flag")]
+        let std = if unstable { std } else { std_unstable };
         bincode::deserialize(std).unwrap()
     }
     #[cfg(not(feature = "bincode"))]
     {
         let std = include_str!("std.jq");
-        jaq_parse::parse(std, jaq_parse::defs()).0.unwrap()
+        jaq_parse::parse(unstable, std, jaq_parse::defs(unstable))
+            .0
+            .unwrap()
     }
 }

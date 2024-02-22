@@ -9,6 +9,7 @@ pub type Path<T> = Vec<(Part<crate::Spanned<T>>, Opt)>;
 /// A part of a path, such as `[]`, `a`, and `[1:]` in `.[].a?[1:]`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum Part<I> {
     /// Access arrays with integer and objects with string indices
     Index(I),
@@ -23,6 +24,7 @@ pub enum Part<I> {
 /// Annotating them with `?` makes them *optional*.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum Opt {
     /// Return nothing if the input cannot be accessed with the path
     Optional,

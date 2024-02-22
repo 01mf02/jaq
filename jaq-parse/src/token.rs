@@ -175,6 +175,7 @@ fn char_() -> impl Parser<char, char, Error = Simple<char>> {
 }
 
 pub fn tree(
+    #[cfg(feature = "unstable-flag")] unstable: bool,
     tree: impl Parser<char, Tree, Error = Simple<char>> + Clone,
 ) -> impl Parser<char, Tree, Error = Simple<char>> {
     let trees = || tree.clone().map_with_span(|t, span| (t, span)).repeated();
@@ -204,7 +205,11 @@ pub fn tree(
         brack.map(|t| Tree::Delim(Delim::Brack, t)),
         brace.map(|t| Tree::Delim(Delim::Brace, t)),
         string.map(|(s, interpol)| Tree::String(s, interpol)),
-        token().map(Tree::Token),
+        token(
+            #[cfg(feature = "unstable-flag")]
+            unstable,
+        )
+        .map(Tree::Token),
     ))
     .recover_with(strategy('(', ')', [('[', ']'), ('{', '}')]))
     .recover_with(strategy('[', ']', [('{', '}'), ('(', ')')]))
@@ -213,12 +218,23 @@ pub fn tree(
     .padded()
 }
 
-pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
+pub fn token(
+    #[cfg(feature = "unstable-flag")] unstable: bool,
+) -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
-    let op = one_of("|=!<>+-*/%")
-        .chain::<char, _, _>(just('/').or_not())
-        .chain::<char, _, _>(just('=').or_not())
-        .collect();
+    #[cfg(feature = "unstable-flag")]
+    let op = crate::either::ChumskyEither::from(if unstable {
+        crate::either::Left(
+            one_of("|=!<>+-*/%")
+                .chain::<char, _, _>(just('/').or_not())
+                .chain::<char, _, _>(just('=').or_not())
+                .collect(),
+        )
+    } else {
+        crate::either::Right(one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect())
+    });
+    #[cfg(not(feature = "unstable-flag"))]
+    let op = one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect();
 
     let var = just('$').ignore_then(text::ident());
 

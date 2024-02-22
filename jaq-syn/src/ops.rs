@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// Binary arithmetical operators (`+`, `-`, `*`, `/`, `%`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum MathOp {
     /// Addition operator (`+`)
     Add,
@@ -50,6 +51,7 @@ impl fmt::Display for MathOp {
 /// Binary comparative operators (`<`, `<=`, `>`, `>=`, `==`, `!=`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum OrdOp {
     /// Less-than operation (`<`).
     Lt,

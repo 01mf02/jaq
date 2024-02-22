@@ -12,6 +12,11 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
+    /// Enable unstable features.
+    #[cfg(feature = "unstable-flag")]
+    #[arg(long)]
+    unstable: bool,
+
     /// Use null as single input value
     #[arg(short, long)]
     null_input: bool,
@@ -126,18 +131,28 @@ fn real_main() -> Result<ExitCode, Error> {
         .format_target(false)
         .init();
 
+    #[cfg(feature = "unstable")]
+    log::info!("jaq: unstable features enabled");
+    #[cfg(feature = "unstable-flag")]
+    let unstable = cli.unstable;
+    #[cfg(not(feature = "unstable-flag"))]
+    let unstable = false;
+    if unstable {
+        log::info!("jaq: unstable feature flag enabled");
+    }
+
     if let Some(test_file) = &cli.run_tests {
-        return Ok(run_tests(std::fs::File::open(test_file)?));
+        return Ok(run_tests(unstable, std::fs::File::open(test_file)?));
     }
 
     let (vars, ctx) = binds(&cli)?.into_iter().unzip();
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
-        Some(file) => parse(&std::fs::read_to_string(file)?, vars)?,
+        Some(file) => parse(unstable, &std::fs::read_to_string(file)?, vars)?,
         None => {
             if let Some(filter) = args.next() {
-                parse(filter, vars)?
+                parse(unstable, filter, vars)?
             } else {
                 Filter::default()
             }
@@ -232,12 +247,30 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
-fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
+fn parse(
+    #[cfg_attr(not(feature = "unstable-flag"), allow(unused_variables))] unstable: bool,
+    filter_str: &str,
+    vars: Vec<String>,
+) -> Result<Filter, Vec<ParseError>> {
     let mut defs = ParseCtx::new(vars);
-    defs.insert_natives(jaq_core::core());
-    defs.insert_defs(jaq_std::std());
+    defs.insert_natives(jaq_core::core(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+    ));
+    defs.insert_defs(jaq_std::std(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+    ));
     assert!(defs.errs.is_empty());
-    let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
+    let (filter, errs) = jaq_parse::parse(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+        filter_str,
+        jaq_parse::main(
+            #[cfg(feature = "unstable-flag")]
+            unstable,
+        ),
+    );
     if !errs.is_empty() {
         return Err(errs
             .into_iter()
@@ -533,10 +566,14 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
 }
 
 fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
+    #[cfg(feature = "unstable-flag")]
+    let unstable = test.unstable;
+    #[cfg(not(feature = "unstable-flag"))]
+    let unstable = false;
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(Vec::new(), &inputs);
 
-    let filter = parse(&test.filter, Vec::new())?;
+    let filter = parse(unstable, &test.filter, Vec::new())?;
 
     use hifijson::token::Lex;
     let json = |s: String| {
@@ -550,9 +587,16 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
 }
 
-fn run_tests(file: std::fs::File) -> ExitCode {
+fn run_tests(
+    #[cfg_attr(not(feature = "unstable-flag"), allow(unused_variables))] unstable: bool,
+    file: std::fs::File,
+) -> ExitCode {
     let lines = io::BufReader::new(file).lines().map(|l| l.unwrap());
-    let tests = jaq_syn::test::Parser::new(lines);
+    let tests = jaq_syn::test::Parser::new(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+        lines,
+    );
 
     let (mut passed, mut total) = (0, 0);
     for test in tests {

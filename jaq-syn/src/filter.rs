@@ -8,12 +8,15 @@ use serde::{Deserialize, Serialize};
 /// Assignment operators (`=`, `|=`, `//=`, `+=`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum AssignOp {
     /// Assignment operator (`=`)
     Assign,
     /// Update-assignment operator (`|=`)
     Update,
     /// Alternation update-assignment operator (`//=`)
+    #[cfg(feature = "unstable-flag")]
+    #[deprecated(note = "Unstable feature")]
     AltUpdate,
     /// Arithmetic update-assignment operator (`+=`, `-=`, `*=`, `/=`, `%=`, …)
     UpdateWith(MathOp),
@@ -24,6 +27,8 @@ impl fmt::Display for AssignOp {
         match self {
             Self::Assign => "=".fmt(f),
             Self::Update => "|=".fmt(f),
+            #[cfg(feature = "unstable-flag")]
+            #[allow(deprecated)]
             Self::AltUpdate => "//=".fmt(f),
             Self::UpdateWith(op) => write!(f, "{op}="),
         }
@@ -33,6 +38,7 @@ impl fmt::Display for AssignOp {
 /// Binary operators (`|`, `,`, `//`, `or`, `and`, `+=`, …, `=`, …, `<`, …)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum BinaryOp {
     /// Binding operator (`EXP as $x | EXP`) if identifier (`x`) is given,
     /// otherwise application operator (`EXP | EXP`)
@@ -59,6 +65,7 @@ pub enum BinaryOp {
 /// consists of two elements, namely `(.): 1` and `b: 2`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum KeyVal<T> {
     /// Both key and value are proper filters, e.g. `{(.+1): .+2}`
     Filter(T, T),
@@ -80,6 +87,7 @@ impl<F> KeyVal<F> {
 /// Common information for folding filters (such as `reduce` and `foreach`)
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub struct Fold<F> {
     /// Generator
     pub xs: F,
@@ -91,9 +99,17 @@ pub struct Fold<F> {
     pub f: F,
 }
 
+impl<F> Fold<F> {
+    /// Create common information for folding filters.
+    pub fn new(xs: F, x: String, init: F, f: F) -> Self {
+        Self { xs, x, init, f }
+    }
+}
+
 /// Type of folding filter.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum FoldType {
     /// Return only the final value of fold
     Reduce,
@@ -106,6 +122,7 @@ pub enum FoldType {
 /// Function from value to stream of values, such as `.[] | add / length`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum Filter<C = String, V = String, Num = String> {
     /// Call to another filter (`FILTER(…)`), e.g. `map(.+1)`
     Call(C, Vec<Spanned<Self>>),

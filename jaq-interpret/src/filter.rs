@@ -161,6 +161,8 @@ where
             |y, (ctx, cv, args)| then(y, |y| bind_vars(args, ctx.cons_var(y), cv)),
         ),
         Some(Bind::Fun(Ref(arg, _defs))) => bind_vars(args, ctx.cons_fun((arg, cv.0.clone())), cv),
+        #[cfg(feature = "unstable-flag")]
+        Some(_) => unimplemented!(),
         None => box_once(Ok((ctx, cv.1))),
     }
 }
@@ -324,6 +326,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(f).run((cv.0.clone(), v))),
             ),
+            #[cfg(feature = "unstable-flag")]
             Ast::AltUpdate(path, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(
                     cv,
@@ -358,12 +361,16 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     FoldType::Foreach => flat_map_with(init, xs, move |i, xs| {
                         then(i, |i| Box::new(fold(true, xs, Input(i), f.clone())))
                     }),
+                    #[cfg(feature = "unstable-flag")]
+                    _ => unimplemented!(),
                 }
             }
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
                 Bind::Fun(f) => w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)),
+                #[cfg(feature = "unstable-flag")]
+                _ => unimplemented!(),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);
@@ -399,7 +406,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Assign(..) | Ast::Update(..) | Ast::AltUpdate(..) | Ast::UpdateMath(..) => err,
+            Ast::Assign(..) | Ast::Update(..) | Ast::UpdateMath(..) => err,
+            #[cfg(feature = "unstable-flag")]
+            Ast::AltUpdate(..) => err,
 
             Ast::Try(..) | Ast::Alt(..) => todo!("these are up for grabs to implement :)"),
             Ast::Fold(..) => todo!("these are up for grabs to implement :)"),
@@ -436,6 +445,8 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
                 Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
+                #[cfg(feature = "unstable-flag")]
+                _ => unimplemented!(),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);

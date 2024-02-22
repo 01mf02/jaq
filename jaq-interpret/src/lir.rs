@@ -140,6 +140,8 @@ impl Ctx {
             let iter = s.parts.into_iter().map(|part| match part {
                 Part::Str(s) => Filter::Str(s),
                 Part::Fun(f) => Filter::Pipe(get(f, ctx), false, fmt),
+                #[cfg(feature = "unstable-flag")]
+                _ => unimplemented!(),
             });
             let mut iter = iter.collect::<Vec<_>>().into_iter().rev();
             let last = iter.next();
@@ -203,6 +205,8 @@ impl Ctx {
                         };
                         (k, v)
                     }
+                    #[cfg(feature = "unstable-flag")]
+                    _ => unimplemented!(),
                 });
                 Filter::Object(kvs.collect())
             }
@@ -222,8 +226,12 @@ impl Ctx {
                     BinaryOp::Ord(op) => Filter::Ord(l, op, r),
                     BinaryOp::Assign(AssignOp::Assign) => Filter::Assign(l, r),
                     BinaryOp::Assign(AssignOp::Update) => Filter::Update(l, r),
+                    #[cfg(feature = "unstable-flag")]
+                    #[allow(deprecated)]
                     BinaryOp::Assign(AssignOp::AltUpdate) => Filter::AltUpdate(l, r),
                     BinaryOp::Assign(AssignOp::UpdateWith(op)) => Filter::UpdateMath(l, op, r),
+                    #[cfg(feature = "unstable-flag")]
+                    _ => unimplemented!(),
                 }
             }
 
@@ -246,9 +254,13 @@ impl Ctx {
                         let upper = upper.map(|f| get(f, self));
                         (path::Part::Range(lower, upper), opt)
                     }
+                    #[cfg(feature = "unstable-flag")]
+                    _ => unimplemented!(),
                 });
                 Filter::Path(f, Path(path.collect()))
             }
+            #[cfg(feature = "unstable-flag")]
+            _ => unimplemented!(),
         }
     }
 }

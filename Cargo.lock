@@ -149,6 +149,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
 
 [[package]]
+name = "either"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
+
+[[package]]
 name = "env_logger"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -255,6 +261,7 @@ dependencies = [
  "jaq-parse",
  "jaq-std",
  "jaq-syn",
+ "log",
  "memmap2",
  "mimalloc",
  "serde_json",
@@ -283,7 +290,9 @@ name = "jaq-interpret"
 version = "1.2.1"
 dependencies = [
  "ahash",
+ "chumsky",
  "dyn-clone",
+ "either",
  "hifijson",
  "indexmap",
  "jaq-parse",
@@ -297,6 +306,7 @@ name = "jaq-parse"
 version = "1.0.2"
 dependencies = [
  "chumsky",
+ "either",
  "jaq-syn",
 ]
 
