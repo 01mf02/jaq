@@ -1,4 +1,4 @@
-use std::{env, fs, io, path, process, str};
+use std::{env, io, process, str};
 
 fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
     let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
