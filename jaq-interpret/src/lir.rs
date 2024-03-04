@@ -66,11 +66,9 @@ fn recurse(typ: CallTyp) -> Filter {
 impl Ctx {
     /// `{}[]` returns zero values.
     fn empty(&mut self) -> Filter {
-        // `{}`
-        let obj = Filter::Object(Default::default());
         // `[]`
         let path = (path::Part::Range(None, None), path::Opt::Essential);
-        Filter::Path(self.id_of_ast(obj), Path(Vec::from([path])))
+        Filter::Path(self.id_of_ast(Filter::ObjEmpty), Path(Vec::from([path])))
     }
 
     /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`
@@ -128,31 +126,52 @@ impl Ctx {
         AbsId(len)
     }
 
+    fn get(&mut self, f: Spanned<mir::Filter>) -> AbsId {
+        let f = self.filter(f);
+        self.id_of_ast(f)
+    }
+
+    fn add(&mut self, l: Filter, r: Filter) -> Filter {
+        Filter::Math(self.id_of_ast(l), MathOp::Add, self.id_of_ast(r))
+    }
+
+    fn of_str(&mut self, s: Str<Spanned<mir::Filter>>) -> Filter {
+        let fmt = s.fmt.map_or(TOSTRING, |fmt| self.get(*fmt));
+        use jaq_syn::string::Part;
+        let iter = s.parts.into_iter().map(|part| match part {
+            Part::Str(s) => Filter::Str(s),
+            Part::Fun(f) => Filter::Pipe(self.get(f), false, fmt),
+        });
+        let mut iter = iter.collect::<Vec<_>>().into_iter().rev();
+        let last = iter.next().unwrap_or_else(|| Filter::Str("".into()));
+        iter.fold(last, |acc, x| self.add(x, acc))
+    }
+
+    fn of_key_val(&mut self, kv: KeyVal<Spanned<mir::Filter>>) -> Filter {
+        match kv {
+            KeyVal::Filter(k, v) => Filter::ObjSingle(self.get(k), self.get(v)),
+            KeyVal::Str(k, v) => {
+                let k = self.of_str(k);
+                let k = self.id_of_ast(k);
+                let v = match v {
+                    None => {
+                        self.id_of_ast(Filter::Path(IDENTITY, Path::from(path::Part::Index(k))))
+                    }
+                    Some(v) => self.get(v),
+                };
+                Filter::ObjSingle(k, v)
+            }
+        }
+    }
+
     /// Convert a MIR filter to a LIR filter.
     fn filter(&mut self, f: Spanned<mir::Filter>) -> Filter {
-        let get = |f, ctx: &mut Self| {
-            let f = ctx.filter(f);
-            ctx.id_of_ast(f)
-        };
-        let of_str = |s: Str<_>, ctx: &mut Self| {
-            let fmt = s.fmt.map_or(TOSTRING, |fmt| get(*fmt, ctx));
-            use jaq_syn::string::Part;
-            let iter = s.parts.into_iter().map(|part| match part {
-                Part::Str(s) => Filter::Str(s),
-                Part::Fun(f) => Filter::Pipe(get(f, ctx), false, fmt),
-            });
-            let mut iter = iter.collect::<Vec<_>>().into_iter().rev();
-            let last = iter.next();
-            iter.fold(last.unwrap_or_else(|| Filter::Str("".into())), |acc, x| {
-                Filter::Math(ctx.id_of_ast(x), MathOp::Add, ctx.id_of_ast(acc))
-            })
-        };
         use mir::Filter as Expr;
 
         match f.0 {
             Expr::Var(v) => Filter::Var(v),
             Expr::Call(call, args) => {
-                let args: Vec<_> = args.into_iter().map(|a| get(a, self)).collect();
+                let args: Vec<_> = args.into_iter().map(|a| self.get(a)).collect();
                 match call {
                     mir::Call::Arg(a) if args.is_empty() => Filter::Var(a),
                     mir::Call::Arg(_) => panic!("higher-order argument encountered"),
@@ -180,38 +199,26 @@ impl Ctx {
             }
 
             Expr::Fold(typ, Fold { xs, init, f, .. }) => {
-                Filter::Fold(typ, get(*xs, self), get(*init, self), get(*f, self))
+                Filter::Fold(typ, self.get(*xs), self.get(*init), self.get(*f))
             }
 
             Expr::Id => Filter::Id,
             Expr::Num(hir::Num::Float(f)) => Filter::Float(f),
             Expr::Num(hir::Num::Int(i)) => Filter::Int(i),
-            Expr::Str(s) => of_str(*s, self),
-            Expr::Array(a) => Filter::Array(a.map_or(EMPTY, |a| get(*a, self))),
+            Expr::Str(s) => self.of_str(*s),
+            Expr::Array(a) => Filter::Array(a.map_or(EMPTY, |a| self.get(*a))),
             Expr::Object(o) => {
-                let kvs = o.into_iter().map(|kv| match kv {
-                    KeyVal::Filter(k, v) => (get(k, self), get(v, self)),
-                    KeyVal::Str(k, v) => {
-                        let k = of_str(k, self);
-                        let k = self.id_of_ast(k);
-                        let v = match v {
-                            None => self.id_of_ast(Filter::Path(
-                                IDENTITY,
-                                Path::from(path::Part::Index(k)),
-                            )),
-                            Some(v) => get(v, self),
-                        };
-                        (k, v)
-                    }
-                });
-                Filter::Object(kvs.collect())
+                let kvs = o.into_iter().map(|kv| self.of_key_val(kv));
+                let mut kvs = kvs.collect::<Vec<_>>().into_iter().rev();
+                let last = kvs.next().unwrap_or(Filter::ObjEmpty);
+                kvs.fold(last, |acc, x| self.add(x, acc))
             }
-            Expr::Try(f) => Filter::Try(get(*f, self), EMPTY),
-            Expr::Neg(f) => Filter::Neg(get(*f, self)),
+            Expr::Try(f) => Filter::Try(self.get(*f), EMPTY),
+            Expr::Neg(f) => Filter::Neg(self.get(*f)),
             Expr::Recurse => recurse(CallTyp::Catch),
 
             Expr::Binary(l, op, r) => {
-                let (l, r) = (get(*l, self), get(*r, self));
+                let (l, r) = (self.get(*l), self.get(*r));
                 match op {
                     BinaryOp::Pipe(bind) => Filter::Pipe(l, bind.is_some(), r),
                     BinaryOp::Comma => Filter::Comma(l, r),
@@ -229,20 +236,20 @@ impl Ctx {
             Expr::Ite(if_thens, else_) => {
                 let else_ = else_.map_or(Filter::Id, |else_| self.filter(*else_));
                 if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
-                    Filter::Ite(get(if_, self), get(then_, self), self.id_of_ast(acc))
+                    Filter::Ite(self.get(if_), self.get(then_), self.id_of_ast(acc))
                 })
             }
             Expr::TryCatch(try_, catch_) => {
-                Filter::Try(get(*try_, self), catch_.map_or(EMPTY, |c| get(*c, self)))
+                Filter::Try(self.get(*try_), catch_.map_or(EMPTY, |c| self.get(*c)))
             }
             Expr::Path(f, path) => {
-                let f = get(*f, self);
+                let f = self.get(*f);
                 use jaq_syn::path::Part;
                 let path = path.into_iter().map(|(p, opt)| match p {
-                    Part::Index(i) => (path::Part::Index(get(i, self)), opt),
+                    Part::Index(i) => (path::Part::Index(self.get(i)), opt),
                     Part::Range(lower, upper) => {
-                        let lower = lower.map(|f| get(f, self));
-                        let upper = upper.map(|f| get(f, self));
+                        let lower = lower.map(|f| self.get(f));
+                        let upper = upper.map(|f| self.get(f));
                         (path::Part::Range(lower, upper), opt)
                     }
                 });
