@@ -12,7 +12,25 @@ categories = ["command-line-utilities", "compilers", "parser-implementations"]
 rust-version = "1.64"
 
 [features]
-default = ["mimalloc"]
+default = [
+    "mimalloc",
+    "unstable-flag",
+]
+unstable = [
+    "unstable-flag",
+    "jaq-syn/unstable",
+    "jaq-parse/unstable",
+    "jaq-interpret/unstable",
+    "jaq-core/unstable",
+    "jaq-std/unstable",
+]
+unstable-flag = [
+    "jaq-syn/unstable-flag",
+    "jaq-parse/unstable-flag",
+    "jaq-interpret/unstable-flag",
+    "jaq-core/unstable-flag",
+    "jaq-std/unstable-flag",
+]
 
 [dependencies]
 jaq-syn       = { version = "1.1.0", path = "../jaq-syn" }
@@ -27,6 +45,7 @@ clap = { version = "4.0.0", features = ["derive"] }
 colored_json = "3.0.1"
 env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
+log = { version = "0.4.17" }
 memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
 serde_json = { version = "1.0.81", features = [ "arbitrary_precision", "preserve_order" ] }

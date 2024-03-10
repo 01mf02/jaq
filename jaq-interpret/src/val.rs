@@ -20,6 +20,7 @@ use jaq_syn::MathOp;
 /// * The sum, difference, product, and remainder of two integers is integer.
 /// * Any other operation between two numbers yields a float.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum Val {
     /// Null
     Null,

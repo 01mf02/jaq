@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// Call to a filter identified by a name type `N` with arguments of type `A`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub struct Call<A = Arg, N = String> {
     /// Name of the filter, e.g. `map`
     pub name: N,
@@ -16,6 +17,11 @@ pub struct Call<A = Arg, N = String> {
 }
 
 impl<A, N> Call<A, N> {
+    /// Create a call to a filter identified by a name type `N` with arguments of type `A`.
+    pub fn new(name: N, args: Vec<A>) -> Self {
+        Self { name, args }
+    }
+
     /// Apply a function to the call arguments.
     pub fn map_args<B>(self, f: impl FnMut(A) -> B) -> Call<B, N> {
         Call {
@@ -28,11 +34,19 @@ impl<A, N> Call<A, N> {
 /// A definition, such as `def map(f): [.[] | f];`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub struct Def<Rhs = Main> {
     /// left-hand side, i.e. what shall be defined, e.g. `map(f)`
     pub lhs: Call,
     /// right-hand side, i.e. what the LHS should be defined as, e.g. `[.[] | f]`
     pub rhs: Rhs,
+}
+
+impl<Rhs> Def<Rhs> {
+    /// Create a definition.
+    pub fn new(lhs: Call, rhs: Rhs) -> Self {
+        Self { lhs, rhs }
+    }
 }
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
@@ -47,6 +61,7 @@ pub struct Def<Rhs = Main> {
 /// In the third case, we bind `f` to a filter `fx`
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum Arg<V = String, F = V> {
     /// binding to a variable
     Var(V),
@@ -124,9 +139,17 @@ impl<V: Deref, F: Deref> Arg<V, F> {
 /// (Potentially empty) sequence of definitions, followed by a filter.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub struct Main<F = Filter> {
     /// Definitions at the top of the filter
     pub defs: Vec<Def<Self>>,
     /// Body of the filter, e.g. `[.[] | f`.
     pub body: Spanned<F>,
+}
+
+impl<F> Main<F> {
+    /// Construct a (potentially empty) sequence of definitions, followed by a filter.
+    pub fn new(defs: Vec<Def<Self>>, body: Spanned<F>) -> Self {
+        Self { defs, body }
+    }
 }

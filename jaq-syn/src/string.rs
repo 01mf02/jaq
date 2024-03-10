@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 /// A part of an interpolated string.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub enum Part<T> {
     /// constant string
     Str(String),
@@ -34,6 +35,7 @@ impl<T> Part<T> {
 /// A possibly interpolated string.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "unstable-flag", non_exhaustive)]
 pub struct Str<T> {
     /// optional filter that is applied to the output of interpolated filters
     /// (`tostring` if not given)
@@ -43,6 +45,11 @@ pub struct Str<T> {
 }
 
 impl<T> Str<T> {
+    /// Create a possibly interpolated string.
+    pub fn new(fmt: Option<Box<T>>, parts: Vec<Part<T>>) -> Self {
+        Self { fmt, parts }
+    }
+
     /// Apply a function to the contained filters.
     pub fn map<U>(self, mut f: impl FnMut(T) -> U) -> Str<U> {
         Str {

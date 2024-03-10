@@ -8,9 +8,12 @@ readme = "../README.md"
 description = "Syntax of the jaq language"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
+rust-version = "1.63"
 
 [features]
 default = ["serde"]
+unstable = ["unstable-flag"]
+unstable-flag = []
 
 [dependencies]
 serde = { version = "1.0.137", features = ["derive"], optional = true }

@@ -2,15 +2,15 @@ use super::{Delim, Token};
 use chumsky::prelude::*;
 use jaq_syn::{Call, Spanned, Str};
 
-pub fn str_<T, P>(expr: P) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
+pub fn str_<T, P>(
+    #[allow(unused_variables)] unstable: bool,
+    expr: P,
+) -> impl Parser<Token, Str<Spanned<T>>, Error = P::Error> + Clone
 where
     T: From<Call<Spanned<T>>>,
     P: Parser<Token, Spanned<T>, Error = Simple<Token>> + Clone,
 {
-    let call = |name| Call {
-        name,
-        args: Default::default(),
-    };
+    let call = |name| Call::new(name, Default::default());
     let ident = select! {
         Token::Ident(ident) if ident.starts_with('@') => ident,
     };
@@ -29,6 +29,6 @@ where
     });
     fmt.or_not()
         .then(parts.delimited_by(just(Token::Quote), just(Token::Quote)))
-        .map(|(fmt, parts)| Str { fmt, parts })
+        .map(|(fmt, parts)| Str::new(fmt, parts))
         .labelled("string")
 }

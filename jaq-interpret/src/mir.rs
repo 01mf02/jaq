@@ -126,11 +126,11 @@ impl Ctx {
                 Expr::Binary(get(self, *l, notr()), op, get(self, *r, notr()))
             }
 
-            Expr::Fold(typ, Fold { xs, x, init, f }) => {
+            Expr::Fold(typ, Fold { xs, x, init, f, .. }) => {
                 let xs = get(self, *xs, notr());
                 let init = get(self, *init, notr());
                 let f = get(self, *f, notr());
-                Expr::Fold(typ, Fold { xs, x, init, f })
+                Expr::Fold(typ, Fold::new(xs, x, init, f))
             }
             Expr::Id => Expr::Id,
             Expr::Recurse => Expr::Recurse,
@@ -161,6 +161,8 @@ impl Ctx {
                     .map(|(p, opt)| (p.map(|p| self.expr(p, notr())), opt));
                 Expr::Path(f, path.collect())
             }
+            #[cfg(feature = "unstable-flag")]
+            _ => unimplemented!(),
         };
         (result, f.1)
     }

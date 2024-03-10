@@ -22,7 +22,11 @@
 //! let mut defs = ParseCtx::new(Vec::new());
 //!
 //! // parse the filter
-//! let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
+//! let (f, errs) = jaq_parse::parse(
+//!     #[cfg(feature = "unstable-flag")] false,
+//!     filter,
+//!     jaq_parse::main(#[cfg(feature = "unstable-flag")] false),
+//! );
 //! assert_eq!(errs, Vec::new());
 //!
 //! // compile the filter in the context of the given definitions
@@ -117,8 +121,10 @@ impl<'a> Ctx<'a> {
     }
 
     fn with_vars(&self, vars: Vars) -> Self {
-        let inputs = self.inputs;
-        Self { vars, inputs }
+        Self {
+            vars,
+            inputs: self.inputs,
+        }
     }
 
     /// Return remaining input values.
@@ -145,16 +151,10 @@ impl ParseCtx {
     /// values corresponding to the variables have to be supplied in the execution context.
     pub fn new(vars: Vec<String>) -> Self {
         use alloc::string::ToString;
-        let def = jaq_syn::Def {
-            lhs: jaq_syn::Call {
-                name: "$".to_string(),
-                args: vars.into_iter().map(Bind::Var).collect(),
-            },
-            rhs: jaq_syn::Main {
-                defs: Vec::new(),
-                body: (jaq_syn::filter::Filter::Id, 0..0),
-            },
-        };
+        let def = jaq_syn::Def::new(
+            jaq_syn::Call::new("$".to_string(), vars.into_iter().map(Bind::Var).collect()),
+            jaq_syn::Main::new(Vec::new(), (jaq_syn::filter::Filter::Id, 0..0)),
+        );
 
         Self {
             errs: Vec::new(),

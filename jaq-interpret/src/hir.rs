@@ -55,6 +55,8 @@ impl fmt::Display for Error {
             Self::Undefined(Bind::Fun(_)) => "undefined filter",
             Self::Num(Num::Float(_)) => "cannot interpret as floating-point number",
             Self::Num(Num::Int(_)) => "cannot interpret as machine-size integer",
+            #[cfg(feature = "unstable-flag")]
+            _ => unimplemented!(),
         }
         .fmt(f)
     }
@@ -126,7 +128,7 @@ impl Ctx {
             .drain(self.callable.len() - defs.len()..)
             .for_each(|callable| assert_eq!(callable.typ, Relative::Sibling));
 
-        jaq_syn::Main { defs, body }
+        jaq_syn::Main::new(defs, body)
     }
 
     pub fn def(&mut self, def: jaq_syn::Def) -> Def {
@@ -136,7 +138,7 @@ impl Ctx {
         });
         let rhs = self.main(def.rhs);
         self.callable.last_mut().unwrap().typ = Relative::Sibling;
-        jaq_syn::Def { lhs: def.lhs, rhs }
+        jaq_syn::Def::new(def.lhs, rhs)
     }
 
     fn expr(&mut self, f: Spanned<Expr>) -> Spanned<Filter> {
@@ -168,12 +170,12 @@ impl Ctx {
                 assert!(self.vars.pop().as_ref() == Some(&x));
                 Expr::Binary(l, BinaryOp::Pipe(Some(x)), r)
             }
-            Expr::Fold(typ, Fold { xs, x, init, f }) => {
+            Expr::Fold(typ, Fold { xs, x, init, f, .. }) => {
                 let (xs, init) = (get(self, *xs), get(self, *init));
                 self.vars.push(x.clone());
                 let f = get(self, *f);
                 assert!(self.vars.pop().as_ref() == Some(&x));
-                Expr::Fold(typ, Fold { xs, x, init, f })
+                Expr::Fold(typ, Fold::new(xs, x, init, f))
             }
             Expr::Id => Expr::Id,
             Expr::Num(n) => Expr::Num(Num::parse(&n).unwrap_or_else(|n| {
@@ -206,6 +208,8 @@ impl Ctx {
                     .map(|(p, opt)| (p.map(|p| self.expr(p)), opt));
                 Expr::Path(f, path.collect())
             }
+            #[cfg(feature = "unstable-flag")]
+            _ => unimplemented!(),
         };
         (result, f.1)
     }

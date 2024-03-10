@@ -12,6 +12,8 @@ rust-version = "1.64"
 
 [features]
 default = ["bincode"]
+unstable = ["unstable-flag", "jaq-syn/unstable", "jaq-parse/unstable"]
+unstable-flag = ["jaq-syn/unstable-flag", "jaq-parse/unstable-flag"]
 
 [build-dependencies]
 jaq-parse = { version = "1.0.0", path = "../jaq-parse" }

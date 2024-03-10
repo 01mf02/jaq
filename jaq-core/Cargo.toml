@@ -12,6 +12,8 @@ rust-version = "1.63"
 
 [features]
 default = ["std", "format", "log", "math", "parse_json", "regex", "time"]
+unstable = ["unstable-flag", "jaq-interpret/unstable"]
+unstable-flag = ["jaq-interpret/unstable-flag"]
 std = []
 format = ["aho-corasick", "base64", "urlencoding"]
 math = ["libm"]

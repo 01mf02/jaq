@@ -24,7 +24,11 @@ use jaq_interpret::{Error, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs}
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
+pub fn minimal(
+    #[cfg(feature = "unstable-flag")]
+    #[allow(unused_variables)]
+    unstable: bool,
+) -> impl Iterator<Item = (String, usize, Native)> {
     run(CORE_RUN).chain(upd(CORE_UPDATE))
 }
 
@@ -42,15 +46,20 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
     feature = "regex",
     feature = "time",
 ))]
-pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
-    minimal()
-        .chain(run(STD))
-        .chain(run(FORMAT))
-        .chain(upd(LOG))
-        .chain(run(MATH))
-        .chain(run(PARSE_JSON))
-        .chain(run(REGEX))
-        .chain(run(TIME))
+pub fn core(
+    #[cfg(feature = "unstable-flag")] unstable: bool,
+) -> impl Iterator<Item = (String, usize, Native)> {
+    minimal(
+        #[cfg(feature = "unstable-flag")]
+        unstable,
+    )
+    .chain(run(STD))
+    .chain(run(FORMAT))
+    .chain(upd(LOG))
+    .chain(run(MATH))
+    .chain(run(PARSE_JSON))
+    .chain(run(REGEX))
+    .chain(run(TIME))
 }
 
 fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
@@ -86,6 +95,8 @@ fn length(v: &Val) -> ValR {
         Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
         Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
         Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
+        #[cfg(feature = "unstable-flag")]
+        _ => unimplemented!(),
     }
 }
 

@@ -54,21 +54,34 @@ impl Owned {
 /// Function from a value to a stream of value results.
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Ast {
+    /// Nullary identity operation (`.`)
     #[default]
     Id,
     ToString,
 
+    /// Integer value literal
     Int(isize),
+    /// Floating point value literal
     Float(f64),
+    /// String value literal
     Str(String),
+    /// Array value literal (`[f]`)
     Array(Id),
+    /// Object value literal (`{}`, `{(f): g, …}`)
     Object(Box<[(Id, Id)]>),
 
+    /// Try-catch (`try f catch g`)
     Try(Id, Id),
+    /// Unary negation operation (`-f`)
     Neg(Id),
+    /// Binary binding operation (`f as $VAR | g`) if identifier (`VAR`) is
+    /// given, otherwise binary application operation (`f | g`)
     Pipe(Id, bool, Id),
+    /// Binary concatenation operation (`f, g`)
     Comma(Id, Id),
+    /// Binary alternation operation (`f // g`)
     Alt(Id, Id),
+    /// If-then-else (`if f then g else h end`)
     Ite(Id, Id, Id),
     /// `reduce`, `for`, and `foreach`
     ///
@@ -95,17 +108,31 @@ pub(crate) enum Ast {
     /// ~~~
     Fold(FoldType, Id, Id, Id),
 
+    /// Path
     Path(Id, crate::path::Path<Id>),
 
-    Update(Id, Id),
-    UpdateMath(Id, MathOp, Id),
+    /// Assignment operation (`f = g`)
     Assign(Id, Id),
+    /// Update-assignment operation (`f |= g`)
+    Update(Id, Id),
+    /// Alternation update-assignment operation (`f //= g`)
+    AltUpdate(Id, Id),
+    /// Arithmetical update-assignment operation (`f += g`, `f -= g`, `f *= g`,
+    /// `f /= g`, `f %= g`, …)
+    UpdateMath(Id, MathOp, Id),
 
+    /// Binary logical operation (`f and g`, `f or g`)
     Logic(Id, bool, Id),
+    /// Binary arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`,
+    /// `f % g`, …)
     Math(Id, MathOp, Id),
+    /// Binary comparative operation (`f < g`, `f <= g`, `f > g`, `f >= g`,
+    /// `f == g`, `f != g`, …)
     Ord(Id, OrdOp, Id),
 
+    /// Bound variable reference (`$x`)
     Var(usize),
+    /// Call to a filter (`filter`, `filter(…)`)
     Call(Call),
 
     Native(Native, Box<[Id]>),
@@ -134,6 +161,8 @@ where
             |y, (ctx, cv, args)| then(y, |y| bind_vars(args, ctx.cons_var(y), cv)),
         ),
         Some(Bind::Fun(Ref(arg, _defs))) => bind_vars(args, ctx.cons_fun((arg, cv.0.clone())), cv),
+        #[cfg(feature = "unstable-flag")]
+        Some(_) => unimplemented!(),
         None => box_once(Ok((ctx, cv.1))),
     }
 }
@@ -290,15 +319,22 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 })
             }
 
+            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
+            }),
             Ast::Update(path, f) => w(path).update(
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| w(f).run((cv.0.clone(), v))),
             ),
+            #[cfg(feature = "unstable-flag")]
+            Ast::AltUpdate(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(
+                    cv,
+                    Box::new(move |x| box_once(Ok(if x.as_bool() { x } else { y.clone() }))),
+                )
+            }),
             Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
-            }),
-            Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
-                w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
             Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
                 if l.as_bool() == *stop {
@@ -325,12 +361,16 @@ impl<'a> FilterT<'a> for Ref<'a> {
                     FoldType::Foreach => flat_map_with(init, xs, move |i, xs| {
                         then(i, |i| Box::new(fold(true, xs, Input(i), f.clone())))
                     }),
+                    #[cfg(feature = "unstable-flag")]
+                    _ => unimplemented!(),
                 }
             }
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
                 Bind::Fun(f) => w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)),
+                #[cfg(feature = "unstable-flag")]
+                _ => unimplemented!(),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);
@@ -366,11 +406,12 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::Object(_) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
+            Ast::Assign(..) | Ast::Update(..) | Ast::UpdateMath(..) => err,
+            #[cfg(feature = "unstable-flag")]
+            Ast::AltUpdate(..) => err,
 
-            // these are up for grabs to implement :)
-            Ast::Try(..) | Ast::Alt(..) => todo!(),
-            Ast::Fold(..) => todo!(),
+            Ast::Try(..) | Ast::Alt(..) => todo!("these are up for grabs to implement :)"),
+            Ast::Fold(..) => todo!("these are up for grabs to implement :)"),
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
@@ -404,6 +445,8 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
                 Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
+                #[cfg(feature = "unstable-flag")]
+                _ => unimplemented!(),
             },
             Ast::Call(call) => {
                 let def = w(&call.id);
