@@ -370,6 +370,11 @@ impl core::ops::Sub for Val {
             (Float(x), Float(y)) => Ok(Float(x - y)),
             (Num(n), r) => Self::from_dec_str(&n) - r,
             (l, Num(n)) => l - Self::from_dec_str(&n),
+            (Arr(mut l), Arr(r)) => {
+                let r = alloc::collections::BTreeSet::from_iter(r.iter());
+                Rc::make_mut(&mut l).retain(|x| !r.contains(x));
+                Ok(Arr(l))
+            }
             (l, r) => Err(Error::MathOp(l, MathOp::Sub, r)),
         }
     }

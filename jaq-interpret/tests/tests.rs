@@ -43,6 +43,8 @@ fn sub() {
     give(json!(1.0), ". - 1", json!(0.0));
 }
 
+yields!(sub_arr, "[1, 2, 3] - [2, 3, 4]", json!([1]));
+
 #[test]
 fn mul() {
     give(json!(1), ". * 2", json!(2));
