@@ -232,6 +232,28 @@ fn to_csv(vs: &[Val]) -> Result<String, Error> {
     Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join(","))
 }
 
+/// Return the indices of `y` in `x`.
+fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
+    match (x, y) {
+        (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
+        (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
+        (Val::Str(x), Val::Str(y)) => {
+            let iw = x.as_bytes().windows(y.len()).enumerate();
+            let y = y.as_bytes();
+            Ok(Box::new(iw.filter_map(move |(i, w)| (w == y).then_some(i))))
+        }
+        (Val::Arr(x), Val::Arr(y)) => {
+            let iw = x.windows(y.len()).enumerate();
+            Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
+        }
+        (Val::Arr(x), y) => {
+            let ix = x.iter().enumerate();
+            Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
+        }
+        (x, y) => Err(Error::Index(x.clone(), y.clone())),
+    }
+}
+
 fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once_with(f))
 }
@@ -303,6 +325,12 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("contains", 1, |args, cv| {
         let vals = args.get(0).run(cv.clone());
         Box::new(vals.map(move |y| Ok(Val::Bool(cv.1.contains(&y?)))))
+    }),
+    ("indices", 1, |args, cv| {
+        let vals = args.get(0).run(cv.clone());
+        let to_int = |i: usize| Val::Int(i.try_into().unwrap());
+        let f = move |v| indices(&cv.1, &v?).map(|idxs| Val::arr(idxs.map(to_int).collect()));
+        Box::new(vals.map(f))
     }),
     ("split", 1, |args, cv| {
         let seps = args.get(0).run(cv.clone());
