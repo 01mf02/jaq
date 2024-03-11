@@ -105,6 +105,26 @@ yields!(flatten_obj, "{a: 1} | flatten", json!([{"a": 1}]));
 yields!(flatten_num, "0 | flatten", [0]);
 
 #[test]
+fn indices() {
+    give(
+        json!("a,b, cd, efg, hijk"),
+        r#"indices(", ")"#,
+        json!([3, 7, 12]),
+    );
+    give(json!([0, 1, 2, 1, 3, 1, 4]), "indices(1)", json!([1, 3, 5]));
+    give(
+        json!([0, 1, 2, 3, 1, 4, 2, 5, 1, 2, 6, 7]),
+        "indices([1, 2])",
+        json!([1, 8]),
+    );
+    give(json!([]), "indices([])", json!([]));
+    give(json!([1, 2]), "indices([1, 2, 3])", json!([]));
+    give(json!(["a", "b", "c"]), r#"indices("b")"#, json!([1]));
+    give(json!([0, 0, 0]), "indices([0, 0])", json!([0, 1]));
+    give(json!("aaa"), r#"indices("aa")"#, json!([0, 1]));
+}
+
+#[test]
 fn inside() {
     give(
         json!(["foo", "bar"]),
