@@ -62,7 +62,8 @@ pub(crate) enum Ast {
     Float(f64),
     Str(String),
     Array(Id),
-    Object(Box<[(Id, Id)]>),
+    ObjEmpty,
+    ObjSingle(Id, Id),
 
     Try(Id, Id),
     Neg(Id),
@@ -140,25 +141,6 @@ where
 
 fn run_cvs<'a>(f: Ref<'a>, cvs: Results<'a, Cv<'a>, Error>) -> impl Iterator<Item = ValR> + 'a {
     cvs.flat_map(move |cv| then(cv, |cv| f.run(cv)))
-}
-
-type ObjVec = Vec<(ValR, ValR)>;
-fn obj_cart<'a, I>(mut args: I, cv: Cv<'a>, prev: ObjVec) -> BoxIter<'a, ObjVec>
-where
-    I: Iterator<Item = (Ref<'a>, Ref<'a>)> + Clone + 'a,
-{
-    if let Some((l, r)) = args.next() {
-        let iter = l.run(cv.clone());
-        flat_map_with(iter, (args, cv, prev), move |l, (args, cv, prev)| {
-            let iter = r.run(cv.clone());
-            flat_map_with(iter, (l, args, cv, prev), |r, (l, args, cv, mut prev)| {
-                prev.push((l, r));
-                obj_cart(args, cv, prev)
-            })
-        })
-    } else {
-        box_once(prev)
-    }
 }
 
 fn reduce<'a, T: Clone + 'a, F>(xs: Results<'a, T, Error>, init: Val, f: F) -> ValRs
@@ -240,14 +222,10 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Array(f) => Box::new(once_with(move || {
                 w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)
             })),
-            Ast::Object(o) if o.is_empty() => box_once(Ok(Val::Obj(Default::default()))),
-            Ast::Object(o) => Box::new(
-                obj_cart(o.iter().map(move |(k, v)| (w(k), w(v))), cv, Vec::new()).map(|kvs| {
-                    kvs.into_iter()
-                        .map(|(k, v)| Ok((k?.to_str()?, v?)))
-                        .collect::<Result<_, _>>()
-                        .map(Val::obj)
-                }),
+            Ast::ObjEmpty => box_once(Ok(Val::Obj(Default::default()))),
+            Ast::ObjSingle(k, v) => Box::new(
+                Self::cartesian(w(k), w(v), cv)
+                    .map(|(k, v)| Ok(Val::obj([(k?.to_str()?, v?)].into_iter().collect()))),
             ),
             Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
                 y.map_or_else(
@@ -364,7 +342,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
         match &self.1[self.0 .0] {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
-            Ast::Array(_) | Ast::Object(_) => err,
+            Ast::Array(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
 
