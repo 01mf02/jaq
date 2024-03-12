@@ -232,15 +232,23 @@ fn to_csv(vs: &[Val]) -> Result<String, Error> {
     Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join(","))
 }
 
+/// Return the string windows having `n` characters, where `n` > 0.
+///
+/// Taken from <https://users.rust-lang.org/t/iterator-over-windows-of-chars/17841/3>.
+fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
+    line.char_indices()
+        .zip(line.char_indices().skip(n).chain(Some((line.len(), ' '))))
+        .map(move |((i, _), (j, _))| &line[i..j])
+}
+
 /// Return the indices of `y` in `x`.
 fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
     match (x, y) {
         (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
         (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
         (Val::Str(x), Val::Str(y)) => {
-            let iw = x.as_bytes().windows(y.len()).enumerate();
-            let y = y.as_bytes();
-            Ok(Box::new(iw.filter_map(move |(i, w)| (w == y).then_some(i))))
+            let iw = str_windows(x, y.chars().count()).enumerate();
+            Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
         }
         (Val::Arr(x), Val::Arr(y)) => {
             let iw = x.windows(y.len()).enumerate();

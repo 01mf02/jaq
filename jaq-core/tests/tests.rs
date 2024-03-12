@@ -175,6 +175,8 @@ yields!(indices_arr_larger, "[1, 2] | indices([1, 2, 3])", json!([]));
 
 yields!(indices_arr_overlap, "[0, 0, 0] | indices([0, 0])", [0, 1]);
 yields!(indices_str_overlap, r#""aaa" | indices("aa")"#, [0, 1]);
+yields!(indices_str_gb1, r#""🇬🇧!" | indices("!")"#, [2]);
+yields!(indices_str_gb2, r#""🇬🇧🇬🇧" | indices("🇬🇧")"#, [0, 2]);
 
 #[test]
 fn json() {
