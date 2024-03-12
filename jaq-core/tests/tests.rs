@@ -198,23 +198,17 @@ fn keys_unsorted() {
     fail(json!(null), "keys_unsorted", err(Val::Null));
 }
 
-#[test]
-fn length() {
-    give(json!("ƒoo"), "length", json!(3));
-    give(json!("नमस्ते"), "length", json!(6));
-    give(json!({"a": 5, "b": 3}), "length", json!(2));
-    give(json!(2), "length", json!(2));
-    give(json!(-2), "length", json!(2));
-    give(json!(2.5), "length", json!(2.5));
-    give(json!(-2.5), "length", json!(2.5));
-}
+yields!(length_str_foo, r#""ƒoo" | length"#, 3);
+yields!(length_str_namaste, r#""नमस्ते" | length"#, 6);
+yields!(length_obj, r#"{"a": 5, "b": 3} | length"#, 2);
+yields!(length_int_pos, " 2 | length", 2);
+yields!(length_int_neg, "-2 | length", 2);
+yields!(length_float_pos, " 2.5 | length", 2.5);
+yields!(length_float_neg, "-2.5 | length", 2.5);
 
-#[test]
-fn utf8bytelength() {
-    give(json!("foo"), "utf8bytelength", json!(3));
-    give(json!("ƒoo"), "utf8bytelength", json!(4));
-    give(json!("नमस्ते"), "utf8bytelength", json!(18));
-}
+yields!(utf8bytelength_foo1, r#""foo" | utf8bytelength"#, 3);
+yields!(utf8bytelength_foo2, r#""ƒoo" | utf8bytelength"#, 4);
+yields!(utf8bytelength_namaste, r#""नमस्ते" | utf8bytelength"#, 18);
 
 #[test]
 fn limit() {
