@@ -415,6 +415,20 @@ impl core::ops::Mul for Val {
     }
 }
 
+/// Split a string by a given separator string.
+fn split<'a>(s: &'a str, sep: &'a str) -> Box<dyn Iterator<Item = String> + 'a> {
+    if s.is_empty() {
+        Box::new(core::iter::empty())
+    } else if sep.is_empty() {
+        // Rust's `split` function with an empty separator ("")
+        // yields an empty string as first and last result
+        // to prevent this, we are using `chars` instead
+        Box::new(s.chars().map(|s| s.to_string()))
+    } else {
+        Box::new(s.split(sep).map(|s| s.to_string()))
+    }
+}
+
 impl core::ops::Div for Val {
     type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
@@ -426,6 +440,7 @@ impl core::ops::Div for Val {
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from_dec_str(&n) / r,
             (l, Num(n)) => l / Self::from_dec_str(&n),
+            (Str(x), Str(y)) => Ok(Val::arr(split(&x, &y).map(Val::str).collect())),
             (l, r) => Err(Error::MathOp(l, MathOp::Div, r)),
         }
     }

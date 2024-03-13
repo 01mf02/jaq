@@ -63,6 +63,11 @@ fn mul() {
     );
 }
 
+yields!(div_str, r#""abcabcdab" / "ab""#, ["", "c", "cd", ""]);
+yields!(div_str_empty, r#""" / """#, json!([]));
+yields!(div_str_empty_str, r#""" / "ab""#, json!([]));
+yields!(div_str_empty_sep, r#""aöß" / """#, ["a", "ö", "ß"]);
+
 #[test]
 fn logic() {
     let tf = json!([true, false]);

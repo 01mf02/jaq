@@ -308,16 +308,6 @@ fn round() {
 }
 
 #[test]
-fn split() {
-    give(json!("aöß"), r#"split("")"#, json!(["a", "ö", "ß"]));
-    give(
-        json!("abcabcdab"),
-        r#"split("ab")"#,
-        json!(["", "c", "cd", ""]),
-    );
-}
-
-#[test]
 fn startswith() {
     give(json!("foobar"), r#"startswith("")"#, json!(true));
     give(json!("foobar"), r#"startswith("bar")"#, json!(false));

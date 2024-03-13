@@ -135,6 +135,9 @@ def    scan(re; flags): matches(re; flags)[] | .[0].string;
 def   match(re; flags): matches(re; flags)[] | .[0] + { captures: .[1:] };
 def capture(re; flags): matches(re; flags)[] | capture_of_match;
 
+def split($sep):
+  if isstring and ($sep | isstring) then . / $sep
+  else error("split input and separator must be strings") end;
 def split (re; flags): split_(re; flags + "g");
 def splits(re; flags): split(re; flags)[];
 
