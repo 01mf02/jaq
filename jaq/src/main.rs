@@ -55,9 +55,9 @@ struct Cli {
     #[arg(short, long)]
     compact_output: bool,
 
-    /// use n spaces for indentation
+    /// Use n spaces for indentation
     #[arg(long, value_name = "n", default_value_t = 2)]
-    indent: u8,
+    indent: usize,
 
     /// Use tabs for indentation rather than spaces
     #[arg(long)]
@@ -451,7 +451,7 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
             let indent = if cli.tab {
                 String::from("\t")
             } else {
-                " ".repeat(cli.indent.into())
+                " ".repeat(cli.indent)
             };
 
             // this looks ugly, but it is hard to abstract over the `Formatter` because
