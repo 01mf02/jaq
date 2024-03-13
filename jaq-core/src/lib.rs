@@ -167,18 +167,6 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
     char::from_u32(u).ok_or_else(|| Error::str(format_args!("cannot use {u} as character")))
 }
 
-/// Split a string by a given separator string.
-fn split(s: &str, sep: &str) -> Vec<Val> {
-    if sep.is_empty() {
-        // Rust's `split` function with an empty separator ("")
-        // yields an empty string as first and last result
-        // to prevent this, we are using `chars` instead
-        s.chars().map(|s| Val::str(s.to_string())).collect()
-    } else {
-        s.split(sep).map(|s| Val::str(s.to_string())).collect()
-    }
-}
-
 /// This implements a ~10x faster version of:
 /// ~~~ text
 /// def range($from; $to; $by): $from |
@@ -339,10 +327,6 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         let to_int = |i: usize| Val::Int(i.try_into().unwrap());
         let f = move |v| indices(&cv.1, &v?).map(|idxs| Val::arr(idxs.map(to_int).collect()));
         Box::new(vals.map(f))
-    }),
-    ("split", 1, |args, cv| {
-        let seps = args.get(0).run(cv.clone());
-        Box::new(seps.map(move |sep| Ok(Val::arr(split(cv.1.as_str()?, sep?.as_str()?)))))
     }),
     ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
     ("limit", 2, |args, cv| {
