@@ -161,7 +161,7 @@ fn real_main() -> Result<ExitCode, Error> {
         let mut last = None;
         for file in files {
             let path = std::path::Path::new(file);
-            let file = mmap_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
+            let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let inputs = read_slice(&cli, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
@@ -221,7 +221,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     })?;
     bind(&mut var_val, &cli.slurpfile, |f| {
         let path = std::path::Path::new(f);
-        let file = mmap_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
+        let file = load_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
         Ok(Val::arr(json_slice(&file).collect::<Result<Vec<_>, _>>()?))
     })?;
 
@@ -270,9 +270,13 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     }
 }
 
-fn mmap_file(path: &std::path::Path) -> io::Result<memmap2::Mmap> {
+/// Try to load file by memory mapping and fall back to regular loading if it fails.
+fn load_file(path: &std::path::Path) -> io::Result<Box<dyn core::ops::Deref<Target = [u8]>>> {
     let file = std::fs::File::open(path)?;
-    unsafe { memmap2::Mmap::map(&file) }
+    match unsafe { memmap2::Mmap::map(&file) } {
+        Ok(mmap) => Ok(Box::new(mmap)),
+        Err(_) => Ok(Box::new(std::fs::read(path)?)),
+    }
 }
 
 fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> std::io::Error {
