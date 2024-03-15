@@ -1,0 +1,28 @@
+[package]
+name = "jaq-play"
+description = "Web interface for jaq"
+version = "0.1.0"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
+categories = ["wasm"]
+readme = "README.md"
+repository = "https://github.com/01mf02/jaq"
+license = "MIT"
+edition = "2021"
+
+[package.metadata.wasm-pack.profile.dev]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+jaq-syn       = { version = "1.1.0", path = "../jaq-syn" }
+jaq-parse     = { version = "1.0.0", path = "../jaq-parse" }
+jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
+hifijson = "0.2"
+log = "0.4.17"
+serde_json = { version = "1.0.81", features = [ "arbitrary_precision", "preserve_order" ] }
+
+console_log = { version = "1.0", features = ["color"] }
+getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen = { version = "0.2" }

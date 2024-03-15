@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/src/main.css">
+  <title>jaq playground</title>
+</head>
+
+<body>
+  <header class="top">
+    <button id="run" class="button">▶️ Run</span>
+    <!--
+    <span id="flags" class="button">⚙️ Flags</span>
+    -->
+  </header>
+
+  <section class="filter">
+    <header><h1>Filter</h1></header>
+    <textarea id="filter" spellcheck="false">.</textarea>
+  </section>
+
+  <div class="IO">
+    <section class="input">
+      <header><h1>Input</h1></header>
+      <textarea id="input" spellcheck="false">null</textarea>
+    </section>
+
+    <section class="output">
+      <header><h1>Output</h1></header>
+      <div id="output" spellcheck="false"></div>
+    </section>
+  </div>
+  <!--
+  <div id="footer"></div>
+  -->
+  <script type="module">
+    import init from "/pkg/jaq_play.js";
+    await init();
+  </script>
+  <script type="module" src="./src/main.js" defer></script>
+</body>
+
+</html>
