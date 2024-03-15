@@ -9,8 +9,7 @@ extern "C" {
     fn output_tag(s: &str, typ: Option<&str>);
 }
 
-use jaq_interpret::{Ctx, Error, FilterT, ParseCtx, RcIter, Val};
-use serde_json::{json, Value};
+use jaq_interpret::{Ctx, FilterT, ParseCtx, RcIter, Val};
 
 fn indent(level: usize) {
     if level > 0 {
@@ -75,7 +74,7 @@ pub fn run(filter: &str, input: &str) {
     let mut lexer = hifijson::SliceLexer::new(input.as_bytes());
     let inputs = core::iter::from_fn(move || {
         use hifijson::token::Lex;
-        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| todo!()))
+        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|_e| todo!()))
     });
 
     // start out only from core filters,
