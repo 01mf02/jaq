@@ -21,7 +21,6 @@ jaq-parse     = { version = "1.0.0", path = "../jaq-parse" }
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 hifijson = "0.2"
 log = "0.4.17"
-serde_json = { version = "1.0.81", features = [ "arbitrary_precision", "preserve_order" ] }
 
 console_log = { version = "1.0", features = ["color"] }
 getrandom = { version = "0.2", features = ["js"] }
