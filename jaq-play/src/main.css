@@ -64,13 +64,13 @@ h1 {
 textarea, #output {
   font-family: "Roboto Mono",monospace;
   font-size: 1.2rem;
-  width: 100%;
   height: 100%; 
   max-height: 100%;
   margin: 0;
 }
 
 textarea {
+  width: 100%;
   resize: none;
   box-sizing: border-box;
 }
@@ -78,8 +78,9 @@ textarea {
 /* Inspiration: https://zserge.com/posts/js-editor/ */
 #output {
   outline: none;
-  overflow-y: auto;
+  overflow: auto;
   padding-left: 48px;
+  width: calc(100% - 48px);
   counter-reset: line;
 }
 
