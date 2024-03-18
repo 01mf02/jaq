@@ -33,6 +33,8 @@ header {
   display: flex;
   justify-content: space-between;
   flex: 3;
+  /* see https://stackoverflow.com/a/48396712 */
+  min-height: 0;
 }
 
 section {
@@ -40,7 +42,10 @@ section {
   flex-direction: column;
 }
 
-.IO > section { flex: 1; }
+.IO > section {
+  flex: 1;
+  min-width: 0;
+}
 
 button {
   border: none;
