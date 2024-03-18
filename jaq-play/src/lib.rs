@@ -1,16 +1,7 @@
+use jaq_interpret::{Ctx, FilterT, ParseCtx, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen(module = "/src/lib.js")]
-extern "C" {
-    #[wasm_bindgen]
-    fn output_newline();
-
-    #[wasm_bindgen]
-    fn output_tag(s: &str, typ: Option<&str>);
-}
-
-use jaq_interpret::{Ctx, FilterT, ParseCtx, RcIter, Val};
-
+/*
 fn indent(level: usize) {
     if level > 0 {
         output_tag(&"    ".repeat(level), None);
@@ -65,9 +56,10 @@ fn print_val(v: &Val, level: usize, indent_start: bool) {
         }
     }
 }
+*/
 
 #[wasm_bindgen]
-pub fn run(filter: &str, input: &str) {
+pub fn run(filter: &str, input: &str, scope: web_sys::DedicatedWorkerGlobalScope) {
     let _ = console_log::init();
     log::info!("Starting run in Rust ...");
 
@@ -94,14 +86,14 @@ pub fn run(filter: &str, input: &str) {
 
     for x in &inputs {
         for y in f.run((Ctx::new([], &inputs), x.unwrap())) {
-            output_newline();
             match y {
-                Ok(y) => print_val(&y, 0, false),
+                Ok(y) => scope.post_message(&y.to_string().into()).unwrap(),
                 Err(e) => {
-                    output_tag(&format!("⚠️ Error: {e}"), Some("error"));
+                    scope.post_message(&format!("⚠️ Error: {e}").into()).unwrap();
                     break;
                 }
             }
         }
     }
+    scope.post_message(&"".into()).unwrap();
 }

@@ -331,6 +331,7 @@ dependencies = [
  "jaq-syn",
  "log",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

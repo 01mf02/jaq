@@ -84,29 +84,12 @@ textarea {
 
 /* Inspiration: https://zserge.com/posts/js-editor/ */
 #output {
-  outline: none;
   overflow: auto;
-  padding-left: 48px;
-  width: calc(100% - 48px);
-  counter-reset: line;
+  padding: 2px;
 }
 
-#output > div {
-  display: block;
-  position: relative;
-  white-space: pre-wrap;
-}
-
-#output div::before {
-  content: counter(line);
-  counter-increment: line;
-  position: absolute;
-  right: calc(100% + 16px);
-  opacity: 0.5;
-}
-
-#output .null   { color: #b71212; }
-#output .array  { color: #b71212; }
-#output .object { color: #b71212; }
-#output .error  { color: #b71212; }
-
+.string  { color: green; }
+.number  { color: darkorange; }
+.boolean { color: blue; }
+.null    { color: magenta; }
+.key     { color: red; }
