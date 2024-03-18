@@ -60,6 +60,8 @@ button {
 
 .button:hover { background: #3a3e41; }
 
+#stop { display: none; }
+
 h1 {
   font-size: 1rem;
   font-weight: 700;
