@@ -1,10 +1,8 @@
 // currently active jaq thread
-let worker = undefined;
+let worker = initWorker();
 
 function startWorker() {
-    stopWorker();
-    document.getElementById("run" ).style.display = "none";
-    document.getElementById("stop").style.display = "block";
+    showRunButton(false);
 
     // remove previous output
     document.getElementById('output').replaceChildren();
@@ -12,20 +10,30 @@ function startWorker() {
     //console.log("Starting run in JS ...");
     const filter = document.getElementById('filter').value;
     const input = document.getElementById('input').value;
-    worker = new Worker("./src/worker.js", { type: "module" });
-    worker.onmessage = event => receiveFromWorker(event.data);
     worker.postMessage({filter, input});
+}
+
+function initWorker() {
+    let worker = new Worker("./src/worker.js", { type: "module" });
+    worker.onmessage = event => receiveFromWorker(event.data);
+    return worker
 }
 
 function receiveFromWorker(data) {
     if (data == "") {
-        stopWorker();
+        showRunButton(true);
         return;
     }
 
     let div = document.createElement("div");
     div.innerHTML = syntaxHighlight(data);
     document.getElementById("output").appendChild(div);
+}
+
+function showRunButton(show) {
+    const display = b => b ? "block" : "none";
+    document.getElementById("run" ).style.display = display(show);
+    document.getElementById("stop").style.display = display(!show);
 }
 
 // Taken from: <https://stackoverflow.com/a/7220510>
@@ -49,15 +57,10 @@ function syntaxHighlight(json) {
 }
 
 function stopWorker() {
-    if (worker == undefined) {
-        return;
-    }
-
     console.log("Stopping worker ...");
+    showRunButton(true)
     worker.terminate();
-    worker = undefined;
-    document.getElementById("run" ).style.display = "block";
-    document.getElementById("stop").style.display = "none";
+    worker = initWorker();
 }
 
 document.getElementById("run").onclick = async () => startWorker();
