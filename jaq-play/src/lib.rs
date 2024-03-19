@@ -1,62 +1,101 @@
+use core::fmt::{self, Debug, Display, Formatter};
 use jaq_interpret::{Ctx, FilterT, ParseCtx, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
-/*
-fn indent(level: usize) {
-    if level > 0 {
-        output_tag(&"    ".repeat(level), None);
+struct Pp<'a> {
+    val: &'a Val,
+    level: usize,
+    indent_start: bool,
+}
+
+impl<'a> Pp<'a> {
+    fn new(val: &'a Val) -> Self {
+        Self {
+            val,
+            level: 0,
+            indent_start: false,
+        }
     }
 }
 
-fn print_val(v: &Val, level: usize, indent_start: bool) {
-    if indent_start {
-        indent(level);
-    }
-    match v {
-        Val::Null => output_tag("null", Some("null")),
-        Val::Bool(true) => output_tag("true", Some("bool")),
-        Val::Bool(false) => output_tag("false", Some("bool")),
-        Val::Int(i) => output_tag(&i.to_string(), Some("number")),
-        Val::Float(x) if x.is_finite() => output_tag(&format!("{x:?}"), Some("number")),
-        Val::Float(_) => output_tag("null", Some("null")),
-        Val::Num(n) => output_tag(n, Some("number")),
-        Val::Str(s) => output_tag(&format!("{s:?}"), Some("string")),
-        Val::Arr(a) if a.is_empty() => output_tag("[]", Some("array")),
-        Val::Arr(a) => {
-            output_tag("[", Some("array"));
-            output_newline();
-            let mut iter = a.iter().peekable();
-            while let Some(x) = iter.next() {
-                print_val(x, level + 1, true);
-                if iter.peek().is_some() {
-                    output_tag(",", None);
-                }
-                output_newline();
-            }
-            indent(level);
-            output_tag("]", Some("array"));
+fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
+    write!(f, "<span class=\"{cls}\">{el}</span>")
+}
+
+fn span_dbg(f: &mut Formatter, cls: &str, el: impl Debug) -> fmt::Result {
+    write!(f, "<span class=\"{cls}\">{el:?}</span>")
+}
+
+fn indent(f: &mut Formatter, level: usize) -> fmt::Result {
+    write!(f, "{}", "    ".repeat(level))
+}
+
+fn escape(s: &str) -> String {
+    use aho_corasick::AhoCorasick;
+    let patterns = &["&", "<", ">"];
+    let replaces = &["&amp;", "&lt;", "&gt;"];
+    let ac = AhoCorasick::new(patterns).unwrap();
+    ac.replace_all(s, replaces)
+}
+
+impl<'a> Display for Pp<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if self.indent_start {
+            indent(f, self.level)?;
         }
-        Val::Obj(o) if o.is_empty() => output_tag("{}", Some("object")),
-        Val::Obj(o) => {
-            output_tag("{", Some("object"));
-            output_newline();
-            let mut iter = o.iter().peekable();
-            while let Some((k, v)) = iter.next() {
-                indent(level + 1);
-                output_tag(&format!("{k:?}"), Some("key"));
-                output_tag(": ", None);
-                print_val(v, level + 1, false);
-                if iter.peek().is_some() {
-                    output_tag(",", None);
+
+        match self.val {
+            Val::Null => span(f, "null", "null"),
+            Val::Bool(b) => span(f, "boolean", b),
+            Val::Int(i) => span(f, "number", i),
+            Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
+            Val::Float(_) => span(f, "null", "null"),
+            Val::Num(n) => span(f, "number", n),
+            Val::Str(s) => span_dbg(f, "string", escape(s)),
+            Val::Arr(a) if a.is_empty() => write!(f, "[]"),
+            Val::Arr(a) => {
+                write!(f, "[\n")?;
+                let mut iter = a.iter().peekable();
+                while let Some(val) = iter.next() {
+                    Pp {
+                        val,
+                        level: self.level + 1,
+                        indent_start: true,
+                    }
+                    .fmt(f)?;
+                    if iter.peek().is_some() {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "\n")?;
                 }
-                output_newline();
+                indent(f, self.level)?;
+                write!(f, "]")
             }
-            indent(level);
-            output_tag("}", Some("object"));
+            Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
+            Val::Obj(o) => {
+                write!(f, "{{\n")?;
+                let mut iter = o.iter().peekable();
+                while let Some((k, val)) = iter.next() {
+                    indent(f, self.level + 1)?;
+                    span_dbg(f, "key", k)?;
+                    write!(f, ": ")?;
+                    Pp {
+                        val,
+                        level: self.level + 1,
+                        indent_start: false,
+                    }
+                    .fmt(f)?;
+                    if iter.peek().is_some() {
+                        write!(f, ",")?;
+                    }
+                    write!(f, "\n")?;
+                }
+                indent(f, self.level)?;
+                write!(f, "}}")
+            }
         }
     }
 }
-*/
 
 #[wasm_bindgen]
 pub fn run(filter: &str, input: &str, scope: web_sys::DedicatedWorkerGlobalScope) {
@@ -87,7 +126,7 @@ pub fn run(filter: &str, input: &str, scope: web_sys::DedicatedWorkerGlobalScope
     for x in &inputs {
         for y in f.run((Ctx::new([], &inputs), x.unwrap())) {
             match y {
-                Ok(y) => scope.post_message(&y.to_string().into()).unwrap(),
+                Ok(y) => scope.post_message(&Pp::new(&y).to_string().into()).unwrap(),
                 Err(e) => {
                     scope.post_message(&format!("⚠️ Error: {e}").into()).unwrap();
                     break;
@@ -95,5 +134,5 @@ pub fn run(filter: &str, input: &str, scope: web_sys::DedicatedWorkerGlobalScope
             }
         }
     }
-    scope.post_message(&"".into()).unwrap();
+    scope.post_message(&JsValue::NULL).unwrap();
 }

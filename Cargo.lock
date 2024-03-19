@@ -323,6 +323,7 @@ dependencies = [
 name = "jaq-play"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "console_log",
  "getrandom",
  "hifijson",
