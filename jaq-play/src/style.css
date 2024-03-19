@@ -47,6 +47,10 @@ section {
   min-width: 0;
 }
 
+.logo {
+  height: 100%;
+}
+
 button {
   border: none;
   color: #b7bcc0;
@@ -56,6 +60,7 @@ button {
   padding: .375rem .75rem;
   font-size: .875rem;
   border-radius: .3rem;
+  margin-left: 8px;
 }
 
 .button:hover { background: #3a3e41; }
