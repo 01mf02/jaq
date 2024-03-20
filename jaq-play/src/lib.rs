@@ -77,7 +77,7 @@ impl<'a> Display for Pp<'a> {
                 let mut iter = o.iter().peekable();
                 while let Some((k, val)) = iter.next() {
                     indent(f, self.level + 1)?;
-                    span_dbg(f, "key", k)?;
+                    span_dbg(f, "key", escape(k))?;
                     write!(f, ": ")?;
                     Pp {
                         val,
