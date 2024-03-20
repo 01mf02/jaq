@@ -33,7 +33,7 @@ jobs:
           tar xzf ${DIR}.tar.gz
           mv ${DIR}/wasm-pack ~/.cargo/bin
       - name: Compile
-        run: wasm-pack build --target web --release
+        run: wasm-pack build --target web --no-typescript --no-pack --release
         working-directory: jaq-play
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
