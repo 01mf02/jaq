@@ -170,19 +170,23 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
 /// This implements a ~10x faster version of:
 /// ~~~ text
 /// def range($from; $to; $by): $from |
-///    if $by > 0 then while(. < $to; . + $by)
-///    else            while(. > $to; . + $by)
+///    if $by > 0 then while(.  < $to; . + $by)
+///  elif $by < 0 then while(.  > $to; . + $by)
+///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
 fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
-    let positive = by > Val::Int(0);
+    let cmp = by.cmp(&Val::Int(0));
+    use core::cmp::Ordering::{Equal, Greater, Less};
     core::iter::from_fn(move || match from.clone() {
-        Ok(x) if (positive && x < to) || (!positive && x > to) => {
-            Some(core::mem::replace(&mut from, x + by.clone()))
+        Ok(x) => match cmp {
+            Greater => x < to,
+            Less => x > to,
+            Equal => x != to,
         }
-        Ok(_) => None,
+        .then(|| core::mem::replace(&mut from, x + by.clone())),
         e @ Err(_) => {
-            // return None as following value
+            // return None after the error
             from = Ok(to.clone());
             Some(e)
         }

@@ -258,6 +258,18 @@ yields!(
     [10.0, 11.0, 12.0, 13.0, 7.0, 8.0, 8.0, 9.0]
 );
 
+yields!(range_pp, "[range(0; 6;  2)]", [0, 2, 4]);
+yields!(range_pn, "[range(0; 6; -2)]", json!([]));
+yields!(range_np, "[range(0; -6; 2)]", json!([]));
+yields!(range_nn, "[range(0; -6; -2)]", [0, -2, -4]);
+yields!(range_zz, "[range(0; 0; 0)]", json!([]));
+yields!(range_fp, "[range(0.0; 2; 0.5)]", [0.0, 0.5, 1.0, 1.5]);
+yields!(range_ip, "[limit(3; range(0; 1/0; 1))]", [0, 1, 2]);
+yields!(range_in, "[limit(3; range(0; -1/0; -1))]", [0, -1, -2]);
+// here, we diverge from jq, which just returns the empty list
+yields!(range_pz, "[limit(3; range(0; 6; 0))]", json!([0, 0, 0]));
+yields!(range_nz, "[limit(3; range(0; -6; 0))]", json!([0, 0, 0]));
+
 #[test]
 fn regex() {
     let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;
