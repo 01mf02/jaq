@@ -187,10 +187,12 @@ fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
     let cmp = by.cmp(&Val::Int(0));
     use core::cmp::Ordering::{Equal, Greater, Less};
     core::iter::from_fn(move || match from.clone() {
-        Ok(x) => {
-            ((cmp == Greater && x < to) || (cmp == Less && x > to) || (cmp == Equal && x != to))
-                .then(|| core::mem::replace(&mut from, x + by.clone()))
+        Ok(x) => match cmp {
+            Greater => x < to,
+            Less => x > to,
+            Equal => x != to,
         }
+        .then(|| core::mem::replace(&mut from, x + by.clone())),
         e @ Err(_) => {
             // return None after the error
             from = Ok(to.clone());
