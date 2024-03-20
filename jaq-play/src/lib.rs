@@ -54,7 +54,8 @@ impl<'a> Display for Pp<'a> {
             Val::Str(s) => span_dbg(f, "string", escape(s)),
             Val::Arr(a) if a.is_empty() => write!(f, "[]"),
             Val::Arr(a) => {
-                write!(f, "[\n")?;
+                write!(f, "[")?;
+                writeln!(f)?;
                 let mut iter = a.iter().peekable();
                 while let Some(val) = iter.next() {
                     Pp {
@@ -66,14 +67,15 @@ impl<'a> Display for Pp<'a> {
                     if iter.peek().is_some() {
                         write!(f, ",")?;
                     }
-                    write!(f, "\n")?;
+                    writeln!(f)?;
                 }
                 indent(f, self.level)?;
                 write!(f, "]")
             }
             Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
             Val::Obj(o) => {
-                write!(f, "{{\n")?;
+                write!(f, "{{")?;
+                writeln!(f)?;
                 let mut iter = o.iter().peekable();
                 while let Some((k, val)) = iter.next() {
                     indent(f, self.level + 1)?;
@@ -88,7 +90,7 @@ impl<'a> Display for Pp<'a> {
                     if iter.peek().is_some() {
                         write!(f, ",")?;
                     }
-                    write!(f, "\n")?;
+                    writeln!(f)?;
                 }
                 indent(f, self.level)?;
                 write!(f, "}}")
