@@ -7,7 +7,7 @@ First install `wasm-pack`:
 
 Compile the WASM binaries (use `--release` instead of `--dev` for better performance):
 
-    wasm-pack build --target web --dev
+    wasm-pack build --target web --no-typescript --no-pack --dev
 
 To serve:
 
