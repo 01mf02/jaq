@@ -99,10 +99,45 @@ impl<'a> Display for Pp<'a> {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug)]
+struct Settings {
+    raw_input: bool,
+    slurp: bool,
+    null_input: bool,
+    in_place: bool,
+    raw_output: bool,
+    compact: bool,
+    join_output: bool,
+    tab: bool,
+}
+
+impl Settings {
+    fn try_from(v: &JsValue) -> Option<Self> {
+        let get = |key: &str| js_sys::Reflect::get(v, &key.into()).ok();
+        let get_bool = |key: &str| get(key).and_then(|v| v.as_bool());
+        Some(Self {
+            raw_input: get_bool("raw-input")?,
+            slurp: get_bool("slurp")?,
+            null_input: get_bool("null-input")?,
+            in_place: get_bool("in-place")?,
+            raw_output: get_bool("raw-output")?,
+            compact: get_bool("compact")?,
+            join_output: get_bool("join-output")?,
+            tab: get_bool("tab")?,
+        })
+    }
+}
+
+use web_sys::DedicatedWorkerGlobalScope as Scope;
+
 #[wasm_bindgen]
-pub fn run(filter: &str, input: &str, scope: web_sys::DedicatedWorkerGlobalScope) {
+pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
     let _ = console_log::init();
-    log::info!("Starting run in Rust ...");
+    log::debug!("Starting run in Rust ...");
+
+    let settings = Settings::try_from(settings).unwrap();
+    log::debug!("{settings:?}");
 
     let mut lexer = hifijson::SliceLexer::new(input.as_bytes());
     let inputs = core::iter::from_fn(move || {

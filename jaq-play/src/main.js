@@ -10,7 +10,18 @@ function startWorker() {
     //console.log("Starting run in JS ...");
     const filter = document.getElementById('filter').value;
     const input = document.getElementById('input').value;
-    worker.postMessage({filter, input});
+    const settings = getSettings();
+    worker.postMessage({filter, input, settings});
+}
+
+function getSettings() {
+    const get = id => document.getElementById(id);
+    const input = ["raw-input", "slurp", "null-input", "in-place"];
+    const output = ["raw-output", "compact", "join-output", "tab"];
+    var acc = {};
+    input.concat(output).forEach(id => acc[id] = get(id).checked);
+    acc["indent"] = get("indent").value;
+    return acc
 }
 
 function initWorker() {

@@ -330,6 +330,7 @@ dependencies = [
  "jaq-interpret",
  "jaq-parse",
  "jaq-syn",
+ "js-sys",
  "log",
  "wasm-bindgen",
  "web-sys",

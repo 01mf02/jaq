@@ -54,20 +54,12 @@
               <label for="join-output">join</label>
             </li>
             <li>
-              <fieldset>
-                <legend>Indentation</legend>
-                <ul>
-                  <li>
-                    <input type="radio" id="spaces" name="indent" checked>
-                    <label for="spaces">Spaces</label>
-                    <input type="number" id="spaces" name="spaces" value="4" min="0" style="width: 3em">
-                  </li>
-                  <li>
-                    <input type="radio" id="tab" name="indent">
-                    <label for="tab">Tab</label>
-                  </li>
-                </ul>
-              </fieldset>
+              <input type="checkbox" id="tab" name="tab">
+              <label for="tab">tab</label>
+            </li>
+            <li>
+              <label for="indent">indent</label>
+              <input type="number" id="indent" name="indent" value="4" min="0" style="width: 3em">
             </li>
           </ul>
         </fieldset>

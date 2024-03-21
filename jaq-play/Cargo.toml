@@ -26,4 +26,5 @@ console_log = { version = "1.0", features = ["color"] }
 getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = ["DedicatedWorkerGlobalScope"] }
+js-sys = { version = "0.3" }
 aho-corasick = "1.1.2"

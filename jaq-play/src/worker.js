@@ -4,6 +4,6 @@ init();
 
 // Set callback to handle messages passed to the worker.
 self.onmessage = async event => {
-    const { filter, input } = event.data;
-    await run(filter, input, self);
+    const { filter, input, settings } = event.data;
+    await run(filter, input, settings, self);
 };
