@@ -15,12 +15,11 @@ function startWorker() {
 }
 
 function getSettings() {
-    const get = id => document.getElementById(id);
-    const input = ["raw-input", "slurp", "null-input", "in-place"];
-    const output = ["raw-output", "compact", "join-output", "tab"];
+    const cbxs = document.querySelectorAll(".settings input[type=checkbox]");
+    const nums = document.querySelectorAll(".settings input[type=number]");
     var acc = {};
-    input.concat(output).forEach(id => acc[id] = get(id).checked);
-    acc["indent"] = get("indent").value;
+    cbxs.forEach(node => acc[node.id] = node.checked);
+    nums.forEach(node => acc[node.id] = node.value);
     return acc
 }
 
