@@ -104,6 +104,7 @@ textarea {
 
 .settings > div {
   display: none;
+  gap: 10px;
   position: absolute;
   background: rgba(16,17,18,.85);
   color: #f0f1f2;
@@ -114,7 +115,12 @@ textarea {
 
 .settings:hover > div { display: flex; }
 
+.settings hr { color: rgba(126,135,142,.25); }
+
 .settings fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 
 ul {
