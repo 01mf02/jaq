@@ -63,7 +63,7 @@ button {
   margin-left: 8px;
 }
 
-.button:hover { background: #3a3e41; }
+button:hover { background: #3a3e41; }
 
 #stop { display: none; }
 
@@ -98,3 +98,27 @@ textarea {
 .boolean { color: blue; }
 .null    { color: magenta; }
 .key     { color: red; }
+
+
+.settings { display: inline-block; }
+
+.settings > div {
+  display: none;
+  position: absolute;
+  background: rgba(16,17,18,.85);
+  color: #f0f1f2;
+  padding: 1rem;
+  border-radius: .125rem;
+  backdrop-filter: blur(3px);
+}
+
+.settings:hover > div { display: flex; }
+
+.settings fieldset {
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 2px;
+}

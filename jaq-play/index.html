@@ -12,11 +12,67 @@
 <body>
   <header class="top">
     <img class="logo" src="./jaq.svg" alt="jaq logo"/>
-    <button id="run"  title="Execute filter with given input (Ctrl+Enter)" class="button">▶️ Run</span>
-    <button id="stop" title="Interrupt execution" class="button">⏹️ Stop</span>
-    <!--
-    <span id="flags" class="button">⚙️ Flags</span>
-    -->
+    <button id="run"  title="Execute filter with given input (Ctrl+Enter)">▶️ Run</button>
+    <button id="stop" title="Interrupt execution">⏹️ Stop</button>
+    <div class="settings">
+      <button>⚙️  Settings</button>
+      <div>
+        <fieldset>
+          <legend>Input</legend>
+          <ul>
+            <li>
+              <input type="checkbox" id="raw-input" name="raw-input">
+              <label for="raw-input">raw</label>
+            </li>
+            <li>
+              <input type="checkbox" id="slurp" name="slurp">
+              <label for="slurp">slurp</label>
+            </li>
+            <li>
+              <input type="checkbox" id="null-input" name="null-input">
+              <label for="null-input">null</label>
+            </li>
+            <li>
+              <input type="checkbox" id="in-place" name="in-place">
+              <label for="in-place">replace input by output</label>
+            </li>
+          </ul>
+        </fieldset>
+        <fieldset>
+          <legend>Output</legend>
+          <ul>
+            <li>
+              <input type="checkbox" id="raw-output" name="raw-output">
+              <label for="raw-output">raw</label>
+            </li>
+            <li>
+              <input type="checkbox" id="compact" name="compact">
+              <label for="compact">compact</label>
+            </li>
+            <li>
+              <input type="checkbox" id="join-output" name="join-output">
+              <label for="join-output">join</label>
+            </li>
+            <li>
+              <fieldset>
+                <legend>Indentation</legend>
+                <ul>
+                  <li>
+                    <input type="radio" id="spaces" name="indent" checked>
+                    <label for="spaces">Spaces</label>
+                    <input type="number" id="spaces" name="spaces" value="4" min="0" style="width: 3em">
+                  </li>
+                  <li>
+                    <input type="radio" id="tab" name="indent">
+                    <label for="tab">Tab</label>
+                  </li>
+                </ul>
+              </fieldset>
+            </li>
+          </ul>
+        </fieldset>
+      </div>
+    </div>
   </header>
 
   <section class="filter">
