@@ -1,0 +1,17 @@
+[package]
+name = 'jaq/jaq'
+version = '0.1.3'
+description = 'Just another JSON query tool'
+readme = "README.md"
+repository = "https://github.com/01mf02/jaq"
+
+# See more keys and definitions at https://docs.wasmer.io/registry/manifest
+
+[[module]]
+name = 'jaq'
+source = 'target/wasm32-wasmer-wasi/release/jaq.wasm'
+abi = 'wasi'
+
+[[command]]
+name = 'jaq'
+module = 'jaq'
