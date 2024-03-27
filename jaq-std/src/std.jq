@@ -161,3 +161,13 @@ def input: first(inputs);
 # Date
 def   todate:   todateiso8601;
 def fromdate: fromdateiso8601;
+
+# Semver
+def parse_semver: capture("^v?(?P<major>0|[1-9]\\d*)\\.(?P<minor>0|[1-9]\\d*)\\.(?P<patch>0|[1-9]\\d*)(?:-(?P<prerelease>(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$");
+def semver_ord:
+  parse_semver
+  | [ ( [.major, .minor, .patch] | map(tonumber) ),
+    if .prerelease == null then {} else
+       ( .prerelease | capture("^(?:(?<d>.*[^\\d\\n\\.])\\.?)?(?<v>\\d+)?$") | [ if .d == null then {} else .d end, if .v == null then {} else .v | tonumber end ] )
+    end
+  ];
