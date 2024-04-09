@@ -415,6 +415,10 @@ impl From<Vec<ParseError>> for Error {
     }
 }
 
+/// Run a filter with given input values and run `f` for every value output.
+///
+/// This function cannot return an `Iterator` because it creates an `RcIter`.
+/// This is most unfortunate. We should think about how to simplify this ...
 fn run(
     cli: &Cli,
     filter: &Filter,
