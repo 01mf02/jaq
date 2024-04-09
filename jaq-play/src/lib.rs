@@ -143,10 +143,9 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
         Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|_e| todo!()))
     });
 
-    // start out only from core filters,
-    // which do not include filters in the standard library
-    // such as `map`, `select` etc.
     let mut defs = ParseCtx::new(Vec::new());
+    defs.insert_natives(jaq_core::core());
+    defs.insert_defs(jaq_std::std());
 
     // parse the filter
     let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
