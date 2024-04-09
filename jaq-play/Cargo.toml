@@ -21,6 +21,8 @@ jaq-parse     = { version = "1.0.0", path = "../jaq-parse" }
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 jaq-core      = { version = "1.2.0", path = "../jaq-core" }
 jaq-std       = { version = "1.2.0", path = "../jaq-std" }
+ariadne = "0.4.0"
+chumsky = { version = "0.9.0", default-features = false }
 hifijson = "0.2"
 log = "0.4.17"
 

@@ -152,7 +152,17 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
 
     // parse the filter
     let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
-    assert_eq!(errs, Vec::new());
+    if !errs.is_empty() {
+        for e in errs {
+            let mut buf = Vec::new();
+            let cache = ariadne::Source::from(filter);
+            report(e).write(cache, &mut buf).unwrap();
+            let s = String::from_utf8(buf).unwrap();
+            scope.post_message(&format!("⚠️ Parse {s}").into()).unwrap();
+        }
+        scope.post_message(&JsValue::NULL).unwrap();
+        return;
+    }
 
     // compile the filter in the context of the given definitions
     let f = defs.compile(f.unwrap());
@@ -173,4 +183,66 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
     }
     // signal that we are done
     scope.post_message(&JsValue::NULL).unwrap();
+}
+
+fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
+    use ariadne::{Color, Fmt, Label, Report, ReportKind};
+    use chumsky::error::SimpleReason;
+
+    let (red, yellow) = (Color::Unset, Color::Unset);
+    let config = ariadne::Config::default().with_color(false);
+
+    let msg = if let SimpleReason::Custom(msg) = e.reason() {
+        msg.clone()
+    } else {
+        let found = if e.found().is_some() {
+            "Unexpected token"
+        } else {
+            "Unexpected end of input"
+        };
+        let when = if let Some(label) = e.label() {
+            format!(" while parsing {label}")
+        } else {
+            String::new()
+        };
+        let expected = if e.expected().len() == 0 {
+            "something else".to_string()
+        } else {
+            e.expected()
+                .map(|expected| match expected {
+                    Some(expected) => expected.to_string(),
+                    None => "end of input".to_string(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        format!("{found}{when}, expected {expected}",)
+    };
+
+    let label = if let SimpleReason::Custom(msg) = e.reason() {
+        msg.clone()
+    } else {
+        format!(
+            "Unexpected {}",
+            e.found()
+                .map(|c| format!("token {}", c.fg(red)))
+                .unwrap_or_else(|| "end of input".to_string())
+        )
+    };
+
+    let report = Report::build(ReportKind::Error, (), e.span().start)
+        .with_message(msg)
+        .with_label(Label::new(e.span()).with_message(label).with_color(red));
+
+    let report = match e.reason() {
+        SimpleReason::Unclosed { span, delimiter } => report.with_label(
+            Label::new(span.clone())
+                .with_message(format!("Unclosed delimiter {}", delimiter.fg(yellow)))
+                .with_color(yellow),
+        ),
+        SimpleReason::Unexpected => report,
+        SimpleReason::Custom(_) => report,
+    };
+
+    report.with_config(config).finish()
 }
