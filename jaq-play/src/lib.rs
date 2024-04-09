@@ -108,6 +108,7 @@ struct Settings {
     raw_output: bool,
     compact: bool,
     join_output: bool,
+    indent: usize,
     tab: bool,
 }
 
@@ -115,6 +116,7 @@ impl Settings {
     fn try_from(v: &JsValue) -> Option<Self> {
         let get = |key: &str| js_sys::Reflect::get(v, &key.into()).ok();
         let get_bool = |key: &str| get(key).and_then(|v| v.as_bool());
+        let as_usize = |v: JsValue| v.as_string()?.parse().ok();
         Some(Self {
             raw_input: get_bool("raw-input")?,
             slurp: get_bool("slurp")?,
@@ -122,6 +124,7 @@ impl Settings {
             raw_output: get_bool("raw-output")?,
             compact: get_bool("compact")?,
             join_output: get_bool("join-output")?,
+            indent: get("indent").and_then(as_usize)?,
             tab: get_bool("tab")?,
         })
     }
@@ -140,7 +143,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
     let mut lexer = hifijson::SliceLexer::new(input.as_bytes());
     let inputs = core::iter::from_fn(move || {
         use hifijson::token::Lex;
-        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|_e| todo!()))
+        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
     });
 
     let mut defs = ParseCtx::new(Vec::new());
@@ -168,5 +171,6 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
             }
         }
     }
+    // signal that we are done
     scope.post_message(&JsValue::NULL).unwrap();
 }
