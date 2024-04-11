@@ -1,5 +1,5 @@
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_interpret::{Ctx, FilterT, ParseCtx, RcIter, Val};
+use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
 struct Pp<'a> {
@@ -132,13 +132,48 @@ impl Settings {
 
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
+enum Error {
+    Chumsky(Vec<ChumskyError>),
+    Hifijson(String),
+    Jaq(jaq_interpret::Error),
+}
+
 #[wasm_bindgen]
-pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
+pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let _ = console_log::init();
     log::debug!("Starting run in Rust ...");
 
     let settings = Settings::try_from(settings).unwrap();
     log::debug!("{settings:?}");
+
+    let post_value = |y| scope.post_message(&Pp::new(&y).to_string().into()).unwrap();
+    match process(filter, input, &settings, post_value) {
+        Ok(()) => (),
+        Err(Error::Chumsky(errs)) => {
+            for e in errs {
+                let mut buf = Vec::new();
+                let cache = ariadne::Source::from(filter);
+                report(e).write(cache, &mut buf).unwrap();
+                let s = String::from_utf8(buf).unwrap();
+                scope.post_message(&format!("⚠️ Parse {s}").into()).unwrap();
+            }
+        }
+        Err(Error::Hifijson(e)) => {
+            scope
+                .post_message(&format!("⚠️ Parse Error: {e}").into())
+                .unwrap();
+        }
+        Err(Error::Jaq(e)) => {
+            scope.post_message(&format!("⚠️ Error: {e}").into()).unwrap();
+        }
+    }
+
+    // signal that we are done
+    scope.post_message(&JsValue::NULL).unwrap();
+}
+
+fn process(filter: &str, input: &str, _settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
+    let filter = parse(filter, Vec::new()).map_err(Error::Chumsky)?;
 
     let mut lexer = hifijson::SliceLexer::new(input.as_bytes());
     let inputs = core::iter::from_fn(move || {
@@ -146,43 +181,38 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: Scope) {
         Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
     });
 
-    let mut defs = ParseCtx::new(Vec::new());
-    defs.insert_natives(jaq_core::core());
-    defs.insert_defs(jaq_std::std());
-
-    // parse the filter
-    let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
-    if !errs.is_empty() {
-        for e in errs {
-            let mut buf = Vec::new();
-            let cache = ariadne::Source::from(filter);
-            report(e).write(cache, &mut buf).unwrap();
-            let s = String::from_utf8(buf).unwrap();
-            scope.post_message(&format!("⚠️ Parse {s}").into()).unwrap();
-        }
-        scope.post_message(&JsValue::NULL).unwrap();
-        return;
-    }
-
-    // compile the filter in the context of the given definitions
-    let f = defs.compile(f.unwrap());
-    assert!(defs.errs.is_empty());
-
     let inputs = RcIter::new(inputs);
 
     for x in &inputs {
-        for y in f.run((Ctx::new([], &inputs), x.unwrap())) {
-            match y {
-                Ok(y) => scope.post_message(&Pp::new(&y).to_string().into()).unwrap(),
-                Err(e) => {
-                    scope.post_message(&format!("⚠️ Error: {e}").into()).unwrap();
-                    break;
-                }
-            }
+        let x = x.map_err(Error::Hifijson)?;
+        for y in filter.run((Ctx::new([], &inputs), x)) {
+            f(y.map_err(Error::Jaq)?)
         }
     }
-    // signal that we are done
-    scope.post_message(&JsValue::NULL).unwrap();
+    Ok(())
+}
+
+type ChumskyError = chumsky::error::Simple<String>;
+
+fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ChumskyError>> {
+    let mut defs = ParseCtx::new(vars);
+    defs.insert_natives(jaq_core::core());
+    defs.insert_defs(jaq_std::std());
+    assert!(defs.errs.is_empty());
+    let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+    let filter = defs.compile(filter.unwrap());
+    if defs.errs.is_empty() {
+        Ok(filter)
+    } else {
+        Err(defs
+            .errs
+            .into_iter()
+            .map(|error| ChumskyError::custom(error.1, error.0.to_string()))
+            .collect())
+    }
 }
 
 fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
