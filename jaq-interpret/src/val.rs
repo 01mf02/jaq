@@ -329,6 +329,30 @@ impl From<Val> for serde_json::Value {
     }
 }
 
+impl From<bool> for Val {
+    fn from(b: bool) -> Self {
+        Self::Bool(b)
+    }
+}
+
+impl From<isize> for Val {
+    fn from(i: isize) -> Self {
+        Self::Int(i)
+    }
+}
+
+impl From<String> for Val {
+    fn from(s: String) -> Self {
+        Self::Str(Rc::new(s))
+    }
+}
+
+impl FromIterator<Self> for Val {
+    fn from_iter<T: IntoIterator<Item = Self>>(iter: T) -> Self {
+        Self::Arr(Rc::new(iter.into_iter().collect()))
+    }
+}
+
 impl core::ops::Add for Val {
     type Output = ValR;
     fn add(self, rhs: Self) -> Self::Output {
