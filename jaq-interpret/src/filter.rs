@@ -35,7 +35,7 @@ pub enum CallTyp {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TailCall(Id, crate::Vars, Val);
+pub struct TailCall<V = Val>(Id, crate::Vars<V>, V);
 
 #[derive(Clone, Debug)]
 pub(crate) struct Call {

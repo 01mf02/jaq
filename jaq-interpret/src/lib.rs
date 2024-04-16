@@ -73,31 +73,31 @@ use stack::Stack;
 
 /// variable bindings
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Vars(RcList<Bind<Val, (filter::Id, Self)>>);
-type Inputs<'i> = RcIter<dyn Iterator<Item = Result<Val, String>> + 'i>;
+struct Vars<V>(RcList<Bind<V, (filter::Id, Self)>>);
+type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
-impl Vars {
-    fn get(&self, i: usize) -> Option<&Bind<Val, (filter::Id, Self)>> {
+impl<V> Vars<V> {
+    fn get(&self, i: usize) -> Option<&Bind<V, (filter::Id, Self)>> {
         self.0.get(i)
     }
 }
 
 /// Filter execution context.
 #[derive(Clone)]
-pub struct Ctx<'a> {
-    vars: Vars,
-    inputs: &'a Inputs<'a>,
+pub struct Ctx<'a, V = Val> {
+    vars: Vars<V>,
+    inputs: &'a Inputs<'a, V>,
 }
 
-impl<'a> Ctx<'a> {
+impl<'a, V> Ctx<'a, V> {
     /// Construct a context.
-    pub fn new(vars: impl IntoIterator<Item = Val>, inputs: &'a Inputs<'a>) -> Self {
+    pub fn new(vars: impl IntoIterator<Item = V>, inputs: &'a Inputs<'a, V>) -> Self {
         let vars = Vars(RcList::new().extend(vars.into_iter().map(Bind::Var)));
         Self { vars, inputs }
     }
 
     /// Add a new variable binding.
-    pub(crate) fn cons_var(mut self, x: Val) -> Self {
+    pub(crate) fn cons_var(mut self, x: V) -> Self {
         self.vars.0 = self.vars.0.cons(Bind::Var(x));
         self
     }
