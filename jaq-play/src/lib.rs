@@ -226,7 +226,7 @@ fn read_str<'a>(
     }
 }
 
-fn raw_input<'a>(slurp: bool, input: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     if slurp {
         Box::new(std::iter::once(input))
     } else {
