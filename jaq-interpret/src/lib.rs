@@ -116,13 +116,13 @@ impl<'a, V> Ctx<'a, V> {
         self
     }
 
-    fn with_vars(&self, vars: Vars) -> Self {
+    fn with_vars(&self, vars: Vars<V>) -> Self {
         let inputs = self.inputs;
         Self { vars, inputs }
     }
 
     /// Return remaining input values.
-    pub fn inputs(&self) -> &'a Inputs<'a> {
+    pub fn inputs(&self) -> &'a Inputs<'a, V> {
         self.inputs
     }
 }
