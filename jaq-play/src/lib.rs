@@ -10,6 +10,7 @@ struct Pp<'a> {
 }
 
 struct PpOpts {
+    raw: bool,
     compact: bool,
     indent: String,
 }
@@ -70,6 +71,7 @@ impl<'a> Display for Pp<'a> {
             Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
             Val::Float(_) => span(f, "null", "null"),
             Val::Num(n) => span(f, "number", n),
+            Val::Str(s) if self.opts.raw => span(f, "string", escape(s)),
             Val::Str(s) => span_dbg(f, "string", escape(s)),
             Val::Arr(a) if a.is_empty() => write!(f, "[]"),
             Val::Arr(a) => {
@@ -177,6 +179,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     };
 
     let pp_opts = PpOpts {
+        raw: settings.raw_output,
         compact: settings.compact,
         indent,
     };
