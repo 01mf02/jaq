@@ -219,10 +219,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
             Ast::Str(s) => Box::new(once_with(move || Ok(Val::str(s.clone())))),
-            Ast::Array(f) => Box::new(once_with(move || {
-                w(f).run(cv).collect::<Result<_, _>>().map(Val::arr)
-            })),
-            Ast::ObjEmpty => box_once(Ok(Val::Obj(Default::default()))),
+            Ast::Array(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
             Ast::ObjSingle(k, v) => Box::new(
                 Self::cartesian(w(k), w(v), cv)
                     .map(|(k, v)| Ok(Val::obj([(k?.to_str()?, v?)].into_iter().collect()))),
