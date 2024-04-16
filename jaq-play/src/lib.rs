@@ -4,17 +4,40 @@ use wasm_bindgen::prelude::*;
 
 struct Pp<'a> {
     val: &'a Val,
+    opts: &'a PpOpts,
     level: usize,
     indent_start: bool,
 }
 
+struct PpOpts {
+    compact: bool,
+    indent: String,
+}
+
 impl<'a> Pp<'a> {
-    fn new(val: &'a Val) -> Self {
+    fn new(val: &'a Val, opts: &'a PpOpts) -> Self {
         Self {
             val,
+            opts,
             level: 0,
             indent_start: false,
         }
+    }
+}
+
+impl PpOpts {
+    fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
+        if !self.compact {
+            write!(f, "{}", self.indent.repeat(level))?
+        }
+        Ok(())
+    }
+
+    fn newline(&self, f: &mut Formatter) -> fmt::Result {
+        if !self.compact {
+            writeln!(f)?
+        }
+        Ok(())
     }
 }
 
@@ -24,10 +47,6 @@ fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
 
 fn span_dbg(f: &mut Formatter, cls: &str, el: impl Debug) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el:?}</span>")
-}
-
-fn indent(f: &mut Formatter, level: usize) -> fmt::Result {
-    write!(f, "{}", "    ".repeat(level))
 }
 
 fn escape(s: &str) -> String {
@@ -41,7 +60,7 @@ fn escape(s: &str) -> String {
 impl<'a> Display for Pp<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         if self.indent_start {
-            indent(f, self.level)?;
+            self.opts.indent(f, self.level)?;
         }
 
         match self.val {
@@ -55,11 +74,12 @@ impl<'a> Display for Pp<'a> {
             Val::Arr(a) if a.is_empty() => write!(f, "[]"),
             Val::Arr(a) => {
                 write!(f, "[")?;
-                writeln!(f)?;
+                self.opts.newline(f)?;
                 let mut iter = a.iter().peekable();
                 while let Some(val) = iter.next() {
                     Pp {
                         val,
+                        opts: self.opts,
                         level: self.level + 1,
                         indent_start: true,
                     }
@@ -67,22 +87,26 @@ impl<'a> Display for Pp<'a> {
                     if iter.peek().is_some() {
                         write!(f, ",")?;
                     }
-                    writeln!(f)?;
+                    self.opts.newline(f)?;
                 }
-                indent(f, self.level)?;
+                self.opts.indent(f, self.level)?;
                 write!(f, "]")
             }
             Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
             Val::Obj(o) => {
                 write!(f, "{{")?;
-                writeln!(f)?;
+                self.opts.newline(f)?;
                 let mut iter = o.iter().peekable();
                 while let Some((k, val)) = iter.next() {
-                    indent(f, self.level + 1)?;
+                    self.opts.indent(f, self.level + 1)?;
                     span_dbg(f, "key", escape(k))?;
-                    write!(f, ": ")?;
+                    write!(f, ":")?;
+                    if !self.opts.compact {
+                        write!(f, " ")?;
+                    }
                     Pp {
                         val,
+                        opts: self.opts,
                         level: self.level + 1,
                         indent_start: false,
                     }
@@ -90,9 +114,9 @@ impl<'a> Display for Pp<'a> {
                     if iter.peek().is_some() {
                         write!(f, ",")?;
                     }
-                    writeln!(f)?;
+                    self.opts.newline(f)?;
                 }
-                indent(f, self.level)?;
+                self.opts.indent(f, self.level)?;
                 write!(f, "}}")
             }
         }
@@ -146,7 +170,22 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let settings = Settings::try_from(settings).unwrap();
     log::debug!("{settings:?}");
 
-    let post_value = |y| scope.post_message(&Pp::new(&y).to_string().into()).unwrap();
+    let indent = if settings.tab {
+        "\t".to_string()
+    } else {
+        " ".repeat(settings.indent)
+    };
+
+    let pp_opts = PpOpts {
+        compact: settings.compact,
+        indent,
+    };
+
+    let post_value = |y| {
+        scope
+            .post_message(&Pp::new(&y, &pp_opts).to_string().into())
+            .unwrap()
+    };
     match process(filter, input, &settings, post_value) {
         Ok(()) => (),
         Err(Error::Chumsky(errs)) => {
