@@ -214,7 +214,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     scope.post_message(&JsValue::NULL).unwrap();
 }
 
-fn process(filter: &str, input: &str, _settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
+fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
     let filter = parse(filter, Vec::new()).map_err(Error::Chumsky)?;
 
     let mut lexer = hifijson::SliceLexer::new(input.as_bytes());
@@ -223,9 +223,13 @@ fn process(filter: &str, input: &str, _settings: &Settings, f: impl Fn(Val)) -> 
         Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
     });
 
-    let inputs = RcIter::new(inputs);
+    let inputs = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
+    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    for x in &inputs {
+    let inputs = RcIter::new(inputs);
+    let null = RcIter::new(null);
+
+    for x in if settings.null_input { &null } else { &inputs } {
         let x = x.map_err(Error::Hifijson)?;
         for y in filter.run((Ctx::new([], &inputs), x)) {
             f(y.map_err(Error::Jaq)?)
