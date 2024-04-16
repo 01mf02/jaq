@@ -220,7 +220,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Float(x) => box_once(Ok(Val::Float(*x))),
             Ast::Str(s) => Box::new(once_with(move || Ok(Val::str(s.clone())))),
             Ast::Array(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
-            Ast::ObjEmpty => box_once(V::from_obj(core::iter::empty())),
+            Ast::ObjEmpty => box_once(Ok(Val::obj(Default::default()))),
             Ast::ObjSingle(k, v) => Box::new(
                 Self::cartesian(w(k), w(v), cv)
                     .map(|(k, v)| Ok(Val::obj([(k?.to_str()?, v?)].into_iter().collect()))),
