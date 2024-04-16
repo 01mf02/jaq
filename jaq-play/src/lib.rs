@@ -214,7 +214,10 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     scope.post_message(&JsValue::NULL).unwrap();
 }
 
-fn read_str<'a>(settings: &Settings, input: &'a str) -> Box<dyn Iterator<Item = Result<Val, String>> + 'a> {
+fn read_str<'a>(
+    settings: &Settings,
+    input: &'a str,
+) -> Box<dyn Iterator<Item = Result<Val, String>> + 'a> {
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
@@ -223,8 +226,7 @@ fn read_str<'a>(settings: &Settings, input: &'a str) -> Box<dyn Iterator<Item = 
     }
 }
 
-fn raw_input<'a>(slurp: bool, input: &'a str) -> impl Iterator<Item = &'a str> + 'a
-{
+fn raw_input<'a>(slurp: bool, input: &'a str) -> impl Iterator<Item = &'a str> + 'a {
     if slurp {
         Box::new(std::iter::once(input))
     } else {
