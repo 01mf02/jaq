@@ -1,6 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
-use crate::val::{Val, ValR, ValRs};
+use crate::val::{Val, ValR, ValRs, ValT};
 use alloc::{boxed::Box, vec::Vec};
 pub use jaq_syn::path::Opt;
 

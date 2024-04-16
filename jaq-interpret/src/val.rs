@@ -55,19 +55,44 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
+pub(crate) trait ValT: Sized {
+    /// If `Ok(k)` is in `v.keys()`, then
+    /// `v.index(k)` must be `Ok(_)` and in `v.range(Range::default())`.
+    fn values(self) -> Box<dyn Iterator<Item = Result<Self, Error>>>;
+    fn index(self, index: &Self) -> Result<Self, Error>;
+    fn range(self, range: Range<&Self>) -> Result<Self, Error>;
+
+    fn map_values<I: Iterator<Item = Result<Self, Error>>>(
+        self,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> Result<Self, Error>;
+    fn map_index<I: Iterator<Item = Result<Self, Error>>>(
+        self,
+        index: &Self,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> Result<Self, Error>;
+    fn map_range<I: Iterator<Item = Result<Self, Error>>>(
+        self,
+        range: Range<&Self>,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> Result<Self, Error>;
+}
+
 type Range<V> = core::ops::Range<Option<V>>;
 
-impl Val {
-    pub(crate) fn values(self) -> impl Iterator<Item = ValR> {
+impl ValT for Val {
+    fn values(self) -> Box<dyn Iterator<Item = ValR>> {
         match self {
-            Self::Arr(a) => Box::new(Rc::unwrap_or_clone(a).into_iter().map(Ok)),
-            Self::Obj(o) => Box::new(Rc::unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v)))
-                as Box<dyn Iterator<Item = _>>,
+            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
+            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => box_once(Err(Error::Type(self, Type::Iter))),
         }
     }
 
-    pub(crate) fn index(self, index: &Self) -> ValR {
+    fn index(self, index: &Self) -> ValR {
         match (self, index) {
             (Val::Arr(a), Val::Int(i)) => Ok(abs_index(*i, a.len())
                 .map(|i| a[i].clone())
@@ -78,7 +103,7 @@ impl Val {
         }
     }
 
-    pub(crate) fn range(self, range: Range<&Self>) -> ValR {
+    fn range(self, range: Range<&Self>) -> ValR {
         let (from, upto) = (range.start, range.end);
         match self {
             Val::Arr(a) => {
@@ -107,11 +132,7 @@ impl Val {
         }
     }
 
-    pub(crate) fn map_values<I: Iterator<Item = ValR>>(
-        self,
-        opt: Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValR {
+    fn map_values<I: Iterator<Item = ValR>>(self, opt: Opt, f: impl Fn(Self) -> I) -> ValR {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -126,7 +147,7 @@ impl Val {
         }
     }
 
-    pub(crate) fn map_index<I: Iterator<Item = ValR>>(
+    fn map_index<I: Iterator<Item = ValR>>(
         mut self,
         index: &Self,
         opt: Opt,
@@ -174,7 +195,7 @@ impl Val {
         }
     }
 
-    pub(crate) fn map_range<I: Iterator<Item = ValR>>(
+    fn map_range<I: Iterator<Item = ValR>>(
         mut self,
         range: Range<&Self>,
         opt: Opt,
