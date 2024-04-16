@@ -79,6 +79,8 @@ pub(crate) trait ValT: Clone + Sized {
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> Result<Self, Error>;
+
+    fn as_bool(&self) -> bool;
 }
 
 type Range<V> = core::ops::Range<Option<V>>;
@@ -220,6 +222,10 @@ impl ValT for Val {
         } else {
             opt.fail(self, |v| Error::Type(v, Type::Arr))
         }
+    }
+
+    fn as_bool(&self) -> bool {
+        self.as_bool()
     }
 }
 
