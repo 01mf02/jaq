@@ -151,7 +151,7 @@ where
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
-type Cv<'c> = (Ctx<'c>, Val);
+type Cv<'c, V = Val> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
 #[derive(Clone)]
