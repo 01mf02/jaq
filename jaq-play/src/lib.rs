@@ -133,7 +133,7 @@ struct Settings {
     null_input: bool,
     raw_output: bool,
     compact: bool,
-    join_output: bool,
+    //join_output: bool,
     indent: usize,
     tab: bool,
 }
@@ -149,7 +149,7 @@ impl Settings {
             null_input: get_bool("null-input")?,
             raw_output: get_bool("raw-output")?,
             compact: get_bool("compact")?,
-            join_output: get_bool("join-output")?,
+            //join_output: get_bool("join-output")?,
             indent: get("indent").and_then(as_usize)?,
             tab: get_bool("tab")?,
         })
