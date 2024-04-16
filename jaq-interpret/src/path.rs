@@ -1,8 +1,7 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::error::{Error, Type};
 use crate::results::then;
 use crate::val::{Val, ValR, ValRs};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 pub use jaq_syn::path::Opt;
 
 #[derive(Clone, Debug)]
@@ -83,120 +82,23 @@ where
 }
 
 impl Part<Val> {
-    fn run(self, current: Val) -> Box<dyn Iterator<Item = ValR>> {
+    fn run(&self, v: Val) -> impl Iterator<Item = ValR> {
         match self {
-            Self::Index(idx) => box_once(match current {
-                Val::Arr(a) => match idx {
-                    Val::Int(i) => Ok(abs_index(i, a.len())
-                        .map(|i| a[i].clone())
-                        .unwrap_or(Val::Null)),
-                    i => Err(Error::Index(Val::Arr(a.clone()), i.clone())),
-                },
-                Val::Obj(o) => match idx {
-                    Val::Str(s) => Ok(o.get(&*s).cloned().unwrap_or(Val::Null)),
-                    i => Err(Error::Index(Val::Obj(o.clone()), i.clone())),
-                },
-                _ => Err(Error::Type(current, Type::Iter)),
-            }),
-            Self::Range(None, None) => then(current.try_into_iter(), |iter| Box::new(iter.map(Ok))),
-            Self::Range(from, upto) => box_once(match current {
-                Val::Arr(a) => {
-                    let len = a.len();
-                    let from = from.as_ref().map(|i| i.as_int()).transpose();
-                    let upto = upto.as_ref().map(|i| i.as_int()).transpose();
-                    from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-                        let from = abs_bound(from, len, 0);
-                        let upto = abs_bound(upto, len, len);
-                        let (skip, take) = skip_take(from, upto);
-                        Val::arr(a.iter().skip(skip).take(take).cloned().collect())
-                    })
-                }
-                Val::Str(s) => {
-                    let len = s.chars().count();
-                    let from = from.as_ref().map(|i| i.as_int()).transpose();
-                    let upto = upto.as_ref().map(|i| i.as_int()).transpose();
-                    from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-                        let from = abs_bound(from, len, 0);
-                        let upto = abs_bound(upto, len, len);
-                        let (skip, take) = skip_take(from, upto);
-                        Val::str(s.chars().skip(skip).take(take).collect())
-                    })
-                }
-                _ => Err(Error::Type(current, Type::Range)),
-            }),
+            Self::Index(idx) => box_once(v.index(idx)),
+            Self::Range(None, None) => Box::new(v.values()),
+            Self::Range(from, upto) => box_once(v.range(from.as_ref()..upto.as_ref())),
         }
     }
 
-    fn update<F, I>(&self, mut v: Val, opt: Opt, f: F) -> ValR
+    fn update<F, I>(&self, v: Val, opt: Opt, f: F) -> ValR
     where
         F: Fn(Val) -> I,
         I: Iterator<Item = ValR>,
     {
         match self {
-            Self::Index(idx) => match v {
-                Val::Obj(ref mut o) => {
-                    let o = Rc::make_mut(o);
-                    use indexmap::map::Entry::{Occupied, Vacant};
-                    let i = match idx {
-                        Val::Str(s) => s,
-                        i => return opt.fail(v, |v| Error::Index(v, i.clone())),
-                    };
-                    match o.entry(Rc::clone(i)) {
-                        Occupied(mut e) => {
-                            match f(e.get().clone()).next().transpose()? {
-                                Some(y) => e.insert(y),
-                                None => e.remove(),
-                            };
-                        }
-                        Vacant(e) => {
-                            if let Some(y) = f(Val::Null).next().transpose()? {
-                                e.insert(y);
-                            }
-                        }
-                    }
-                    Ok(v)
-                }
-                Val::Arr(ref mut a) => {
-                    let a = Rc::make_mut(a);
-                    let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
-                    let i = match idx.as_int().and_then(abs_or) {
-                        Ok(i) => i,
-                        Err(e) => return opt.fail(v, |_| e),
-                    };
-
-                    if let Some(y) = f(a[i].clone()).next().transpose()? {
-                        a[i] = y;
-                    } else {
-                        a.remove(i);
-                    }
-                    Ok(v)
-                }
-                _ => opt.fail(v, |v| Error::Type(v, Type::Iter)),
-            },
-            Self::Range(None, None) => match v.try_map(&f)? {
-                y @ (Val::Arr(_) | Val::Obj(_)) => Ok(y),
-                v => opt.fail(v, |v| Error::Type(v, Type::Iter)),
-            },
-            Self::Range(from, upto) => match v {
-                Val::Arr(ref mut a) => {
-                    let a = Rc::make_mut(a);
-                    let from = from.as_ref().map(|i| i.as_int()).transpose();
-                    let upto = upto.as_ref().map(|i| i.as_int()).transpose();
-                    let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
-                        Ok(from_upto) => from_upto,
-                        Err(e) => return opt.fail(v, |_| e),
-                    };
-                    let len = a.len();
-                    let from = abs_bound(from, len, 0);
-                    let upto = abs_bound(upto, len, len);
-                    let (skip, take) = skip_take(from, upto);
-                    let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
-                    let y = f(arr).map(|y| y?.into_arr()).next().transpose()?;
-                    a.splice(skip..skip + take, (*y.unwrap_or_default()).clone());
-                    Ok(v)
-                }
-                _ => opt.fail(v, |v| Error::Type(v, Type::Arr)),
-            },
+            Self::Index(idx) => v.map_index(idx, opt, f),
+            Self::Range(None, None) => v.map_values(opt, f),
+            Self::Range(from, upto) => v.map_range(from.as_ref()..upto.as_ref(), opt, f),
         }
     }
 }
@@ -274,40 +176,4 @@ impl<F> From<Part<F>> for Path<F> {
     fn from(p: Part<F>) -> Self {
         Self(Vec::from([(p, Opt::Essential)]))
     }
-}
-
-fn skip_take(from: usize, until: usize) -> (usize, usize) {
-    (from, if until > from { until - from } else { 0 })
-}
-
-/// If a range bound is given, absolutise and clip it between 0 and `len`,
-/// else return `default`.
-fn abs_bound(i: Option<isize>, len: usize, default: usize) -> usize {
-    let abs = |i| core::cmp::min(wrap(i, len).unwrap_or(0), len);
-    i.map(abs).unwrap_or(default)
-}
-
-/// Absolutise an index and return result if it is inside [0, len).
-fn abs_index(i: isize, len: usize) -> Option<usize> {
-    wrap(i, len).filter(|i| *i < len)
-}
-
-fn wrap(i: isize, len: usize) -> Option<usize> {
-    if i >= 0 {
-        Some(i as usize)
-    } else if len < -i as usize {
-        None
-    } else {
-        Some(len - (-i as usize))
-    }
-}
-
-#[test]
-fn wrap_test() {
-    let len = 4;
-    assert_eq!(wrap(0, len), Some(0));
-    assert_eq!(wrap(8, len), Some(8));
-    assert_eq!(wrap(-1, len), Some(3));
-    assert_eq!(wrap(-4, len), Some(0));
-    assert_eq!(wrap(-8, len), None);
 }

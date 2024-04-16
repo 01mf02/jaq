@@ -1,5 +1,6 @@
 //! JSON values with reference-counted sharing.
 
+use crate::box_iter::{box_once, BoxIter};
 use crate::error::{Error, Type};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
@@ -7,7 +8,7 @@ use core::cmp::Ordering;
 use core::fmt;
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
-use jaq_syn::MathOp;
+use jaq_syn::{path::Opt, MathOp};
 
 /// JSON value with sharing.
 ///
@@ -46,12 +47,195 @@ type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 pub type ValR = Result<Val, Error>;
 
 /// A stream of value results.
-pub type ValRs<'a> = Box<dyn Iterator<Item = ValR> + 'a>;
+pub type ValRs<'a> = BoxIter<'a, ValR>;
 
 // This might be included in the Rust standard library:
 // <https://github.com/rust-lang/rust/issues/93610>
 fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+}
+
+type Range<V> = core::ops::Range<Option<V>>;
+
+impl Val {
+    pub(crate) fn values(self) -> impl Iterator<Item = ValR> {
+        match self {
+            Self::Arr(a) => Box::new(Rc::unwrap_or_clone(a).into_iter().map(Ok)),
+            Self::Obj(o) => Box::new(Rc::unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v)))
+                as Box<dyn Iterator<Item = _>>,
+            _ => box_once(Err(Error::Type(self, Type::Iter))),
+        }
+    }
+
+    pub(crate) fn index(self, index: &Self) -> ValR {
+        match (self, index) {
+            (Val::Arr(a), Val::Int(i)) => Ok(abs_index(*i, a.len())
+                .map(|i| a[i].clone())
+                .unwrap_or(Val::Null)),
+            (Val::Obj(o), Val::Str(s)) => Ok(o.get(s).cloned().unwrap_or(Val::Null)),
+            (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::Index(s, index.clone())),
+            (s, _) => Err(Error::Type(s, Type::Iter)),
+        }
+    }
+
+    pub(crate) fn range(self, range: Range<&Self>) -> ValR {
+        let (from, upto) = (range.start, range.end);
+        match self {
+            Val::Arr(a) => {
+                let len = a.len();
+                let from = from.as_ref().map(|i| i.as_int()).transpose();
+                let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+                    let from = abs_bound(from, len, 0);
+                    let upto = abs_bound(upto, len, len);
+                    let (skip, take) = skip_take(from, upto);
+                    a.iter().skip(skip).take(take).cloned().collect()
+                })
+            }
+            Val::Str(s) => {
+                let len = s.chars().count();
+                let from = from.as_ref().map(|i| i.as_int()).transpose();
+                let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+                    let from = abs_bound(from, len, 0);
+                    let upto = abs_bound(upto, len, len);
+                    let (skip, take) = skip_take(from, upto);
+                    Val::from(s.chars().skip(skip).take(take).collect::<String>())
+                })
+            }
+            _ => Err(Error::Type(self, Type::Range)),
+        }
+    }
+
+    pub(crate) fn map_values<I: Iterator<Item = ValR>>(
+        self,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> ValR {
+        match self {
+            Self::Arr(a) => {
+                let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
+                Ok(iter.collect::<Result<_, _>>()?)
+            }
+            Self::Obj(o) => {
+                let iter = rc_unwrap_or_clone(o).into_iter();
+                let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
+                Ok(Self::obj(iter.collect::<Result<_, _>>()?))
+            }
+            v => opt.fail(v, |v| Error::Type(v, Type::Iter)),
+        }
+    }
+
+    pub(crate) fn map_index<I: Iterator<Item = ValR>>(
+        mut self,
+        index: &Self,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> ValR {
+        match self {
+            Val::Obj(ref mut o) => {
+                let o = Rc::make_mut(o);
+                use indexmap::map::Entry::{Occupied, Vacant};
+                let i = match index {
+                    Val::Str(s) => s,
+                    i => return opt.fail(self, |v| Error::Index(v, i.clone())),
+                };
+                match o.entry(Rc::clone(i)) {
+                    Occupied(mut e) => {
+                        match f(e.get().clone()).next().transpose()? {
+                            Some(y) => e.insert(y),
+                            None => e.remove(),
+                        };
+                    }
+                    Vacant(e) => {
+                        if let Some(y) = f(Val::Null).next().transpose()? {
+                            e.insert(y);
+                        }
+                    }
+                }
+                Ok(self)
+            }
+            Val::Arr(ref mut a) => {
+                let a = Rc::make_mut(a);
+                let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
+                let i = match index.as_int().and_then(abs_or) {
+                    Ok(i) => i,
+                    Err(e) => return opt.fail(self, |_| e),
+                };
+
+                if let Some(y) = f(a[i].clone()).next().transpose()? {
+                    a[i] = y;
+                } else {
+                    a.remove(i);
+                }
+                Ok(self)
+            }
+            _ => opt.fail(self, |v| Error::Type(v, Type::Iter)),
+        }
+    }
+
+    pub(crate) fn map_range<I: Iterator<Item = ValR>>(
+        mut self,
+        range: Range<&Self>,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> ValR {
+        if let Val::Arr(ref mut a) = self {
+            let a = Rc::make_mut(a);
+            let from = range.start.as_ref().map(|i| i.as_int()).transpose();
+            let upto = range.end.as_ref().map(|i| i.as_int()).transpose();
+            let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
+                Ok(from_upto) => from_upto,
+                Err(e) => return opt.fail(self, |_| e),
+            };
+            let len = a.len();
+            let from = abs_bound(from, len, 0);
+            let upto = abs_bound(upto, len, len);
+            let (skip, take) = skip_take(from, upto);
+            let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
+            let y = f(arr).map(|y| y?.into_arr()).next().transpose()?;
+            a.splice(skip..skip + take, (*y.unwrap_or_default()).clone());
+            Ok(self)
+        } else {
+            opt.fail(self, |v| Error::Type(v, Type::Arr))
+        }
+    }
+}
+
+fn skip_take(from: usize, until: usize) -> (usize, usize) {
+    (from, if until > from { until - from } else { 0 })
+}
+
+/// If a range bound is given, absolutise and clip it between 0 and `len`,
+/// else return `default`.
+fn abs_bound(i: Option<isize>, len: usize, default: usize) -> usize {
+    let abs = |i| core::cmp::min(wrap(i, len).unwrap_or(0), len);
+    i.map(abs).unwrap_or(default)
+}
+
+/// Absolutise an index and return result if it is inside [0, len).
+fn abs_index(i: isize, len: usize) -> Option<usize> {
+    wrap(i, len).filter(|i| *i < len)
+}
+
+fn wrap(i: isize, len: usize) -> Option<usize> {
+    if i >= 0 {
+        Some(i as usize)
+    } else if len < -i as usize {
+        None
+    } else {
+        Some(len - (-i as usize))
+    }
+}
+
+#[test]
+fn wrap_test() {
+    let len = 4;
+    assert_eq!(wrap(0, len), Some(0));
+    assert_eq!(wrap(8, len), Some(8));
+    assert_eq!(wrap(-1, len), Some(3));
+    assert_eq!(wrap(-4, len), Some(0));
+    assert_eq!(wrap(-8, len), None);
 }
 
 impl Val {
@@ -184,21 +368,6 @@ impl Val {
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
             _ => Err(Error::Type(self, Type::Iter)),
         }
-    }
-
-    pub(crate) fn try_map<I: Iterator<Item = ValR>>(self, f: impl Fn(Self) -> I) -> ValR {
-        Ok(match self {
-            Self::Arr(a) => {
-                let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
-                Self::arr(iter.collect::<Result<_, _>>()?)
-            }
-            Self::Obj(o) => {
-                let iter = rc_unwrap_or_clone(o).into_iter();
-                let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
-                Self::obj(iter.collect::<Result<_, _>>()?)
-            }
-            v => v,
-        })
     }
 
     /// `a` contains `b` iff either
@@ -440,7 +609,7 @@ impl core::ops::Mul for Val {
 }
 
 /// Split a string by a given separator string.
-fn split<'a>(s: &'a str, sep: &'a str) -> Box<dyn Iterator<Item = String> + 'a> {
+fn split<'a>(s: &'a str, sep: &'a str) -> BoxIter<'a, String> {
     if s.is_empty() {
         Box::new(core::iter::empty())
     } else if sep.is_empty() {
