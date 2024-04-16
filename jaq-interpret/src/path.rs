@@ -1,6 +1,7 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
-use crate::val::{Val, ValR, ValRs, ValT};
+use crate::val::ValT;
+use crate::Error;
 use alloc::{boxed::Box, vec::Vec};
 pub use jaq_syn::path::Opt;
 
@@ -40,12 +41,15 @@ impl<'a, U: Clone + 'a> Path<U> {
     }
 }
 
-impl Path<Val> {
-    pub fn run<'a>(self, v: Val) -> ValRs<'a> {
+impl<'a, V: ValT + 'a> Path<V> {
+    pub fn run(self, v: V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a> {
         run(self.0.into_iter(), v)
     }
 
-    pub fn update<'a, F: Fn(Val) -> ValRs<'a>>(mut self, v: Val, f: F) -> ValR {
+    pub fn update<F>(mut self, v: V, f: F) -> Result<V, Error>
+    where
+        F: Fn(V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a>,
+    {
         if let Some(last) = self.0.pop() {
             update(self.0.into_iter(), last, v, &f)
         } else {
@@ -55,9 +59,9 @@ impl Path<Val> {
     }
 }
 
-fn run<'a, I>(mut iter: I, val: Val) -> ValRs<'a>
+fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a>
 where
-    I: Iterator<Item = (Part<Val>, Opt)> + Clone + 'a,
+    I: Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
 {
     if let Some((part, opt)) = iter.next() {
         let essential = matches!(opt, Opt::Essential);
@@ -68,10 +72,10 @@ where
     }
 }
 
-fn update<'f, P, F>(mut iter: P, last: (Part<Val>, Opt), v: Val, f: &F) -> ValR
+fn update<'a, V: ValT, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> Result<V, Error>
 where
-    P: Iterator<Item = (Part<Val>, Opt)> + Clone,
-    F: Fn(Val) -> ValRs<'f>,
+    P: Iterator<Item = (Part<V>, Opt)> + Clone,
+    F: Fn(V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a>,
 {
     if let Some((part, opt)) = iter.next() {
         use core::iter::once;
@@ -81,8 +85,8 @@ where
     }
 }
 
-impl Part<Val> {
-    fn run(&self, v: Val) -> impl Iterator<Item = ValR> {
+impl<'a, V: ValT + 'a> Part<V> {
+    fn run(&self, v: V) -> impl Iterator<Item = Result<V, Error>> + 'a {
         match self {
             Self::Index(idx) => box_once(v.index(idx)),
             Self::Range(None, None) => Box::new(v.values()),
@@ -90,10 +94,10 @@ impl Part<Val> {
         }
     }
 
-    fn update<F, I>(&self, v: Val, opt: Opt, f: F) -> ValR
+    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> Result<V, Error>
     where
-        F: Fn(Val) -> I,
-        I: Iterator<Item = ValR>,
+        F: Fn(V) -> I,
+        I: Iterator<Item = Result<V, Error>>,
     {
         match self {
             Self::Index(idx) => v.map_index(idx, opt, f),
