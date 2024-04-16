@@ -55,7 +55,9 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
-pub(crate) trait ValT: Clone + Sized {
+pub(crate) trait ValT:
+    Clone + From<bool> + From<isize> + From<String> + FromIterator<Self>
+{
     /// If `Ok(k)` is in `v.keys()`, then
     /// `v.index(k)` must be `Ok(_)` and in `v.range(Range::default())`.
     fn values(self) -> Box<dyn Iterator<Item = Result<Self, Error>>>;
