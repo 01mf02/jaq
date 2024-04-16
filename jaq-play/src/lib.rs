@@ -214,14 +214,47 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     scope.post_message(&JsValue::NULL).unwrap();
 }
 
+fn read_str<'a>(settings: &Settings, input: &'a str) -> Box<dyn Iterator<Item = Result<Val, String>> + 'a> {
+    if settings.raw_input {
+        Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
+    } else {
+        let vals = json_slice(input.as_bytes());
+        Box::new(collect_if(settings.slurp, vals))
+    }
+}
+
+fn raw_input<'a>(slurp: bool, input: &'a str) -> impl Iterator<Item = &'a str> + 'a
+{
+    if slurp {
+        Box::new(std::iter::once(input))
+    } else {
+        Box::new(input.lines()) as Box<dyn Iterator<Item = _>>
+    }
+}
+
+fn json_slice(slice: &[u8]) -> impl Iterator<Item = Result<Val, String>> + '_ {
+    let mut lexer = hifijson::SliceLexer::new(slice);
+    core::iter::from_fn(move || {
+        use hifijson::token::Lex;
+        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
+    })
+}
+
+fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
+    slurp: bool,
+    iter: impl Iterator<Item = Result<T, E>> + 'a,
+) -> Box<dyn Iterator<Item = Result<T, E>> + 'a> {
+    if slurp {
+        Box::new(core::iter::once(iter.collect()))
+    } else {
+        Box::new(iter)
+    }
+}
+
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
     let filter = parse(filter, Vec::new()).map_err(Error::Chumsky)?;
 
-    let mut lexer = hifijson::SliceLexer::new(input.as_bytes());
-    let inputs = core::iter::from_fn(move || {
-        use hifijson::token::Lex;
-        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
-    });
+    let inputs = read_str(settings, input);
 
     let inputs = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
