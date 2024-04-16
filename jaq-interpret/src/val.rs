@@ -565,18 +565,18 @@ fn float_cmp(left: &f64, right: &f64) -> Ordering {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Null => "null".fmt(f),
-            Self::Bool(b) => b.fmt(f),
-            Self::Int(i) => i.fmt(f),
+            Self::Null => write!(f, "null"),
+            Self::Bool(b) => write!(f, "{b}"),
+            Self::Int(i) => write!(f, "{i}"),
             Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
-            Self::Float(_) => "null".fmt(f),
-            Self::Num(n) => n.fmt(f),
+            Self::Float(_) => write!(f, "null"),
+            Self::Num(n) => write!(f, "{n}"),
             Self::Str(s) => write!(f, "\"{s}\""),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();
                 if let Some(first) = iter.next() {
-                    first.fmt(f)?;
+                    write!(f, "{first}")?;
                 };
                 iter.try_for_each(|x| write!(f, ",{x}"))?;
                 write!(f, "]")
