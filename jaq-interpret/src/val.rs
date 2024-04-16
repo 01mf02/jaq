@@ -391,6 +391,7 @@ impl Val {
     /// Return the elements of an array or the values of an object (omitting its keys).
     ///
     /// Fail on any other value.
+    #[deprecated(since = "1.3.0", note = "use `ValT::values` instead")]
     pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
