@@ -38,8 +38,8 @@ To try it, you can use the filter `.[]`
 Running this should yield the following outputs:
 
 ~~~ json
-Hello
-World
+"Hello"
+"World"
 1
 2
 ~~~
