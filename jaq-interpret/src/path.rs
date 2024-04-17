@@ -1,7 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
-use crate::val::ValT;
-use crate::Error;
+use crate::val::{ValR2, ValT};
 use alloc::{boxed::Box, vec::Vec};
 pub use jaq_syn::path::Opt;
 
@@ -42,13 +41,13 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl<'a, V: ValT + 'a> Path<V> {
-    pub fn run(self, v: V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a> {
+    pub fn run(self, v: V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a> {
         run(self.0.into_iter(), v)
     }
 
-    pub fn update<F>(mut self, v: V, f: F) -> Result<V, Error>
+    pub fn update<F>(mut self, v: V, f: F) -> ValR2<V>
     where
-        F: Fn(V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a>,
+        F: Fn(V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a>,
     {
         if let Some(last) = self.0.pop() {
             update(self.0.into_iter(), last, v, &f)
@@ -59,7 +58,7 @@ impl<'a, V: ValT + 'a> Path<V> {
     }
 }
 
-fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a>
+fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a>
 where
     I: Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
 {
@@ -72,10 +71,10 @@ where
     }
 }
 
-fn update<'a, V: ValT, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> Result<V, Error>
+fn update<'a, V: ValT, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValR2<V>
 where
     P: Iterator<Item = (Part<V>, Opt)> + Clone,
-    F: Fn(V) -> Box<dyn Iterator<Item = Result<V, Error>> + 'a>,
+    F: Fn(V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a>,
 {
     if let Some((part, opt)) = iter.next() {
         use core::iter::once;
@@ -86,7 +85,7 @@ where
 }
 
 impl<'a, V: ValT + 'a> Part<V> {
-    fn run(&self, v: V) -> impl Iterator<Item = Result<V, Error>> + 'a {
+    fn run(&self, v: V) -> impl Iterator<Item = ValR2<V>> + 'a {
         match self {
             Self::Index(idx) => box_once(v.index(idx)),
             Self::Range(None, None) => Box::new(v.values()),
@@ -94,10 +93,10 @@ impl<'a, V: ValT + 'a> Part<V> {
         }
     }
 
-    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> Result<V, Error>
+    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValR2<V>
     where
         F: Fn(V) -> I,
-        I: Iterator<Item = Result<V, Error>>,
+        I: Iterator<Item = ValR2<V>>,
     {
         match self {
             Self::Index(idx) => v.map_index(idx, opt, f),

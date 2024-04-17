@@ -8,16 +8,16 @@ use core::fmt;
 /// Each variant shows an example of how it can be produced.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Error {
+pub enum Error<V = Val> {
     /// `0 | error`
-    Val(Val),
+    Val(V),
 
     /// Expected a value of given type, but got something else
-    Type(Val, Type),
+    Type(V, Type),
     /// `1 - "a"`
-    MathOp(Val, jaq_syn::MathOp, Val),
+    MathOp(V, jaq_syn::MathOp, V),
     /// `{} | .[0]` or `[] | has("a")` or `{} | has(0)`
-    Index(Val, Val),
+    Index(V, V),
 
     /// `[] | .[0] = 0`
     IndexOutOfBounds(isize),
@@ -28,7 +28,7 @@ pub enum Error {
     ///
     /// This is used internally to execute tail-recursive filters.
     /// If this can be observed by users, then this is a bug.
-    TailCall(crate::filter::TailCall),
+    TailCall(crate::filter::TailCall<V>),
 }
 
 /// Types and sets of types.

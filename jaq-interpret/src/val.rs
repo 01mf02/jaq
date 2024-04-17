@@ -55,32 +55,36 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
-pub(crate) trait ValT:
-    Clone + From<bool> + From<isize> + From<String> + FromIterator<Self>
+pub type ValR2<V> = Result<V, Error<V>>;
+
+pub trait ValT:
+    Clone + fmt::Display + From<bool> + From<isize> + From<String> + FromIterator<Self>
 {
+    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
+
     /// If `Ok(k)` is in `v.keys()`, then
     /// `v.index(k)` must be `Ok(_)` and in `v.range(Range::default())`.
-    fn values(self) -> Box<dyn Iterator<Item = Result<Self, Error>>>;
-    fn index(self, index: &Self) -> Result<Self, Error>;
-    fn range(self, range: Range<&Self>) -> Result<Self, Error>;
+    fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>>;
+    fn index(self, index: &Self) -> ValR2<Self>;
+    fn range(self, range: Range<&Self>) -> ValR2<Self>;
 
-    fn map_values<I: Iterator<Item = Result<Self, Error>>>(
+    fn map_values<I: Iterator<Item = ValR2<Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> Result<Self, Error>;
-    fn map_index<I: Iterator<Item = Result<Self, Error>>>(
+    ) -> ValR2<Self>;
+    fn map_index<I: Iterator<Item = ValR2<Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> Result<Self, Error>;
-    fn map_range<I: Iterator<Item = Result<Self, Error>>>(
+    ) -> ValR2<Self>;
+    fn map_range<I: Iterator<Item = ValR2<Self>>>(
         self,
         range: Range<&Self>,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> Result<Self, Error>;
+    ) -> ValR2<Self>;
 
     fn as_bool(&self) -> bool;
 }
@@ -88,7 +92,12 @@ pub(crate) trait ValT:
 type Range<V> = core::ops::Range<Option<V>>;
 
 impl ValT for Val {
-    fn values(self) -> Box<dyn Iterator<Item = ValR>> {
+    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self> {
+        let iter = iter.into_iter().map(|(k, v)| Ok((k.to_str()?, v)));
+        Ok(Self::obj(iter.collect::<Result<_, _>>()?))
+    }
+
+    fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>> {
         match self {
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
