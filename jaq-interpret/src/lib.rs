@@ -61,6 +61,9 @@ pub mod results;
 mod stack;
 mod val;
 
+#[allow(dead_code)]
+mod exn;
+
 pub use error::Error;
 pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
