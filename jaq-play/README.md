@@ -84,8 +84,8 @@ no option yields `[1, 2] "x"`,
 
 For example, with the filter `.` and the input `[1, 2] "x"`,
 "raw" yields `"[     1,     2 ] x"`,
-"compact" yields `[1,2] x"`,
-"tab" yields `[ 	1, 	2] "x"`, and
+"compact" yields `[1,2] "x"`,
+"tab" yields `[ 	1, 	2 ] "x"`, and
 "indent" set to 2 yields `[   1,   2 ] "x"`.
 (To make the output more compact, I replaced newline with space.)
 
