@@ -46,8 +46,7 @@ Running this should yield the following outputs:
 ~~~
 
 To show that you can yield an infinite output stream, you can use the filter
-`foreach repeat(1) as $x (0; .+$x)` which yields
-the stream of positive natural numbers (1, 2, 3, ...).
+`range(0; infinite)` which yields the stream of natural numbers (0, 1, 2, ...).
 Because there are infinitely many of those, the execution will never terminate.
 For that reason, during program execution,
 the "Run" button turns into a "Stop" button,
