@@ -23,9 +23,9 @@ impl<V> From<Error<V>> for Exn<V> {
     }
 }
 
-pub struct Error<V>(Part<V, Vec<Part<V, String>>>);
+pub struct Error<V>(Part<V, Vec<Part<V>>>);
 
-enum Part<V, S> {
+pub enum Part<V, S = &'static str> {
     Val(V),
     Str(S),
 }
@@ -33,6 +33,12 @@ enum Part<V, S> {
 impl<V> Error<V> {
     pub fn new(v: V) -> Self {
         Self(Part::Val(v))
+    }
+}
+
+impl<V> FromIterator<Part<V>> for Error<V> {
+    fn from_iter<T: IntoIterator<Item = Part<V>>>(iter: T) -> Self {
+        Self(Part::Str(iter.into_iter().collect()))
     }
 }
 
