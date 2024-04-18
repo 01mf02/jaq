@@ -203,7 +203,7 @@ impl Ctx {
             }
 
             Expr::Id => Filter::Id,
-            Expr::Num(hir::Num::Float(f)) => Filter::Float(f),
+            Expr::Num(hir::Num::Num(n)) => Filter::Num(n),
             Expr::Num(hir::Num::Int(i)) => Filter::Int(i),
             Expr::Str(s) => self.of_str(*s),
             Expr::Array(a) => Filter::Array(a.map_or(EMPTY, |a| self.get(*a))),

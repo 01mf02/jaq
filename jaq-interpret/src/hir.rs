@@ -27,25 +27,25 @@ pub enum Call {
     Native(crate::filter::Native),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Num {
-    Float(f64),
+    Num(String),
     Int(isize),
 }
 
 impl Num {
-    fn parse(n: &str) -> Result<Self, Self> {
+    fn parse(n: String) -> Result<Self, String> {
         if n.contains(['.', 'e', 'E']) {
-            n.parse().map(Num::Float).map_err(|_| Self::Float(0.))
+            Ok(Self::Num(n))
         } else {
-            n.parse().map(Num::Int).map_err(|_| Self::Int(0))
+            n.parse().map(Num::Int).map_err(|_| n)
         }
     }
 }
 
 pub enum Error {
     Undefined(Arg),
-    Num(Num),
+    Num(String),
 }
 
 impl fmt::Display for Error {
@@ -53,8 +53,7 @@ impl fmt::Display for Error {
         match self {
             Self::Undefined(Bind::Var(_)) => "undefined variable",
             Self::Undefined(Bind::Fun(_)) => "undefined filter",
-            Self::Num(Num::Float(_)) => "cannot interpret as floating-point number",
-            Self::Num(Num::Int(_)) => "cannot interpret as machine-size integer",
+            Self::Num(_) => "cannot interpret as machine-size integer",
         }
         .fmt(f)
     }
@@ -176,9 +175,9 @@ impl Ctx {
                 Expr::Fold(typ, Fold { xs, x, init, f })
             }
             Expr::Id => Expr::Id,
-            Expr::Num(n) => Expr::Num(Num::parse(&n).unwrap_or_else(|n| {
+            Expr::Num(n) => Expr::Num(Num::parse(n).unwrap_or_else(|n| {
                 self.errs.push((Error::Num(n), f.1.clone()));
-                n
+                Num::Int(0)
             })),
             Expr::Str(s) => Expr::Str(Box::new((*s).map(|f| self.expr(f)))),
             Expr::Array(a) => Expr::Array(a.map(|a| get(self, *a))),

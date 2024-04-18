@@ -60,6 +60,7 @@ pub type ValR2<V> = Result<V, Error<V>>;
 pub trait ValT:
     Clone + fmt::Display + From<bool> + From<isize> + From<String> + FromIterator<Self>
 {
+    fn from_num(n: String) -> ValR2<Self>;
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
 
     /// If `Ok(k)` is in `v.keys()`, then
@@ -92,6 +93,10 @@ pub trait ValT:
 type Range<V> = core::ops::Range<Option<V>>;
 
 impl ValT for Val {
+    fn from_num(n: String) -> ValR2<Self> {
+        Ok(Val::Num(Rc::new(n)))
+    }
+
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self> {
         let iter = iter.into_iter().map(|(k, v)| Ok((k.to_str()?, v)));
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))

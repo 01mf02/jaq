@@ -1,6 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Fold, Results};
-use crate::val::{Val, ValR, ValRs};
+use crate::val::{Val, ValR, ValRs, ValT};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::ops::ControlFlow;
@@ -59,7 +59,7 @@ pub(crate) enum Ast {
     ToString,
 
     Int(isize),
-    Float(f64),
+    Num(String),
     Str(String),
     Array(Id),
     ObjEmpty,
@@ -217,7 +217,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Id => box_once(Ok(cv.1)),
             Ast::ToString => Box::new(once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))),
             Ast::Int(n) => box_once(Ok(Val::Int(*n))),
-            Ast::Float(x) => box_once(Ok(Val::Float(*x))),
+            Ast::Num(x) => box_once(Val::from_num(x.clone())),
             Ast::Str(s) => Box::new(once_with(move || Ok(Val::str(s.clone())))),
             Ast::Array(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
             Ast::ObjEmpty => box_once(Ok(Val::obj(Default::default()))),
@@ -339,7 +339,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1[self.0 .0] {
             Ast::ToString => err,
-            Ast::Int(_) | Ast::Float(_) | Ast::Str(_) => err,
+            Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
