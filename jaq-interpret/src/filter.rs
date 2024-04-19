@@ -1,6 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Fold, Results};
-use crate::val::{Val, ValR, ValRs, ValT};
+use crate::val::{Val, ValR, ValR2s, ValRs, ValT};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::ops::ControlFlow;
@@ -10,16 +10,31 @@ use jaq_syn::{MathOp, OrdOp};
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
-pub struct Owned(Id, Box<[Ast]>);
+pub struct Owned<V = Val>(Id, Lut<V>);
 
-impl Default for Owned {
+/// Look-up table for indices stored in ASTs.
+#[derive(Clone, Debug)]
+struct Lut<V = Val> {
+    defs: Box<[Ast]>,
+    natives: Box<[Native<V>]>,
+}
+
+impl<V> Default for Owned<V> {
     fn default() -> Self {
-        Self(Id(0), Box::new([Ast::Id]))
+        Self::new(Id(0), [Ast::Id].into(), [].into())
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-pub struct Ref<'a>(Id, &'a [Ast]);
+#[derive(Debug)]
+pub struct Ref<'a, V = Val>(Id, &'a Lut<V>);
+
+impl<'a, V> Clone for Ref<'a, V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<'a, V> Copy for Ref<'a, V> {}
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Id(pub usize);
@@ -35,7 +50,7 @@ pub enum CallTyp {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TailCall<V = Val>(Id, crate::Vars<V>, V);
+pub struct TailCall<V>(Id, crate::Vars<V>, V);
 
 #[derive(Clone, Debug)]
 pub(crate) struct Call {
@@ -45,16 +60,15 @@ pub(crate) struct Call {
     pub args: Box<[Bind<Id, Id>]>,
 }
 
-impl Owned {
-    pub(crate) fn new(main: Id, recs: Vec<Ast>) -> Self {
-        Self(main, recs.into())
+impl<V> Owned<V> {
+    pub(crate) fn new(main: Id, defs: Box<[Ast]>, natives: Box<[Native<V>]>) -> Self {
+        Self(main, Lut { defs, natives })
     }
 }
 
-/// Function from a value to a stream of value results.
-#[derive(Clone, Debug, Default)]
+/// Abstract syntax tree for filters.
+#[derive(Clone, Debug)]
 pub(crate) enum Ast {
-    #[default]
     Id,
     ToString,
 
@@ -109,16 +123,16 @@ pub(crate) enum Ast {
     Var(usize),
     Call(Call),
 
-    Native(Native, Box<[Id]>),
+    Native(usize, Box<[Id]>),
 }
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
-pub trait Update<'a>: Fn(Val) -> ValRs<'a> + DynClone {}
+pub trait Update<'a, V = Val>: Fn(V) -> ValR2s<'a, V> + DynClone {}
 
-impl<'a, T: Fn(Val) -> ValRs<'a> + Clone> Update<'a> for T {}
+impl<'a, V, T: Fn(V) -> ValR2s<'a, V> + Clone> Update<'a, V> for T {}
 
-dyn_clone::clone_trait_object!(<'a> Update<'a>);
+dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 
 /// Enhance the context `ctx` with variables bound to the outputs of `args` executed on `cv`,
 /// and return the enhanced contexts together with the original value of `cv`.
@@ -139,8 +153,8 @@ where
     }
 }
 
-fn run_cvs<'a>(f: Ref<'a>, cvs: Results<'a, Cv<'a>, Error>) -> impl Iterator<Item = ValR> + 'a {
-    cvs.flat_map(move |cv| then(cv, |cv| f.run(cv)))
+fn run_cvs<'a>(f: Ref<'a>, cvs: Results<'a, Cv<'a, V>, Error<V>>) -> ValR2s<'a, V> {
+    Box::new(cvs.flat_map(move |cv| then(cv, |cv| f.run(cv))))
 }
 
 fn reduce<'a, T: Clone + 'a, F>(xs: Results<'a, T, Error>, init: Val, f: F) -> ValRs
@@ -155,44 +169,55 @@ type Cv<'c, V = Val> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
 #[derive(Clone)]
-pub struct Native {
-    run: RunPtr,
-    update: UpdatePtr,
+pub struct Native<V = Val> {
+    run: RunPtr<V>,
+    update: UpdatePtr<V>,
 }
 
 /// Run function pointer.
-pub type RunPtr = for<'a> fn(Args<'a>, Cv<'a>) -> ValRs<'a>;
+pub type RunPtr<V = Val> = for<'a> fn(Args<'a, V>, Cv<'a, V>) -> ValR2s<'a, V>;
 /// Update function pointer.
-pub type UpdatePtr = for<'a> fn(Args<'a>, Cv<'a>, Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
+pub type UpdatePtr<V = Val> =
+    for<'a> fn(Args<'a, V>, Cv<'a, V>, Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V>;
 
-impl Native {
+impl<V> Native<V> {
     /// Create a native filter from a run function, without support for updates.
-    pub const fn new(run: RunPtr) -> Self {
+    pub const fn new(run: RunPtr<V>) -> Self {
         Self::with_update(run, |_, _, _| box_once(Err(Error::PathExp)))
     }
 
     /// Create a native filter from a run function and an update function (used for `filter |= ...`).
-    pub const fn with_update(run: RunPtr, update: UpdatePtr) -> Self {
+    // TODO for v2.0: remove this
+    pub const fn with_update(run: RunPtr<V>, update: UpdatePtr<V>) -> Self {
         Self { run, update }
     }
 }
 
-impl core::fmt::Debug for Native {
+// TODO for v2.0: remove this
+impl<V> core::fmt::Debug for Native<V> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("Native").finish()
     }
 }
 
 /// Arguments passed to a native filter.
-#[derive(Copy, Clone)]
-pub struct Args<'a>(&'a [Id], &'a [Ast]);
+pub struct Args<'a, V = Val>(&'a [Id], &'a Lut<V>);
 
-impl<'a> Args<'a> {
+impl<'a, V> Clone for Args<'a, V> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<'a, V> Copy for Args<'a, V> {}
+
+impl<'a> Args<'a, V> {
     /// Obtain the n-th argument passed to the filter, crash if it is not given.
     // This function returns an `impl` in order not to expose the `Filter` type publicly.
     // It would be more elegant to implement `Index<usize>` here instead,
     // but because of returning `impl`, we cannot do this right now, see:
     // <https://github.com/rust-lang/rust/issues/63063>.
+    // TODO for v2.0: make this take `&self`?
     pub fn get(self, i: usize) -> impl FilterT<'a> {
         Ref(self.0[i], self.1)
     }
@@ -208,23 +233,24 @@ impl<'a> FilterT<'a> for &'a Owned {
     }
 }
 
+type V = Val;
+
 impl<'a> FilterT<'a> for Ref<'a> {
     fn run(self, cv: Cv<'a>) -> ValRs<'a> {
         use core::iter::{once, once_with};
         // wrap a filter AST with the filter definitions
         let w = move |id: &Id| Ref(*id, self.1);
-        match &self.1[self.0 .0] {
+        match &self.1.defs[self.0 .0] {
             Ast::Id => box_once(Ok(cv.1)),
             Ast::ToString => Box::new(once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))),
-            Ast::Int(n) => box_once(Ok(Val::Int(*n))),
-            Ast::Num(x) => box_once(Val::from_num(x.clone())),
-            Ast::Str(s) => Box::new(once_with(move || Ok(Val::str(s.clone())))),
+            Ast::Int(n) => box_once(Ok(V::from(*n))),
+            Ast::Num(x) => box_once(V::from_num(x.clone())),
+            Ast::Str(s) => Box::new(once_with(move || Ok(V::from(s.clone())))),
             Ast::Array(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
-            Ast::ObjEmpty => box_once(Ok(Val::obj(Default::default()))),
-            Ast::ObjSingle(k, v) => Box::new(
-                Self::cartesian(w(k), w(v), cv)
-                    .map(|(k, v)| Ok(Val::obj([(k?.to_str()?, v?)].into_iter().collect()))),
-            ),
+            Ast::ObjEmpty => box_once(V::from_map([])),
+            Ast::ObjSingle(k, v) => {
+                Box::new(Self::cartesian(w(k), w(v), cv).map(|(k, v)| V::from_map([(k?, v?)])))
+            }
             Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
                 y.map_or_else(
                     |e| w(c).run((cv.0.clone(), e.as_val())),
@@ -278,16 +304,16 @@ impl<'a> FilterT<'a> for Ref<'a> {
             }),
             Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
                 if l.as_bool() == *stop {
-                    box_once(Ok(Val::Bool(*stop)))
+                    box_once(Ok(V::from(*stop)))
                 } else {
-                    Box::new(w(r).run(cv).map(|r| Ok(Val::Bool(r?.as_bool()))))
+                    Box::new(w(r).run(cv).map(|r| Ok(V::from(r?.as_bool()))))
                 }
             }),
             Ast::Math(l, op, r) => {
                 Box::new(Self::cartesian(w(l), w(r), cv).map(|(x, y)| op.run(x?, y?)))
             }
             Ast::Ord(l, op, r) => Box::new(
-                Self::cartesian(w(l), w(r), cv).map(|(x, y)| Ok(Val::Bool(op.run(&x?, &y?)))),
+                Self::cartesian(w(l), w(r), cv).map(|(x, y)| Ok(V::from(op.run(&x?, &y?)))),
             ),
 
             Ast::Fold(typ, xs, init, f) => {
@@ -314,9 +340,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 let inputs = cv.0.inputs;
                 let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 match call.typ {
-                    CallTyp::Normal => Box::new(run_cvs(def, cvs)),
+                    CallTyp::Normal => run_cvs(def, cvs),
                     CallTyp::Catch => Box::new(crate::Stack::new(
-                        Vec::from([Box::new(run_cvs(def, cvs)) as Results<_, _>]),
+                        Vec::from([run_cvs(def, cvs)]),
                         move |r| match r {
                             Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
                                 ControlFlow::Continue(def.run((Ctx { inputs, vars }, v)))
@@ -330,14 +356,14 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 }
             }
 
-            Ast::Native(Native { run, .. }, args) => (run)(Args(args, self.1), cv),
+            Ast::Native(id, args) => (self.1.natives[*id].run)(Args(args, self.1), cv),
         }
     }
 
     fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
         let err = box_once(Err(Error::PathExp));
         let w = move |id: &Id| Ref(*id, self.1);
-        match &self.1[self.0 .0] {
+        match &self.1.defs[self.0 .0] {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
             Ast::Array(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
@@ -389,7 +415,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
                 reduce(cvs, init, move |cv, v| def.update((cv.0, v), f.clone()))
             }
 
-            Ast::Native(Native { update, .. }, args) => (update)(Args(args, self.1), cv, f),
+            Ast::Native(id, args) => (self.1.natives[*id].update)(Args(args, self.1), cv, f),
         }
     }
 }

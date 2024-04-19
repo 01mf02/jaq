@@ -3,7 +3,7 @@
 //! This mainly analyses occurrences of recursion, which is
 //! important to efficiently execute tail-recursive filters.
 
-use crate::hir::{self, ArgIdx, Num, RelId, VarIdx};
+use crate::hir::{self, ArgIdx, NativeId, Num, RelId, VarIdx};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::filter::{BinaryOp, Filter as Expr, Fold};
 use jaq_syn::Spanned;
@@ -26,7 +26,7 @@ pub struct Def {
 pub enum Call {
     Def { id: RelId, skip: usize, tail: bool },
     Arg(ArgIdx),
-    Native(crate::filter::Native),
+    Native(NativeId),
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -137,7 +137,7 @@ pub struct ParseCtx {
     /// errors occurred during transformation
     // TODO for v2.0: remove this and make it a function
     pub errs: Vec<jaq_syn::Spanned<hir::Error>>,
-    native: Vec<(String, usize, filter::Native)>,
+    native: Vec<((String, usize), filter::Native)>,
     def: jaq_syn::Def,
 }
 
@@ -168,7 +168,7 @@ impl ParseCtx {
 
     /// Add a native filter with given name and arity.
     pub fn insert_native(&mut self, name: String, arity: usize, f: filter::Native) {
-        self.native.push((name, arity, f));
+        self.native.push(((name, arity), f));
     }
 
     /// Add native filters with given names and arities.
@@ -176,6 +176,9 @@ impl ParseCtx {
     where
         I: IntoIterator<Item = (String, usize, filter::Native)>,
     {
+        let natives = natives
+            .into_iter()
+            .map(|(name, arity, f)| ((name, arity), f));
         self.native.extend(natives);
     }
 
@@ -201,7 +204,8 @@ impl ParseCtx {
     /// Given a main filter (consisting of definitions and a body), return a finished filter.
     pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
         let mut hctx = hir::Ctx::default();
-        hctx.native = self.native.clone();
+        let native = self.native.iter().map(|(sig, _)| sig.clone());
+        hctx.native = native.collect();
         self.def.rhs.defs.extend(main.defs);
         self.def.rhs.body = main.body;
         let def = hctx.def(self.def.clone());
@@ -214,7 +218,10 @@ impl ParseCtx {
         //std::dbg!(&def);
         let def = mctx.def(def, Default::default());
 
-        lir::root_def(def)
+        let mut lctx = lir::Ctx::default();
+        let id = lctx.def(def);
+        let native = self.native.iter().map(|(_sig, native)| native.clone());
+        filter::Owned::new(id, lctx.defs.into(), native.collect())
     }
 
     /// Compile and run a filter on given input, panic if it does not compile or yield the given output.

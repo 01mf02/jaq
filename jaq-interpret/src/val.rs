@@ -56,6 +56,7 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 }
 
 pub type ValR2<V> = Result<V, Error<V>>;
+pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
 pub trait ValT:
     Clone + fmt::Display + From<bool> + From<isize> + From<String> + FromIterator<Self>

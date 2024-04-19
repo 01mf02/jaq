@@ -17,6 +17,7 @@ pub type Def = jaq_syn::Def<Main>;
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct RelId(pub usize);
+pub type NativeId = usize;
 pub type VarIdx = usize;
 pub type ArgIdx = usize;
 
@@ -24,7 +25,7 @@ pub type ArgIdx = usize;
 pub enum Call {
     Def { id: RelId, skip: usize },
     Arg(ArgIdx),
-    Native(crate::filter::Native),
+    Native(NativeId),
 }
 
 #[derive(Debug, Clone)]
@@ -77,7 +78,7 @@ pub struct Ctx {
     /// accessible defined filters
     callable: Vec<Callable>,
     /// accessible native filters
-    pub native: Vec<(String, usize, crate::filter::Native)>,
+    pub native: Vec<(String, usize)>,
     /// locally bound variables (not bound by filter definition)
     vars: Vec<String>,
 }
@@ -111,8 +112,8 @@ impl Ctx {
 
         self.native
             .iter()
-            .find(|(name_, arity_, _)| *name_ == name && *arity_ == arity)
-            .map(|(_, _, native)| Call::Native(native.clone()))
+            .position(|(name_, arity_)| *name_ == name && *arity_ == arity)
+            .map(Call::Native)
     }
 
     pub fn main(&mut self, main: jaq_syn::Main) -> Main {
