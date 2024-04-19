@@ -71,9 +71,9 @@ impl<V: ValT> fmt::Display for Error<V> {
         match self {
             Self::Val(v) => {
                 if let Some(s) = v.as_str() {
-                    s.fmt(f)
+                    write!(f, "{s}")
                 } else {
-                    v.fmt(f)
+                    write!(f, "{v}")
                 }
             }
             Self::Type(v, ty) => write!(f, "cannot use {v} as {ty}"),
