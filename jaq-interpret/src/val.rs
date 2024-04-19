@@ -5,7 +5,8 @@ use crate::error::{Error, Type};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
-use core::fmt;
+use core::fmt::{self, Debug, Display};
+use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
 use jaq_syn::{path::Opt, MathOp};
@@ -59,7 +60,18 @@ pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
 pub trait ValT:
-    Clone + fmt::Display + From<bool> + From<isize> + From<String> + FromIterator<Self>
+    Clone
+    + Display
+    + From<bool>
+    + From<isize>
+    + From<String>
+    + FromIterator<Self>
+    + Add<Output = ValR2<Self>>
+    + Sub<Output = ValR2<Self>>
+    + Mul<Output = ValR2<Self>>
+    + Div<Output = ValR2<Self>>
+    + Rem<Output = ValR2<Self>>
+    + Neg<Output = ValR2<Self>>
 {
     fn from_num(n: String) -> ValR2<Self>;
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
@@ -89,6 +101,7 @@ pub trait ValT:
     ) -> ValR2<Self>;
 
     fn as_bool(&self) -> bool;
+    fn as_str(&self) -> Option<&str>;
 }
 
 type Range<V> = core::ops::Range<Option<V>>;
@@ -243,6 +256,15 @@ impl ValT for Val {
 
     fn as_bool(&self) -> bool {
         self.as_bool()
+    }
+
+    /// If the value is a string, return it, else fail.
+    fn as_str(&self) -> Option<&str> {
+        if let Self::Str(s) = self {
+            Some(s)
+        } else {
+            None
+        }
     }
 }
 
