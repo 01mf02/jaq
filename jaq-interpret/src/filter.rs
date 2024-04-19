@@ -1,6 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::{fold, recurse, then, Fold, Results};
-use crate::val::{Val, ValR, ValR2s, ValRs, ValT};
+use crate::val::{Val, ValR2, ValR2s, ValT};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::ops::ControlFlow;
@@ -138,10 +138,11 @@ dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
-fn bind_vars<'a, I>(mut args: I, ctx: Ctx<'a>, cv: Cv<'a>) -> Results<'a, Cv<'a>, Error>
-where
-    I: Iterator<Item = Bind<Ref<'a>, Ref<'a>>> + Clone + 'a,
-{
+fn bind_vars<'a, V: ValT>(
+    mut args: impl Iterator<Item = Bind<Ref<'a, V>, Ref<'a, V>>> + Clone + 'a,
+    ctx: Ctx<'a, V>,
+    cv: Cv<'a, V>,
+) -> Results<'a, Cv<'a, V>, Error<V>> {
     match args.next() {
         Some(Bind::Var(arg)) => flat_map_with(
             arg.run(cv.clone()),
@@ -153,13 +154,15 @@ where
     }
 }
 
-fn run_cvs<'a>(f: Ref<'a>, cvs: Results<'a, Cv<'a, V>, Error<V>>) -> ValR2s<'a, V> {
+fn run_cvs<'a, V: ValT>(f: Ref<'a, V>, cvs: Results<'a, Cv<'a, V>, Error<V>>) -> ValR2s<'a, V> {
     Box::new(cvs.flat_map(move |cv| then(cv, |cv| f.run(cv))))
 }
 
-fn reduce<'a, T: Clone + 'a, F>(xs: Results<'a, T, Error>, init: Val, f: F) -> ValRs
+fn reduce<'a, T, V, F>(xs: Results<'a, T, Error<V>>, init: V, f: F) -> ValR2s<V>
 where
-    F: Fn(T, Val) -> ValRs<'a> + 'a,
+    T: Clone + 'a,
+    V: Clone + 'a,
+    F: Fn(T, V) -> ValR2s<'a, V> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(false, xs, Fold::Input(init), f))
@@ -211,38 +214,40 @@ impl<'a, V> Clone for Args<'a, V> {
 
 impl<'a, V> Copy for Args<'a, V> {}
 
-impl<'a> Args<'a, V> {
+impl<'a, V: ValT> Args<'a, V> {
     /// Obtain the n-th argument passed to the filter, crash if it is not given.
     // This function returns an `impl` in order not to expose the `Filter` type publicly.
     // It would be more elegant to implement `Index<usize>` here instead,
     // but because of returning `impl`, we cannot do this right now, see:
     // <https://github.com/rust-lang/rust/issues/63063>.
     // TODO for v2.0: make this take `&self`?
-    pub fn get(self, i: usize) -> impl FilterT<'a> {
+    pub fn get(self, i: usize) -> impl FilterT<'a, V> {
         Ref(self.0[i], self.1)
     }
 }
 
-impl<'a> FilterT<'a> for &'a Owned {
-    fn run(self, cv: Cv<'a>) -> ValRs<'a> {
+impl<'a, V: ValT> FilterT<'a, V> for &'a Owned<V> {
+    fn run(self, cv: Cv<'a, V>) -> ValR2s<'a, V> {
         Ref(self.0, &self.1).run(cv)
     }
 
-    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+    fn update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V> {
         Ref(self.0, &self.1).update(cv, f)
     }
 }
 
-type V = Val;
-
-impl<'a> FilterT<'a> for Ref<'a> {
-    fn run(self, cv: Cv<'a>) -> ValRs<'a> {
+impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
+    fn run(self, cv: Cv<'a, V>) -> ValR2s<'a, V> {
+        use alloc::string::ToString;
         use core::iter::{once, once_with};
         // wrap a filter AST with the filter definitions
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1.defs[self.0 .0] {
             Ast::Id => box_once(Ok(cv.1)),
-            Ast::ToString => Box::new(once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))),
+            Ast::ToString => Box::new(once_with(move || match cv.1.as_str() {
+                Some(_) => Ok(cv.1),
+                None => Ok(V::from(cv.1.to_string())),
+            })),
             Ast::Int(n) => box_once(Ok(V::from(*n))),
             Ast::Num(x) => box_once(V::from_num(x.clone())),
             Ast::Str(s) => Box::new(once_with(move || Ok(V::from(s.clone())))),
@@ -302,6 +307,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
+
             Ast::Logic(l, stop, r) => w(l).pipe(cv, move |cv, l| {
                 if l.as_bool() == *stop {
                     box_once(Ok(V::from(*stop)))
@@ -360,7 +366,7 @@ impl<'a> FilterT<'a> for Ref<'a> {
         }
     }
 
-    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+    fn update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V> {
         let err = box_once(Err(Error::PathExp));
         let w = move |id: &Id| Ref(*id, self.1);
         match &self.1.defs[self.0 .0] {
@@ -371,8 +377,9 @@ impl<'a> FilterT<'a> for Ref<'a> {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::Try(..) | Ast::Alt(..) => todo!(),
-            Ast::Fold(..) => todo!(),
+            Ast::Try(..) | Ast::Alt(..) | Ast::Fold(..) => {
+                unimplemented!("updating with this operator is not supported yet")
+            }
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
@@ -420,35 +427,38 @@ impl<'a> FilterT<'a> for Ref<'a> {
     }
 }
 
+type Triple<T> = (T, T, T);
+
 /// Function from a value to a stream of value results.
 // TODO for v2.0: Remove `Clone` bound and make sub-trait requiring `Copy` for derived functions
-pub trait FilterT<'a>: Clone + 'a {
+// try to implement functions on &self?
+pub trait FilterT<'a, V: ValT = Val>: Clone + 'a {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
-    fn run(self, cv: Cv<'a>) -> ValRs<'a>;
+    fn run(self, cv: Cv<'a, V>) -> ValR2s<'a, V>;
 
     /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
-    fn update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a>;
+    fn update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V>;
 
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
     /// In that case, we can consume `cv` instead of cloning it.
-    fn pipe<T: 'a, F>(self, cv: Cv<'a>, f: F) -> Results<'a, T, Error>
+    fn pipe<T: 'a, F>(self, cv: Cv<'a, V>, f: F) -> Results<'a, T, Error<V>>
     where
-        F: Fn(Cv<'a>, Val) -> Results<'a, T, Error> + 'a,
+        F: Fn(Cv<'a, V>, V) -> Results<'a, T, Error<V>> + 'a,
     {
         flat_map_with(self.run(cv.clone()), cv, move |y, cv| then(y, |y| f(cv, y)))
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
-    fn cartesian(self, r: Self, cv: Cv<'a>) -> BoxIter<'a, (ValR, ValR)> {
+    fn cartesian(self, r: Self, cv: Cv<'a, V>) -> BoxIter<'a, (ValR2<V>, ValR2<V>)> {
         flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
             map_with(r.clone().run(cv), l, |r, l| (l, r))
         })
     }
 
     /// Run `self`, `m`, and `r`, and return the cartesian product of their outputs.
-    fn cartesian3(self, m: Self, r: Self, cv: Cv<'a>) -> BoxIter<'a, (ValR, ValR, ValR)> {
+    fn cartesian3(self, m: Self, r: Self, cv: Cv<'a, V>) -> BoxIter<'a, Triple<ValR2<V>>> {
         flat_map_with(self.run(cv.clone()), cv, move |l, cv| {
             let r = r.clone();
             flat_map_with(m.clone().run(cv.clone()), (l, cv), move |m, (l, cv)| {
@@ -464,14 +474,14 @@ pub trait FilterT<'a>: Clone + 'a {
     /// if `outer` is true, it returns values for which `f` yields no output.
     /// This is useful to implement `while` and `until`.
     #[deprecated(since = "1.2.0")]
-    fn recurse(self, inner: bool, outer: bool, cv: Cv<'a>) -> ValRs {
+    fn recurse(self, inner: bool, outer: bool, cv: Cv<'a, V>) -> ValR2s<V> {
         let f = move |v| self.clone().run((cv.0.clone(), v));
         Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
     }
 
     /// Return the output of `recurse(l) |= f`.
     #[deprecated(since = "1.2.0")]
-    fn recurse_update(self, cv: Cv<'a>, f: Box<dyn Update<'a> + 'a>) -> ValRs<'a> {
+    fn recurse_update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V> {
         // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
         Box::new(f(cv.1).flat_map(move |v| {
             then(v, |v| {
