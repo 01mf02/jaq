@@ -1,5 +1,5 @@
 //! Runtime errors.
-use crate::Val;
+use crate::val::{Val, ValT};
 use alloc::string::ToString;
 use core::fmt;
 
@@ -51,26 +51,31 @@ pub enum Type {
     Range,
 }
 
-impl Error {
+impl<V: ValT> Error<V> {
     /// Convert the error into a value to be used by `catch` filters.
-    pub fn as_val(self) -> Val {
+    pub fn as_val(self) -> V {
         match self {
             Self::Val(ev) => ev,
-            _ => Val::str(self.to_string()),
+            _ => V::from(self.to_string()),
         }
     }
 
     /// Build an error from something that can be converted to a string.
     pub fn str(s: impl ToString) -> Self {
-        Self::Val(Val::str(s.to_string()))
+        Self::Val(V::from(s.to_string()))
     }
 }
 
-impl fmt::Display for Error {
+impl<V: ValT> fmt::Display for Error<V> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Val(Val::Str(s)) => s.fmt(f),
-            Self::Val(v) => v.fmt(f),
+            Self::Val(v) => {
+                if let Some(s) = v.as_str() {
+                    s.fmt(f)
+                } else {
+                    v.fmt(f)
+                }
+            }
             Self::Type(v, ty) => write!(f, "cannot use {v} as {ty}"),
             Self::MathOp(l, op, r) => write!(f, "cannot calculate {l} {op} {r}"),
             Self::Index(v, i) => write!(f, "cannot index {v} with {i}"),
