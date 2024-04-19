@@ -66,6 +66,8 @@ pub trait ValT:
     + From<isize>
     + From<String>
     + FromIterator<Self>
+    + PartialEq
+    + PartialOrd
     + Add<Output = ValR2<Self>>
     + Sub<Output = ValR2<Self>>
     + Mul<Output = ValR2<Self>>
