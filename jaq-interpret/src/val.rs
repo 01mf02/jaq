@@ -9,7 +9,10 @@ use core::fmt::{self, Debug, Display};
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
+use serde::{Serialize, Serializer};
+use serde::ser::{SerializeMap, SerializeSeq};
 use jaq_syn::{path::Opt, MathOp};
+use serde::de::{self, Deserialize, Deserializer, Visitor, MapAccess, SeqAccess, DeserializeOwned};
 
 /// JSON value with sharing.
 ///
@@ -60,42 +63,42 @@ pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
 pub trait ValT:
-    Clone
-    + Display
-    + From<bool>
-    + From<isize>
-    + From<String>
-    + FromIterator<Self>
-    + PartialEq
-    + PartialOrd
-    + Add<Output = ValR2<Self>>
-    + Sub<Output = ValR2<Self>>
-    + Mul<Output = ValR2<Self>>
-    + Div<Output = ValR2<Self>>
-    + Rem<Output = ValR2<Self>>
-    + Neg<Output = ValR2<Self>>
+Clone
++ Display
++ From<bool>
++ From<isize>
++ From<String>
++ FromIterator<Self>
++ PartialEq
++ PartialOrd
++ Add<Output=ValR2<Self>>
++ Sub<Output=ValR2<Self>>
++ Mul<Output=ValR2<Self>>
++ Div<Output=ValR2<Self>>
++ Rem<Output=ValR2<Self>>
++ Neg<Output=ValR2<Self>>
 {
     fn from_num(n: String) -> ValR2<Self>;
-    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
+    fn from_map<I: IntoIterator<Item=(Self, Self)>>(iter: I) -> ValR2<Self>;
 
     /// If `Ok(k)` is in `v.keys()`, then
     /// `v.index(k)` must be `Ok(_)` and in `v.range(Range::default())`.
-    fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>>;
+    fn values(self) -> Box<dyn Iterator<Item=ValR2<Self>>>;
     fn index(self, index: &Self) -> ValR2<Self>;
     fn range(self, range: Range<&Self>) -> ValR2<Self>;
 
-    fn map_values<I: Iterator<Item = ValR2<Self>>>(
+    fn map_values<I: Iterator<Item=ValR2<Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
-    fn map_index<I: Iterator<Item = ValR2<Self>>>(
+    fn map_index<I: Iterator<Item=ValR2<Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
-    fn map_range<I: Iterator<Item = ValR2<Self>>>(
+    fn map_range<I: Iterator<Item=ValR2<Self>>>(
         self,
         range: Range<&Self>,
         opt: Opt,
@@ -113,12 +116,12 @@ impl ValT for Val {
         Ok(Val::Num(Rc::new(n)))
     }
 
-    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self> {
+    fn from_map<I: IntoIterator<Item=(Self, Self)>>(iter: I) -> ValR2<Self> {
         let iter = iter.into_iter().map(|(k, v)| Ok((k.to_str()?, v)));
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
     }
 
-    fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>> {
+    fn values(self) -> Box<dyn Iterator<Item=ValR2<Self>>> {
         match self {
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
@@ -166,7 +169,7 @@ impl ValT for Val {
         }
     }
 
-    fn map_values<I: Iterator<Item = ValR>>(self, opt: Opt, f: impl Fn(Self) -> I) -> ValR {
+    fn map_values<I: Iterator<Item=ValR>>(self, opt: Opt, f: impl Fn(Self) -> I) -> ValR {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -181,7 +184,7 @@ impl ValT for Val {
         }
     }
 
-    fn map_index<I: Iterator<Item = ValR>>(
+    fn map_index<I: Iterator<Item=ValR>>(
         mut self,
         index: &Self,
         opt: Opt,
@@ -229,7 +232,7 @@ impl ValT for Val {
         }
     }
 
-    fn map_range<I: Iterator<Item = ValR>>(
+    fn map_range<I: Iterator<Item=ValR>>(
         mut self,
         range: Range<&Self>,
         opt: Opt,
@@ -307,6 +310,22 @@ fn wrap_test() {
 }
 
 impl Val {
+    /// De-Serialize the value to `Val`
+    pub fn from_generic<T: ?Sized + Serialize>(val: &T) -> anyhow::Result<Self> {
+        let mut ser = serde_json::Serializer::new(Vec::new());
+        val.serialize(&mut ser)?;
+        let bytes = ser.into_inner();
+        let val = serde_json::from_slice::<Self>(&bytes)?;
+        Ok(val)
+    }
+
+    /// Serialize `Val` to a generic type.
+    pub fn to_generic<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
+        let bytes = serde_json::to_vec(&self)?;
+        let val = T::deserialize(&mut serde_json::Deserializer::from_slice(&bytes))?;
+        Ok(val)
+    }
+
     /// Construct a string value.
     pub fn str(s: String) -> Self {
         Self::Str(s.into())
@@ -431,7 +450,7 @@ impl Val {
     ///
     /// Fail on any other value.
     #[deprecated(since = "1.3.0", note = "use `ValT::values` instead")]
-    pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
+    pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item=Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
@@ -567,6 +586,124 @@ impl From<Val> for serde_json::Value {
     }
 }
 
+impl Serialize for Val {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+    {
+        match *self {
+            Val::Null => serializer.serialize_unit(),
+            Val::Bool(b) => serializer.serialize_bool(b),
+            Val::Int(i) => serializer.serialize_i64(i as i64),
+            Val::Float(f) => serializer.serialize_f64(f),
+            Val::Num(ref n) => {
+                let parsed_number = n.parse::<serde_json::Number>()
+                    .map_err(serde::ser::Error::custom)?;
+                serializer.serialize_newtype_variant("Val", 0, "Num", &parsed_number)
+            }
+            Val::Str(ref s) => serializer.serialize_str(s),
+            Val::Arr(ref a) => {
+                let mut seq = serializer.serialize_seq(Some(a.len()))?;
+                for elem in a.iter() {
+                    seq.serialize_element(elem)?;
+                }
+                seq.end()
+            }
+            Val::Obj(ref o) => {
+                let mut map = serializer.serialize_map(Some(o.len()))?;
+                for (k, v) in o.iter() {
+                    map.serialize_entry(&**k, v)?;
+                }
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Val {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+    {
+        struct ValVisitor;
+
+        impl<'de> Visitor<'de> for ValVisitor {
+            type Value = Val;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a valid JSON value")
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Val::Null)
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Val::Bool(value))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Val::Int(value as isize))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Val::Float(value))
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Val::Str(Rc::new(value.to_string())))
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+                where
+                    E: de::Error,
+            {
+                Ok(Val::Str(Rc::new(value)))
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<Self::Value, V::Error>
+                where
+                    V: SeqAccess<'de>,
+            {
+                let mut arr = Vec::new();
+                while let Some(elem) = seq.next_element()? {
+                    arr.push(elem);
+                }
+                Ok(Val::Arr(Rc::new(arr)))
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+                where
+                    V: MapAccess<'de>,
+            {
+                let mut obj: Map<_, _> = Default::default();
+                while let Some((key, value)) = map.next_entry()? {
+                    obj.insert(Rc::new(key), value);
+                }
+                Ok(Val::Obj(Rc::new(obj)))
+            }
+        }
+
+        deserializer.deserialize_any(ValVisitor)
+    }
+}
+
+
 impl From<bool> for Val {
     fn from(b: bool) -> Self {
         Self::Bool(b)
@@ -586,7 +723,7 @@ impl From<String> for Val {
 }
 
 impl FromIterator<Self> for Val {
-    fn from_iter<T: IntoIterator<Item = Self>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item=Self>>(iter: T) -> Self {
         Self::Arr(Rc::new(iter.into_iter().collect()))
     }
 }
