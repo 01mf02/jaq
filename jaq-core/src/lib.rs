@@ -53,6 +53,27 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         .chain(run(TIME))
 }
 
+/// Feature enabled filters.
+pub fn feature_enabled() -> impl Iterator<Item = (String, usize, Native)> {
+    let mut feature = minimal();
+    #[cfg(feature = "std")]
+    feature = feature.chain(run(STD));
+    #[cfg(feature = "format")]
+    feature = feature.chain(run(FORMAT));
+    #[cfg(feature = "log")]
+    feature = feature.chain(upd(LOG));
+    #[cfg(feature = "math")]
+    feature = feature.chain(run(MATH));
+    #[cfg(feature = "parse_json")]
+    feature = feature.chain(run(PARSE_JSON));
+    #[cfg(feature = "regex")]
+    feature = feature.chain(run(REGEX));
+    #[cfg(feature = "time")]
+    feature = feature.chain(run(TIME));
+
+    feature
+}
+
 fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
     fs.iter()
         .map(|&(name, arity, f)| (name.to_string(), arity, Native::new(f)))
