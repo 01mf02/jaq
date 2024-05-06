@@ -17,6 +17,11 @@ header {
   background: #101112;
 }
 
+.about {
+  flex-grow: 1;
+  text-align: right;
+}
+
 .IO header {
   background: #b7bcc0;
 }
