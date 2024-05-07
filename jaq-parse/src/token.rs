@@ -213,7 +213,7 @@ pub fn tree(
     .padded()
 }
 
-pub fn token() -> impl Parser<char, Token, Error = Simple<char>> {
+fn token() -> impl Parser<char, Token, Error = Simple<char>> {
     // A parser for operators
     let op = one_of("|=!<>+-*/%").chain(one_of("=/").or_not()).collect();
 
