@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use jaq_syn::filter::{AssignOp, BinaryOp, Fold, KeyVal};
 use jaq_syn::{MathOp, Spanned, Str};
 
-pub struct Ctx {
+pub(crate) struct Ctx {
     pub defs: Vec<Filter>,
     callable: Vec<Callable>,
 }
