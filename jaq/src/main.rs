@@ -495,7 +495,7 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
     let (red, yellow) = if isatty {
         (Color::Red, Color::Yellow)
     } else {
-        (Color::Unset, Color::Unset)
+        (Color::Primary, Color::Primary)
     };
     let config = ariadne::Config::default().with_color(isatty);
 

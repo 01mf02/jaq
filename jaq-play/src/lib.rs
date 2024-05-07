@@ -300,7 +300,7 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
     use ariadne::{Color, Fmt, Label, Report, ReportKind};
     use chumsky::error::SimpleReason;
 
-    let (red, yellow) = (Color::Unset, Color::Unset);
+    let (red, yellow) = (Color::Primary, Color::Primary);
     let config = ariadne::Config::default().with_color(false);
 
     let msg = if let SimpleReason::Custom(msg) = e.reason() {
