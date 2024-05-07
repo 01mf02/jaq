@@ -14,3 +14,4 @@ rust-version = "1.64"
 [dependencies]
 chumsky = { version = "0.9.0", default-features = false }
 jaq-syn = { version = "1.0.0", path = "../jaq-syn" }
+parcours = { version = "0.3.0", path = "../../parcours" }

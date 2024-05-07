@@ -1,5 +1,5 @@
 //! JSON query language parser.
-#![no_std]
+//#![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
@@ -7,6 +7,7 @@ extern crate alloc;
 
 mod def;
 mod filter;
+mod lex;
 mod path;
 mod prec_climb;
 mod string;
@@ -39,10 +40,35 @@ pub fn parse<T, P>(src: &str, parser: P) -> (Option<T>, Vec<Error>)
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
+    /*
+    for i in 0..500 {
+
     let (tokens, lex_errs) = lex()
         .then_ignore(end())
         .recover_with(skip_then_retry_until([]))
         .parse_recovery(src);
+    if let Some((tokens2, rest)) = crate::lex::lex().parse(src, &mut ()) {
+        let v: Vec<_> = tokens2.into_iter().map(|tree| tree.tokens(0..42)).flatten().collect();
+    }
+    }
+    */
+    use parcours::Parser;
+    if let Some((tokens2, rest)) = crate::lex::lex().parse(src, &mut ()) {
+        let v: Vec<_> = tokens2
+            .into_iter()
+            .map(|tree| tree.tokens(0..42))
+            .flatten()
+            .collect();
+        std::println!("{v:?}");
+        std::println!("finished: {}", rest.is_empty());
+    } else {
+        std::println!("parse error");
+    }
+    let (tokens, lex_errs) = lex()
+        .then_ignore(end())
+        .recover_with(skip_then_retry_until([]))
+        .parse_recovery(src);
+    let lex_errs: Vec<Simple<char>> = lex_errs;
 
     let (parsed, parse_errs) = if let Some(tokens) = tokens {
         let len = src.chars().count();
