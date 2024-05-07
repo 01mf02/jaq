@@ -727,6 +727,9 @@ Please make sure that after your change, `cargo test` runs successfully.
 
 # Acknowledgements
 
+This project has been kindly supported by
+the [NLnet foundation](https://nlnet.nl/project/jaq/) as part of an NGI0 grant.
+
 jaq has profited tremendously from:
 
 * [serde_json] to read and [colored_json] to output JSON,
