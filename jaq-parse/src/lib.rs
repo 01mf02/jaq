@@ -52,18 +52,14 @@ where
     }
     }
     */
-    use parcours::Parser;
-    if let Some((tokens2, rest)) = crate::lex::lex().parse(src, &mut ()) {
-        let v: Vec<_> = tokens2
-            .into_iter()
-            .map(|tree| tree.tokens(0..42))
-            .flatten()
-            .collect();
-        std::println!("{v:?}");
-        std::println!("finished: {}", rest.is_empty());
-    } else {
-        std::println!("parse error");
-    }
+    let (tokens2, rest) = crate::lex::lex_(src);
+    let v: Vec<_> = tokens2
+        .into_iter()
+        .map(|(tree, span)| tree.tokens(0..42))
+        .flatten()
+        .collect();
+    std::println!("{v:?}");
+    std::println!("finished: {}", rest.is_empty());
     let (tokens, lex_errs) = lex()
         .then_ignore(end())
         .recover_with(skip_then_retry_until([]))

@@ -100,6 +100,7 @@ fn string(mut i: &str) -> Option<(Vec<Part<Tree>>, &str)> {
         parts.push(Part::Str(i[..i.len() - rest.len()].to_string()));
         let mut chars = rest.chars();
         let c = match chars.next()? {
+            '"' => return Some((parts, chars.as_str())),
             '\\' => match chars.next()? {
                 c @ ('\\' | '/' | '"') => c,
                 'b' => '\x08',
@@ -115,11 +116,15 @@ fn string(mut i: &str) -> Option<(Vec<Part<Tree>>, &str)> {
                         //emit(Simple::custom(span, "invalid unicode character"));
                         '\u{FFFD}' // unicode replacement character
                     })
-                },
-                '(' => todo!(),
+                }
+                '(' => {
+                    let (trees, rest) = trees(chars.as_str(), Delim::Paren);
+                    parts.push(Part::Fun(trees));
+                    i = rest;
+                    continue;
+                }
                 _ => todo!("add error"),
             },
-            '"' => return Some((parts, chars.as_str())),
             _ => unreachable!(),
         };
         parts.push(Part::Str(c.into()));
@@ -128,16 +133,12 @@ fn string(mut i: &str) -> Option<(Vec<Part<Tree>>, &str)> {
 }
 
 /// Whitespace and comments.
-fn space_(i: &str) -> &str {
+fn trim_space(i: &str) -> &str {
     let mut i = i.trim_start();
     while let Some(comment) = i.strip_prefix('#') {
         i = comment.trim_start_matches(|c| c != '\n').trim_start();
     }
     i
-}
-
-fn space<'a>() -> impl Parser<&'a str, O = ()> + Clone {
-    parcours::from_fn(|i, _| Some(((), space_(i))))
 }
 
 use jaq_syn::Spanned;
@@ -154,7 +155,7 @@ fn parts_to_interpol(
                 tail.push(((f, 0..42), (String::new(), 0..42)));
                 while let Some(part) = parts.next() {
                     match part {
-                        Part::Str(s) => tail.last_mut().unwrap().1.0.extend(s.chars()),
+                        Part::Str(s) => tail.last_mut().unwrap().1 .0.extend(s.chars()),
                         Part::Fun(f) => tail.push(((f, 0..42), (String::new(), 0..42))),
                     }
                 }
@@ -164,30 +165,47 @@ fn parts_to_interpol(
     (init, tail)
 }
 
-fn tree<'a>() -> impl Parser<&'a str, O = Tree> {
-    // TODO: span!
-    let trees = lazy!(tree).map(|t| (t, 0..42)).repeated();
-    let close = |s| space().ignore_then(str::matches(s));
-    let paren = trees.delimited_by(str::matches("("), close(")"));
-    let brack = trees.delimited_by(str::matches("["), close("]"));
-    let brace = trees.delimited_by(str::matches("{"), close("}"));
-
-    let pair = |p| (Tree::Delim(Delim::Paren, p), 0..42);
-    let interpol = str::matches("\\").ignore_then(paren.clone().map(pair));
-
-    let string = str::matches("\"").ignore_then(parcours::from_fn(|i, _| {
-        string(i).map(|(parts, rest)| (parts_to_interpol(parts), rest))
-    }));
-
-    space().ignore_then(any((
-        paren.map(|t| Tree::Delim(Delim::Paren, t)),
-        brack.map(|t| Tree::Delim(Delim::Brack, t)),
-        brace.map(|t| Tree::Delim(Delim::Brace, t)),
-        string.map(|(s, interpol)| Tree::String(s, interpol)),
-        parcours::from_fn(|i, _| token(i)).map(Tree::Token),
-    )))
+fn trees2(mut i: &str) -> (Vec<Spanned<Tree>>, &str) {
+    let mut trees = Vec::new();
+    while let Some((tree, rest)) = tree_(i) {
+        trees.push((tree, 0..42));
+        i = rest;
+    }
+    (trees, i)
 }
 
-pub fn lex<'a>() -> impl Parser<&'a str, O = Vec<Tree>> {
-    lazy!(tree).repeated().then_ignore(space())
+fn trees(mut i: &str, delim: Delim) -> (Tree, &str) {
+    let (trees, i) = trees2(i);
+    let i = trim_space(i);
+    let i = i.strip_prefix(delim.close()).unwrap_or_else(|| {
+        todo!("add error");
+        i
+    });
+    (Tree::Delim(delim, trees), i)
+}
+
+fn tree_(i: &str) -> Option<(Tree, &str)> {
+    let i = trim_space(i);
+    let mut chars = i.chars();
+
+    Some(match chars.next()? {
+        '"' => {
+            let (parts, rest) = string(chars.as_str())?;
+            let (init, tail) = parts_to_interpol(parts);
+            (Tree::String(init, tail), rest)
+        }
+        '(' => trees(chars.as_str(), Delim::Paren),
+        '[' => trees(chars.as_str(), Delim::Brack),
+        '{' => trees(chars.as_str(), Delim::Brace),
+        _ => {
+            let (token, rest) = token(i)?;
+            (Tree::Token(token), rest)
+        }
+    })
+}
+
+pub fn lex_(i: &str) -> (Vec<Spanned<Tree>>, &str) {
+    let (trees, i) = trees2(i);
+    let i = trim_space(i);
+    (trees, i)
 }

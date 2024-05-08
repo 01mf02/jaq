@@ -19,7 +19,7 @@ impl Delim {
         }
     }
 
-    fn close(self) -> char {
+    pub(crate) fn close(self) -> char {
         match self {
             Self::Paren => ')',
             Self::Brack => ']',
