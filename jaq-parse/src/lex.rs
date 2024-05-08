@@ -1,18 +1,92 @@
 use crate::token::{Delim, Token, Tree};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use parcours::{all, any, consumed, lazy, select, str, Combinator, Parser};
+use parcours::{any, lazy, select, str, Combinator, Parser};
+
+fn strip_digits(i: &str) -> Option<&str> {
+    i.strip_prefix(|c: char| c.is_numeric())
+        .map(|i| i.trim_start_matches(|c: char| c.is_numeric()))
+}
 
 /// Decimal with optional exponent.
-fn num<'a>() -> impl Parser<&'a str, O = &'a str> {
-    let digits = str::take_while1(|c, _| c.is_numeric());
-    let comma = str::matches(".").then(digits.opt());
-    let exp = all((
-        str::next().filter(|c| "eE".contains(*c)),
-        str::next().filter(|c| "+-".contains(*c)).opt(),
-        digits,
-    ));
-    consumed(all((digits, comma.opt(), exp.opt())))
+fn trim_num(i: &str) -> &str {
+    let i = i.trim_start_matches(|c: char| c.is_numeric());
+    let i = i.strip_prefix('.').map_or(i, |i| {
+        strip_digits(i).unwrap_or_else(|| {
+            // TODO: register error
+            todo!();
+            i
+        })
+    });
+    let i = i.strip_prefix(['e', 'E']).map_or(i, |i| {
+        let i = i.strip_prefix(['+', '-']).unwrap_or(i);
+        strip_digits(i).unwrap_or_else(|| {
+            // TODO: register error
+            todo!();
+            i
+        })
+    });
+    i
+}
+
+fn trim_ident(i: &str) -> &str {
+    i.trim_start_matches(|c: char| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn strip_ident(i: &str) -> Option<&str> {
+    i.strip_prefix(|c: char| c.is_ascii_alphabetic() || c == '_')
+        .map(trim_ident)
+}
+
+fn token(i: &str) -> Option<(Token, &str)> {
+    let is_op = |c| "|=!<>+-*/%".contains(c);
+    let prefix = |rest: &str| &i[..i.len() - rest.len()];
+    let single = |tk: Token| (tk, &i[1..]);
+
+    let mut chars = i.chars();
+    Some(match chars.next()? {
+        'a'..='z' | 'A'..='Z' | '@' | '_' => {
+            let rest = trim_ident(chars.as_str());
+            let tk = match prefix(rest) {
+                "def" => Token::Def,
+                "if" => Token::If,
+                "then" => Token::Then,
+                "elif" => Token::Elif,
+                "else" => Token::Else,
+                "end" => Token::End,
+                "or" => Token::Or,
+                "and" => Token::And,
+                "as" => Token::As,
+                "reduce" => Token::Reduce,
+                "for" => Token::For,
+                "foreach" => Token::Foreach,
+                "try" => Token::Try,
+                "catch" => Token::Catch,
+                ident => Token::Ident(ident.to_string()),
+            };
+            (tk, rest)
+        }
+        '$' => {
+            // TODO: handle error
+            let rest = strip_ident(chars.as_str()).unwrap();
+            (Token::Var(i[1..i.len() - rest.len()].to_string()), rest)
+        }
+        '0'..='9' => {
+            let rest = trim_num(chars.as_str());
+            (Token::Num(prefix(rest).to_string()), rest)
+        }
+        '.' if chars.next() == Some('.') => (Token::DotDot, &i[2..]),
+        '.' => single(Token::Dot),
+        ':' => single(Token::Colon),
+        ';' => single(Token::Semicolon),
+        ',' => single(Token::Comma),
+        '?' => single(Token::Question),
+        c if is_op(c) => {
+            let rest = chars.as_str().trim_start_matches(is_op);
+            (Token::Op(prefix(rest).to_string()), rest)
+        }
+        _ => return None,
+    })
 }
 
 /// Hexadecimal number with `len` digits.
@@ -50,53 +124,6 @@ fn char_<'a>() -> impl Parser<&'a str, O = char> + Clone {
     str::next().filter(|c| *c != '\\' && *c != '"').or(escape)
 }
 
-fn ident<'a>() -> impl Parser<&'a str, O = &'a str> {
-    consumed(all((
-        str::matches("@").opt(),
-        str::next().filter(|c| c.is_ascii_alphabetic() || *c == '_'),
-        str::take_while(|c, _s| c.is_ascii_alphanumeric() || *c == '_'),
-    )))
-}
-
-fn token<'a>() -> impl Parser<&'a str, O = Token> {
-    let op = str::take_while1(|c, _| "|=!<>+-*/%".contains(*c));
-
-    let var = str::matches("$").ignore_then(ident());
-
-    let ident = ident().map(|ident| match ident {
-        "def" => Token::Def,
-        "if" => Token::If,
-        "then" => Token::Then,
-        "elif" => Token::Elif,
-        "else" => Token::Else,
-        "end" => Token::End,
-        "or" => Token::Or,
-        "and" => Token::And,
-        "as" => Token::As,
-        "reduce" => Token::Reduce,
-        "for" => Token::For,
-        "foreach" => Token::Foreach,
-        "try" => Token::Try,
-        "catch" => Token::Catch,
-        _ => Token::Ident(ident.to_string()),
-    });
-
-    any((
-        ident,
-        str::matches("..").map(|_| Token::DotDot),
-        str::next().filter_map(select!(
-            '.' => Token::Dot,
-            ':' => Token::Colon,
-            ';' => Token::Semicolon,
-            ',' => Token::Comma,
-            '?' => Token::Question,
-        )),
-        op.map(|op| op.to_string()).map(Token::Op),
-        var.map(|s| s.to_string()).map(Token::Var),
-        num().map(|n| n.to_string()).map(Token::Num),
-    ))
-}
-
 /// Whitespace and comments.
 fn space<'a>() -> impl Parser<&'a str, O = ()> + Clone {
     let space = str::take_while(|c, _| c.is_ascii_whitespace());
@@ -128,7 +155,7 @@ fn tree<'a>() -> impl Parser<&'a str, O = Tree> {
         brack.map(|t| Tree::Delim(Delim::Brack, t)),
         brace.map(|t| Tree::Delim(Delim::Brace, t)),
         string.map(|(s, interpol)| Tree::String(s, interpol)),
-        token().map(Tree::Token),
+        parcours::from_fn(|i, _| token(i)).map(Tree::Token),
     )))
 }
 
