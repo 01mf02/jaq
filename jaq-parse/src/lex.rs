@@ -1,7 +1,7 @@
 use crate::token::{Delim, Token, Tree};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use parcours::{any, lazy, select, str, Combinator, Parser};
+use parcours::{any, lazy, str, Combinator, Parser};
 
 fn strip_digits(i: &str) -> Option<&str> {
     i.strip_prefix(|c: char| c.is_numeric())
@@ -75,7 +75,7 @@ fn token(i: &str) -> Option<(Token, &str)> {
             let rest = trim_num(chars.as_str());
             (Token::Num(prefix(rest).to_string()), rest)
         }
-        '.' if chars.next() == Some('.') => (Token::DotDot, &i[2..]),
+        '.' if chars.next()? == '.' => (Token::DotDot, &i[2..]),
         '.' => single(Token::Dot),
         ':' => single(Token::Colon),
         ';' => single(Token::Semicolon),
@@ -89,47 +89,79 @@ fn token(i: &str) -> Option<(Token, &str)> {
     })
 }
 
-/// Hexadecimal number with `len` digits.
-fn hex<'a>(len: usize) -> impl Parser<&'a str, O = &'a str> + Clone {
-    let mut n = 0;
-    str::take_while(move |c, _| {
-        n += 1;
-        n <= len && c.is_ascii_hexdigit()
-    })
-    .filter(move |digits| digits.len() == len)
-}
+use jaq_syn::string::Part;
 
-/// JSON string character.
-fn char_<'a>() -> impl Parser<&'a str, O = char> + Clone {
-    let unicode = str::matches("u").ignore_then(hex(4).map(|digits| {
-        let num = u32::from_str_radix(&digits, 16).unwrap();
-        char::from_u32(num).unwrap_or_else(|| {
-            //emit(Simple::custom(span, "invalid unicode character"));
-            '\u{FFFD}' // unicode replacement character
-        })
-    }));
+/// Returns `None` when an unexpected EOF was encountered.
+fn string(mut i: &str) -> Option<(Vec<Part<Tree>>, &str)> {
+    let mut parts = Vec::new();
 
-    let bla = str::next().filter_map(select!(
-        '\\' => '\\',
-        '/' => '/',
-        '"' => '"',
-        'b' => '\x08',
-        'f' => '\x0C',
-        'n' => '\n',
-        'r' => '\r',
-        't' => '\t',
-    ));
-    let escape = str::matches("\\").ignore_then(bla.or(unicode));
-
-    str::next().filter(|c| *c != '\\' && *c != '"').or(escape)
+    loop {
+        let rest = i.trim_start_matches(|c| c != '\\' && c != '"');
+        parts.push(Part::Str(i[..i.len() - rest.len()].to_string()));
+        let mut chars = rest.chars();
+        let c = match chars.next()? {
+            '\\' => match chars.next()? {
+                c @ ('\\' | '/' | '"') => c,
+                'b' => '\x08',
+                'f' => '\x0C',
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                'u' => {
+                    let mut hex = String::with_capacity(4);
+                    (0..4).try_for_each(|_| Some(hex.push(chars.next()?)))?;
+                    let num = u32::from_str_radix(&hex, 16).unwrap();
+                    char::from_u32(num).unwrap_or_else(|| {
+                        //emit(Simple::custom(span, "invalid unicode character"));
+                        '\u{FFFD}' // unicode replacement character
+                    })
+                },
+                '(' => todo!(),
+                _ => todo!("add error"),
+            },
+            '"' => return Some((parts, chars.as_str())),
+            _ => unreachable!(),
+        };
+        parts.push(Part::Str(c.into()));
+        i = chars.as_str();
+    }
 }
 
 /// Whitespace and comments.
+fn space_(i: &str) -> &str {
+    let mut i = i.trim_start();
+    while let Some(comment) = i.strip_prefix('#') {
+        i = comment.trim_start_matches(|c| c != '\n').trim_start();
+    }
+    i
+}
+
 fn space<'a>() -> impl Parser<&'a str, O = ()> + Clone {
-    let space = str::take_while(|c, _| c.is_ascii_whitespace());
-    let comment = str::matches("#").then(str::take_while(|c, _| *c != '\n'));
-    let comments = space.then(comment).map(|_| ()).repeated::<()>();
-    comments.then(space).map(|_| ())
+    parcours::from_fn(|i, _| Some(((), space_(i))))
+}
+
+use jaq_syn::Spanned;
+fn parts_to_interpol(
+    parts: Vec<Part<Tree>>,
+) -> (Spanned<String>, Vec<(Spanned<Tree>, Spanned<String>)>) {
+    let mut init = (String::new(), 0..42);
+    let mut tail = Vec::new();
+    let mut parts = parts.into_iter();
+    while let Some(part) = parts.next() {
+        match part {
+            Part::Str(s) => init.0.extend(s.chars()),
+            Part::Fun(f) => {
+                tail.push(((f, 0..42), (String::new(), 0..42)));
+                while let Some(part) = parts.next() {
+                    match part {
+                        Part::Str(s) => tail.last_mut().unwrap().1.0.extend(s.chars()),
+                        Part::Fun(f) => tail.push(((f, 0..42), (String::new(), 0..42))),
+                    }
+                }
+            }
+        }
+    }
+    (init, tail)
 }
 
 fn tree<'a>() -> impl Parser<&'a str, O = Tree> {
@@ -140,15 +172,12 @@ fn tree<'a>() -> impl Parser<&'a str, O = Tree> {
     let brack = trees.delimited_by(str::matches("["), close("]"));
     let brace = trees.delimited_by(str::matches("{"), close("}"));
 
-    let chars = char_().repeated::<String>().map(|s| (s, 0..42));
-
     let pair = |p| (Tree::Delim(Delim::Paren, p), 0..42);
     let interpol = str::matches("\\").ignore_then(paren.clone().map(pair));
 
-    let string = chars
-        .clone()
-        .then(interpol.then(chars).repeated())
-        .delimited_by(str::matches("\""), str::matches("\""));
+    let string = str::matches("\"").ignore_then(parcours::from_fn(|i, _| {
+        string(i).map(|(parts, rest)| (parts_to_interpol(parts), rest))
+    }));
 
     space().ignore_then(any((
         paren.map(|t| Tree::Delim(Delim::Paren, t)),
