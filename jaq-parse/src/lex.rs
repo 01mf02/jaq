@@ -42,6 +42,7 @@ pub enum Expect<'a> {
     Ident,
     Delim(&'a str),
     Escape,
+    Unicode,
 }
 
 type Errors<'a> = Vec<(Expect<'a>, &'a str)>;
@@ -144,10 +145,10 @@ fn string<'a>(mut i: &'a str, e: &mut Errors<'a>) -> Option<(Vec<Part<Token<&'a 
                 'u' => {
                     let mut hex = String::with_capacity(4);
                     (0..4).try_for_each(|_| Some(hex.push(chars.next()?)))?;
-                    let num = u32::from_str_radix(&hex, 16).unwrap();
-                    char::from_u32(num).unwrap_or_else(|| {
-                        //emit(Simple::custom(span, "invalid unicode character"));
-                        '\u{FFFD}' // unicode replacement character
+                    let c = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32);
+                    c.unwrap_or_else(|| {
+                        e.push((Expect::Unicode, &rest[2..]));
+                        '\u{FFFD}' // Unicode replacement character
                     })
                 }
                 '(' => {
@@ -161,6 +162,7 @@ fn string<'a>(mut i: &'a str, e: &mut Errors<'a>) -> Option<(Vec<Part<Token<&'a 
                     continue;
                 }
             },
+            // SAFETY: due to `trim_start_matches`
             _ => unreachable!(),
         };
         parts.push(Part::Str(c.into()));
