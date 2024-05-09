@@ -5,10 +5,8 @@ use alloc::vec::Vec;
 /// Token (tree) generic over string type `S`.
 #[derive(Debug)]
 pub enum Token<S> {
-    /// keywords such as `def`, but also identifiers such as `map` or `@csv`.
+    /// keywords such as `def`, but also identifiers such as `map`, `$x`, or `@csv`
     Word(S),
-    /// variable, including leading `$`
-    Var(S),
     /// number
     Num(S),
     /// interpolated string
@@ -82,14 +80,14 @@ fn token(i: &str) -> Option<(Token<&str>, &str)> {
 
     let mut chars = i.chars();
     Some(match chars.next()? {
-        'a'..='z' | 'A'..='Z' | '@' | '_' => {
+        'a'..='z' | 'A'..='Z' | '_' => {
             let rest = trim_ident(chars.as_str());
             (Token::Word(prefix(rest)), rest)
         }
-        '$' => {
+        '$' | '@' => {
             // TODO: handle error
             let rest = strip_ident(chars.as_str()).unwrap();
-            (Token::Var(prefix(rest)), rest)
+            (Token::Word(prefix(rest)), rest)
         }
         '0'..='9' => {
             let rest = trim_num(chars.as_str());
