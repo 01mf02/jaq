@@ -159,7 +159,7 @@ fn string<'a>(mut i: &'a str, e: &mut Errors<'a>) -> Option<(Vec<Part<Token<&'a 
                 }
                 _ => {
                     e.push((Expect::Escape, &rest[1..]));
-                    continue;
+                    '\0'
                 }
             },
             // SAFETY: due to `trim_start_matches`
