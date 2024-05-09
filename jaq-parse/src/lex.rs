@@ -233,17 +233,6 @@ fn delim<'a>(i: &'a str, e: &mut Errors<'a>) -> (Token<&'a str>, &'a str) {
     (Token::Delim(delim, tokens), rest)
 }
 
-/*
-fn tokens_then<'a>(i: &'a str, e: &mut Errors<'a>, delim: Delim) -> (Token<&'a str>, &'a str) {
-    let (tokens, i) = tokens(i, e);
-    let i = trim_space(i);
-    let i = i
-        .strip_prefix(delim.close())
-        .unwrap_or_else(|| fail(Expect::Delim(delim), i, e));
-    (Token::Delim(delim, tokens), i)
-}
-*/
-
 pub fn lex<'a>(i: &'a str, e: &mut Errors<'a>) -> (Vec<Token<&'a str>>, &'a str) {
     let (tokens, i) = tokens(i, e);
     let i = trim_space(i);
