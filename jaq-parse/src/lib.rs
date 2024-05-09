@@ -52,8 +52,10 @@ where
     }
     }
     */
-    let (tokens2, rest) = crate::lex::lex_(src);
-    std::println!("{tokens2:?}");
+    let mut lex_errs = Vec::new();
+    let (tokens, rest) = crate::lex::lex(src, &mut lex_errs);
+    std::println!("Tokens: {tokens:?}");
+    std::println!("Errors: {lex_errs:?}");
     std::println!("finished: {}", rest.is_empty());
     let (tokens, lex_errs) = lex()
         .then_ignore(end())

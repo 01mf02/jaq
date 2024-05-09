@@ -15,7 +15,7 @@ pub enum Token<S> {
     Op(S),
     /// punctuation, such as `.` or `;`
     Punct(Punct, S),
-    /// delimited tokens, e.g. `(...)` or `{...}`
+    /// delimited tokens, e.g. `(...)` or `[...]`
     Delim(Delim, Vec<Self>),
 }
 
@@ -36,28 +36,35 @@ pub enum Punct {
     Semicolon,
 }
 
+#[derive(Debug)]
+pub enum Expect<'a> {
+    Digit,
+    Ident,
+    Delim(&'a str),
+    Escape,
+}
+
+type Errors<'a> = Vec<(Expect<'a>, &'a str)>;
+
+fn fail<'a>(e: Expect<'a>, i: &'a str, errs: &mut Errors<'a>) -> &'a str {
+    errs.push((e, i));
+    i
+}
+
 fn strip_digits(i: &str) -> Option<&str> {
     i.strip_prefix(|c: char| c.is_numeric())
         .map(|i| i.trim_start_matches(|c: char| c.is_numeric()))
 }
 
 /// Decimal with optional exponent.
-fn trim_num(i: &str) -> &str {
+fn trim_num<'a>(i: &'a str, e: &mut Errors<'a>) -> &'a str {
     let i = i.trim_start_matches(|c: char| c.is_numeric());
     let i = i.strip_prefix('.').map_or(i, |i| {
-        strip_digits(i).unwrap_or_else(|| {
-            // TODO: register error
-            todo!();
-            i
-        })
+        strip_digits(i).unwrap_or_else(|| fail(Expect::Digit, i, e))
     });
     let i = i.strip_prefix(['e', 'E']).map_or(i, |i| {
         let i = i.strip_prefix(['+', '-']).unwrap_or(i);
-        strip_digits(i).unwrap_or_else(|| {
-            // TODO: register error
-            todo!();
-            i
-        })
+        strip_digits(i).unwrap_or_else(|| fail(Expect::Digit, i, e))
     });
     i
 }
@@ -71,7 +78,7 @@ fn strip_ident(i: &str) -> Option<&str> {
         .map(trim_ident)
 }
 
-fn token(i: &str) -> Option<(Token<&str>, &str)> {
+fn token<'a>(i: &'a str, e: &mut Errors<'a>) -> Option<(Token<&'a str>, &'a str)> {
     let i = trim_space(i);
 
     let is_op = |c| "|=!<>+-*/%".contains(c);
@@ -85,15 +92,15 @@ fn token(i: &str) -> Option<(Token<&str>, &str)> {
             (Token::Word(prefix(rest)), rest)
         }
         '$' | '@' => {
-            // TODO: handle error
-            let rest = strip_ident(chars.as_str()).unwrap();
+            let rest = strip_ident(chars.as_str())
+                .unwrap_or_else(|| fail(Expect::Ident, chars.as_str(), e));
             (Token::Word(prefix(rest)), rest)
         }
         '0'..='9' => {
-            let rest = trim_num(chars.as_str());
+            let rest = trim_num(chars.as_str(), e);
             (Token::Num(prefix(rest)), rest)
         }
-        '.' if chars.next()? == '.' => punct(2, Punct::DotDot),
+        '.' if chars.next() == Some('.') => punct(2, Punct::DotDot),
         '.' => punct(1, Punct::Dot),
         ':' => punct(1, Punct::Colon),
         ';' => punct(1, Punct::Semicolon),
@@ -104,12 +111,10 @@ fn token(i: &str) -> Option<(Token<&str>, &str)> {
             (Token::Op(prefix(rest)), rest)
         }
         '"' => {
-            let (parts, rest) = string(chars.as_str())?;
+            let (parts, rest) = string(chars.as_str(), e)?;
             (Token::Str(parts), rest)
         }
-        '(' => tokens_then(chars.as_str(), Delim::Paren),
-        '[' => tokens_then(chars.as_str(), Delim::Brack),
-        '{' => tokens_then(chars.as_str(), Delim::Brace),
+        '(' | '[' | '{' => delim(i, e),
         _ => return None,
     })
 }
@@ -117,7 +122,7 @@ fn token(i: &str) -> Option<(Token<&str>, &str)> {
 use jaq_syn::string::Part;
 
 /// Returns `None` when an unexpected EOF was encountered.
-fn string(mut i: &str) -> Option<(Vec<Part<Token<&str>>>, &str)> {
+fn string<'a>(mut i: &'a str, e: &mut Errors<'a>) -> Option<(Vec<Part<Token<&'a str>>>, &'a str)> {
     let mut parts = Vec::new();
 
     loop {
@@ -146,12 +151,15 @@ fn string(mut i: &str) -> Option<(Vec<Part<Token<&str>>>, &str)> {
                     })
                 }
                 '(' => {
-                    let (trees, rest) = tokens_then(chars.as_str(), Delim::Paren);
+                    let (trees, rest) = delim(&rest[1..], e);
                     parts.push(Part::Fun(trees));
                     i = rest;
                     continue;
                 }
-                _ => todo!("add error"),
+                _ => {
+                    e.push((Expect::Escape, &rest[1..]));
+                    continue;
+                }
             },
             _ => unreachable!(),
         };
@@ -195,27 +203,47 @@ fn parts_to_interpol(
 }
 */
 
-fn tokens(mut i: &str) -> (Vec<Token<&str>>, &str) {
+fn tokens<'a>(mut i: &'a str, e: &mut Errors<'a>) -> (Vec<Token<&'a str>>, &'a str) {
     let mut tokens = Vec::new();
-    while let Some((tk, rest)) = token(i) {
+    while let Some((tk, rest)) = token(i, e) {
         tokens.push(tk);
         i = rest;
     }
     (tokens, i)
 }
 
-fn tokens_then(i: &str, delim: Delim) -> (Token<&str>, &str) {
-    let (tokens, i) = tokens(i);
-    let i = trim_space(i);
-    let i = i.strip_prefix(delim.close()).unwrap_or_else(|| {
-        todo!("add error");
-        i
-    });
-    (Token::Delim(delim, tokens), i)
+/// Parse a delimited sequence of tokens.
+///
+/// The input string has to start with either '(', '[', or '{'.
+fn delim<'a>(i: &'a str, e: &mut Errors<'a>) -> (Token<&'a str>, &'a str) {
+    let mut chars = i.chars();
+    let delim = match chars.next().unwrap() {
+        '(' => Delim::Paren,
+        '[' => Delim::Brack,
+        '{' => Delim::Brace,
+        _ => panic!(),
+    };
+    let (tokens, rest) = tokens(chars.as_str(), e);
+    let rest = trim_space(rest);
+    let rest = rest
+        .strip_prefix(delim.close())
+        .unwrap_or_else(|| fail(Expect::Delim(i), rest, e));
+    (Token::Delim(delim, tokens), rest)
 }
 
-pub fn lex_(i: &str) -> (Vec<Token<&str>>, &str) {
-    let (tokens, i) = tokens(i);
+/*
+fn tokens_then<'a>(i: &'a str, e: &mut Errors<'a>, delim: Delim) -> (Token<&'a str>, &'a str) {
+    let (tokens, i) = tokens(i, e);
+    let i = trim_space(i);
+    let i = i
+        .strip_prefix(delim.close())
+        .unwrap_or_else(|| fail(Expect::Delim(delim), i, e));
+    (Token::Delim(delim, tokens), i)
+}
+*/
+
+pub fn lex<'a>(i: &'a str, e: &mut Errors<'a>) -> (Vec<Token<&'a str>>, &'a str) {
+    let (tokens, i) = tokens(i, e);
     let i = trim_space(i);
     (tokens, i)
 }
