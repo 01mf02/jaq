@@ -1,7 +1,42 @@
-use crate::token::{Delim, Token, Tree};
+use crate::token::Delim;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use parcours::{any, lazy, str, Combinator, Parser};
+
+/// Token (tree) generic over string type `S`.
+#[derive(Debug)]
+pub enum Token<S> {
+    /// keywords such as `def`, but also identifiers such as `map` or `@csv`.
+    Word(S),
+    /// variable, including leading `$`
+    Var(S),
+    /// number
+    Num(S),
+    /// interpolated string
+    Str(Vec<jaq_syn::string::Part<Self>>),
+    /// operator, such as `|` or `+=`
+    Op(S),
+    /// punctuation, such as `.` or `;`
+    Punct(Punct, S),
+    /// delimited tokens, e.g. `(...)` or `{...}`
+    Delim(Delim, Vec<Self>),
+}
+
+/// Punctuation.
+#[derive(Debug)]
+pub enum Punct {
+    /// `.`
+    Dot,
+    /// `..`
+    DotDot,
+    /// `?`
+    Question,
+    /// `,`
+    Comma,
+    /// `:`
+    Colon,
+    /// `;`
+    Semicolon,
+}
 
 fn strip_digits(i: &str) -> Option<&str> {
     i.strip_prefix(|c: char| c.is_numeric())
@@ -38,53 +73,45 @@ fn strip_ident(i: &str) -> Option<&str> {
         .map(trim_ident)
 }
 
-fn token(i: &str) -> Option<(Token, &str)> {
+fn token(i: &str) -> Option<(Token<&str>, &str)> {
+    let i = trim_space(i);
+
     let is_op = |c| "|=!<>+-*/%".contains(c);
     let prefix = |rest: &str| &i[..i.len() - rest.len()];
-    let single = |tk: Token| (tk, &i[1..]);
+    let punct = |len: usize, p: Punct| (Token::Punct(p, &i[..len]), &i[len..]);
 
     let mut chars = i.chars();
     Some(match chars.next()? {
         'a'..='z' | 'A'..='Z' | '@' | '_' => {
             let rest = trim_ident(chars.as_str());
-            let tk = match prefix(rest) {
-                "def" => Token::Def,
-                "if" => Token::If,
-                "then" => Token::Then,
-                "elif" => Token::Elif,
-                "else" => Token::Else,
-                "end" => Token::End,
-                "or" => Token::Or,
-                "and" => Token::And,
-                "as" => Token::As,
-                "reduce" => Token::Reduce,
-                "for" => Token::For,
-                "foreach" => Token::Foreach,
-                "try" => Token::Try,
-                "catch" => Token::Catch,
-                ident => Token::Ident(ident.to_string()),
-            };
-            (tk, rest)
+            (Token::Word(prefix(rest)), rest)
         }
         '$' => {
             // TODO: handle error
             let rest = strip_ident(chars.as_str()).unwrap();
-            (Token::Var(i[1..i.len() - rest.len()].to_string()), rest)
+            (Token::Var(prefix(rest)), rest)
         }
         '0'..='9' => {
             let rest = trim_num(chars.as_str());
-            (Token::Num(prefix(rest).to_string()), rest)
+            (Token::Num(prefix(rest)), rest)
         }
-        '.' if chars.next()? == '.' => (Token::DotDot, &i[2..]),
-        '.' => single(Token::Dot),
-        ':' => single(Token::Colon),
-        ';' => single(Token::Semicolon),
-        ',' => single(Token::Comma),
-        '?' => single(Token::Question),
+        '.' if chars.next()? == '.' => punct(2, Punct::DotDot),
+        '.' => punct(1, Punct::Dot),
+        ':' => punct(1, Punct::Colon),
+        ';' => punct(1, Punct::Semicolon),
+        ',' => punct(1, Punct::Comma),
+        '?' => punct(1, Punct::Question),
         c if is_op(c) => {
             let rest = chars.as_str().trim_start_matches(is_op);
-            (Token::Op(prefix(rest).to_string()), rest)
+            (Token::Op(prefix(rest)), rest)
         }
+        '"' => {
+            let (parts, rest) = string(chars.as_str())?;
+            (Token::Str(parts), rest)
+        }
+        '(' => tokens_then(chars.as_str(), Delim::Paren),
+        '[' => tokens_then(chars.as_str(), Delim::Brack),
+        '{' => tokens_then(chars.as_str(), Delim::Brace),
         _ => return None,
     })
 }
@@ -92,12 +119,15 @@ fn token(i: &str) -> Option<(Token, &str)> {
 use jaq_syn::string::Part;
 
 /// Returns `None` when an unexpected EOF was encountered.
-fn string(mut i: &str) -> Option<(Vec<Part<Tree>>, &str)> {
+fn string(mut i: &str) -> Option<(Vec<Part<Token<&str>>>, &str)> {
     let mut parts = Vec::new();
 
     loop {
         let rest = i.trim_start_matches(|c| c != '\\' && c != '"');
-        parts.push(Part::Str(i[..i.len() - rest.len()].to_string()));
+        let s = &i[..i.len() - rest.len()];
+        if !s.is_empty() {
+            parts.push(Part::Str(s.to_string()))
+        }
         let mut chars = rest.chars();
         let c = match chars.next()? {
             '"' => return Some((parts, chars.as_str())),
@@ -118,7 +148,7 @@ fn string(mut i: &str) -> Option<(Vec<Part<Tree>>, &str)> {
                     })
                 }
                 '(' => {
-                    let (trees, rest) = trees(chars.as_str(), Delim::Paren);
+                    let (trees, rest) = tokens_then(chars.as_str(), Delim::Paren);
                     parts.push(Part::Fun(trees));
                     i = rest;
                     continue;
@@ -141,6 +171,7 @@ fn trim_space(i: &str) -> &str {
     i
 }
 
+/*
 use jaq_syn::Spanned;
 fn parts_to_interpol(
     parts: Vec<Part<Tree>>,
@@ -164,48 +195,29 @@ fn parts_to_interpol(
     }
     (init, tail)
 }
+*/
 
-fn trees2(mut i: &str) -> (Vec<Spanned<Tree>>, &str) {
-    let mut trees = Vec::new();
-    while let Some((tree, rest)) = tree_(i) {
-        trees.push((tree, 0..42));
+fn tokens(mut i: &str) -> (Vec<Token<&str>>, &str) {
+    let mut tokens = Vec::new();
+    while let Some((tk, rest)) = token(i) {
+        tokens.push(tk);
         i = rest;
     }
-    (trees, i)
+    (tokens, i)
 }
 
-fn trees(mut i: &str, delim: Delim) -> (Tree, &str) {
-    let (trees, i) = trees2(i);
+fn tokens_then(i: &str, delim: Delim) -> (Token<&str>, &str) {
+    let (tokens, i) = tokens(i);
     let i = trim_space(i);
     let i = i.strip_prefix(delim.close()).unwrap_or_else(|| {
         todo!("add error");
         i
     });
-    (Tree::Delim(delim, trees), i)
+    (Token::Delim(delim, tokens), i)
 }
 
-fn tree_(i: &str) -> Option<(Tree, &str)> {
+pub fn lex_(i: &str) -> (Vec<Token<&str>>, &str) {
+    let (tokens, i) = tokens(i);
     let i = trim_space(i);
-    let mut chars = i.chars();
-
-    Some(match chars.next()? {
-        '"' => {
-            let (parts, rest) = string(chars.as_str())?;
-            let (init, tail) = parts_to_interpol(parts);
-            (Tree::String(init, tail), rest)
-        }
-        '(' => trees(chars.as_str(), Delim::Paren),
-        '[' => trees(chars.as_str(), Delim::Brack),
-        '{' => trees(chars.as_str(), Delim::Brace),
-        _ => {
-            let (token, rest) = token(i)?;
-            (Tree::Token(token), rest)
-        }
-    })
-}
-
-pub fn lex_(i: &str) -> (Vec<Spanned<Tree>>, &str) {
-    let (trees, i) = trees2(i);
-    let i = trim_space(i);
-    (trees, i)
+    (tokens, i)
 }

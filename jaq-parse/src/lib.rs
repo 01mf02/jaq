@@ -53,12 +53,7 @@ where
     }
     */
     let (tokens2, rest) = crate::lex::lex_(src);
-    let v: Vec<_> = tokens2
-        .into_iter()
-        .map(|(tree, span)| tree.tokens(0..42))
-        .flatten()
-        .collect();
-    std::println!("{v:?}");
+    std::println!("{tokens2:?}");
     std::println!("finished: {}", rest.is_empty());
     let (tokens, lex_errs) = lex()
         .then_ignore(end())
