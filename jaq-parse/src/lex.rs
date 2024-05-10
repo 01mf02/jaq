@@ -50,7 +50,7 @@ impl Punct {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expect<'a> {
     Digit,
     Ident,
@@ -60,11 +60,11 @@ pub enum Expect<'a> {
     Unicode,
 }
 
-type Errors<'a> = Vec<(Expect<'a>, &'a str)>;
+type Error<'a> = (Expect<'a>, &'a str);
 
 pub struct Lex<'a> {
     i: &'a str,
-    e: Errors<'a>,
+    e: Vec<Error<'a>>,
 }
 
 impl<'a> Lex<'a> {
@@ -83,7 +83,7 @@ impl<'a> Lex<'a> {
         self.i
     }
 
-    pub fn errors(&self) -> &Errors<'a> {
+    pub fn errors(&self) -> &[Error<'a>] {
         &self.e
     }
 
@@ -113,13 +113,15 @@ impl<'a> Lex<'a> {
         }
     }
 
+    /// Lex a sequence matching `[a-zA-Z0-9_]*`.
     fn ident0(&mut self) {
         self.trim(|c: char| c.is_ascii_alphanumeric() || c == '_');
     }
 
+    /// Lex a sequence matching `[a-zA-Z_][a-zA-Z0-9_]*`.
     fn ident1(&mut self) {
-        let f = |c: char| c.is_ascii_alphabetic() || c == '_';
-        if let Some(rest) = self.i.strip_prefix(f) {
+        let first = |c: char| c.is_ascii_alphabetic() || c == '_';
+        if let Some(rest) = self.i.strip_prefix(first) {
             self.i = rest;
             self.ident0();
         } else {
@@ -127,6 +129,7 @@ impl<'a> Lex<'a> {
         }
     }
 
+    /// Lex a non-empty digit sequence.
     fn digits1(&mut self) {
         if let Some(rest) = self.i.strip_prefix(|c: char| c.is_numeric()) {
             self.i = rest.trim_start_matches(|c: char| c.is_numeric());
