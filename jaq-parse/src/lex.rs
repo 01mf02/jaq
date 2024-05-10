@@ -162,7 +162,10 @@ impl<'a> Lex<'a> {
         loop {
             let s = self.consumed(self.i.chars(), |lex| lex.trim(|c| c != '\\' && c != '"'));
             //if !s.is_empty() {
-            parts.push(Part::Str(s.to_string()));
+            match parts.last_mut() {
+                Some(Part::Str(prev)) => prev.push_str(s),
+                Some(_) | None => parts.push(Part::Str(s.to_string())),
+            }
             //}
             match self.next() {
                 Some('"') => return parts,
@@ -190,7 +193,10 @@ impl<'a> Lex<'a> {
                     };
 
                     self.i = chars.as_str();
-                    parts.push(Part::Str(c.into()));
+                    match parts.last_mut() {
+                        Some(Part::Str(prev)) => prev.push(c),
+                        Some(_) | None => parts.push(Part::Str(c.to_string())),
+                    }
                 }
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
