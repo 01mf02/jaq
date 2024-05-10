@@ -1,7 +1,8 @@
-use crate::token::Delim;
+use crate::token::{Delim, Token as OToken};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use jaq_syn::string::Part;
+use jaq_syn::{Span, Spanned};
 
 /// Token (tree) generic over string type `S`.
 #[derive(Debug)]
@@ -160,9 +161,9 @@ impl<'a> Lex<'a> {
 
         loop {
             let s = self.consumed(self.i.chars(), |lex| lex.trim(|c| c != '\\' && c != '"'));
-            if !s.is_empty() {
-                parts.push(Part::Str(s.to_string()))
-            }
+            //if !s.is_empty() {
+            parts.push(Part::Str(s.to_string()));
+            //}
             match self.next() {
                 Some('"') => return parts,
                 Some('\\') => {
@@ -265,28 +266,68 @@ fn unicode(chars: &mut core::str::Chars) -> Option<char> {
     u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
 }
 
-/*
-use jaq_syn::Spanned;
-fn parts_to_interpol(
-    parts: Vec<Part<Tree>>,
-) -> (Spanned<String>, Vec<(Spanned<Tree>, Spanned<String>)>) {
-    let mut init = (String::new(), 0..42);
-    let mut tail = Vec::new();
-    let mut parts = parts.into_iter();
-    while let Some(part) = parts.next() {
-        match part {
-            Part::Str(s) => init.0.extend(s.chars()),
-            Part::Fun(f) => {
-                tail.push(((f, 0..42), (String::new(), 0..42)));
-                while let Some(part) = parts.next() {
-                    match part {
-                        Part::Str(s) => tail.last_mut().unwrap().1 .0.extend(s.chars()),
-                        Part::Fun(f) => tail.push(((f, 0..42), (String::new(), 0..42))),
-                    }
-                }
+fn span(whole_buffer: &str, part: &str) -> Span {
+    let start = part.as_ptr() as usize - whole_buffer.as_ptr() as usize;
+    let end = start + part.len();
+    start..end
+}
+
+impl<'a> Token<&'a str> {
+    pub fn tokens(self, i: &'a str) -> Box<dyn Iterator<Item = Spanned<OToken>> + 'a> {
+        use core::iter::once;
+        match self {
+            Self::Word(w) => Box::new(once((
+                match w {
+                    "def" => OToken::Def,
+                    "if" => OToken::If,
+                    "then" => OToken::Then,
+                    "elif" => OToken::Elif,
+                    "else" => OToken::Else,
+                    "end" => OToken::End,
+                    "or" => OToken::Or,
+                    "and" => OToken::And,
+                    "as" => OToken::As,
+                    "reduce" => OToken::Reduce,
+                    "for" => OToken::For,
+                    "foreach" => OToken::Foreach,
+                    "try" => OToken::Try,
+                    "catch" => OToken::Catch,
+                    w if w.starts_with("$") => OToken::Var(w[1..].to_string()),
+                    w => OToken::Ident(w.to_string()),
+                },
+                span(i, w),
+            ))),
+            Self::Num(n) => Box::new(once((OToken::Num(n.to_string()), span(i, n)))),
+            Self::Op(o) => Box::new(once((OToken::Op(o.to_string()), span(i, o)))),
+            Self::Punct(p, s) => Box::new(once((
+                match p {
+                    Punct::Dot => OToken::Dot,
+                    Punct::DotDot => OToken::DotDot,
+                    Punct::Question => OToken::Question,
+                    Punct::Comma => OToken::Comma,
+                    Punct::Colon => OToken::Colon,
+                    Punct::Semicolon => OToken::Semicolon,
+                },
+                span(i, s),
+            ))),
+            Self::Delim(delim, tokens) => {
+                let init = once((OToken::Open(delim), 0..0));
+                let last = once((OToken::Close(delim), 0..0));
+                Box::new(init.chain(tokens.into_iter().flat_map(|t| t.tokens(i)).chain(last)))
+            }
+            Self::Str(parts) => {
+                let quote = once((OToken::Quote, 0..0));
+                let f = |part: Part<Token<&'a str>>| match part {
+                    Part::Fun(t) => t.tokens(i),
+                    Part::Str(s) => Box::new(once((OToken::Str(s.to_string()), 0..0))),
+                };
+                Box::new(
+                    quote
+                        .clone()
+                        .chain(parts.into_iter().flat_map(f))
+                        .chain(quote),
+                )
             }
         }
     }
-    (init, tail)
 }
-*/

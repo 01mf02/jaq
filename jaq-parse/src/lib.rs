@@ -40,31 +40,26 @@ pub fn parse<T, P>(src: &str, parser: P) -> (Option<T>, Vec<Error>)
 where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
-    /*
-    for i in 0..500 {
-
-    let (tokens, lex_errs) = lex()
-        .then_ignore(end())
-        .recover_with(skip_then_retry_until([]))
-        .parse_recovery(src);
-    if let Some((tokens2, rest)) = crate::lex::lex().parse(src, &mut ()) {
-        let v: Vec<_> = tokens2.into_iter().map(|tree| tree.tokens(0..42)).flatten().collect();
-    }
-    }
-    */
     let mut lexer = crate::lex::Lex::new(src);
-    let tokens = lexer.lex();
-    std::println!("Tokens: {tokens:?}");
+    let tokens: Vec<_> = lexer
+        .lex()
+        .into_iter()
+        .flat_map(|t| t.tokens(src))
+        .collect();
+    /*
     std::println!("Errors: {:?}", lexer.errors());
     std::println!("finished: {}", lexer.input().is_empty());
+    std::println!("Tokens: {tokens:?}");
+    */
 
-    let (tokens, lex_errs) = lex()
+    let (tokens2, lex_errs) = lex()
         .then_ignore(end())
         .recover_with(skip_then_retry_until([]))
         .parse_recovery(src);
     let lex_errs: Vec<Simple<char>> = lex_errs;
 
-    let (parsed, parse_errs) = if let Some(tokens) = tokens {
+    let (parsed, parse_errs) = if let Some(_tokens2) = tokens2 {
+        //std::println!("Tokens: {tokens2:?} (old)");
         let len = src.chars().count();
         let stream = chumsky::Stream::from_iter(len..len + 1, tokens.into_iter());
         parser.then_ignore(end()).parse_recovery(stream)
