@@ -148,6 +148,9 @@ impl<'a> Lex<'a> {
         }
     }
 
+    /// Lex a (possibly interpolated) string.
+    ///
+    /// The input string has to start with '"'.
     fn str(&mut self) -> Vec<Part<Token<&'a str>>> {
         let start = self.i;
         assert_eq!(self.next(), Some('"'));
@@ -229,7 +232,7 @@ impl<'a> Lex<'a> {
         core::iter::from_fn(|| self.token()).collect()
     }
 
-    /// Parse a delimited sequence of tokens.
+    /// Lex a sequence of tokens that is surrounded by parentheses, curly braces, or brackets.
     ///
     /// The input string has to start with either '(', '[', or '{'.
     fn delim(&mut self) -> Token<&'a str> {
