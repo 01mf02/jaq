@@ -55,6 +55,7 @@ pub enum Expect<'a> {
     Digit,
     Ident,
     Delim(&'a str),
+    String(&'a str),
     Escape,
     Unicode,
 }
@@ -147,8 +148,8 @@ impl<'a> Lex<'a> {
         }
     }
 
-    /// Returns `None` when an unexpected EOF was encountered.
-    fn str(&mut self) -> Option<Vec<Part<Token<&'a str>>>> {
+    fn str(&mut self) -> Vec<Part<Token<&'a str>>> {
+        let start = self.i;
         assert_eq!(self.next(), Some('"'));
         let mut parts = Vec::new();
 
@@ -157,33 +158,26 @@ impl<'a> Lex<'a> {
             if !s.is_empty() {
                 parts.push(Part::Str(s.to_string()))
             }
-            match self.next()? {
-                '"' => return Some(parts),
-                '\\' => {
+            match self.next() {
+                Some('"') => return parts,
+                Some('\\') => {
                     let mut chars = self.i.chars();
-                    let c = match chars.next()? {
-                        c @ ('\\' | '/' | '"') => c,
-                        'b' => '\x08',
-                        'f' => '\x0C',
-                        'n' => '\n',
-                        'r' => '\r',
-                        't' => '\t',
-                        'u' => {
-                            let mut hex = String::with_capacity(4);
-                            for _ in 0..4 {
-                                hex.push(chars.next()?);
-                            }
-                            let c = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32);
-                            c.unwrap_or_else(|| {
-                                self.e.push((Expect::Unicode, self.i));
-                                '\u{FFFD}' // Unicode replacement character
-                            })
-                        }
-                        '(' => {
+                    let c = match chars.next() {
+                        Some(c @ ('\\' | '/' | '"')) => c,
+                        Some('b') => '\x08',
+                        Some('f') => '\x0C',
+                        Some('n') => '\n',
+                        Some('r') => '\r',
+                        Some('t') => '\t',
+                        Some('u') => unicode(&mut chars).unwrap_or_else(|| {
+                            self.e.push((Expect::Unicode, self.i));
+                            '\u{FFFD}' // Unicode replacement character
+                        }),
+                        Some('(') => {
                             parts.push(Part::Fun(self.delim()));
                             continue;
                         }
-                        _ => {
+                        Some(_) | None => {
                             self.e.push((Expect::Escape, self.i));
                             '\0'
                         }
@@ -193,7 +187,11 @@ impl<'a> Lex<'a> {
                     parts.push(Part::Str(c.into()));
                 }
                 // SAFETY: due to `lex.trim()`
-                _ => unreachable!(),
+                Some(_) => unreachable!(),
+                None => {
+                    self.e.push((Expect::String(start), self.i));
+                    return parts;
+                }
             };
         }
     }
@@ -221,7 +219,7 @@ impl<'a> Lex<'a> {
             ';' => self.punct(Punct::Semicolon),
             ',' => self.punct(Punct::Comma),
             '?' => self.punct(Punct::Question),
-            '"' => Token::Str(self.str()?),
+            '"' => Token::Str(self.str()),
             '(' | '[' | '{' => self.delim(),
             _ => return None,
         })
@@ -252,6 +250,14 @@ impl<'a> Lex<'a> {
         }
         Token::Delim(delim, tokens)
     }
+}
+
+fn unicode(chars: &mut core::str::Chars) -> Option<char> {
+    let mut hex = String::with_capacity(4);
+    for _ in 0..4 {
+        hex.push(chars.next()?);
+    }
+    u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
 }
 
 /*
