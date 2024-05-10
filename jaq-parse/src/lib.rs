@@ -52,11 +52,12 @@ where
     }
     }
     */
-    let mut lex_errs = Vec::new();
-    let (tokens, rest) = crate::lex::lex(src, &mut lex_errs);
+    let mut lexer = crate::lex::Lex::new(src);
+    let tokens = lexer.lex();
     std::println!("Tokens: {tokens:?}");
-    std::println!("Errors: {lex_errs:?}");
-    std::println!("finished: {}", rest.is_empty());
+    std::println!("Errors: {:?}", lexer.errors());
+    std::println!("finished: {}", lexer.input().is_empty());
+
     let (tokens, lex_errs) = lex()
         .then_ignore(end())
         .recover_with(skip_then_retry_until([]))

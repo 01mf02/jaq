@@ -1,6 +1,7 @@
 use crate::token::Delim;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
+use jaq_syn::string::Part;
 
 /// Token (tree) generic over string type `S`.
 #[derive(Debug)]
@@ -10,7 +11,7 @@ pub enum Token<S> {
     /// number
     Num(S),
     /// interpolated string
-    Str(Vec<jaq_syn::string::Part<Self>>),
+    Str(Vec<Part<Self>>),
     /// operator, such as `|` or `+=`
     Op(S),
     /// punctuation, such as `.` or `;`
@@ -20,7 +21,7 @@ pub enum Token<S> {
 }
 
 /// Punctuation.
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Punct {
     /// `.`
     Dot,
@@ -36,6 +37,19 @@ pub enum Punct {
     Semicolon,
 }
 
+impl Punct {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Dot => ".",
+            Self::DotDot => "..",
+            Self::Question => "?",
+            Self::Comma => ",",
+            Self::Colon => ":",
+            Self::Semicolon => ";",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Expect<'a> {
     Digit,
@@ -47,136 +61,197 @@ pub enum Expect<'a> {
 
 type Errors<'a> = Vec<(Expect<'a>, &'a str)>;
 
-fn fail<'a>(e: Expect<'a>, i: &'a str, errs: &mut Errors<'a>) -> &'a str {
-    errs.push((e, i));
-    i
+pub struct Lex<'a> {
+    i: &'a str,
+    e: Errors<'a>,
 }
 
-fn strip_digits(i: &str) -> Option<&str> {
-    i.strip_prefix(|c: char| c.is_numeric())
-        .map(|i| i.trim_start_matches(|c: char| c.is_numeric()))
-}
+impl<'a> Lex<'a> {
+    pub fn new(i: &'a str) -> Self {
+        let e = Vec::new();
+        Self { i, e }
+    }
 
-/// Decimal with optional exponent.
-fn trim_num<'a>(i: &'a str, e: &mut Errors<'a>) -> &'a str {
-    let i = i.trim_start_matches(|c: char| c.is_numeric());
-    let i = i.strip_prefix('.').map_or(i, |i| {
-        strip_digits(i).unwrap_or_else(|| fail(Expect::Digit, i, e))
-    });
-    let i = i.strip_prefix(['e', 'E']).map_or(i, |i| {
-        let i = i.strip_prefix(['+', '-']).unwrap_or(i);
-        strip_digits(i).unwrap_or_else(|| fail(Expect::Digit, i, e))
-    });
-    i
-}
+    pub fn lex(&mut self) -> Vec<Token<&'a str>> {
+        let tokens = self.tokens();
+        self.space();
+        tokens
+    }
 
-fn trim_ident(i: &str) -> &str {
-    i.trim_start_matches(|c: char| c.is_ascii_alphanumeric() || c == '_')
-}
+    pub fn input(&self) -> &'a str {
+        self.i
+    }
 
-fn strip_ident(i: &str) -> Option<&str> {
-    i.strip_prefix(|c: char| c.is_ascii_alphabetic() || c == '_')
-        .map(trim_ident)
-}
+    pub fn errors(&self) -> &Errors<'a> {
+        &self.e
+    }
 
-fn token<'a>(i: &'a str, e: &mut Errors<'a>) -> Option<(Token<&'a str>, &'a str)> {
-    let i = trim_space(i);
+    fn next(&mut self) -> Option<char> {
+        let mut chars = self.i.chars();
+        let c = chars.next()?;
+        self.i = chars.as_str();
+        Some(c)
+    }
 
-    let is_op = |c| "|=!<>+-*/%".contains(c);
-    let prefix = |rest: &str| &i[..i.len() - rest.len()];
-    let punct = |len: usize, p: Punct| (Token::Punct(p, &i[..len]), &i[len..]);
+    fn trim(&mut self, f: impl FnMut(char) -> bool) {
+        self.i = self.i.trim_start_matches(f);
+    }
 
-    let mut chars = i.chars();
-    Some(match chars.next()? {
-        'a'..='z' | 'A'..='Z' | '_' => {
-            let rest = trim_ident(chars.as_str());
-            (Token::Word(prefix(rest)), rest)
+    fn consumed(&mut self, chars: core::str::Chars<'a>, f: impl FnOnce(&mut Self)) -> &'a str {
+        let start = self.i;
+        self.i = chars.as_str();
+        f(self);
+        &start[..start.len() - self.i.len()]
+    }
+
+    /// Whitespace and comments.
+    fn space(&mut self) {
+        self.i = self.i.trim_start();
+        while let Some(comment) = self.i.strip_prefix('#') {
+            self.i = comment.trim_start_matches(|c| c != '\n').trim_start();
         }
-        '$' | '@' => {
-            let rest = strip_ident(chars.as_str())
-                .unwrap_or_else(|| fail(Expect::Ident, chars.as_str(), e));
-            (Token::Word(prefix(rest)), rest)
-        }
-        '0'..='9' => {
-            let rest = trim_num(chars.as_str(), e);
-            (Token::Num(prefix(rest)), rest)
-        }
-        '.' if chars.next() == Some('.') => punct(2, Punct::DotDot),
-        '.' => punct(1, Punct::Dot),
-        ':' => punct(1, Punct::Colon),
-        ';' => punct(1, Punct::Semicolon),
-        ',' => punct(1, Punct::Comma),
-        '?' => punct(1, Punct::Question),
-        c if is_op(c) => {
-            let rest = chars.as_str().trim_start_matches(is_op);
-            (Token::Op(prefix(rest)), rest)
-        }
-        '"' => {
-            let (parts, rest) = string(chars.as_str(), e)?;
-            (Token::Str(parts), rest)
-        }
-        '(' | '[' | '{' => delim(i, e),
-        _ => return None,
-    })
-}
+    }
 
-use jaq_syn::string::Part;
+    fn ident0(&mut self) {
+        self.trim(|c: char| c.is_ascii_alphanumeric() || c == '_');
+    }
 
-/// Returns `None` when an unexpected EOF was encountered.
-fn string<'a>(mut i: &'a str, e: &mut Errors<'a>) -> Option<(Vec<Part<Token<&'a str>>>, &'a str)> {
-    let mut parts = Vec::new();
-
-    loop {
-        let rest = i.trim_start_matches(|c| c != '\\' && c != '"');
-        let s = &i[..i.len() - rest.len()];
-        if !s.is_empty() {
-            parts.push(Part::Str(s.to_string()))
+    fn ident1(&mut self) {
+        let f = |c: char| c.is_ascii_alphabetic() || c == '_';
+        if let Some(rest) = self.i.strip_prefix(f) {
+            self.i = rest;
+            self.ident0();
+        } else {
+            self.e.push((Expect::Ident, self.i));
         }
-        let mut chars = rest.chars();
-        let c = match chars.next()? {
-            '"' => return Some((parts, chars.as_str())),
-            '\\' => match chars.next()? {
-                c @ ('\\' | '/' | '"') => c,
-                'b' => '\x08',
-                'f' => '\x0C',
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
-                'u' => {
-                    let mut hex = String::with_capacity(4);
-                    (0..4).try_for_each(|_| Some(hex.push(chars.next()?)))?;
-                    let c = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32);
-                    c.unwrap_or_else(|| {
-                        e.push((Expect::Unicode, &rest[2..]));
-                        '\u{FFFD}' // Unicode replacement character
-                    })
+    }
+
+    fn digits1(&mut self) {
+        if let Some(rest) = self.i.strip_prefix(|c: char| c.is_numeric()) {
+            self.i = rest.trim_start_matches(|c: char| c.is_numeric());
+        } else {
+            self.e.push((Expect::Digit, self.i));
+        }
+    }
+
+    /// Decimal with optional exponent.
+    fn num(&mut self) {
+        self.trim(|c| c.is_numeric());
+        if let Some(i) = self.i.strip_prefix('.') {
+            self.i = i;
+            self.digits1();
+        }
+        if let Some(i) = self.i.strip_prefix(['e', 'E']) {
+            self.i = i.strip_prefix(['+', '-']).unwrap_or(i);
+            self.digits1();
+        }
+    }
+
+    /// Returns `None` when an unexpected EOF was encountered.
+    fn str(&mut self) -> Option<Vec<Part<Token<&'a str>>>> {
+        assert_eq!(self.next(), Some('"'));
+        let mut parts = Vec::new();
+
+        loop {
+            let s = self.consumed(self.i.chars(), |lex| lex.trim(|c| c != '\\' && c != '"'));
+            if !s.is_empty() {
+                parts.push(Part::Str(s.to_string()))
+            }
+            match self.next()? {
+                '"' => return Some(parts),
+                '\\' => {
+                    let mut chars = self.i.chars();
+                    let c = match chars.next()? {
+                        c @ ('\\' | '/' | '"') => c,
+                        'b' => '\x08',
+                        'f' => '\x0C',
+                        'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
+                        'u' => {
+                            let mut hex = String::with_capacity(4);
+                            for _ in 0..4 {
+                                hex.push(chars.next()?);
+                            }
+                            let c = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32);
+                            c.unwrap_or_else(|| {
+                                self.e.push((Expect::Unicode, self.i));
+                                '\u{FFFD}' // Unicode replacement character
+                            })
+                        }
+                        '(' => {
+                            parts.push(Part::Fun(self.delim()));
+                            continue;
+                        }
+                        _ => {
+                            self.e.push((Expect::Escape, self.i));
+                            '\0'
+                        }
+                    };
+
+                    self.i = chars.as_str();
+                    parts.push(Part::Str(c.into()));
                 }
-                '(' => {
-                    let (trees, rest) = delim(&rest[1..], e);
-                    parts.push(Part::Fun(trees));
-                    i = rest;
-                    continue;
-                }
-                _ => {
-                    e.push((Expect::Escape, &rest[1..]));
-                    '\0'
-                }
-            },
-            // SAFETY: due to `trim_start_matches`
-            _ => unreachable!(),
+                // SAFETY: due to `lex.trim()`
+                _ => unreachable!(),
+            };
+        }
+    }
+
+    fn punct(&mut self, p: Punct) -> Token<&'a str> {
+        let (s, after) = self.i.split_at(p.as_str().len());
+        self.i = after;
+        Token::Punct(p, s)
+    }
+
+    fn token(&mut self) -> Option<Token<&'a str>> {
+        self.space();
+
+        let is_op = |c| "|=!<>+-*/%".contains(c);
+
+        let mut chars = self.i.chars();
+        Some(match chars.next()? {
+            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(chars, |lex| lex.ident0())),
+            '$' | '@' => Token::Word(self.consumed(chars, |lex| lex.ident1())),
+            '0'..='9' => Token::Num(self.consumed(chars, |lex| lex.num())),
+            c if is_op(c) => Token::Op(self.consumed(chars, |lex| lex.trim(is_op))),
+            '.' if chars.next() == Some('.') => self.punct(Punct::DotDot),
+            '.' => self.punct(Punct::Dot),
+            ':' => self.punct(Punct::Colon),
+            ';' => self.punct(Punct::Semicolon),
+            ',' => self.punct(Punct::Comma),
+            '?' => self.punct(Punct::Question),
+            '"' => Token::Str(self.str()?),
+            '(' | '[' | '{' => self.delim(),
+            _ => return None,
+        })
+    }
+
+    fn tokens(&mut self) -> Vec<Token<&'a str>> {
+        core::iter::from_fn(|| self.token()).collect()
+    }
+
+    /// Parse a delimited sequence of tokens.
+    ///
+    /// The input string has to start with either '(', '[', or '{'.
+    fn delim(&mut self) -> Token<&'a str> {
+        let start = self.i;
+        let delim = match self.next() {
+            Some('(') => Delim::Paren,
+            Some('[') => Delim::Brack,
+            Some('{') => Delim::Brace,
+            _ => panic!(),
         };
-        parts.push(Part::Str(c.into()));
-        i = chars.as_str();
-    }
-}
+        let tokens = self.tokens();
 
-/// Whitespace and comments.
-fn trim_space(i: &str) -> &str {
-    let mut i = i.trim_start();
-    while let Some(comment) = i.strip_prefix('#') {
-        i = comment.trim_start_matches(|c| c != '\n').trim_start();
+        self.space();
+        if let Some(rest) = self.i.strip_prefix(delim.close()) {
+            self.i = rest
+        } else {
+            self.e.push((Expect::Delim(start), self.i));
+        }
+        Token::Delim(delim, tokens)
     }
-    i
 }
 
 /*
@@ -204,37 +279,3 @@ fn parts_to_interpol(
     (init, tail)
 }
 */
-
-fn tokens<'a>(mut i: &'a str, e: &mut Errors<'a>) -> (Vec<Token<&'a str>>, &'a str) {
-    let mut tokens = Vec::new();
-    while let Some((tk, rest)) = token(i, e) {
-        tokens.push(tk);
-        i = rest;
-    }
-    (tokens, i)
-}
-
-/// Parse a delimited sequence of tokens.
-///
-/// The input string has to start with either '(', '[', or '{'.
-fn delim<'a>(i: &'a str, e: &mut Errors<'a>) -> (Token<&'a str>, &'a str) {
-    let mut chars = i.chars();
-    let delim = match chars.next().unwrap() {
-        '(' => Delim::Paren,
-        '[' => Delim::Brack,
-        '{' => Delim::Brace,
-        _ => panic!(),
-    };
-    let (tokens, rest) = tokens(chars.as_str(), e);
-    let rest = trim_space(rest);
-    let rest = rest
-        .strip_prefix(delim.close())
-        .unwrap_or_else(|| fail(Expect::Delim(i), rest, e));
-    (Token::Delim(delim, tokens), rest)
-}
-
-pub fn lex<'a>(i: &'a str, e: &mut Errors<'a>) -> (Vec<Token<&'a str>>, &'a str) {
-    let (tokens, i) = tokens(i, e);
-    let i = trim_space(i);
-    (tokens, i)
-}
