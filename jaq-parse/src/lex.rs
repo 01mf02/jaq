@@ -55,7 +55,6 @@ pub enum Expect<'a> {
     Digit,
     Ident,
     Delim(&'a str),
-    String(&'a str),
     Escape,
     Unicode,
 }
@@ -195,7 +194,7 @@ impl<'a> Lex<'a> {
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
                 None => {
-                    self.e.push((Expect::String(start), self.i));
+                    self.e.push((Expect::Delim(start), self.i));
                     return parts;
                 }
             };
