@@ -50,12 +50,6 @@ pub type ValR = Result<Val, Error>;
 /// A stream of value results.
 pub type ValRs<'a> = BoxIter<'a, ValR>;
 
-// This might be included in the Rust standard library:
-// <https://github.com/rust-lang/rust/issues/93610>
-fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
-    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
-}
-
 pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
@@ -120,8 +114,8 @@ impl ValT for Val {
 
     fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>> {
         match self {
-            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
-            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
+            Self::Arr(a) => Box::new(Rc::unwrap_or_clone(a).into_iter().map(Ok)),
+            Self::Obj(o) => Box::new(Rc::unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => box_once(Err(Error::Type(self, Type::Iter))),
         }
     }
@@ -169,11 +163,11 @@ impl ValT for Val {
     fn map_values<I: Iterator<Item = ValR>>(self, opt: Opt, f: impl Fn(Self) -> I) -> ValR {
         match self {
             Self::Arr(a) => {
-                let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
+                let iter = Rc::unwrap_or_clone(a).into_iter().flat_map(f);
                 Ok(iter.collect::<Result<_, _>>()?)
             }
             Self::Obj(o) => {
-                let iter = rc_unwrap_or_clone(o).into_iter();
+                let iter = Rc::unwrap_or_clone(o).into_iter();
                 let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
                 Ok(Self::obj(iter.collect::<Result<_, _>>()?))
             }
@@ -433,8 +427,10 @@ impl Val {
     #[deprecated(since = "1.3.0", note = "use `ValT::values` instead")]
     pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
         match self {
-            Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
-            Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
+            Self::Arr(a) => Ok(Box::new(Rc::unwrap_or_clone(a).into_iter())),
+            Self::Obj(o) => Ok(Box::new(
+                Rc::unwrap_or_clone(o).into_iter().map(|(_k, v)| v),
+            )),
             _ => Err(Error::Type(self, Type::Iter)),
         }
     }
@@ -644,7 +640,7 @@ impl core::ops::Sub for Val {
 
 fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
     let l = Rc::make_mut(l);
-    let r = rc_unwrap_or_clone(r).into_iter();
+    let r = Rc::unwrap_or_clone(r).into_iter();
     r.for_each(|(k, v)| match (l.get_mut(&k), v) {
         (Some(Val::Obj(l)), Val::Obj(r)) => obj_merge(l, r),
         (Some(l), r) => *l = r,

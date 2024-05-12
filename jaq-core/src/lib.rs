@@ -66,12 +66,6 @@ fn upd<'a>(
     })
 }
 
-// This might be included in the Rust standard library:
-// <https://github.com/rust-lang/rust/issues/93610>
-fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
-    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
-}
-
 /// Return 0 for null, the absolute value for numbers, and
 /// the length for strings, arrays, and objects.
 ///
@@ -306,17 +300,17 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
     ("group_by", 1, |args, cv| {
         let group = move |arr| group_by(arr, |v| args.get(0).run((cv.0.clone(), v)));
-        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(group))
+        once_with(move || cv.1.into_arr().map(Rc::unwrap_or_clone).and_then(group))
     }),
     ("min_by", 1, |args, cv| {
         let f = move |v| args.get(0).run((cv.0.clone(), v));
         let cmp = move |arr| cmp_by(arr, f, |my, y| y < my);
-        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(cmp))
+        once_with(move || cv.1.into_arr().map(Rc::unwrap_or_clone).and_then(cmp))
     }),
     ("max_by", 1, |args, cv| {
         let f = move |v| args.get(0).run((cv.0.clone(), v));
         let cmp = move |arr| cmp_by(arr, f, |my, y| y >= my);
-        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(cmp))
+        once_with(move || cv.1.into_arr().map(Rc::unwrap_or_clone).and_then(cmp))
     }),
     ("has", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
