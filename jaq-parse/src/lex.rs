@@ -58,6 +58,27 @@ pub enum Expect<'a> {
     Delim(&'a str),
     Escape,
     Unicode,
+    Token,
+}
+
+impl<'a> Expect<'a> {
+    pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, Span) {
+        let mut pos = span(full, pos);
+        pos.end = pos.start;
+        let s = match self {
+            Self::Digit => "expected digit",
+            Self::Ident => "expected identifier",
+            Self::Delim(start) => {
+                let mut start = span(full, start);
+                start.end = pos.start;
+                return ("unclosed delimiter", start);
+            }
+            Self::Escape => "expected string escape sequence",
+            Self::Unicode => "expected 4-digit hexadecimal UTF-8 code point",
+            Self::Token => "expected token",
+        };
+        (s, pos)
+    }
 }
 
 type Error<'a> = (Expect<'a>, &'a str);
@@ -73,18 +94,13 @@ impl<'a> Lex<'a> {
         Self { i, e }
     }
 
-    pub fn lex(&mut self) -> Vec<Token<&'a str>> {
+    pub fn lex(mut self) -> (Vec<Token<&'a str>>, Vec<Error<'a>>) {
         let tokens = self.tokens();
         self.space();
-        tokens
-    }
-
-    pub fn input(&self) -> &'a str {
-        self.i
-    }
-
-    pub fn errors(&self) -> &[Error<'a>] {
-        &self.e
+        if !self.i.is_empty() {
+            self.e.push((Expect::Token, self.i));
+        }
+        (tokens, self.e)
     }
 
     fn next(&mut self) -> Option<char> {

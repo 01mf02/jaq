@@ -20,9 +20,9 @@ yields!(cartesian_arith, "[(1,2) * (3,4)]", [3, 4, 6, 8]);
 #[test]
 fn add() {
     give(json!(1), ". + 2", json!(3));
-    give(json!(1.0), ". + 2.", json!(3.0));
+    give(json!(1.0), ". + 2.0", json!(3.0));
     give(json!(1), "2.0 + .", json!(3.0));
-    give(json!(null), "1.e1 + 2.1e2", json!(220.0));
+    give(json!(null), "1.0e1 + 2.1e2", json!(220.0));
 
     give(json!("Hello "), ". + \"world\"", json!("Hello world"));
     give(json!([1, 2]), ". + [3, 4]", json!([1, 2, 3, 4]));
@@ -48,7 +48,7 @@ yields!(sub_arr, "[1, 2, 3] - [2, 3, 4]", json!([1]));
 #[test]
 fn mul() {
     give(json!(1), ". * 2", json!(2));
-    give(json!(1.0), ". * 2.", json!(2.0));
+    give(json!(1.0), ". * 2.0", json!(2.0));
     give(json!(1), "2.0 * .", json!(2.0));
 
     give(json!("Hello"), "2 * .", json!("HelloHello"));
