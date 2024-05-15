@@ -11,6 +11,7 @@ mod lex;
 mod path;
 mod prec_climb;
 mod string;
+mod term;
 mod token;
 
 pub use def::{defs, main};
@@ -30,6 +31,10 @@ where
     P: Parser<Token, T, Error = Simple<Token>> + Clone,
 {
     let (tokens, lex_errs) = crate::lex::Lex::new(src).lex();
+
+    let mut new_parser = term::Parser::new(&tokens);
+    std::println!("{:?}", new_parser.term());
+
     let tokens: Vec<_> = tokens.into_iter().flat_map(|t| t.tokens(src)).collect();
     //std::println!("Tokens: {tokens:?}");
 

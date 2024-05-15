@@ -243,7 +243,7 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut defs = ParseCtx::new(vars);
     defs.insert_natives(jaq_core::core());
-    defs.insert_defs(jaq_std::std());
+    //defs.insert_defs(jaq_std::std());
     assert!(defs.errs.is_empty());
     let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
     if !errs.is_empty() {
