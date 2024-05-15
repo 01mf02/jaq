@@ -730,7 +730,7 @@ Please make sure that after your change, `cargo test` runs successfully.
 This project has been kindly supported by
 the [NLnet foundation](https://nlnet.nl/project/jaq/) as part of an NGI0 grant.
 
-jaq has profited tremendously from:
+jaq has also profited from:
 
 * [serde_json] to read and [colored_json] to output JSON,
 * [chumsky] to parse and [ariadne] to pretty-print parse errors,
