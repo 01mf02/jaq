@@ -22,7 +22,7 @@ pub enum Token<S> {
 }
 
 /// Punctuation.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Punct {
     /// `.`
     Dot,
