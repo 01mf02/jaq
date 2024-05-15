@@ -1,4 +1,4 @@
-use alloc::{string::String};
+use alloc::string::String;
 use chumsky::prelude::*;
 use core::fmt;
 
