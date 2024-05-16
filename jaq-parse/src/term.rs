@@ -20,9 +20,11 @@ pub enum Term<S> {
     Id,
     Recurse,
     Neg(Box<Self>),
+    Pipe(Box<Self>, Option<S>, Box<Self>),
     BinOp(Box<Self>, Vec<(S, Self)>),
     IfThenElse(Box<Self>, Box<Self>, Option<Box<Self>>),
     TryCatch(Box<Self>, Option<Box<Self>>),
+    Fold(S, Box<Self>, S, Vec<Self>),
     Var(S),
     Call(S, Vec<Self>),
     Key(S),
@@ -84,6 +86,8 @@ impl<'a> Parser<'a> {
 
     fn op(&mut self, with_comma: bool) -> Option<&'a str> {
         self.maybe(|p| match p.i.next() {
+            // handle pipe directly in `term()`
+            Some(Token::Op("|")) => None,
             Some(Token::Op(o) | Token::Word(o @ ("and" | "or"))) => Some(*o),
             Some(Token::Punct(Punct::Comma, o)) if with_comma => Some(*o),
             _ => None,
@@ -97,6 +101,13 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn var(&mut self) -> &'a str {
+        match self.i.next() {
+            Some(Token::Word(x)) if x.starts_with('$') => *x,
+            _ => todo!(),
+        }
+    }
+
     pub fn term_with_comma(&mut self, with_comma: bool) -> Term<&'a str> {
         let head = self.atom();
         let mut tail = Vec::new();
@@ -104,10 +115,26 @@ impl<'a> Parser<'a> {
             tail.push((op, self.atom()));
         }
 
-        if tail.is_empty() {
+        let tm = if tail.is_empty() {
             head
         } else {
             Term::BinOp(Box::new(head), tail)
+        };
+
+        let pipe = self.maybe(|p| match p.i.next() {
+            Some(Token::Op("|")) => Some(None),
+            Some(Token::Word("as")) => {
+                let x = p.var();
+                match p.i.next() {
+                    Some(Token::Op("|")) => Some(Some(x)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        });
+        match pipe {
+            None => tm,
+            Some(x) => Term::Pipe(Box::new(tm), x, Box::new(self.term_with_comma(with_comma))),
         }
     }
 
@@ -116,7 +143,7 @@ impl<'a> Parser<'a> {
     }
 
     fn atom(&mut self) -> Term<&'a str> {
-        let mut tm = match self.i.next() {
+        let tm = match self.i.next() {
             Some(Token::Op("-")) => Term::Neg(Box::new(self.atom())),
             Some(Token::Word("if")) => {
                 let if_ = self.term();
@@ -145,8 +172,16 @@ impl<'a> Parser<'a> {
                 });
                 Term::TryCatch(Box::new(try_), catch.map(Box::new))
             }
-            Some(Token::Word("reduce")) => todo!(),
-            Some(Token::Word("foreach")) => todo!(),
+            Some(Token::Word(fold @ ("reduce" | "foreach"))) => {
+                let xs = self.term();
+                assert!(matches!(self.i.next(), Some(Token::Word("as"))));
+                let x = self.var();
+                let args = self.args(|p| p.term());
+                if args.is_empty() {
+                    todo!()
+                }
+                Term::Fold(*fold, Box::new(xs), x, args)
+            },
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
                 let head = Term::Call(*id, self.args(|p| p.term()));
@@ -182,9 +217,11 @@ impl<'a> Parser<'a> {
             }),
             _ => todo!(),
         };
-        if matches!(self.opt(), path::Opt::Optional) {
-            tm = Term::TryCatch(Box::new(tm), None);
-        }
+
+        let tm = match self.opt() {
+            path::Opt::Optional => Term::TryCatch(Box::new(tm), None),
+            path::Opt::Essential => tm,
+        };
 
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while self.punct(Punct::Dot).is_some() {
