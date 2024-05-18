@@ -16,39 +16,9 @@ pub enum Token<S> {
     /// operator, such as `|` or `+=`
     Op(S),
     /// punctuation, such as `.` or `;`
-    Punct(Punct, S),
+    Char(S),
     /// delimited tokens, e.g. `(...)` or `[...]`
-    Delim(Delim, Vec<Self>),
-}
-
-/// Punctuation.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Punct {
-    /// `.`
-    Dot,
-    /// `..`
-    DotDot,
-    /// `?`
-    Question,
-    /// `,`
-    Comma,
-    /// `:`
-    Colon,
-    /// `;`
-    Semicolon,
-}
-
-impl Punct {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Dot => ".",
-            Self::DotDot => "..",
-            Self::Question => "?",
-            Self::Comma => ",",
-            Self::Colon => ":",
-            Self::Semicolon => ";",
-        }
-    }
+    Block(S, Vec<Self>),
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +78,12 @@ impl<'a> Lex<'a> {
         let c = chars.next()?;
         self.i = chars.as_str();
         Some(c)
+    }
+
+    fn take(&mut self, len: usize) -> &'a str {
+        let (head, tail) = self.i.split_at(len);
+        self.i = tail;
+        head
     }
 
     fn trim(&mut self, f: impl FnMut(char) -> bool) {
@@ -224,12 +200,6 @@ impl<'a> Lex<'a> {
         }
     }
 
-    fn punct(&mut self, p: Punct) -> Token<&'a str> {
-        let (s, after) = self.i.split_at(p.as_str().len());
-        self.i = after;
-        Token::Punct(p, s)
-    }
-
     fn token(&mut self) -> Option<Token<&'a str>> {
         self.space();
 
@@ -241,12 +211,8 @@ impl<'a> Lex<'a> {
             '$' | '@' => Token::Word(self.consumed(chars, |lex| lex.ident1())),
             '0'..='9' => Token::Num(self.consumed(chars, |lex| lex.num())),
             c if is_op(c) => Token::Op(self.consumed(chars, |lex| lex.trim(is_op))),
-            '.' if chars.next() == Some('.') => self.punct(Punct::DotDot),
-            '.' => self.punct(Punct::Dot),
-            ':' => self.punct(Punct::Colon),
-            ';' => self.punct(Punct::Semicolon),
-            ',' => self.punct(Punct::Comma),
-            '?' => self.punct(Punct::Question),
+            '.' if chars.next() == Some('.') => Token::Char(self.take(2)),
+            '.' | ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
             '"' => Token::Str(self.str()),
             '(' | '[' | '{' => self.delim(),
             _ => return None,
@@ -262,21 +228,23 @@ impl<'a> Lex<'a> {
     /// The input string has to start with either '(', '[', or '{'.
     fn delim(&mut self) -> Token<&'a str> {
         let start = self.i;
-        let delim = match self.next() {
-            Some('(') => Delim::Paren,
-            Some('[') => Delim::Brack,
-            Some('{') => Delim::Brace,
+        let open = &self.i[..1];
+        let close = match self.next() {
+            Some('(') => ')',
+            Some('[') => ']',
+            Some('{') => '}',
             _ => panic!(),
         };
-        let tokens = self.tokens();
+        let mut tokens = self.tokens();
 
         self.space();
-        if let Some(rest) = self.i.strip_prefix(delim.close()) {
+        if let Some(rest) = self.i.strip_prefix(close) {
+            tokens.push(Token::Char(&self.i[..1]));
             self.i = rest
         } else {
             self.e.push((Expect::Delim(start), self.i));
         }
-        Token::Delim(delim, tokens)
+        Token::Block(open, tokens)
     }
 }
 
@@ -321,21 +289,30 @@ impl<'a> Token<&'a str> {
             ))),
             Self::Num(n) => Box::new(once((OToken::Num(n.to_string()), span(i, n)))),
             Self::Op(o) => Box::new(once((OToken::Op(o.to_string()), span(i, o)))),
-            Self::Punct(p, s) => Box::new(once((
-                match p {
-                    Punct::Dot => OToken::Dot,
-                    Punct::DotDot => OToken::DotDot,
-                    Punct::Question => OToken::Question,
-                    Punct::Comma => OToken::Comma,
-                    Punct::Colon => OToken::Colon,
-                    Punct::Semicolon => OToken::Semicolon,
-                },
-                span(i, s),
-            ))),
-            Self::Delim(delim, tokens) => {
-                let init = once((OToken::Open(delim), 0..0));
-                let last = once((OToken::Close(delim), 0..0));
-                Box::new(init.chain(tokens.into_iter().flat_map(|t| t.tokens(i)).chain(last)))
+            Self::Char(c) => {
+                let token = match c {
+                    ".." => OToken::DotDot,
+                    "." => OToken::Dot,
+                    "?" => OToken::Question,
+                    "," => OToken::Comma,
+                    ":" => OToken::Colon,
+                    ";" => OToken::Semicolon,
+                    ")" => OToken::Close(Delim::Paren),
+                    "]" => OToken::Close(Delim::Brack),
+                    "}" => OToken::Close(Delim::Brace),
+                    _ => panic!("{}", c),
+                };
+                Box::new(once((token, span(i, c))))
+            }
+            Self::Block(open, tokens) => {
+                let delim = match open {
+                    "(" => Delim::Paren,
+                    "[" => Delim::Brack,
+                    "{" => Delim::Brace,
+                    _ => panic!(),
+                };
+                let init = once((OToken::Open(delim), span(i, open)));
+                Box::new(init.chain(tokens.into_iter().flat_map(|t| t.tokens(i))))
             }
             Self::Str(parts) => {
                 let quote = once((OToken::Quote, 0..0));

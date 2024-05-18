@@ -1,16 +1,12 @@
-use crate::lex::{Punct, Token};
-use crate::Delim;
+use crate::lex::Token;
 use jaq_syn::filter::KeyVal;
 use jaq_syn::{path, string, Arg, Call, Def};
 
-// TODO: problem: we cannot get a position from a None
-// example: (0 | )
-// include a scope?
 type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
 #[derive(Debug)]
 pub enum Expect {
     Keyword(&'static str),
-    Punct(Punct),
+    Char(char),
     Var,
     ElseOrEnd,
     Term,
@@ -72,15 +68,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], f: F) -> T
+    fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], last: &'a str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
     {
         let i = core::mem::replace(&mut self.i, tokens.iter());
         let y = match f(self) {
             Ok(y) => {
-                if let Some(next) = self.i.next() {
-                    self.e.push((Expect::Nothing, Some(next)));
+                match (self.i.as_slice(), last) {
+                    ([], "") => (),
+                    ([], _) => panic!(),
+                    ([next, ..], "") => self.e.push((Expect::Nothing, Some(next))),
+                    ([Token::Char(c)], last) if *c == last => (),
+                    ([next, ..], last) => self
+                        .e
+                        .push((Expect::Char(last.chars().next().unwrap()), Some(next))),
                 }
                 y
             }
@@ -116,25 +118,23 @@ impl<'a> Parser<'a> {
         Ok(y)
     }
 
-    fn sep_by1<T, F>(&mut self, punct: Punct, f: F) -> Result<'a, Vec<T>>
+    fn sep_by1<T, F>(&mut self, sep: char, f: F) -> Result<'a, Vec<T>>
     where
         F: Fn(&mut Self) -> Result<'a, T>,
     {
         let mut ys = Vec::from([f(self)?]);
         loop {
             match self.i.next() {
-                Some(Token::Punct(p, _)) if *p == punct => ys.push(f(self)?),
-                None => return Ok(ys),
-                next => return Err((Expect::Punct(punct), next)),
+                Some(Token::Char(c)) if c.chars().eq([sep]) => ys.push(f(self)?),
+                Some(Token::Char(")" | "}")) => return Ok(ys),
+                next => return Err((Expect::Char(sep), next)),
             }
         }
     }
 
     fn args<T>(&mut self, f: impl Fn(&mut Self) -> Result<'a, T> + Copy) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
-            Some(Token::Delim(Delim::Paren, tokens)) => {
-                Some(p.with(tokens, |p| p.sep_by1(Punct::Semicolon, f)))
-            }
+            Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.sep_by1(';', f))),
             _ => None,
         })
         .unwrap_or_default()
@@ -145,22 +145,22 @@ impl<'a> Parser<'a> {
             // handle pipe directly in `term()`
             Some(Token::Op("|")) => None,
             Some(Token::Op(o) | Token::Word(o @ ("and" | "or"))) => Some(*o),
-            Some(Token::Punct(Punct::Comma, o)) if with_comma => Some(*o),
+            Some(Token::Char(o @ ",")) if with_comma => Some(*o),
             _ => None,
         })
     }
 
-    fn punct(&mut self, punct: Punct) -> Option<&'a str> {
+    fn char0(&mut self, c: char) -> Option<&'a str> {
         self.maybe(|p| match p.i.next() {
-            Some(Token::Punct(p, s)) if *p == punct => Some(*s),
+            Some(Token::Char(s)) if s.chars().eq([c]) => Some(*s),
             _ => None,
         })
     }
 
-    fn punct1(&mut self, punct: Punct) -> Result<'a, &'a str> {
+    fn char1(&mut self, c: char) -> Result<'a, &'a str> {
         match self.i.next() {
-            Some(Token::Punct(p, s)) if *p == punct => Ok(*s),
-            next => Err((Expect::Punct(punct), next)),
+            Some(Token::Char(s)) if s.chars().eq([c]) => Ok(*s),
+            next => Err((Expect::Char(c), next)),
         }
     }
 
@@ -197,7 +197,7 @@ impl<'a> Parser<'a> {
                 let x = p.var()?;
                 match p.i.next() {
                     Some(Token::Op("|")) => Ok(Some(Some(x))),
-                    next => Err((todo!(), next)),
+                    next => Err((Expect::Char('|'), next)),
                 }
             }
             _ => Ok(None),
@@ -256,19 +256,23 @@ impl<'a> Parser<'a> {
                     }),
                 }
             }
-            Some(Token::Punct(Punct::Dot, _)) => self
+            Some(Token::Char(".")) => self
                 .maybe(|p| p.i.next().and_then(ident_key))
                 .map_or(Term::Id, Term::Key),
-            Some(Token::Punct(Punct::DotDot, _)) => Term::Recurse,
+            Some(Token::Char("..")) => Term::Recurse,
             Some(Token::Num(n)) => Term::Num(*n),
-            Some(Token::Delim(Delim::Paren, tokens)) => self.with(tokens, |p| p.term()),
-            Some(Token::Delim(Delim::Brack, tokens)) if tokens.is_empty() => Term::Arr(None),
-            Some(Token::Delim(Delim::Brack, tokens)) => {
-                Term::Arr(Some(Box::new(self.with(tokens, |p| p.term()))))
+            Some(Token::Block("[", tokens)) if matches!(tokens[..], [Token::Char("]")]) => {
+                Term::Arr(None)
             }
-            Some(Token::Delim(Delim::Brace, tokens)) if tokens.is_empty() => Term::Obj(Vec::new()),
-            Some(Token::Delim(Delim::Brace, tokens)) => self.with(tokens, |p| {
-                p.sep_by1(Punct::Comma, |p| p.obj_entry()).map(Term::Obj)
+            Some(Token::Block("{", tokens)) if matches!(tokens[..], [Token::Char("}")]) => {
+                Term::Obj(Vec::new())
+            }
+            Some(Token::Block("(", tokens)) => self.with(tokens, ")", |p| p.term()),
+            Some(Token::Block("[", tokens)) => {
+                Term::Arr(Some(Box::new(self.with(tokens, "]", |p| p.term()))))
+            }
+            Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
+                p.sep_by1(',', |p| p.obj_entry()).map(Term::Obj)
             }),
             Some(Token::Str(parts)) => Term::Str(string::Str {
                 fmt: None,
@@ -287,13 +291,13 @@ impl<'a> Parser<'a> {
         };
 
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
-        while self.punct(Punct::Dot).is_some() {
+        while self.char0('.').is_some() {
             use path::Opt;
             let key = match self.i.next() {
                 Some(Token::Word(id)) if !id.starts_with(['$', '@']) => Some(*id),
                 next => return Err((Expect::Key, next)),
             };
-            let opt = self.punct(Punct::Question).is_some();
+            let opt = self.char0('?').is_some();
             let key = Term::Str(string::Str::from(key.unwrap_or("").to_string()));
             let opt = if opt { Opt::Optional } else { Opt::Essential };
             path.push((path::Part::Index(key), opt));
@@ -315,18 +319,18 @@ impl<'a> Parser<'a> {
             Some(Token::Word(k)) if !k.starts_with(['$', '@']) => {
                 let k = string::Str::from(k.to_string());
                 let v = self
-                    .punct(Punct::Colon)
+                    .char0(':')
                     .map(|_| self.term_with_comma(false))
                     .transpose()?;
                 Ok(KeyVal::Str(k, v))
             }
             // TODO: handle $x
-            Some(Token::Delim(Delim::Paren, tokens)) => {
-                let k = self.with(tokens, |p| p.term());
-                self.punct1(Punct::Colon)?;
+            Some(Token::Block("(", tokens)) => {
+                let k = self.with(tokens, ")", |p| p.term());
+                self.char1(':')?;
                 Ok(KeyVal::Filter(k, self.term()?))
             }
-            next => Err((todo!(), next)),
+            next => Err((Expect::Key, next)),
         }
     }
 
@@ -336,8 +340,8 @@ impl<'a> Parser<'a> {
     ) -> Vec<string::Part<Term<&'a str>>> {
         let parts = parts.iter().map(|part| match part {
             string::Part::Str(s) => string::Part::Str(s.clone()),
-            string::Part::Fun(Token::Delim(Delim::Paren, tokens)) => {
-                string::Part::Fun(self.with(tokens, |p| p.term()))
+            string::Part::Fun(Token::Block("(", tokens)) => {
+                string::Part::Fun(self.with(tokens, ")", |p| p.term()))
             }
             string::Part::Fun(_) => unreachable!(),
         });
@@ -346,14 +350,15 @@ impl<'a> Parser<'a> {
 
     fn path_part(&mut self) -> Result<'a, path::Part<Term<&'a str>>> {
         use path::Part::{Index, Range};
-        Ok(if self.i.as_slice().is_empty() {
+        let done = |p: &Self| matches!(p.i.as_slice(), [Token::Char("]")]);
+        Ok(if done(self) {
             Range(None, None)
-        } else if self.punct(Punct::Colon).is_some() {
+        } else if self.char0(':').is_some() {
             Range(None, Some(self.term()?))
         } else {
             let tm = self.term()?;
-            if self.punct(Punct::Colon).is_some() {
-                if self.i.as_slice().is_empty() {
+            if self.char0(':').is_some() {
+                if done(self) {
                     Range(Some(tm), None)
                 } else {
                     Range(Some(tm), Some(self.term()?))
@@ -366,7 +371,7 @@ impl<'a> Parser<'a> {
 
     fn path_part_opt(&mut self) -> Option<(path::Part<Term<&'a str>>, path::Opt)> {
         let part = self.maybe(|p| match p.i.next() {
-            Some(Token::Delim(Delim::Brack, tokens)) => Some(p.with(&tokens, |p| p.path_part())),
+            Some(Token::Block("[", tokens)) => Some(p.with(&tokens, "]", |p| p.path_part())),
             _ => None,
         })?;
         Some((part, self.opt()))
@@ -374,18 +379,20 @@ impl<'a> Parser<'a> {
 
     fn opt(&mut self) -> path::Opt {
         let mut opt = path::Opt::Essential;
-        while self.punct(Punct::Question).is_some() {
+        while self.char0('?').is_some() {
             opt = path::Opt::Optional;
         }
         opt
     }
 
     pub fn main(&mut self) -> Result<'a, Main<Term<&'a str>>> {
-        Ok(Main {
+        let mut main = Main {
             defs: self.defs()?,
             body: self.i.as_slice(),
         }
-        .map(&mut |tokens| self.with(tokens, |p| p.term())))
+        .map(&mut |tokens| (tokens, ";"));
+        main.body.1 = "";
+        Ok(main.map(&mut |(tokens, last)| self.with(tokens, last, |p| p.term())))
     }
 
     pub fn defs(&mut self) -> Result<'a, Vec<Def<Main<&'a [Token<&'a str>]>>>> {
@@ -395,10 +402,9 @@ impl<'a> Parser<'a> {
     pub fn def_rhs(&mut self) -> Result<'a, Main<&'a [Token<&'a str>]>> {
         let defs = self.defs()?;
         let i = self.i.as_slice();
-        let is_semicolon = |tk| matches!(tk, &Token::Punct(Punct::Semicolon, _));
-        let body = match self.i.position(is_semicolon) {
-            None => return Err((Expect::Punct(Punct::Semicolon), None)),
-            Some(p) => &i[..p],
+        let body = match self.i.position(|tk| matches!(tk, &Token::Char(";"))) {
+            None => return Err((Expect::Char(';'), None)),
+            Some(p) => &i[..p + 1],
         };
         Ok(Main { defs, body })
     }
@@ -427,7 +433,7 @@ impl<'a> Parser<'a> {
 
     fn def_tail(&mut self) -> Result<'a, Def<Main<&'a [Token<&'a str>]>>> {
         let lhs = self.def_lhs()?;
-        self.punct1(Punct::Colon)?;
+        self.char1(':')?;
         let rhs = self.def_rhs()?;
 
         Ok(Def { lhs, rhs })
