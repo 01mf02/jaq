@@ -44,6 +44,7 @@ pub enum Term<S> {
     TryCatch(Box<Self>, Option<Box<Self>>),
     IfThenElse(Box<Self>, Box<Self>, Option<Box<Self>>),
 
+    Def(Vec<Def<S, Self>>, Box<Self>),
     Call(S, Vec<Self>),
     Var(S),
 
@@ -179,6 +180,8 @@ impl<'a> Parser<'a> {
     }
 
     pub fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
+        let defs = self.defs()?;
+
         let head = self.atom_path()?;
         let mut tail = Vec::new();
         while let Some(op) = self.op(with_comma) {
@@ -202,10 +205,17 @@ impl<'a> Parser<'a> {
             }
             _ => Ok(None),
         })?;
-        Ok(match pipe {
+        let tm = match pipe {
             None => tm,
             Some(x) => Term::Pipe(Box::new(tm), x, Box::new(self.term_with_comma(with_comma)?)),
-        })
+        };
+        let tm = if defs.is_empty() {
+            tm
+        } else {
+            Term::Def(defs, Box::new(tm))
+        };
+
+        Ok(tm)
     }
 
     fn atom(&mut self) -> Result<'a, Term<&'a str>> {
@@ -386,27 +396,14 @@ impl<'a> Parser<'a> {
     }
 
     pub fn main(&mut self) -> Result<'a, Main<&'a str, Term<&'a str>>> {
-        let mut main = Main {
+        Ok(Main {
             defs: self.defs()?,
-            body: self.i.as_slice(),
-        }
-        .map(&mut |tokens| (tokens, ";"));
-        main.body.1 = "";
-        Ok(main.map(&mut |(tokens, last)| self.with(tokens, last, |p| p.term())))
+            body: self.term()?,
+        })
     }
 
-    pub fn defs(&mut self) -> Result<'a, Vec<Def<&'a str, Main<&'a str, &'a [Token<&'a str>]>>>> {
+    pub fn defs(&mut self) -> Result<'a, Vec<Def<&'a str, Term<&'a str>>>> {
         core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
-    }
-
-    pub fn def_rhs(&mut self) -> Result<'a, Main<&'a str, &'a [Token<&'a str>]>> {
-        let defs = self.defs()?;
-        let i = self.i.as_slice();
-        let body = match self.i.position(|tk| matches!(tk, &Token::Char(";"))) {
-            None => return Err((Expect::Char(';'), None)),
-            Some(p) => &i[..p + 1],
-        };
-        Ok(Main { defs, body })
     }
 
     fn def_head(&mut self) -> Option<()> {
@@ -416,7 +413,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn def_tail(&mut self) -> Result<'a, Def<&'a str, Main<&'a str, &'a [Token<&'a str>]>>> {
+    fn def_tail(&mut self) -> Result<'a, Def<&'a str, Term<&'a str>>> {
         let name = match self.i.next() {
             Some(Token::Word(name)) if !name.starts_with(['$', '@']) => name,
             next => return Err((Expect::Ident, next)),
@@ -428,7 +425,12 @@ impl<'a> Parser<'a> {
             })
         });
         self.char1(':')?;
-        let body = self.def_rhs()?;
+
+        let body = self.term()?;
+        match self.i.next() {
+            Some(Token::Char(";")) => (),
+            next => return Err((Expect::Char(';'), next)),
+        };
 
         Ok(Def { name, args, body })
     }
@@ -437,7 +439,7 @@ impl<'a> Parser<'a> {
 #[derive(Debug)]
 pub struct Main<S, F> {
     /// Definitions at the top of the filter
-    pub defs: Vec<Def<S, Self>>,
+    pub defs: Vec<Def<S, F>>,
     /// Body of the filter, e.g. `[.[] | f]`.
     pub body: F,
 }
@@ -447,20 +449,6 @@ pub struct Def<S, F> {
     name: S,
     args: Vec<S>,
     body: F,
-}
-
-impl<S, F> Main<S, F> {
-    fn map<G>(self, f: &mut impl FnMut(F) -> G) -> Main<S, G> {
-        let defs = self.defs.into_iter().map(|def| Def {
-            name: def.name,
-            args: def.args,
-            body: def.body.map(f),
-        });
-        Main {
-            defs: defs.collect(),
-            body: f(self.body),
-        }
-    }
 }
 
 fn ident_key<'a>(token: &Token<&'a str>) -> Option<&'a str> {
