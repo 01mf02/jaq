@@ -1,6 +1,6 @@
 use crate::lex::Token;
 use jaq_syn::filter::KeyVal;
-use jaq_syn::{path, string, Arg, Call, Def};
+use jaq_syn::{path, string};
 
 type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
 #[derive(Debug)]
@@ -385,7 +385,7 @@ impl<'a> Parser<'a> {
         opt
     }
 
-    pub fn main(&mut self) -> Result<'a, Main<Term<&'a str>>> {
+    pub fn main(&mut self) -> Result<'a, Main<&'a str, Term<&'a str>>> {
         let mut main = Main {
             defs: self.defs()?,
             body: self.i.as_slice(),
@@ -395,11 +395,11 @@ impl<'a> Parser<'a> {
         Ok(main.map(&mut |(tokens, last)| self.with(tokens, last, |p| p.term())))
     }
 
-    pub fn defs(&mut self) -> Result<'a, Vec<Def<Main<&'a [Token<&'a str>]>>>> {
+    pub fn defs(&mut self) -> Result<'a, Vec<Def<&'a str, Main<&'a str, &'a [Token<&'a str>]>>>> {
         core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
     }
 
-    pub fn def_rhs(&mut self) -> Result<'a, Main<&'a [Token<&'a str>]>> {
+    pub fn def_rhs(&mut self) -> Result<'a, Main<&'a str, &'a [Token<&'a str>]>> {
         let defs = self.defs()?;
         let i = self.i.as_slice();
         let body = match self.i.position(|tk| matches!(tk, &Token::Char(";"))) {
@@ -416,43 +416,45 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn def_lhs(&mut self) -> Result<'a, Call> {
+    fn def_tail(&mut self) -> Result<'a, Def<&'a str, Main<&'a str, &'a [Token<&'a str>]>>> {
         let name = match self.i.next() {
-            Some(Token::Word(name)) if !name.starts_with(['$', '@']) => name.to_string(),
+            Some(Token::Word(name)) if !name.starts_with(['$', '@']) => name,
             next => return Err((Expect::Ident, next)),
         };
         let args = self.args(|p| {
             Ok(match p.i.next() {
-                Some(Token::Word(v)) if v.starts_with('$') => Arg::Var(v.to_string()),
-                Some(Token::Word(arg)) if !arg.starts_with('@') => Arg::Fun(arg.to_string()),
+                Some(Token::Word(arg)) if !arg.starts_with('@') => *arg,
                 next => return Err((Expect::Arg, next)),
             })
         });
-        Ok(Call { name, args })
-    }
-
-    fn def_tail(&mut self) -> Result<'a, Def<Main<&'a [Token<&'a str>]>>> {
-        let lhs = self.def_lhs()?;
         self.char1(':')?;
-        let rhs = self.def_rhs()?;
+        let body = self.def_rhs()?;
 
-        Ok(Def { lhs, rhs })
+        Ok(Def { name, args, body })
     }
 }
 
 #[derive(Debug)]
-pub struct Main<F> {
+pub struct Main<S, F> {
     /// Definitions at the top of the filter
-    pub defs: Vec<Def<Self>>,
+    pub defs: Vec<Def<S, Self>>,
     /// Body of the filter, e.g. `[.[] | f]`.
     pub body: F,
 }
 
-impl<F> Main<F> {
-    fn map<G>(self, f: &mut impl FnMut(F) -> G) -> Main<G> {
+#[derive(Debug)]
+pub struct Def<S, F> {
+    name: S,
+    args: Vec<S>,
+    body: F,
+}
+
+impl<S, F> Main<S, F> {
+    fn map<G>(self, f: &mut impl FnMut(F) -> G) -> Main<S, G> {
         let defs = self.defs.into_iter().map(|def| Def {
-            lhs: def.lhs,
-            rhs: def.rhs.map(f),
+            name: def.name,
+            args: def.args,
+            body: def.body.map(f),
         });
         Main {
             defs: defs.collect(),
