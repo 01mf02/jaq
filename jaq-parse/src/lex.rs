@@ -211,6 +211,9 @@ impl<'a> Lex<'a> {
             '$' | '@' => Token::Word(self.consumed(chars, |lex| lex.ident1())),
             '0'..='9' => Token::Num(self.consumed(chars, |lex| lex.num())),
             c if is_op(c) => Token::Op(self.consumed(chars, |lex| lex.trim(is_op))),
+            '?' if (chars.next(), chars.next()) == (Some('/'), Some('/')) => {
+                Token::Op(self.take(3))
+            }
             '.' if chars.next() == Some('.') => Token::Char(self.take(2)),
             '.' | ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
             '"' => Token::Str(self.str()),
