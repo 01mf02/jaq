@@ -33,7 +33,7 @@ where
     let (tokens, lex_errs) = crate::lex::Lex::new(src).lex();
 
     let mut new_parser = term::Parser::new(&tokens);
-    std::println!("{:?}", new_parser.main());
+    std::println!("{:?}", new_parser.term());
     std::println!("{:?}", new_parser.e);
 
     let tokens: Vec<_> = tokens.into_iter().flat_map(|t| t.tokens(src)).collect();

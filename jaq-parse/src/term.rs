@@ -180,8 +180,6 @@ impl<'a> Parser<'a> {
     }
 
     pub fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
-        let defs = self.defs()?;
-
         let head = self.atom_path()?;
         let mut tail = Vec::new();
         while let Some(op) = self.op(with_comma) {
@@ -205,17 +203,10 @@ impl<'a> Parser<'a> {
             }
             _ => Ok(None),
         })?;
-        let tm = match pipe {
+        Ok(match pipe {
             None => tm,
             Some(x) => Term::Pipe(Box::new(tm), x, Box::new(self.term_with_comma(with_comma)?)),
-        };
-        let tm = if defs.is_empty() {
-            tm
-        } else {
-            Term::Def(defs, Box::new(tm))
-        };
-
-        Ok(tm)
+        })
     }
 
     fn atom(&mut self) -> Result<'a, Term<&'a str>> {
@@ -320,8 +311,15 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn term(&mut self) -> Result<'a, Term<&'a str>> {
-        self.term_with_comma(true)
+    pub fn term(&mut self) -> Result<'a, Term<&'a str>> {
+        let defs = self.defs()?;
+        let tm = self.term_with_comma(true)?;
+
+        Ok(if defs.is_empty() {
+            tm
+        } else {
+            Term::Def(defs, Box::new(tm))
+        })
     }
 
     fn obj_entry(&mut self) -> Result<'a, KeyVal<Term<&'a str>>> {
@@ -395,13 +393,6 @@ impl<'a> Parser<'a> {
         opt
     }
 
-    pub fn main(&mut self) -> Result<'a, Main<&'a str, Term<&'a str>>> {
-        Ok(Main {
-            defs: self.defs()?,
-            body: self.term()?,
-        })
-    }
-
     pub fn defs(&mut self) -> Result<'a, Vec<Def<&'a str, Term<&'a str>>>> {
         core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
     }
@@ -437,17 +428,10 @@ impl<'a> Parser<'a> {
 }
 
 #[derive(Debug)]
-pub struct Main<S, F> {
-    /// Definitions at the top of the filter
-    pub defs: Vec<Def<S, F>>,
-    /// Body of the filter, e.g. `[.[] | f]`.
-    pub body: F,
-}
-
-#[derive(Debug)]
 pub struct Def<S, F> {
     name: S,
     args: Vec<S>,
+    /// Body of the filter, e.g. `[.[] | f]`.
     body: F,
 }
 
