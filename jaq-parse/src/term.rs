@@ -13,12 +13,13 @@ pub enum Expect {
     Key,
     Ident,
     Arg,
+    Str,
     Nothing,
 }
 
 type Result<'a, T> = core::result::Result<T, Error<'a>>;
 
-pub(crate) struct Parser<'a> {
+pub struct Parser<'a> {
     i: core::slice::Iter<'a, Token<&'a str>>,
     pub e: Vec<Error<'a>>,
     /// names of fold-like filters, e.g. "reduce" and "foreach"
@@ -32,9 +33,9 @@ pub enum Term<S> {
     Recurse,
 
     Num(S),
-    Str(string::Str<Self>),
+    Str(Option<S>, Vec<string::Part<Self>>),
     Arr(Option<Box<Self>>),
-    Obj(Vec<KeyVal<Self>>),
+    Obj(Vec<(Self, Option<Self>)>),
 
     Neg(Box<Self>),
     Pipe(Box<Self>, Option<S>, Box<Self>),
@@ -249,19 +250,18 @@ impl<'a> Parser<'a> {
                 Term::Fold(*fold, Box::new(xs), x, args)
             }
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
-            Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
-                let head = Term::Call(*id, self.args(|p| p.term()));
+            Some(Token::Word(id)) if id.starts_with('@') => {
                 let s = self.maybe(|p| match p.i.next() {
                     Some(Token::Str(parts)) if id.starts_with('@') => Some(p.str_parts(parts)),
                     _ => None,
                 });
                 match s {
-                    None => head,
-                    Some(parts) => Term::Str(string::Str {
-                        fmt: Some(Box::new(head)),
-                        parts,
-                    }),
+                    None => Term::Call(*id, Vec::new()),
+                    Some(parts) => Term::Str(Some(id), parts),
                 }
+            }
+            Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
+                Term::Call(*id, self.args(|p| p.term()))
             }
             Some(Token::Char(".")) => self
                 .maybe(|p| p.i.next().and_then(ident_key))
@@ -281,10 +281,7 @@ impl<'a> Parser<'a> {
             Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
                 p.sep_by1(',', |p| p.obj_entry()).map(Term::Obj)
             }),
-            Some(Token::Str(parts)) => Term::Str(string::Str {
-                fmt: None,
-                parts: self.str_parts(parts),
-            }),
+            Some(Token::Str(parts)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
         })
     }
@@ -301,11 +298,11 @@ impl<'a> Parser<'a> {
         while self.char0('.').is_some() {
             use path::Opt;
             let key = match self.i.next() {
-                Some(Token::Word(id)) if !id.starts_with(['$', '@']) => Some(*id),
+                Some(Token::Word(id)) if !id.starts_with(['$', '@']) => *id,
                 next => return Err((Expect::Key, next)),
             };
             let opt = self.char0('?').is_some();
-            let key = Term::Str(string::Str::from(key.unwrap_or("").to_string()));
+            let key = Term::Str(None, Vec::from([string::Part::Str(key.to_string())]));
             let opt = if opt { Opt::Optional } else { Opt::Essential };
             path.push((path::Part::Index(key), opt));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
@@ -328,24 +325,26 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn obj_entry(&mut self) -> Result<'a, KeyVal<Term<&'a str>>> {
-        match self.i.next() {
-            Some(Token::Word(k)) if !k.starts_with(['$', '@']) => {
-                let k = string::Str::from(k.to_string());
-                let v = self
-                    .char0(':')
-                    .map(|_| self.term_with_comma(false))
-                    .transpose()?;
-                Ok(KeyVal::Str(k, v))
+    fn obj_entry(&mut self) -> Result<'a, (Term<&'a str>, Option<Term<&'a str>>)> {
+        let key = match self.i.next() {
+            Some(Token::Str(parts)) => Term::Str(None, self.str_parts(parts)),
+            Some(Token::Word(k)) if k.starts_with('@') => match self.i.next() {
+                Some(Token::Str(parts)) => Term::Str(Some(*k), self.str_parts(parts)),
+                next => return Err((Expect::Str, next)),
+            },
+            Some(Token::Word(k)) if k.starts_with('$') => Term::Var(*k),
+            Some(Token::Word(k)) if !!KEYWORDS.contains(k) => {
+                Term::Str(None, Vec::from([string::Part::Str(k.to_string())]))
             }
-            // TODO: handle $x
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", |p| p.term());
                 self.char1(':')?;
-                Ok(KeyVal::Filter(k, self.term()?))
+                return Ok((k, Some(self.term()?)));
             }
-            next => Err((Expect::Key, next)),
-        }
+            next => return Err((Expect::Key, next)),
+        };
+        let v = self.char0(':').map(|_| self.term_with_comma(false));
+        Ok((key, v.transpose()?))
     }
 
     fn str_parts(
