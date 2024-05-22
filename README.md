@@ -54,6 +54,20 @@ This should allow users proficient in jq to easily use jaq.
 # Installation
 
 
+## Binaries
+
+You can download binaries for Linux, Mac, and Windows on the [releases page](https://github.com/01mf02/jaq/releases).
+
+You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
+
+    $ brew install jaq
+    $ brew install --HEAD jaq # latest development version
+
+Or using [scoop](https://scoop.sh/#/apps?q=jaq&id=59dbaf2bb778402cd8ec50d0ad4cdae8a6814fc3) on Windows:
+
+    $ scoop install main/jaq
+
+
 ## From Source
 
 To compile jaq, you need a Rust toolchain.
@@ -76,17 +90,6 @@ If you have cloned this repository, you can also build jaq by executing one of t
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
 
-
-## Binaries
-
-You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
-
-    $ brew install jaq
-    $ brew install --HEAD jaq # latest development version
-
-Or using [scoop](https://scoop.sh/#/apps?q=jaq&id=59dbaf2bb778402cd8ec50d0ad4cdae8a6814fc3) on Windows:
-
-    > scoop install main/jaq
 
 
 # Examples
