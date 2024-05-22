@@ -243,7 +243,31 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut defs = ParseCtx::new(vars);
     defs.insert_natives(jaq_core::core());
-    //defs.insert_defs(jaq_std::std());
+    defs.insert_defs(jaq_std::std());
+
+    /*
+    let std = include_str!("../../jaq-std/src/std.jq");
+    for i in 0..1000 {
+        //let (filter, errs) = jaq_parse::parse(std, jaq_parse::defs());
+
+        //let _ = jaq_std::std();
+
+        let (tokens, lex_errs) = jaq_parse::lex::Lex::new(std).lex();
+
+        let mut new_parser = jaq_parse::term::Parser::new(&tokens);
+        let defs = new_parser.defs();
+        //std::println!("{:?}", new_parser.e);
+    }
+    */
+
+    /*
+    let (tokens, lex_errs) = jaq_parse::lex::Lex::new(filter_str).lex();
+
+    let mut new_parser = jaq_parse::term::Parser::new(&tokens);
+    std::println!("{:?}", new_parser.term());
+    std::println!("{:?}", new_parser.e);
+    */
+
     assert!(defs.errs.is_empty());
     let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
     if !errs.is_empty() {
