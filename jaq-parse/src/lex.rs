@@ -255,7 +255,7 @@ impl<'a> Lex<'a> {
 
 fn unicode(chars: &mut core::str::Chars) -> Option<u32> {
     let s = chars.as_str();
-    for i in 0..4 {
+    for _ in 0..4 {
         chars.next()?;
     }
     u32::from_str_radix(&s[..4], 16).ok()
