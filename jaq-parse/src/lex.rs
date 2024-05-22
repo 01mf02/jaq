@@ -147,6 +147,41 @@ impl<'a> Lex<'a> {
         }
     }
 
+    fn escape(&mut self) -> Option<StrPart<&'a str, Token<&'a str>>> {
+        let mut chars = self.i.chars();
+        let part = match chars.next() {
+            Some(c @ ('\\' | '/' | '"')) => StrPart::Char(c),
+            Some('b') => StrPart::Char('\x08'),
+            Some('f') => StrPart::Char('\x0C'),
+            Some('n') => StrPart::Char('\n'),
+            Some('r') => StrPart::Char('\r'),
+            Some('t') => StrPart::Char('\t'),
+            Some('u') => {
+                let mut hex = 0;
+                for _ in 0..4 {
+                    let i = chars.as_str();
+                    match chars.next().and_then(|c| c.to_digit(16)) {
+                        Some(digit) => hex = (hex << 4) + digit,
+                        None => {
+                            self.i = i;
+                            self.e.push((Expect::Unicode, self.i));
+                            return None;
+                        }
+                    }
+                }
+                StrPart::Unicode(hex)
+            }
+            Some('(') => return Some(StrPart::Filter(self.delim())),
+            Some(_) | None => {
+                self.e.push((Expect::Escape, self.i));
+                return None;
+            }
+        };
+
+        self.i = chars.as_str();
+        Some(part)
+    }
+
     /// Lex a (possibly interpolated) string.
     ///
     /// The input string has to start with '"'.
@@ -162,37 +197,7 @@ impl<'a> Lex<'a> {
             }
             match self.next() {
                 Some('"') => return parts,
-                Some('\\') => {
-                    let mut chars = self.i.chars();
-                    let c = match chars.next() {
-                        Some(c @ ('\\' | '/' | '"')) => c,
-                        Some('b') => '\x08',
-                        Some('f') => '\x0C',
-                        Some('n') => '\n',
-                        Some('r') => '\r',
-                        Some('t') => '\t',
-                        Some('u') => {
-                            let unicode = unicode(&mut chars).unwrap_or_else(|| {
-                                self.e.push((Expect::Unicode, self.i));
-                                0xFFFD // Unicode replacement character
-                            });
-                            self.i = chars.as_str();
-                            parts.push(StrPart::Unicode(unicode));
-                            continue;
-                        }
-                        Some('(') => {
-                            parts.push(StrPart::Filter(self.delim()));
-                            continue;
-                        }
-                        Some(_) | None => {
-                            self.e.push((Expect::Escape, self.i));
-                            '\0'
-                        }
-                    };
-
-                    self.i = chars.as_str();
-                    parts.push(StrPart::Char(c));
-                }
+                Some('\\') => self.escape().map(|part| parts.push(part)),
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
                 None => {
@@ -252,14 +257,6 @@ impl<'a> Lex<'a> {
         }
         Token::Block(open, tokens)
     }
-}
-
-fn unicode(chars: &mut core::str::Chars) -> Option<u32> {
-    let s = chars.as_str();
-    for _ in 0..4 {
-        chars.next()?;
-    }
-    u32::from_str_radix(&s[..4], 16).ok()
 }
 
 fn span(whole_buffer: &str, part: &str) -> jaq_syn::Span {
