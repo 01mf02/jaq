@@ -4,6 +4,14 @@ use alloc::vec::Vec;
 use jaq_syn::string::Part;
 use jaq_syn::{Span, Spanned};
 
+#[derive(Debug)]
+pub enum StrPart<S, F> {
+    Str(S),
+    Filter(F),
+    Char(char),
+    Unicode(u32),
+}
+
 /// Token (tree) generic over string type `S`.
 #[derive(Debug)]
 pub enum Token<S> {
@@ -12,7 +20,7 @@ pub enum Token<S> {
     /// number
     Num(S),
     /// interpolated string
-    Str(Vec<Part<Self>>),
+    Str(Vec<StrPart<S, Self>>),
     /// operator, such as `|` or `+=`
     Op(S),
     /// punctuation, such as `.` or `;`
@@ -146,19 +154,16 @@ impl<'a> Lex<'a> {
     /// Lex a (possibly interpolated) string.
     ///
     /// The input string has to start with '"'.
-    fn str(&mut self) -> Vec<Part<Token<&'a str>>> {
+    fn str(&mut self) -> Vec<StrPart<&'a str, Token<&'a str>>> {
         let start = self.i;
         assert_eq!(self.next(), Some('"'));
         let mut parts = Vec::new();
 
         loop {
             let s = self.consumed(self.i.chars(), |lex| lex.trim(|c| c != '\\' && c != '"'));
-            //if !s.is_empty() {
-            match parts.last_mut() {
-                Some(Part::Str(prev)) => prev.push_str(s),
-                Some(_) | None => parts.push(Part::Str(s.to_string())),
+            if !s.is_empty() {
+                parts.push(StrPart::Str(s));
             }
-            //}
             match self.next() {
                 Some('"') => return parts,
                 Some('\\') => {
@@ -170,12 +175,16 @@ impl<'a> Lex<'a> {
                         Some('n') => '\n',
                         Some('r') => '\r',
                         Some('t') => '\t',
-                        Some('u') => unicode(&mut chars).unwrap_or_else(|| {
-                            self.e.push((Expect::Unicode, self.i));
-                            '\u{FFFD}' // Unicode replacement character
-                        }),
+                        Some('u') => {
+                            let unicode = unicode(&mut chars).unwrap_or_else(|| {
+                                self.e.push((Expect::Unicode, self.i));
+                                0xFFFD // Unicode replacement character
+                            });
+                            parts.push(StrPart::Unicode(unicode));
+                            continue;
+                        }
                         Some('(') => {
-                            parts.push(Part::Fun(self.delim()));
+                            parts.push(StrPart::Filter(self.delim()));
                             continue;
                         }
                         Some(_) | None => {
@@ -185,10 +194,7 @@ impl<'a> Lex<'a> {
                     };
 
                     self.i = chars.as_str();
-                    match parts.last_mut() {
-                        Some(Part::Str(prev)) => prev.push(c),
-                        Some(_) | None => parts.push(Part::Str(c.to_string())),
-                    }
+                    parts.push(StrPart::Char(c));
                 }
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
@@ -251,12 +257,12 @@ impl<'a> Lex<'a> {
     }
 }
 
-fn unicode(chars: &mut core::str::Chars) -> Option<char> {
+fn unicode(chars: &mut core::str::Chars) -> Option<u32> {
     let mut hex = String::with_capacity(4);
     for _ in 0..4 {
         hex.push(chars.next()?);
     }
-    u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32)
+    u32::from_str_radix(&hex, 16).ok()
 }
 
 fn span(whole_buffer: &str, part: &str) -> Span {
@@ -319,9 +325,11 @@ impl<'a> Token<&'a str> {
             }
             Self::Str(parts) => {
                 let quote = once((OToken::Quote, 0..0));
-                let f = |part: Part<Token<&'a str>>| match part {
-                    Part::Fun(t) => t.tokens(i),
-                    Part::Str(s) => Box::new(once((OToken::Str(s.to_string()), 0..0))),
+                let f = |part: StrPart<&'a str, Token<&'a str>>| match part {
+                    StrPart::Filter(t) => t.tokens(i),
+                    StrPart::Str(s) => Box::new(once((OToken::Str(s.to_string()), 0..0))),
+                    StrPart::Char(c) => Box::new(once((OToken::Str(c.to_string()), 0..0))),
+                    StrPart::Unicode(_) => todo!(),
                 };
                 Box::new(
                     quote

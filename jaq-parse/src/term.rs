@@ -1,4 +1,4 @@
-use crate::lex::Token;
+use crate::lex::{StrPart, Token};
 use jaq_syn::filter::KeyVal;
 use jaq_syn::{path, string};
 
@@ -33,7 +33,7 @@ pub enum Term<S> {
     Recurse,
 
     Num(S),
-    Str(Option<S>, Vec<string::Part<Self>>),
+    Str(Option<S>, Vec<StrPart<S, Self>>),
     Arr(Option<Box<Self>>),
     Obj(Vec<(Self, Option<Self>)>),
 
@@ -302,7 +302,7 @@ impl<'a> Parser<'a> {
                 next => return Err((Expect::Key, next)),
             };
             let opt = self.char0('?').is_some();
-            let key = Term::Str(None, Vec::from([string::Part::Str(key.to_string())]));
+            let key = Term::Str(None, Vec::from([StrPart::Str(key)]));
             let opt = if opt { Opt::Optional } else { Opt::Essential };
             path.push((path::Part::Index(key), opt));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
@@ -334,7 +334,7 @@ impl<'a> Parser<'a> {
             },
             Some(Token::Word(k)) if k.starts_with('$') => Term::Var(*k),
             Some(Token::Word(k)) if !!KEYWORDS.contains(k) => {
-                Term::Str(None, Vec::from([string::Part::Str(k.to_string())]))
+                Term::Str(None, Vec::from([StrPart::Str(*k)]))
             }
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", |p| p.term());
@@ -349,14 +349,16 @@ impl<'a> Parser<'a> {
 
     fn str_parts(
         &mut self,
-        parts: &'a [string::Part<Token<&'a str>>],
-    ) -> Vec<string::Part<Term<&'a str>>> {
+        parts: &'a [StrPart<&'a str, Token<&'a str>>],
+    ) -> Vec<StrPart<&'a str, Term<&'a str>>> {
         let parts = parts.iter().map(|part| match part {
-            string::Part::Str(s) => string::Part::Str(s.clone()),
-            string::Part::Fun(Token::Block("(", tokens)) => {
-                string::Part::Fun(self.with(tokens, ")", |p| p.term()))
+            StrPart::Str(s) => StrPart::Str(*s),
+            StrPart::Filter(Token::Block("(", tokens)) => {
+                StrPart::Filter(self.with(tokens, ")", |p| p.term()))
             }
-            string::Part::Fun(_) => unreachable!(),
+            StrPart::Filter(_) => unreachable!(),
+            StrPart::Char(c) => StrPart::Char(*c),
+            StrPart::Unicode(u) => StrPart::Unicode(*u),
         });
         parts.collect()
     }
