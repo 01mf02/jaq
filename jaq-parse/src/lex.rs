@@ -176,6 +176,7 @@ impl<'a> Lex<'a> {
                                 self.e.push((Expect::Unicode, self.i));
                                 0xFFFD // Unicode replacement character
                             });
+                            self.i = chars.as_str();
                             parts.push(StrPart::Unicode(unicode));
                             continue;
                         }
