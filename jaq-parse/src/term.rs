@@ -42,7 +42,7 @@ pub enum Term<S> {
 
     Fold(S, Box<Self>, S, Vec<Self>),
     TryCatch(Box<Self>, Option<Box<Self>>),
-    IfThenElse(Box<Self>, Box<Self>, Option<Box<Self>>),
+    IfThenElse(Vec<(Self, Self)>, Option<Box<Self>>),
 
     Def(Vec<Def<S, Self>>, Box<Self>),
     Call(S, Vec<Self>),
@@ -57,7 +57,7 @@ pub enum Term<S> {
 /// Note that for example `reduce` is not part of this list,
 /// because it *can* appear at the beginning of an expression.
 const KEYWORDS: &[&str] = &[
-    "include", "import", "def", "as", "and", "or", "catch", "then", "else", "end",
+    "include", "import", "def", "as", "and", "or", "catch", "then", "elif", "else", "end",
 ];
 
 impl<'a> Parser<'a> {
@@ -213,19 +213,25 @@ impl<'a> Parser<'a> {
         Ok(match self.i.next() {
             Some(Token::Op("-")) => Term::Neg(Box::new(self.atom_path()?)),
             Some(Token::Word("if")) => {
-                let if_ = self.term()?;
-                self.keyword("then")?;
-                let then_ = self.term()?;
-                let else_ = match self.i.next() {
-                    Some(Token::Word("else")) => {
-                        let else_ = self.term()?;
-                        self.keyword("end")?;
-                        Some(else_)
-                    }
-                    Some(Token::Word("end")) => None,
-                    next => return Err((Expect::ElseOrEnd, next)),
+                let if_then = |p: &mut Self| {
+                    let if_ = p.term()?;
+                    p.keyword("then")?;
+                    Ok((if_, p.term()?))
                 };
-                Term::IfThenElse(Box::new(if_), Box::new(then_), else_.map(Box::new))
+                let mut if_thens = Vec::from([if_then(self)?]);
+                let else_ = loop {
+                    match self.i.next() {
+                        Some(Token::Word("elif")) => if_thens.push(if_then(self)?),
+                        Some(Token::Word("else")) => {
+                            let else_ = self.term()?;
+                            self.keyword("end")?;
+                            break Some(else_);
+                        }
+                        Some(Token::Word("end")) => break None,
+                        next => return Err((Expect::ElseOrEnd, next)),
+                    }
+                };
+                Term::IfThenElse(if_thens, else_.map(Box::new))
             }
             Some(Token::Word("try")) => {
                 let try_ = self.atom_path()?;
@@ -437,7 +443,7 @@ pub struct Def<S, F> {
 
 fn ident_key<'a>(token: &Token<&'a str>) -> Option<&'a str> {
     match token {
-        Token::Word(id) if !id.starts_with(['$', '@']) => Some(*id),
+        Token::Word(id) if !id.starts_with(['$', '@']) && !KEYWORDS.contains(id) => Some(*id),
         _ => None,
     }
 }
