@@ -333,7 +333,7 @@ impl<'a> Parser<'a> {
                 next => return Err((Expect::Str, next)),
             },
             Some(Token::Word(k)) if k.starts_with('$') => Term::Var(*k),
-            Some(Token::Word(k)) if !!KEYWORDS.contains(k) => {
+            Some(Token::Word(k)) if !KEYWORDS.contains(k) => {
                 Term::Str(None, Vec::from([StrPart::Str(*k)]))
             }
             Some(Token::Block("(", tokens)) => {
@@ -386,7 +386,7 @@ impl<'a> Parser<'a> {
 
     fn path_part_opt(&mut self) -> Option<(path::Part<Term<&'a str>>, path::Opt)> {
         let part = self.maybe(|p| match p.i.next() {
-            Some(Token::Block("[", tokens)) => Some(p.with(&tokens, "]", |p| p.path_part())),
+            Some(Token::Block("[", tokens)) => Some(p.with(tokens, "]", |p| p.path_part())),
             _ => None,
         })?;
         Some((part, self.opt()))
