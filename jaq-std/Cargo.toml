@@ -11,8 +11,7 @@ keywords = ["json", "query", "jq"]
 rust-version = "1.64"
 
 [features]
-#default = ["bincode"]
-default = []
+default = ["bincode"]
 
 [build-dependencies]
 jaq-parse = { version = "1.0.0", path = "../jaq-parse" }
