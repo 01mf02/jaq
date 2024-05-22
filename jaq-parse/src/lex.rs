@@ -1,8 +1,4 @@
-use crate::token::{Delim, Token as OToken};
-use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use jaq_syn::string::Part;
-use jaq_syn::{Span, Spanned};
 
 #[derive(Debug)]
 pub enum StrPart<S, F> {
@@ -40,7 +36,7 @@ pub enum Expect<'a> {
 }
 
 impl<'a> Expect<'a> {
-    pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, Span) {
+    pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, jaq_syn::Span) {
         let mut pos = span(full, pos);
         pos.end = pos.start;
         let s = match self {
@@ -258,14 +254,14 @@ impl<'a> Lex<'a> {
 }
 
 fn unicode(chars: &mut core::str::Chars) -> Option<u32> {
-    let mut hex = String::with_capacity(4);
-    for _ in 0..4 {
-        hex.push(chars.next()?);
+    let s = chars.as_str();
+    for i in 0..4 {
+        chars.next()?;
     }
-    u32::from_str_radix(&hex, 16).ok()
+    u32::from_str_radix(&s[..4], 16).ok()
 }
 
-fn span(whole_buffer: &str, part: &str) -> Span {
+fn span(whole_buffer: &str, part: &str) -> jaq_syn::Span {
     let start = part.as_ptr() as usize - whole_buffer.as_ptr() as usize;
     let end = start + part.len();
     start..end
