@@ -192,7 +192,7 @@ Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
 The results show that
 jaq-1.4 is fastest on 15 benchmarks, whereas
 jq-1.7.1 is fastest on 2 benchmarks and
-gojq-0.12.13 is fastest on 2 benchmarks.
+gojq-0.12.15 is fastest on 2 benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [gojq]: https://github.com/itchyny/gojq
