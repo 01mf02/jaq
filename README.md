@@ -8,6 +8,9 @@
 jaq (pronounced like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
+You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
+Instructions for the playground can be found [here](jaq-play/).
+
 jaq focuses on three goals:
 
 * **Correctness**:
