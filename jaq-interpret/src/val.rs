@@ -59,6 +59,7 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
+// This makes `f64::from_str` accessible as intra-doc link.
 #[cfg(doc)]
 use core::str::FromStr;
 
