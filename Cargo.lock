@@ -260,7 +260,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
 name = "jaq"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "ariadne",
  "atty",
@@ -282,7 +282,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "1.2.1"
+version = "1.4.0"
 dependencies = [
  "aho-corasick",
  "base64",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-interpret"
-version = "1.2.1"
+version = "1.4.0"
 dependencies = [
  "ahash",
  "dyn-clone",
@@ -342,7 +342,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "1.2.1"
+version = "1.4.0"
 dependencies = [
  "bincode",
  "jaq-core",
