@@ -59,6 +59,12 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
+#[cfg(doc)]
+use core::str::FromStr;
+
+/// Values that can be processed by the interpreter.
+///
+/// Implement this trait if you want jaq to process your own type of values.
 pub trait ValT:
     Clone
     + Display
@@ -75,26 +81,66 @@ pub trait ValT:
     + Rem<Output = ValR2<Self>>
     + Neg<Output = ValR2<Self>>
 {
+    /// Create a number from a string.
+    ///
+    /// The number should adhere to the format accepted by [`f64::from_str`].
     fn from_num(n: String) -> ValR2<Self>;
+
+    /// Create an associative map (or object) from a sequence of key-value pairs.
+    ///
+    /// This is used when creating values with the syntax `{k: v}`.
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
 
-    /// If `Ok(k)` is in `v.keys()`, then
-    /// `v.index(k)` must be `Ok(_)` and in `v.range(Range::default())`.
+    /// Yield the children of a value.
+    ///
+    /// This is used by `.[]`.
     fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>>;
+
+    /// Yield the child of a value at the given index.
+    ///
+    /// This is used by `.[k]`.
+    ///
+    /// If `v.index(k)` is `Ok(_)`, then it is contained in `v.values()`.
     fn index(self, index: &Self) -> ValR2<Self>;
+
+    /// Yield a slice of the value with the given range.
+    ///
+    /// This is used by `.[s:e]`, `.[s:]`, and `.[:e]`.
     fn range(self, range: Range<&Self>) -> ValR2<Self>;
 
+    /// Map a function over the children of the value.
+    ///
+    /// This is used by
+    /// - `.[]  |= f` (`opt` = [`Opt::Essential`]) and
+    /// - `.[]? |= f` (`opt` = [`Opt::Optional`]).
+    ///
+    /// If the children of the value are undefined, then:
+    ///
+    /// - If `opt` is [`Opt::Essential`], return an error.
+    /// - If `opt` is [`Opt::Optional`] , return the input value.
     fn map_values<I: Iterator<Item = ValR2<Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
+
+    /// Map a function over the child of the value at the given index.
+    ///
+    /// This is used by `.[k] |= f`.
+    ///
+    /// See [`Self::map_values`] for the behaviour of `opt`.
     fn map_index<I: Iterator<Item = ValR2<Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
+
+    /// Map a function over the slice of the value with the given range.
+    ///
+    /// This is used by `.[s:e] |= f`, `.[s:] |= f`, and `.[:e] |= f`.
+    ///
+    /// See [`Self::map_values`] for the behaviour of `opt`.
     fn map_range<I: Iterator<Item = ValR2<Self>>>(
         self,
         range: Range<&Self>,
@@ -102,7 +148,16 @@ pub trait ValT:
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
 
+    /// Return a boolean representation of the value.
+    ///
+    /// This is used by `if v then ...`.
     fn as_bool(&self) -> bool;
+
+    /// If the value is a string, return it.
+    ///
+    /// If `v.as_str()` yields `Some(s)`, then
+    /// `"\(v)"` yields `s`, otherwise it yields `v.to_string()`
+    /// (provided by [`Display`]).
     fn as_str(&self) -> Option<&str>;
 }
 
