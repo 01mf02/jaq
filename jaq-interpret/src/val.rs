@@ -255,7 +255,9 @@ impl ValT for Val {
                     Occupied(mut e) => {
                         match f(e.get().clone()).next().transpose()? {
                             Some(y) => e.insert(y),
-                            None => e.remove(),
+                            // this runs in constant time, at the price of
+                            // changing the order of the elements
+                            None => e.swap_remove(),
                         };
                     }
                     Vacant(e) => {
