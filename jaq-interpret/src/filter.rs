@@ -249,7 +249,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 None => Ok(V::from(cv.1.to_string())),
             })),
             Ast::Int(n) => box_once(Ok(V::from(*n))),
-            Ast::Num(x) => box_once(V::from_num(x.clone())),
+            Ast::Num(x) => box_once(V::from_num(x)),
             Ast::Str(s) => Box::new(once_with(move || Ok(V::from(s.clone())))),
             Ast::Array(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
             Ast::ObjEmpty => box_once(V::from_map([])),

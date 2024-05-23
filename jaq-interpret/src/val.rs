@@ -85,7 +85,7 @@ pub trait ValT:
     /// Create a number from a string.
     ///
     /// The number should adhere to the format accepted by [`f64::from_str`].
-    fn from_num(n: String) -> ValR2<Self>;
+    fn from_num(n: &str) -> ValR2<Self>;
 
     /// Create an associative map (or object) from a sequence of key-value pairs.
     ///
@@ -165,8 +165,8 @@ pub trait ValT:
 type Range<V> = core::ops::Range<Option<V>>;
 
 impl ValT for Val {
-    fn from_num(n: String) -> ValR2<Self> {
-        Ok(Val::Num(Rc::new(n)))
+    fn from_num(n: &str) -> ValR2<Self> {
+        Ok(Val::Num(Rc::new(n.to_string())))
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self> {
