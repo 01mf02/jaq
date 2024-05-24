@@ -256,13 +256,12 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     let (tokens, lex_errs) = jaq_parse::lex::Lex::new(filter_str).lex();
     if lex_errs.is_empty() {
         let mut parser = jaq_parse::term::Parser::new(&tokens);
-        std::println!("{:?}", parser.term());
+        std::println!("{:?}", parser.module(|p| p.term()));
         std::println!("{:?}", parser.e);
     } else {
         std::println!("{:?}", lex_errs);
     }
     */
-
 
     assert!(defs.errs.is_empty());
     let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());

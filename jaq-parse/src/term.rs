@@ -159,6 +159,12 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn terminated<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<'a, T>) -> Result<'a, T> {
+        let y = f(self)?;
+        self.char1(';')?;
+        Ok(y)
+    }
+
     fn char1(&mut self, c: char) -> Result<'a, &'a str> {
         match self.i.next() {
             Some(Token::Char(s)) if s.chars().eq([c]) => Ok(*s),
@@ -413,7 +419,7 @@ impl<'a> Parser<'a> {
 
     fn def_tail(&mut self) -> Result<'a, Def<&'a str, Term<&'a str>>> {
         let name = match self.i.next() {
-            Some(Token::Word(name)) if !name.starts_with(['$', '@']) => name,
+            Some(Token::Word(name)) if !name.starts_with(['$']) => name,
             next => return Err((Expect::Ident, next)),
         };
         let args = self.args(|p| {
@@ -425,13 +431,66 @@ impl<'a> Parser<'a> {
         self.char1(':')?;
 
         let body = self.term()?;
-        match self.i.next() {
-            Some(Token::Char(";")) => (),
-            next => return Err((Expect::Char(';'), next)),
-        };
+        self.char1(';')?;
 
         Ok(Def { name, args, body })
     }
+
+    fn bare_str(&mut self) -> Result<'a, &'a str> {
+        match self.i.next() {
+            Some(Token::Str(parts)) => match parts[..] {
+                [StrPart::Str(s)] => Ok(s),
+                _ => todo!(),
+            },
+            next => Err((Expect::Str, next)),
+        }
+    }
+
+    fn include(&mut self) -> Result<'a, (&'a str, Option<&'a str>)> {
+        self.bare_str().map(|path| (path, None))
+    }
+
+    fn import(&mut self) -> Result<'a, (&'a str, Option<&'a str>)> {
+        let path = self.bare_str()?;
+        self.keyword("as")?;
+        let name = match self.i.next() {
+            Some(Token::Word(name)) if !name.starts_with(['$', '@']) => *name,
+            next => return Err((Expect::Ident, next)),
+        };
+        Ok((path, Some(name)))
+    }
+
+    pub fn module<B, F>(&mut self, f: F) -> Result<'a, Module<&'a str, B>>
+    where
+        F: FnOnce(&mut Self) -> Result<'a, B>,
+    {
+        let meta = self
+            .maybe(|p| match p.i.next() {
+                Some(Token::Word("module")) => Some(p.terminated(|p| p.term())),
+                _ => None,
+            })
+            .transpose()?;
+
+        let mods = core::iter::from_fn(|| {
+            self.maybe(|p| match p.i.next() {
+                Some(Token::Word("include")) => Some(p.terminated(|p| p.include())),
+                Some(Token::Word("import")) => Some(p.terminated(|p| p.import())),
+                _ => None,
+            })
+        })
+        .collect::<Result<_>>()?;
+
+        let body = f(self)?;
+
+        Ok(Module { meta, mods, body })
+    }
+}
+
+#[derive(Debug)]
+pub struct Module<S, B> {
+    meta: Option<Term<S>>,
+    mods: Vec<(S, Option<S>)>,
+    body: B,
 }
 
 #[derive(Debug)]
