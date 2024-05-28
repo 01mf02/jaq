@@ -62,6 +62,7 @@ const KEYWORDS: &[&str] = &[
 ];
 
 impl<'a> Parser<'a> {
+    #[must_use]
     pub fn new(i: &'a [Token<&'a str>]) -> Self {
         Self {
             i: i.iter(),
@@ -252,7 +253,7 @@ impl<'a> Parser<'a> {
                 let xs = self.atom_path()?;
                 self.keyword("as")?;
                 let x = self.var()?;
-                let args = self.args(|p| p.term());
+                let args = self.args(Self::term);
                 Term::Fold(*fold, Box::new(xs), x, args)
             }
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
@@ -267,7 +268,7 @@ impl<'a> Parser<'a> {
                 }
             }
             Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
-                Term::Call(*id, self.args(|p| p.term()))
+                Term::Call(*id, self.args(Self::term))
             }
             Some(Token::Char(".")) => self
                 .maybe(|p| p.i.next().and_then(ident_key))
@@ -280,12 +281,12 @@ impl<'a> Parser<'a> {
             Some(Token::Block("{", tokens)) if matches!(tokens[..], [Token::Char("}")]) => {
                 Term::Obj(Vec::new())
             }
-            Some(Token::Block("(", tokens)) => self.with(tokens, ")", |p| p.term()),
+            Some(Token::Block("(", tokens)) => self.with(tokens, ")", Self::term),
             Some(Token::Block("[", tokens)) => {
-                Term::Arr(Some(Box::new(self.with(tokens, "]", |p| p.term()))))
+                Term::Arr(Some(Box::new(self.with(tokens, "]", Self::term))))
             }
             Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
-                p.sep_by1(',', |p| p.obj_entry()).map(Term::Obj)
+                p.sep_by1(',', Self::obj_entry).map(Term::Obj)
             }),
             Some(Token::Str(parts)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
@@ -343,7 +344,7 @@ impl<'a> Parser<'a> {
                 Term::Str(None, Vec::from([StrPart::Str(*k)]))
             }
             Some(Token::Block("(", tokens)) => {
-                let k = self.with(tokens, ")", |p| p.term());
+                let k = self.with(tokens, ")", Self::term);
                 self.char1(':')?;
                 return Ok((k, Some(self.term()?)));
             }
@@ -360,7 +361,7 @@ impl<'a> Parser<'a> {
         let parts = parts.iter().map(|part| match part {
             StrPart::Str(s) => StrPart::Str(*s),
             StrPart::Filter(Token::Block("(", tokens)) => {
-                StrPart::Filter(self.with(tokens, ")", |p| p.term()))
+                StrPart::Filter(self.with(tokens, ")", Self::term))
             }
             StrPart::Filter(_) => unreachable!(),
             StrPart::Char(c) => StrPart::Char(*c),
@@ -392,7 +393,7 @@ impl<'a> Parser<'a> {
 
     fn path_part_opt(&mut self) -> Option<(path::Part<Term<&'a str>>, path::Opt)> {
         let part = self.maybe(|p| match p.i.next() {
-            Some(Token::Block("[", tokens)) => Some(p.with(tokens, "]", |p| p.path_part())),
+            Some(Token::Block("[", tokens)) => Some(p.with(tokens, "]", Self::path_part)),
             _ => None,
         })?;
         Some((part, self.opt()))
@@ -466,15 +467,15 @@ impl<'a> Parser<'a> {
     {
         let meta = self
             .maybe(|p| match p.i.next() {
-                Some(Token::Word("module")) => Some(p.terminated(|p| p.term())),
+                Some(Token::Word("module")) => Some(p.terminated(Self::term)),
                 _ => None,
             })
             .transpose()?;
 
         let mods = core::iter::from_fn(|| {
             self.maybe(|p| match p.i.next() {
-                Some(Token::Word("include")) => Some(p.terminated(|p| p.include())),
-                Some(Token::Word("import")) => Some(p.terminated(|p| p.import())),
+                Some(Token::Word("include")) => Some(p.terminated(Self::include)),
+                Some(Token::Word("import")) => Some(p.terminated(Self::import)),
                 _ => None,
             })
         })

@@ -63,11 +63,13 @@ pub struct Lex<'a> {
 }
 
 impl<'a> Lex<'a> {
+    #[must_use]
     pub fn new(i: &'a str) -> Self {
         let e = Vec::new();
         Self { i, e }
     }
 
+    #[must_use]
     pub fn lex(mut self) -> (Vec<Token<&'a str>>, Vec<Error<'a>>) {
         let tokens = self.tokens();
         self.space();
@@ -136,7 +138,7 @@ impl<'a> Lex<'a> {
 
     /// Decimal with optional exponent.
     fn num(&mut self) {
-        self.trim(|c| c.is_numeric());
+        self.trim(char::is_numeric);
         if let Some(i) = self.i.strip_prefix('.') {
             self.i = i;
             self.digits1();
@@ -215,9 +217,9 @@ impl<'a> Lex<'a> {
 
         let mut chars = self.i.chars();
         Some(match chars.next()? {
-            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(chars, |lex| lex.ident0())),
-            '$' | '@' => Token::Word(self.consumed(chars, |lex| lex.ident1())),
-            '0'..='9' => Token::Num(self.consumed(chars, |lex| lex.num())),
+            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(chars, Self::ident0)),
+            '$' | '@' => Token::Word(self.consumed(chars, Self::ident1)),
+            '0'..='9' => Token::Num(self.consumed(chars, Self::num)),
             c if is_op(c) => Token::Op(self.consumed(chars, |lex| lex.trim(is_op))),
             '?' if (chars.next(), chars.next()) == (Some('/'), Some('/')) => {
                 Token::Op(self.take(3))
@@ -251,7 +253,7 @@ impl<'a> Lex<'a> {
         self.space();
         if let Some(rest) = self.i.strip_prefix(close) {
             tokens.push(Token::Char(&self.i[..1]));
-            self.i = rest
+            self.i = rest;
         } else {
             self.e.push((Expect::Delim(start), self.i));
         }
