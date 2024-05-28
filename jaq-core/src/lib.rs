@@ -28,6 +28,85 @@ pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
     run(CORE_RUN).chain(upd(CORE_UPDATE))
 }
 
+trait ValT2: From<f64> {
+    fn len(&self) -> Option<usize>;
+    fn abs(self) -> Result<Self, Self>;
+
+    fn keys(self) -> Result<Self, Error>;
+    fn as_seq(&self) -> Box<dyn Iterator<Item = Result<&Self, Error>> + '_>;
+    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Error>;
+
+    fn as_isize(&self) -> Option<isize>;
+    fn as_f64(&self) -> Result<f64, Error>;
+}
+
+fn round<V: ValT2>(v: V, f: impl FnOnce(f64) -> f64) -> Result<V, Error> {
+    if v.as_isize().is_some() {
+        Ok(v)
+    } else {
+        Ok(V::from(f(v.as_f64()?)))
+    }
+}
+
+impl ValT2 for Val {
+    fn as_seq(&self) -> Box<dyn Iterator<Item = Result<&Self, Error>> + '_> {
+        match self {
+            Self::Arr(a) => Box::new(a.iter().map(Ok)),
+            _ => Box::new(core::iter::once(Err(todo!()))),
+        }
+    }
+
+    fn keys(self) -> Result<Self, Error> {
+        match self {
+            Self::Obj(o) => match Rc::try_unwrap(o) {
+                Ok(o) => Ok(o.into_keys().map(Self::Str).collect()),
+                Err(o) => Ok(o.keys().cloned().map(Self::Str).collect()),
+            },
+            _ => todo!(),
+        }
+    }
+
+    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Error> {
+        match self {
+            Self::Arr(a) => match Rc::try_unwrap(a) {
+                Ok(a) => Ok(a.into_iter().collect()),
+                Err(a) => Ok(a.iter().cloned().collect()),
+            },
+            _ => Err(todo!()),
+        }
+    }
+
+    fn len(&self) -> Option<usize> {
+        match self {
+            Self::Str(s) => Some(s.chars().count()),
+            Self::Arr(a) => Some(a.len()),
+            Self::Obj(o) => Some(o.len()),
+            _ => None,
+        }
+    }
+
+    fn abs(self) -> Result<Self, Self> {
+        match self {
+            Self::Int(i) => Ok(Self::Int(i.abs())),
+            Self::Float(f) => Ok(Self::Float(f.abs())),
+            Self::Num(n) if n.starts_with('-') => Ok(Self::Num(Rc::new(n[1..].to_string()))),
+            Self::Num(_) => Ok(self),
+            _ => Err(self),
+        }
+    }
+
+    fn as_isize(&self) -> Option<isize> {
+        match self {
+            Self::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    fn as_f64(&self) -> Result<f64, Error> {
+        Self::as_float(self)
+    }
+}
+
 /// Return those named filters available by default in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
 /// but also `now`, `debug`, `fromdateiso8601`, ...
@@ -147,15 +226,10 @@ where
 }
 
 /// Convert a string into an array of its Unicode codepoints.
-fn explode(s: &str) -> Result<Vec<Val>, Error> {
+fn explode(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
     let conv = |c: char| Ok(Val::Int(isize::try_from(c as u32).map_err(Error::str)?));
-    s.chars().map(conv).collect()
-}
-
-/// Convert an array of Unicode codepoints into a string.
-fn implode(xs: &[Val]) -> Result<String, Error> {
-    xs.iter().map(as_codepoint).collect()
+    s.chars().map(conv)
 }
 
 /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
@@ -176,7 +250,7 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
 ///    end;
 /// ~~~
 fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
-    let cmp = by.cmp(&Val::Int(0));
+    let cmp = by.cmp(&Val::from(0));
     use core::cmp::Ordering::{Equal, Greater, Less};
     core::iter::from_fn(move || match from.clone() {
         Ok(x) => match cmp {
@@ -263,29 +337,36 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
     }),
     ("length", 0, |_, cv| once_with(move || length(&cv.1))),
+    ("object_keys", 0, |_, cv| once_with(move || cv.1.keys())),
     ("keys_unsorted", 0, |_, cv| {
         once_with(move || cv.1.keys_unsorted().map(Val::arr))
     }),
     ("floor", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.floor()))
+        once_with(move || round(cv.1, |f| f.floor()))
     }),
     ("round", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.round()))
+        once_with(move || round(cv.1, |f| f.round()))
     }),
     ("ceil", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.ceil()))
+        once_with(move || round(cv.1, |f| f.ceil()))
     }),
     ("tojson", 0, |_, cv| {
-        once_with(move || Ok(Val::str(cv.1.to_string())))
+        once_with(move || Ok(Val::from(cv.1.to_string())))
     }),
     ("utf8bytelength", 0, |_, cv| {
-        once_with(move || cv.1.as_str().map(|s| Val::Int(s.len() as isize)))
+        once_with(move || cv.1.as_str().map(|s| Val::from(s.len() as isize)))
     }),
     ("explode", 0, |_, cv| {
-        once_with(move || cv.1.as_str().and_then(|s| Ok(Val::arr(explode(s)?))))
+        once_with(move || cv.1.as_str().and_then(|s| explode(s).collect()))
     }),
+    // Convert an array of Unicode codepoints into a string.
     ("implode", 0, |_, cv| {
-        once_with(move || cv.1.as_arr().and_then(|a| Ok(Val::str(implode(a)?))))
+        once_with(move || {
+            cv.1.as_seq()
+                .map(|v| v.and_then(as_codepoint))
+                .collect::<Result<String, _>>()
+                .map(Val::from)
+        })
     }),
     ("ascii_downcase", 0, |_, cv| {
         once_with(move || cv.1.mutate_str(|s| s.make_ascii_lowercase()))
@@ -297,7 +378,11 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         once_with(move || cv.1.mutate_arr(|a| a.reverse()))
     }),
     ("sort", 0, |_, cv| {
-        once_with(move || cv.1.mutate_arr(|a| a.sort()))
+        once_with(move || {
+            let mut a: Vec<_> = cv.1.into_seq()?;
+            a.sort();
+            Ok(Val::from_iter(a))
+        })
     }),
     ("sort_by", 1, |args, cv| {
         once_with(move || {
@@ -321,6 +406,10 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("has", 1, |args, cv| {
         let keys = args.get(0).run(cv.clone());
         Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))))
+    }),
+    ("string_contains", 1, |args, cv| {
+        let vals = args.get(0).run(cv.clone());
+        Box::new(vals.map(move |y| Ok(Val::from(cv.1.as_str()?.contains(&**y?.as_str()?)))))
     }),
     ("contains", 1, |args, cv| {
         let vals = args.get(0).run(cv.clone());
