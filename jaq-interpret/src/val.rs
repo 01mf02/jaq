@@ -637,6 +637,12 @@ impl From<isize> for Val {
     }
 }
 
+impl From<f64> for Val {
+    fn from(f: f64) -> Self {
+        Self::Float(f)
+    }
+}
+
 impl From<String> for Val {
     fn from(s: String) -> Self {
         Self::Str(Rc::new(s))
