@@ -15,9 +15,13 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, format, rc::Rc, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::results::{box_once, run_if_ok, then};
-use jaq_interpret::{Error, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs};
+use jaq_interpret::{Args, Error, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs, ValT};
+
+type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
+type ValR2<V> = Result<V, Error<V>>;
+type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
 /// Return the minimal set of named filters available in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
@@ -25,66 +29,52 @@ use jaq_interpret::{Error, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs}
 ///
 /// Does not return filters from the standard library, such as `map`.
 pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
-    run(CORE_RUN).chain(upd(CORE_UPDATE))
+    run(BLA).chain(run(CORE_RUN)).chain(upd(CORE_UPDATE))
 }
 
-trait ValT2: From<f64> {
-    fn len(&self) -> Option<usize>;
-    fn abs(self) -> Result<Self, Self>;
-
-    fn keys(self) -> Result<Self, Error>;
-    fn as_seq(&self) -> Box<dyn Iterator<Item = Result<&Self, Error>> + '_>;
-    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Error>;
-
+trait ValT2: ValT + Ord + From<f64> {
+    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self>;
     fn as_isize(&self) -> Option<isize>;
     fn as_f64(&self) -> Result<f64, Error>;
 }
 
-fn round<V: ValT2>(v: V, f: impl FnOnce(f64) -> f64) -> Result<V, Error> {
-    if v.as_isize().is_some() {
-        Ok(v)
-    } else {
-        Ok(V::from(f(v.as_f64()?)))
+trait ValTx: Sized + ValT2 {
+    fn into_vec(self) -> Result<Vec<Self>, Error> {
+        self.into_seq().map_err(|e| todo!())
+    }
+
+    /// Apply a function to an array.
+    fn mutate_arr<F>(self, f: F) -> Result<Self, Error>
+    where
+        F: FnOnce(&mut Vec<Self>) -> Result<(), Error>,
+    {
+        let mut a = self.into_vec()?;
+        f(&mut a)?;
+        Ok(Self::from_iter(a))
+    }
+
+    fn round(self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
+        if self.as_isize().is_some() {
+            Ok(self)
+        } else {
+            Ok(Self::from(f(self.as_f64()?)))
+        }
     }
 }
+impl<T: ValT2> ValTx for T {}
 
 impl ValT2 for Val {
-    fn as_seq(&self) -> Box<dyn Iterator<Item = Result<&Self, Error>> + '_> {
-        match self {
-            Self::Arr(a) => Box::new(a.iter().map(Ok)),
-            _ => Box::new(core::iter::once(Err(todo!()))),
-        }
-    }
-
-    fn keys(self) -> Result<Self, Error> {
-        match self {
-            Self::Obj(o) => match Rc::try_unwrap(o) {
-                Ok(o) => Ok(o.into_keys().map(Self::Str).collect()),
-                Err(o) => Ok(o.keys().cloned().map(Self::Str).collect()),
-            },
-            _ => todo!(),
-        }
-    }
-
-    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Error> {
+    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self> {
         match self {
             Self::Arr(a) => match Rc::try_unwrap(a) {
                 Ok(a) => Ok(a.into_iter().collect()),
                 Err(a) => Ok(a.iter().cloned().collect()),
             },
-            _ => Err(todo!()),
+            _ => Err(self),
         }
     }
 
-    fn len(&self) -> Option<usize> {
-        match self {
-            Self::Str(s) => Some(s.chars().count()),
-            Self::Arr(a) => Some(a.len()),
-            Self::Obj(o) => Some(o.len()),
-            _ => None,
-        }
-    }
-
+    /*
     fn abs(self) -> Result<Self, Self> {
         match self {
             Self::Int(i) => Ok(Self::Int(i.abs())),
@@ -94,6 +84,7 @@ impl ValT2 for Val {
             _ => Err(self),
         }
     }
+    */
 
     fn as_isize(&self) -> Option<isize> {
         match self {
@@ -132,23 +123,19 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         .chain(run(TIME))
 }
 
-fn run<'a>(fs: &'a [(&str, usize, RunPtr)]) -> impl Iterator<Item = (String, usize, Native)> + 'a {
+fn run<'a, V>(
+    fs: &'a [(&str, usize, RunPtr<V>)],
+) -> impl Iterator<Item = (String, usize, Native<V>)> + 'a {
     fs.iter()
         .map(|&(name, arity, f)| (name.to_string(), arity, Native::new(f)))
 }
 
-fn upd<'a>(
-    fs: &'a [(&str, usize, RunPtr, UpdatePtr)],
-) -> impl Iterator<Item = (String, usize, Native)> + 'a {
+fn upd<'a, V>(
+    fs: &'a [(&str, usize, RunPtr<V>, UpdatePtr<V>)],
+) -> impl Iterator<Item = (String, usize, Native<V>)> + 'a {
     fs.iter().map(|&(name, arity, run, update)| {
         (name.to_string(), arity, Native::with_update(run, update))
     })
-}
-
-// This might be included in the Rust standard library:
-// <https://github.com/rust-lang/rust/issues/93610>
-fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
-    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
 /// Return 0 for null, the absolute value for numbers, and
@@ -169,7 +156,10 @@ fn length(v: &Val) -> ValR {
 }
 
 /// Sort array by the given function.
-fn sort_by<'a>(xs: &mut [Val], f: impl Fn(Val) -> ValRs<'a>) -> Result<(), Error> {
+fn sort_by<'a, V: ValT2, F>(xs: &mut [V], f: F) -> Result<(), Error<V>>
+where
+    F: Fn(V) -> ValR2s<'a, V>,
+{
     // Some(e) iff an error has previously occurred
     let mut err = None;
     xs.sort_by_cached_key(|x| run_if_ok(x.clone(), &mut err, &f));
@@ -177,8 +167,8 @@ fn sort_by<'a>(xs: &mut [Val], f: impl Fn(Val) -> ValRs<'a>) -> Result<(), Error
 }
 
 /// Group an array by the given function.
-fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
-    let mut yx: Vec<(Vec<Val>, Val)> = xs
+fn group_by<'a, V: ValT2>(xs: Vec<V>, f: impl Fn(V) -> ValR2s<'a, V>) -> ValR2<V> {
+    let mut yx: Vec<(Vec<V>, V)> = xs
         .into_iter()
         .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
         .collect::<Result<_, _>>()?;
@@ -191,30 +181,31 @@ fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
         let mut group = Vec::from([first_x]);
         for (y, x) in yx {
             if group_y != y {
-                grouped.push(Val::arr(core::mem::take(&mut group)));
+                grouped.push(V::from_iter(core::mem::take(&mut group)));
                 group_y = y;
             }
             group.push(x);
         }
         if !group.is_empty() {
-            grouped.push(Val::arr(group))
+            grouped.push(V::from_iter(group))
         }
     }
 
-    Ok(Val::arr(grouped))
+    Ok(V::from_iter(grouped))
 }
 
 /// Get the minimum or maximum element from an array according to the given function.
-fn cmp_by<'a, R>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>, replace: R) -> ValR
+fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Error<V>>
 where
-    R: Fn(&Vec<Val>, &Vec<Val>) -> bool,
+    F: Fn(V) -> ValR2s<'a, V>,
+    R: Fn(&[V], &[V]) -> bool,
 {
     let iter = xs.into_iter();
-    let mut iter = iter.map(|x: Val| (x.clone(), f(x).collect::<Result<_, _>>()));
+    let mut iter = iter.map(|x| (x.clone(), f(x).collect::<Result<Vec<_>, _>>()));
     let (mut mx, mut my) = if let Some((x, y)) = iter.next() {
         (x, y?)
     } else {
-        return Ok(Val::Null);
+        return Ok(None);
     };
     for (x, y) in iter {
         let y = y?;
@@ -222,7 +213,7 @@ where
             (mx, my) = (x, y);
         }
     }
-    Ok(mx)
+    Ok(Some(mx))
 }
 
 /// Convert a string into an array of its Unicode codepoints.
@@ -230,6 +221,11 @@ fn explode(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
     let conv = |c: char| Ok(Val::Int(isize::try_from(c as u32).map_err(Error::str)?));
     s.chars().map(conv)
+}
+
+/// Convert an array of Unicode codepoints into a string.
+fn implode(xs: &[Val]) -> Result<String, Error> {
+    xs.iter().map(as_codepoint).collect()
 }
 
 /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
@@ -267,37 +263,6 @@ fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
     })
 }
 
-fn strip<F>(s: &Rc<String>, other: &str, f: F) -> Rc<String>
-where
-    F: for<'a> Fn(&'a str, &str) -> Option<&'a str>,
-{
-    f(s, other).map_or_else(|| s.clone(), |stripped| Rc::new(stripped.into()))
-}
-
-fn to_sh(v: &Val) -> Result<String, Error> {
-    let err = || Error::str(format_args!("cannot escape for shell: {v}"));
-    Ok(match v {
-        Val::Str(s) => format!("'{}'", s.replace('\'', r"'\''")),
-        Val::Arr(_) | Val::Obj(_) => return Err(err()),
-        v => v.to_string(),
-    })
-}
-
-fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
-    let err = || Error::str(format_args!("invalid value in a table row: {v}"));
-    Ok(match v {
-        Val::Null => "".to_owned(),
-        Val::Str(s) => f(s),
-        Val::Arr(_) | Val::Obj(_) => return Err(err()),
-        v => v.to_string(),
-    })
-}
-
-fn to_csv(vs: &[Val]) -> Result<String, Error> {
-    let fr = |v| fmt_row(v, |s| format!("\"{}\"", s.replace('"', "\"\"")));
-    Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join(","))
-}
-
 /// Return the string windows having `n` characters, where `n` > 0.
 ///
 /// Taken from <https://users.rust-lang.org/t/iterator-over-windows-of-chars/17841/3>.
@@ -332,23 +297,43 @@ fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 
     Box::new(core::iter::once_with(f))
 }
 
+fn once_or_empty<'a, T>(f: impl FnOnce() -> Option<T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
+    Box::new(core::iter::once_with(f).flatten())
+}
+
+fn bla<'a, V: ValT, F>(args: Args<'a, V>, cv: Cv<'a, V>, f: F) -> ValR2s<'a, V>
+where
+    F: Fn(&V, V) -> ValR2<V> + 'a,
+{
+    let vals = args.get(0).run(cv.clone());
+    Box::new(vals.map(move |y| f(&cv.1, y?)))
+}
+
+const BLA: &[(&str, usize, RunPtr)] = &[
+    ("length", 0, |_, cv| once_with(move || length(&cv.1))),
+    ("keys_unsorted", 0, |_, cv| {
+        once_with(move || cv.1.keys_unsorted().map(Val::arr))
+    }),
+    ("contains", 1, |args, cv| {
+        bla(args, cv, |x, y| Ok(Val::from(x.contains(&y))))
+    }),
+    ("has", 1, |args, cv| {
+        bla(args, cv, |v, k| v.has(&k).map(Val::from))
+    }),
+];
+
 const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("inputs", 0, |_, cv| {
         Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
     }),
-    ("length", 0, |_, cv| once_with(move || length(&cv.1))),
-    ("object_keys", 0, |_, cv| once_with(move || cv.1.keys())),
-    ("keys_unsorted", 0, |_, cv| {
-        once_with(move || cv.1.keys_unsorted().map(Val::arr))
-    }),
     ("floor", 0, |_, cv| {
-        once_with(move || round(cv.1, |f| f.floor()))
+        once_with(move || cv.1.round(|f| f.floor()))
     }),
     ("round", 0, |_, cv| {
-        once_with(move || round(cv.1, |f| f.round()))
+        once_with(move || cv.1.round(|f| f.round()))
     }),
     ("ceil", 0, |_, cv| {
-        once_with(move || round(cv.1, |f| f.ceil()))
+        once_with(move || cv.1.round(|f| f.ceil()))
     }),
     ("tojson", 0, |_, cv| {
         once_with(move || Ok(Val::from(cv.1.to_string())))
@@ -359,14 +344,8 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     ("explode", 0, |_, cv| {
         once_with(move || cv.1.as_str().and_then(|s| explode(s).collect()))
     }),
-    // Convert an array of Unicode codepoints into a string.
     ("implode", 0, |_, cv| {
-        once_with(move || {
-            cv.1.as_seq()
-                .map(|v| v.and_then(as_codepoint))
-                .collect::<Result<String, _>>()
-                .map(Val::from)
-        })
+        once_with(move || cv.1.into_vec().and_then(|s| implode(&s)).map(Val::from))
     }),
     ("ascii_downcase", 0, |_, cv| {
         once_with(move || cv.1.mutate_str(|s| s.make_ascii_lowercase()))
@@ -375,51 +354,33 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         once_with(move || cv.1.mutate_str(|s| s.make_ascii_uppercase()))
     }),
     ("reverse", 0, |_, cv| {
-        once_with(move || cv.1.mutate_arr(|a| a.reverse()))
+        once_with(move || cv.1.mutate_arr(|a| Ok(a.reverse())))
     }),
     ("sort", 0, |_, cv| {
-        once_with(move || {
-            let mut a: Vec<_> = cv.1.into_seq()?;
-            a.sort();
-            Ok(Val::from_iter(a))
-        })
+        once_with(move || cv.1.mutate_arr(|a| Ok(a.sort())))
     }),
     ("sort_by", 1, |args, cv| {
-        once_with(move || {
-            cv.1.try_mutate_arr(|arr| sort_by(arr, |v| args.get(0).run((cv.0.clone(), v))))
-        })
+        let f = move |v| args.get(0).run((cv.0.clone(), v));
+        once_with(move || cv.1.mutate_arr(|a| sort_by(a, f)))
     }),
     ("group_by", 1, |args, cv| {
-        let group = move |arr| group_by(arr, |v| args.get(0).run((cv.0.clone(), v)));
-        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(group))
-    }),
-    ("min_by", 1, |args, cv| {
         let f = move |v| args.get(0).run((cv.0.clone(), v));
-        let cmp = move |arr| cmp_by(arr, f, |my, y| y < my);
-        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(cmp))
+        once_with(move || cv.1.into_vec().and_then(|a| group_by(a, f)))
+    }),
+    // TODO: adapt std to return null if input is []
+    ("min_by", 1, |args, cv| {
+        let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my);
+        once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
     }),
     ("max_by", 1, |args, cv| {
-        let f = move |v| args.get(0).run((cv.0.clone(), v));
-        let cmp = move |arr| cmp_by(arr, f, |my, y| y >= my);
-        once_with(move || cv.1.into_arr().map(rc_unwrap_or_clone).and_then(cmp))
-    }),
-    ("has", 1, |args, cv| {
-        let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.has(&k?)?))))
-    }),
-    ("string_contains", 1, |args, cv| {
-        let vals = args.get(0).run(cv.clone());
-        Box::new(vals.map(move |y| Ok(Val::from(cv.1.as_str()?.contains(&**y?.as_str()?)))))
-    }),
-    ("contains", 1, |args, cv| {
-        let vals = args.get(0).run(cv.clone());
-        Box::new(vals.map(move |y| Ok(Val::Bool(cv.1.contains(&y?)))))
+        let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my);
+        once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
     }),
     ("indices", 1, |args, cv| {
-        let vals = args.get(0).run(cv.clone());
         let to_int = |i: usize| Val::Int(i.try_into().unwrap());
-        let f = move |v| indices(&cv.1, &v?).map(|idxs| Val::arr(idxs.map(to_int).collect()));
-        Box::new(vals.map(f))
+        bla(args, cv, move |x, v| {
+            indices(x, &v).map(|idxs| Val::from_iter(idxs.map(to_int)))
+        })
     }),
     ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
     ("limit", 2, |args, cv| {
@@ -436,46 +397,34 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         }))
     }),
     ("startswith", 1, |args, cv| {
-        let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.as_str()?.starts_with(&**k?.as_str()?)))))
+        bla(args, cv, |v, s| {
+            Ok(Val::from(v.as_str()?.starts_with(&**s.as_str()?)))
+        })
     }),
     ("endswith", 1, |args, cv| {
-        let keys = args.get(0).run(cv.clone());
-        Box::new(keys.map(move |k| Ok(Val::Bool(cv.1.as_str()?.ends_with(&**k?.as_str()?)))))
+        bla(args, cv, |v, s| {
+            Ok(Val::from(v.as_str()?.ends_with(&**s.as_str()?)))
+        })
     }),
     ("ltrimstr", 1, |args, cv| {
-        Box::new(args.get(0).run(cv.clone()).map(move |pre| {
-            Ok(Val::Str(strip(cv.1.as_str()?, &pre?.to_str()?, |s, o| {
-                s.strip_prefix(o)
-            })))
-        }))
+        bla(args, cv, |v, pre| {
+            Ok(v.as_str()?
+                .strip_prefix(&**pre.to_str()?)
+                .map_or_else(|| v.clone(), |s| Val::from(s.to_string())))
+        })
     }),
     ("rtrimstr", 1, |args, cv| {
-        Box::new(args.get(0).run(cv.clone()).map(move |suf| {
-            Ok(Val::Str(strip(cv.1.as_str()?, &suf?.to_str()?, |s, o| {
-                s.strip_suffix(o)
-            })))
-        }))
+        bla(args, cv, |v, suf| {
+            Ok(v.as_str()?
+                .strip_suffix(&**suf.to_str()?)
+                .map_or_else(|| v.clone(), |s| Val::from(s.to_string())))
+        })
     }),
-    ("@text", 0, |_, cv| {
-        once_with(move || Ok(Val::str(cv.1.to_string_or_clone())))
+    ("escape_str_csv", 0, |_, cv| {
+        once_with(move || Ok(Val::from(cv.1.as_str()?.replace('"', "\"\""))))
     }),
-    ("@json", 0, |_, cv| {
-        once_with(move || Ok(Val::str(cv.1.to_string())))
-    }),
-    ("@sh", 0, |_, cv| {
-        let to_shs = |v: &Val| -> Result<Vec<String>, _> {
-            match v {
-                Val::Arr(a) => Box::new(a.iter()),
-                v => box_once(v),
-            }
-            .map(to_sh)
-            .collect()
-        };
-        once_with(move || to_shs(&cv.1).map(|ss| Val::str(ss.join(" "))))
-    }),
-    ("@csv", 0, |_, cv| {
-        once_with(move || cv.1.as_arr().and_then(|a| to_csv(a)).map(Val::str))
+    ("escape_str_sh", 0, |_, cv| {
+        once_with(move || Ok(Val::from(cv.1.as_str()?.replace('\'', r"'\''"))))
     }),
 ];
 
@@ -519,21 +468,16 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 }
 
 #[cfg(feature = "format")]
-fn to_tsv(vs: &[Val]) -> Result<String, Error> {
-    let fs = |s: &str| replace(s, &["\n", "\r", "\t", "\\"], &["\\n", "\\r", "\\t", "\\\\"]);
-    let fr = |v| fmt_row(v, fs);
-    Ok(vs.iter().map(fr).collect::<Result<Vec<_>, _>>()?.join("\t"))
-}
-
-#[cfg(feature = "format")]
 const FORMAT: &[(&str, usize, RunPtr)] = &[
-    ("@tsv", 0, |_, cv| {
-        once_with(move || cv.1.as_arr().and_then(|a| to_tsv(a)).map(Val::str))
-    }),
-    ("@html", 0, |_, cv| {
+    ("escape_str_html", 0, |_, cv| {
         let pats = ["<", ">", "&", "\'", "\""];
         let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-        once_with(move || Ok(Val::str(replace(&cv.1.to_string_or_clone(), &pats, &reps))))
+        once_with(move || Ok(Val::from(replace(cv.1.as_str()?, &pats, &reps))))
+    }),
+    ("escape_str_tsv", 0, |_, cv| {
+        let pats = ["\n", "\r", "\t", "\\"];
+        let reps = ["\\n", "\\r", "\\t", "\\\\"];
+        once_with(move || Ok(Val::from(replace(cv.1.as_str()?, &pats, &reps))))
     }),
     ("@uri", 0, |_, cv| {
         use urlencoding::encode;
@@ -621,7 +565,7 @@ const MATH: &[(&str, usize, RunPtr)] = &[
 ];
 
 #[cfg(feature = "regex")]
-type Cv<'a> = (jaq_interpret::Ctx<'a>, Val);
+type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
 fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {

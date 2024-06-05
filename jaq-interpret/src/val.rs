@@ -521,19 +521,23 @@ impl Val {
         Ok(Self::Str(s))
     }
 
+    /*
     /// Apply a function to an array.
     pub fn mutate_arr(self, f: impl Fn(&mut Vec<Self>)) -> ValR {
         let mut a = self.into_arr()?;
         f(Rc::make_mut(&mut a));
         Ok(Self::Arr(a))
     }
+    */
 
+    /*
     /// Apply a fallible function to an array.
     pub fn try_mutate_arr(self, f: impl Fn(&mut Vec<Self>) -> Result<(), Error>) -> ValR {
         let mut a = self.into_arr()?;
         f(Rc::make_mut(&mut a))?;
         Ok(Self::Arr(a))
     }
+    */
 
     /// Parse at least one JSON value, given an initial token and a lexer.
     ///
