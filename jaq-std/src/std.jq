@@ -161,3 +161,12 @@ def input: first(inputs);
 # Date
 def   todate:   todateiso8601;
 def fromdate: fromdateiso8601;
+
+# Formatting
+def fmt_row(f): if . >= "" then f elif . == null then "" else "\(.)" end;
+def @csv: .[] |= fmt_row("\"\(escape_str_csv)\"") | join("," );
+def @tsv: .[] |= fmt_row(     escape_str_tsv    ) | join("\t");
+def @sh: [if isarray then .[] end | fmt_row("'\(escape_str_sh)'")] | join(" ");
+def @text: if isstring then . else "\(.)" end;
+def @json: "\(.)";
+def @html: @text | escape_str_html;
