@@ -111,6 +111,14 @@ impl<'a> Lex<'a> {
         }
     }
 
+    fn mod_then_ident(&mut self) {
+        self.ident0();
+        if let Some(rest) = self.i.strip_prefix("::") {
+            self.i = rest.strip_prefix(['@', '$']).unwrap_or(rest);
+            self.ident1();
+        }
+    }
+
     /// Lex a sequence matching `[a-zA-Z0-9_]*`.
     fn ident0(&mut self) {
         self.trim(|c: char| c.is_ascii_alphanumeric() || c == '_');
@@ -217,7 +225,7 @@ impl<'a> Lex<'a> {
 
         let mut chars = self.i.chars();
         Some(match chars.next()? {
-            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(chars, Self::ident0)),
+            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(chars, Self::mod_then_ident)),
             '$' | '@' => Token::Word(self.consumed(chars, Self::ident1)),
             '0'..='9' => Token::Num(self.consumed(chars, Self::num)),
             c if is_op(c) => Token::Op(self.consumed(chars, |lex| lex.trim(is_op))),
