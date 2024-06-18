@@ -194,7 +194,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
         Err(Error::Chumsky(errs)) => {
             for e in errs {
                 scope
-                    .post_message(&format!("⚠️ Parse error: {}", report(&filter, &e)).into())
+                    .post_message(&format!("⚠️ Parse error: {}", report(filter, &e)).into())
                     .unwrap();
             }
         }
