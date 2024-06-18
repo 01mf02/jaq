@@ -1,4 +1,5 @@
 use clap::{Parser, ValueEnum};
+use core::fmt::{self, Display, Formatter};
 use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -71,7 +72,7 @@ struct Cli {
 
     /// Color output
     #[arg(long, value_name = "WHEN", default_value = "auto")]
-    color: Color,
+    color: ColorWhen,
 
     /// Read filter from a file
     ///
@@ -100,7 +101,7 @@ struct Cli {
 }
 
 #[derive(Clone, ValueEnum)]
-enum Color {
+enum ColorWhen {
     Always,
     Auto,
     Never,
@@ -110,10 +111,10 @@ impl Cli {
     fn color_mode(&self) -> colored_json::ColorMode {
         use colored_json::{ColorMode, Output};
         match self.color {
-            Color::Always => ColorMode::On,
-            Color::Auto if self.in_place => ColorMode::Off,
-            Color::Auto => ColorMode::Auto(Output::StdOut),
-            Color::Never => ColorMode::Off,
+            ColorWhen::Always => ColorMode::On,
+            ColorWhen::Auto if self.in_place => ColorMode::Off,
+            ColorWhen::Auto => ColorMode::Auto(Output::StdOut),
+            ColorWhen::Never => ColorMode::Off,
         }
     }
 }
@@ -126,6 +127,7 @@ fn main() -> ExitCode {
 }
 
 fn real_main() -> Result<ExitCode, Error> {
+    // TODO: move into `main`
     let cli = Cli::parse();
 
     use env_logger::Env;
@@ -367,6 +369,12 @@ enum Error {
 
 impl Termination for Error {
     fn report(self) -> ExitCode {
+        if atty::is(atty::Stream::Stderr) {
+            yansi::enable();
+        } else {
+            yansi::disable();
+        };
+
         let exit = match self {
             Self::FalseOrNull => 1,
             Self::Io(prefix, e) => {
@@ -381,11 +389,9 @@ impl Termination for Error {
                 eprintln!("Error: {e}");
                 2
             }
-            Self::Chumsky(e) => {
-                for err in e {
-                    report(err.error)
-                        .eprint(ariadne::Source::from(err.filter))
-                        .unwrap();
+            Self::Chumsky(errs) => {
+                for e in errs {
+                    eprintln!("Error: {}", report(&e.filter, &e.error));
                 }
                 3
             }
@@ -486,20 +492,36 @@ fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Re
     Ok(y)
 }
 
-fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
-    use ariadne::{Color, Fmt, Label, Report, ReportKind};
+#[derive(Debug)]
+struct Report<'a> {
+    code: &'a str,
+    message: String,
+    labels: Vec<(core::ops::Range<usize>, String, Color)>,
+}
+
+#[derive(Clone, Debug)]
+enum Color {
+    Yellow,
+    Red,
+}
+
+impl Color {
+    fn apply(&self, d: impl Display) -> String {
+        use yansi::{Color, Paint};
+        let color = match self {
+            Self::Yellow => Color::Yellow,
+            Self::Red => Color::Red,
+        };
+        d.fg(color).to_string()
+    }
+}
+
+fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
     use chumsky::error::SimpleReason;
 
-    // color error messages only if we are on a tty
-    let isatty = atty::is(atty::Stream::Stderr);
-    let (red, yellow) = if isatty {
-        (Color::Red, Color::Yellow)
-    } else {
-        (Color::Unset, Color::Unset)
-    };
-    let config = ariadne::Config::default().with_color(isatty);
+    let eof = || "end of input".to_string();
 
-    let msg = if let SimpleReason::Custom(msg) = e.reason() {
+    let message = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
         let found = if e.found().is_some() {
@@ -515,13 +537,8 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
         let expected = if e.expected().len() == 0 {
             "something else".to_string()
         } else {
-            e.expected()
-                .map(|expected| match expected {
-                    Some(expected) => expected.to_string(),
-                    None => "end of input".to_string(),
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
+            let f = |e: &Option<String>| e.as_ref().map_or_else(eof, |e| e.to_string());
+            e.expected().map(f).collect::<Vec<_>>().join(", ")
         };
         format!("{found}{when}, expected {expected}",)
     };
@@ -529,29 +546,46 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
     let label = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
-        format!(
-            "Unexpected {}",
-            e.found()
-                .map(|c| format!("token {}", c.fg(red)))
-                .unwrap_or_else(|| "end of input".to_string())
-        )
+        let token = |c: &String| format!("token {}", Color::Red.apply(c));
+        format!("Unexpected {}", e.found().map_or_else(eof, token))
     };
-
-    let report = Report::build(ReportKind::Error, (), e.span().start)
-        .with_message(msg)
-        .with_label(Label::new(e.span()).with_message(label).with_color(red));
-
-    let report = match e.reason() {
-        SimpleReason::Unclosed { span, delimiter } => report.with_label(
-            Label::new(span.clone())
-                .with_message(format!("Unclosed delimiter {}", delimiter.fg(yellow)))
-                .with_color(yellow),
-        ),
-        SimpleReason::Unexpected => report,
-        SimpleReason::Custom(_) => report,
+    // convert character indices to byte offsets
+    let char_to_byte = |i| {
+        code.char_indices()
+            .map(|(i, _c)| i)
+            .chain([code.len(), code.len()])
+            .nth(i)
+            .unwrap()
     };
+    let conv = |span: &core::ops::Range<_>| char_to_byte(span.start)..char_to_byte(span.end);
+    let mut labels = Vec::from([(conv(&e.span()), label, Color::Red)]);
 
-    report.with_config(config).finish()
+    if let SimpleReason::Unclosed { span, delimiter } = e.reason() {
+        let text = format!("Unclosed delimiter {}", Color::Yellow.apply(delimiter));
+        labels.insert(0, (conv(span), text, Color::Yellow));
+    }
+    Report {
+        code,
+        message,
+        labels,
+    }
+}
+
+impl Display for Report<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        use codesnake::{Block, CodeWidth, Label, LineIndex};
+        let idx = LineIndex::new(self.code);
+        let labels = self.labels.clone().into_iter().map(|(range, text, color)| {
+            Label::new(range, text).with_style(move |s| color.apply(s).to_string())
+        });
+        let block = Block::new(&idx, labels).unwrap().map_code(|c| {
+            let c = c.replace('\t', "    ");
+            let w = unicode_width::UnicodeWidthStr::width(&*c);
+            CodeWidth::new(c, core::cmp::max(w, 1))
+        });
+        writeln!(f, "{}", self.message)?;
+        write!(f, "{}\n{}{}", block.prologue(), block, block.epilogue())
+    }
 }
 
 fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {

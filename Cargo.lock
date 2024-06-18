@@ -31,16 +31,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
 
 [[package]]
-name = "ariadne"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd002a6223f12c7a95cdd4b1cb3a0149d22d37f7a9ecdb2cb691a071fe236c29"
-dependencies = [
- "unicode-width",
- "yansi",
-]
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -137,6 +127,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "codesnake"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cdbcda08384319005fd4b79b08aa04728dbafa702d304d737b5ccbd556df331"
+
+[[package]]
 name = "colored_json"
 version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -145,7 +141,7 @@ dependencies = [
  "atty",
  "serde",
  "serde_json",
- "yansi",
+ "yansi 0.5.1",
 ]
 
 [[package]]
@@ -262,10 +258,10 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 name = "jaq"
 version = "1.4.0"
 dependencies = [
- "ariadne",
  "atty",
  "chumsky",
  "clap",
+ "codesnake",
  "colored_json",
  "env_logger",
  "hifijson",
@@ -278,6 +274,8 @@ dependencies = [
  "mimalloc",
  "serde_json",
  "tempfile",
+ "unicode-width",
+ "yansi 1.0.1",
 ]
 
 [[package]]
@@ -324,8 +322,8 @@ name = "jaq-play"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "ariadne",
  "chumsky",
+ "codesnake",
  "console_log",
  "getrandom",
  "hifijson",
@@ -336,6 +334,7 @@ dependencies = [
  "jaq-syn",
  "js-sys",
  "log",
+ "unicode-width",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -645,9 +644,9 @@ checksum = "22049a19f4a68748a168c0fc439f9516686aa045927ff767eca0a85101fb6e73"
 
 [[package]]
 name = "unicode-width"
-version = "0.1.11"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e51733f11c9c4f72aa0c160008246859e340b00807569a0da0e7a1079b27ba85"
+checksum = "0336d538f7abc86d282a4189614dfaa90810dfc2c6f6427eaf88e16311dd225d"
 
 [[package]]
 name = "urlencoding"
@@ -767,6 +766,12 @@ name = "yansi"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
+
+[[package]]
+name = "yansi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zerocopy"
