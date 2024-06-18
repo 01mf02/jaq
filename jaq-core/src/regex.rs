@@ -123,7 +123,7 @@ impl From<Match> for Val {
             ("offset", Self::Int(m.offset as isize)),
             ("length", Self::Int(m.length as isize)),
             ("string", Self::str(m.string)),
-            ("name", m.name.map(Self::str).unwrap_or(Self::Null)),
+            ("name", m.name.map_or(Self::Null, Self::str)),
         ];
         let obj = obj.into_iter().filter(|(_, v)| *v != Self::Null);
         Self::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())

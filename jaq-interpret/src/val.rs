@@ -807,9 +807,9 @@ impl PartialEq for Val {
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Int(x), Self::Int(y)) => x == y,
             (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
-                float_eq(&(*i as f64), f)
+                float_eq(*i as f64, *f)
             }
-            (Self::Float(x), Self::Float(y)) => float_eq(x, y),
+            (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
             (Self::Num(n), y) => &Self::from_dec_str(n) == y,
             (x, Self::Num(n)) => x == &Self::from_dec_str(n),
@@ -836,9 +836,9 @@ impl Ord for Val {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Int(x), Self::Int(y)) => x.cmp(y),
-            (Self::Int(i), Self::Float(f)) => float_cmp(&(*i as f64), f),
-            (Self::Float(f), Self::Int(i)) => float_cmp(f, &(*i as f64)),
-            (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
+            (Self::Int(i), Self::Float(f)) => float_cmp(*i as f64, *f),
+            (Self::Float(f), Self::Int(i)) => float_cmp(*f, *i as f64),
+            (Self::Float(x), Self::Float(y)) => float_cmp(*x, *y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
             (Self::Num(n), y) => Self::from_dec_str(n).cmp(y),
             (x, Self::Num(n)) => x.cmp(&Self::from_dec_str(n)),
@@ -880,15 +880,15 @@ impl Ord for Val {
     }
 }
 
-fn float_eq(left: &f64, right: &f64) -> bool {
+fn float_eq(left: f64, right: f64) -> bool {
     float_cmp(left, right) == Ordering::Equal
 }
 
-fn float_cmp(left: &f64, right: &f64) -> Ordering {
-    if *left == 0. && *right == 0. {
+fn float_cmp(left: f64, right: f64) -> Ordering {
+    if left == 0. && right == 0. {
         Ordering::Equal
     } else {
-        f64::total_cmp(left, right)
+        f64::total_cmp(&left, &right)
     }
 }
 

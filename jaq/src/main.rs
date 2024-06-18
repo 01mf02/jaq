@@ -1,4 +1,5 @@
 use clap::{Parser, ValueEnum};
+use core::fmt::{self, Display, Formatter};
 use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
@@ -71,7 +72,7 @@ struct Cli {
 
     /// Color output
     #[arg(long, value_name = "WHEN", default_value = "auto")]
-    color: Color,
+    color: ColorWhen,
 
     /// Read filter from a file
     ///
@@ -100,45 +101,56 @@ struct Cli {
 }
 
 #[derive(Clone, ValueEnum)]
-enum Color {
+enum ColorWhen {
     Always,
     Auto,
     Never,
 }
 
-impl Cli {
-    fn color_mode(&self) -> colored_json::ColorMode {
-        use colored_json::{ColorMode, Output};
-        match self.color {
-            Color::Always => ColorMode::On,
-            Color::Auto if self.in_place => ColorMode::Off,
-            Color::Auto => ColorMode::Auto(Output::StdOut),
-            Color::Never => ColorMode::Off,
+impl ColorWhen {
+    fn use_if(&self, f: impl Fn() -> bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Auto => f(),
+            Self::Never => false,
         }
     }
 }
 
 fn main() -> ExitCode {
-    match real_main() {
-        Ok(exit) => exit,
-        Err(e) => e.report(),
-    }
-}
-
-fn real_main() -> Result<ExitCode, Error> {
-    let cli = Cli::parse();
-
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
         // omit name of module that emitted log message
         .format_target(false)
         .init();
 
+    let cli = Cli::parse();
+
+    if !cli.in_place && cli.color.use_if(|| atty::is(atty::Stream::Stdout)) {
+        yansi::enable();
+    } else {
+        yansi::disable();
+    }
+
+    match real_main(&cli) {
+        Ok(exit) => exit,
+        Err(e) => {
+            if cli.color.use_if(|| atty::is(atty::Stream::Stderr)) {
+                yansi::enable();
+            } else {
+                yansi::disable();
+            }
+            e.report()
+        }
+    }
+}
+
+fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     if let Some(test_file) = &cli.run_tests {
         return Ok(run_tests(std::fs::File::open(test_file)?));
     }
 
-    let (vars, ctx) = binds(&cli)?.into_iter().unzip();
+    let (vars, ctx) = binds(cli)?.into_iter().unzip();
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
@@ -155,14 +167,14 @@ fn real_main() -> Result<ExitCode, Error> {
     let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
-        let inputs = read_buffered(&cli, io::stdin().lock());
-        with_stdout(|out| run(&cli, &filter, ctx, inputs, |v| print(&cli, v, out)))?
+        let inputs = read_buffered(cli, io::stdin().lock());
+        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
         for file in files {
             let path = std::path::Path::new(file);
             let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
-            let inputs = read_slice(&cli, &file);
+            let inputs = read_slice(cli, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -170,8 +182,8 @@ fn real_main() -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                last = run(&cli, &filter, ctx.clone(), inputs, |output| {
-                    print(&cli, output, tmp.as_file_mut())
+                last = run(cli, &filter, ctx.clone(), inputs, |output| {
+                    print(tmp.as_file_mut(), cli, &output)
                 })?;
 
                 // replace the input file with the temporary file
@@ -180,7 +192,7 @@ fn real_main() -> Result<ExitCode, Error> {
                 std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(|out| {
-                    run(&cli, &filter, ctx.clone(), inputs, |v| print(&cli, v, out))
+                    run(cli, &filter, ctx.clone(), inputs, |v| print(out, cli, &v))
                 })?;
             }
         }
@@ -381,11 +393,9 @@ impl Termination for Error {
                 eprintln!("Error: {e}");
                 2
             }
-            Self::Chumsky(e) => {
-                for err in e {
-                    report(err.error)
-                        .eprint(ariadne::Source::from(err.filter))
-                        .unwrap();
+            Self::Chumsky(errs) => {
+                for e in errs {
+                    eprintln!("Error: {}", report(&e.filter, &e.error));
                 }
                 3
             }
@@ -449,32 +459,108 @@ fn run(
     Ok(last)
 }
 
-fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
-    use colored_json::{ColoredFormatter, CompactFormatter, PrettyFormatter};
-    match val {
-        Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
-        _ => {
-            let val = serde_json::Value::from(val);
-            let mode = cli.color_mode();
-            let indent = if cli.tab {
-                String::from("\t")
-            } else {
-                " ".repeat(cli.indent)
-            };
+struct FormatterFn<F>(F);
 
-            // this looks ugly, but it is hard to abstract over the `Formatter` because
-            // we cannot create a `Box<dyn Formatter>` because
-            // Rust says that the `Formatter` trait is not "object safe"
-            if cli.compact_output {
-                ColoredFormatter::new(CompactFormatter).write_colored_json(&val, writer, mode)
-            } else {
-                ColoredFormatter::new(PrettyFormatter::with_indent(indent.as_bytes()))
-                    .write_colored_json(&val, writer, mode)
-            }?;
+impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.0(f)
+    }
+}
+
+struct PpOpts {
+    compact: bool,
+    indent: String,
+}
+
+impl PpOpts {
+    fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
+        if !self.compact {
+            write!(f, "{}", self.indent.repeat(level))?;
+        }
+        Ok(())
+    }
+
+    fn newline(&self, f: &mut Formatter) -> fmt::Result {
+        if !self.compact {
+            writeln!(f)?;
+        }
+        Ok(())
+    }
+}
+
+fn fmt_seq<T, I, F>(fmt: &mut Formatter, opts: &PpOpts, level: usize, xs: I, f: F) -> fmt::Result
+where
+    I: IntoIterator<Item = T>,
+    F: Fn(&mut Formatter, T) -> fmt::Result,
+{
+    opts.newline(fmt)?;
+    let mut iter = xs.into_iter().peekable();
+    while let Some(x) = iter.next() {
+        opts.indent(fmt, level + 1)?;
+        f(fmt, x)?;
+        if iter.peek().is_some() {
+            write!(fmt, ",")?;
+        }
+        opts.newline(fmt)?;
+    }
+    opts.indent(fmt, level)
+}
+
+fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
+    use yansi::Paint;
+    match v {
+        Val::Null => "null".fmt(f),
+        Val::Bool(b) => b.fmt(f),
+        Val::Int(i) => i.fmt(f),
+        Val::Float(x) if x.is_finite() => write!(f, "{x:?}"),
+        Val::Float(_) => "null".fmt(f),
+        Val::Num(n) => n.fmt(f),
+        Val::Str(s) => write!(f, "{:?}", s.green()),
+        Val::Arr(a) => {
+            '['.bold().fmt(f)?;
+            if !a.is_empty() {
+                fmt_seq(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
+            }
+            ']'.bold().fmt(f)
+        }
+        Val::Obj(o) => {
+            '{'.bold().fmt(f)?;
+            if !o.is_empty() {
+                fmt_seq(f, opts, level, &**o, |f, (k, val)| {
+                    write!(f, "{:?}:", k.bold())?;
+                    if !opts.compact {
+                        write!(f, " ")?;
+                    }
+                    fmt_val(f, opts, level + 1, val)
+                })?;
+            }
+            '}'.bold().fmt(f)
+        }
+    }
+}
+
+fn print(writer: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
+    let f = |f: &mut Formatter| fmt_val_root(f, cli, val);
+    write!(writer, "{}", FormatterFn(f))
+}
+
+fn fmt_val_root(f: &mut Formatter, cli: &Cli, val: &Val) -> fmt::Result {
+    match val {
+        Val::Str(s) if cli.raw_output => write!(f, "{s}")?,
+        _ => {
+            let opts = PpOpts {
+                compact: cli.compact_output,
+                indent: if cli.tab {
+                    String::from("\t")
+                } else {
+                    " ".repeat(cli.indent)
+                },
+            };
+            fmt_val(f, &opts, 0, val)?;
         }
     };
     if !cli.join_output {
-        writeln!(writer)?;
+        writeln!(f)?;
     }
     Ok(())
 }
@@ -486,20 +572,36 @@ fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Re
     Ok(y)
 }
 
-fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
-    use ariadne::{Color, Fmt, Label, Report, ReportKind};
+#[derive(Debug)]
+struct Report<'a> {
+    code: &'a str,
+    message: String,
+    labels: Vec<(core::ops::Range<usize>, String, Color)>,
+}
+
+#[derive(Clone, Debug)]
+enum Color {
+    Yellow,
+    Red,
+}
+
+impl Color {
+    fn apply(&self, d: impl Display) -> String {
+        use yansi::{Color, Paint};
+        let color = match self {
+            Self::Yellow => Color::Yellow,
+            Self::Red => Color::Red,
+        };
+        d.fg(color).to_string()
+    }
+}
+
+fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
     use chumsky::error::SimpleReason;
 
-    // color error messages only if we are on a tty
-    let isatty = atty::is(atty::Stream::Stderr);
-    let (red, yellow) = if isatty {
-        (Color::Red, Color::Yellow)
-    } else {
-        (Color::Unset, Color::Unset)
-    };
-    let config = ariadne::Config::default().with_color(isatty);
+    let eof = || "end of input".to_string();
 
-    let msg = if let SimpleReason::Custom(msg) = e.reason() {
+    let message = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
         let found = if e.found().is_some() {
@@ -515,13 +617,8 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
         let expected = if e.expected().len() == 0 {
             "something else".to_string()
         } else {
-            e.expected()
-                .map(|expected| match expected {
-                    Some(expected) => expected.to_string(),
-                    None => "end of input".to_string(),
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
+            let f = |e: &Option<String>| e.as_ref().map_or_else(eof, |e| e.to_string());
+            e.expected().map(f).collect::<Vec<_>>().join(", ")
         };
         format!("{found}{when}, expected {expected}",)
     };
@@ -529,29 +626,46 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
     let label = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
-        format!(
-            "Unexpected {}",
-            e.found()
-                .map(|c| format!("token {}", c.fg(red)))
-                .unwrap_or_else(|| "end of input".to_string())
-        )
+        let token = |c: &String| format!("token {}", Color::Red.apply(c));
+        format!("Unexpected {}", e.found().map_or_else(eof, token))
     };
-
-    let report = Report::build(ReportKind::Error, (), e.span().start)
-        .with_message(msg)
-        .with_label(Label::new(e.span()).with_message(label).with_color(red));
-
-    let report = match e.reason() {
-        SimpleReason::Unclosed { span, delimiter } => report.with_label(
-            Label::new(span.clone())
-                .with_message(format!("Unclosed delimiter {}", delimiter.fg(yellow)))
-                .with_color(yellow),
-        ),
-        SimpleReason::Unexpected => report,
-        SimpleReason::Custom(_) => report,
+    // convert character indices to byte offsets
+    let char_to_byte = |i| {
+        code.char_indices()
+            .map(|(i, _c)| i)
+            .chain([code.len(), code.len()])
+            .nth(i)
+            .unwrap()
     };
+    let conv = |span: &core::ops::Range<_>| char_to_byte(span.start)..char_to_byte(span.end);
+    let mut labels = Vec::from([(conv(&e.span()), label, Color::Red)]);
 
-    report.with_config(config).finish()
+    if let SimpleReason::Unclosed { span, delimiter } = e.reason() {
+        let text = format!("Unclosed delimiter {}", Color::Yellow.apply(delimiter));
+        labels.insert(0, (conv(span), text, Color::Yellow));
+    }
+    Report {
+        code,
+        message,
+        labels,
+    }
+}
+
+impl Display for Report<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        use codesnake::{Block, CodeWidth, Label, LineIndex};
+        let idx = LineIndex::new(self.code);
+        let labels = self.labels.clone().into_iter().map(|(range, text, color)| {
+            Label::new(range, text).with_style(move |s| color.apply(s).to_string())
+        });
+        let block = Block::new(&idx, labels).unwrap().map_code(|c| {
+            let c = c.replace('\t', "    ");
+            let w = unicode_width::UnicodeWidthStr::width(&*c);
+            CodeWidth::new(c, core::cmp::max(w, 1))
+        });
+        writeln!(f, "{}", self.message)?;
+        write!(f, "{}\n{}{}", block.prologue(), block, block.epilogue())
+    }
 }
 
 fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
@@ -560,8 +674,8 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
 
     let filter = parse(&test.filter, Vec::new())?;
 
-    use hifijson::token::Lex;
     let json = |s: String| {
+        use hifijson::token::Lex;
         hifijson::SliceLexer::new(s.as_bytes())
             .exactly_one(Val::parse)
             .map_err(invalid_data)
@@ -573,7 +687,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
 }
 
 fn run_tests(file: std::fs::File) -> ExitCode {
-    let lines = io::BufReader::new(file).lines().map(|l| l.unwrap());
+    let lines = io::BufReader::new(file).lines().map(Result::unwrap);
     let tests = jaq_syn::test::Parser::new(lines);
 
     let (mut passed, mut total) = (0, 0);

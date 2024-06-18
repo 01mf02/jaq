@@ -187,7 +187,7 @@ fn group_by<'a, V: ValT2>(xs: Vec<V>, f: impl Fn(V) -> ValR2s<'a, V>) -> ValR2<V
             group.push(x);
         }
         if !group.is_empty() {
-            grouped.push(V::from_iter(group))
+            grouped.push(V::from_iter(group));
         }
     }
 
@@ -246,8 +246,8 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
 ///    end;
 /// ~~~
 fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
-    let cmp = by.cmp(&Val::from(0));
     use core::cmp::Ordering::{Equal, Greater, Less};
+    let cmp = by.cmp(&Val::Int(0));
     core::iter::from_fn(move || match from.clone() {
         Ok(x) => match cmp {
             Greater => x < to,
@@ -327,14 +327,12 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
     }),
     ("floor", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.floor()))
+        once_with(move || cv.1.round(f64::floor))
     }),
     ("round", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.round()))
+        once_with(move || cv.1.round(f64::round))
     }),
-    ("ceil", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.ceil()))
-    }),
+    ("ceil", 0, |_, cv| once_with(move || cv.1.round(f64::ceil))),
     ("tojson", 0, |_, cv| {
         once_with(move || Ok(Val::from(cv.1.to_string())))
     }),

@@ -20,14 +20,14 @@ jaq-parse     = { version = "1.0.0", path = "../jaq-parse" }
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 jaq-core      = { version = "1.2.0", path = "../jaq-core" }
 jaq-std       = { version = "1.2.0", path = "../jaq-std" }
-ariadne = "0.4.0"
 atty = "0.2"
 chumsky = { version = "0.9.0", default-features = false }
+codesnake = { version = "0.1" }
 clap = { version = "4.0.0", features = ["derive"] }
-colored_json = "3.0.1"
 env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
 memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
-serde_json = { version = "1.0.81", features = [ "arbitrary_precision", "preserve_order" ] }
 tempfile = "3.3.0"
+unicode-width = "0.1.13"
+yansi = "1.0.1"
