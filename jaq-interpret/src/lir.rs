@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Low-level Intermediate Representation of filters.
 
 use crate::filter::{self, Ast as Filter, CallTyp, Id as AbsId};

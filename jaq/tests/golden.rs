@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use std::{env, io, process, str};
 
 fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {

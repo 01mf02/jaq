@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Functions on iterators over results.
 
 // TODO for v2.0: remove this from `results`

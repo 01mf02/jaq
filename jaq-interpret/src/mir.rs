@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Mid-level Intermediate Representation of definitions and filters.
 //!
 //! This mainly analyses occurrences of recursion, which is

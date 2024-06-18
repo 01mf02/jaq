@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use alloc::{string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
 

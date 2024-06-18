@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use alloc::boxed::Box;
 use alloc::rc::Rc;
 use once_cell::unsync::Lazy;

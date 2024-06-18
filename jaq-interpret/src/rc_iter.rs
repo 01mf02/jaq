@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 /// A more flexible version of `&mut impl Iterator`.
 pub struct RcIter<I: ?Sized>(core::cell::RefCell<I>);
 

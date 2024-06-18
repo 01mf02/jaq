@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Functions from values to streams of values.
 use crate::{Call, MathOp, OrdOp, Path, Span, Spanned, Str};
 use alloc::{boxed::Box, string::String, vec::Vec};

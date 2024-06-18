@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use super::{filter::filter, Delim, Token};
 use alloc::vec::Vec;
 use chumsky::prelude::*;

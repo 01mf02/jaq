@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Value access and iteration.
 use alloc::vec::Vec;
 #[cfg(feature = "serde")]

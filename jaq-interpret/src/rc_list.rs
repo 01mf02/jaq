@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct List<T>(alloc::rc::Rc<Node<T>>);
 

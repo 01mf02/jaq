@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! JSON query language syntax.
 #![no_std]
 #![forbid(unsafe_code)]
