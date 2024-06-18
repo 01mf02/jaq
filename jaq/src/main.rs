@@ -144,7 +144,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         return Ok(run_tests(std::fs::File::open(test_file)?));
     }
 
-    let (vars, ctx) = binds(&cli)?.into_iter().unzip();
+    let (vars, ctx) = binds(cli)?.into_iter().unzip();
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
@@ -161,14 +161,14 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
-        let inputs = read_buffered(&cli, io::stdin().lock());
-        with_stdout(|out| run(&cli, &filter, ctx, inputs, |v| print(&cli, v, out)))?
+        let inputs = read_buffered(cli, io::stdin().lock());
+        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(cli, v, out)))?
     } else {
         let mut last = None;
         for file in files {
             let path = std::path::Path::new(file);
             let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
-            let inputs = read_slice(&cli, &file);
+            let inputs = read_slice(cli, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -176,8 +176,8 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                last = run(&cli, &filter, ctx.clone(), inputs, |output| {
-                    print(&cli, output, tmp.as_file_mut())
+                last = run(cli, &filter, ctx.clone(), inputs, |output| {
+                    print(cli, output, tmp.as_file_mut())
                 })?;
 
                 // replace the input file with the temporary file
@@ -186,7 +186,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(|out| {
-                    run(&cli, &filter, ctx.clone(), inputs, |v| print(&cli, v, out))
+                    run(cli, &filter, ctx.clone(), inputs, |v| print(cli, v, out))
                 })?;
             }
         }
