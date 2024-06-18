@@ -475,14 +475,14 @@ struct PpOpts {
 impl PpOpts {
     fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
         if !self.compact {
-            write!(f, "{}", self.indent.repeat(level))?
+            write!(f, "{}", self.indent.repeat(level))?;
         }
         Ok(())
     }
 
     fn newline(&self, f: &mut Formatter) -> fmt::Result {
         if !self.compact {
-            writeln!(f)?
+            writeln!(f)?;
         }
         Ok(())
     }

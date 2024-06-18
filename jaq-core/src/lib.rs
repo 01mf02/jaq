@@ -118,7 +118,7 @@ fn group_by<'a>(xs: Vec<Val>, f: impl Fn(Val) -> ValRs<'a>) -> ValR {
             group.push(x);
         }
         if !group.is_empty() {
-            grouped.push(Val::arr(group))
+            grouped.push(Val::arr(group));
         }
     }
 
@@ -176,8 +176,8 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
 ///    end;
 /// ~~~
 fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
-    let cmp = by.cmp(&Val::Int(0));
     use core::cmp::Ordering::{Equal, Greater, Less};
+    let cmp = by.cmp(&Val::Int(0));
     core::iter::from_fn(move || match from.clone() {
         Ok(x) => match cmp {
             Greater => x < to,
@@ -212,7 +212,7 @@ fn to_sh(v: &Val) -> Result<String, Error> {
 fn fmt_row(v: &Val, f: impl Fn(&str) -> String) -> Result<String, Error> {
     let err = || Error::str(format_args!("invalid value in a table row: {v}"));
     Ok(match v {
-        Val::Null => "".to_owned(),
+        Val::Null => String::new(),
         Val::Str(s) => f(s),
         Val::Arr(_) | Val::Obj(_) => return Err(err()),
         v => v.to_string(),
@@ -267,14 +267,12 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         once_with(move || cv.1.keys_unsorted().map(Val::arr))
     }),
     ("floor", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.floor()))
+        once_with(move || cv.1.round(f64::floor))
     }),
     ("round", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.round()))
+        once_with(move || cv.1.round(f64::round))
     }),
-    ("ceil", 0, |_, cv| {
-        once_with(move || cv.1.round(|f| f.ceil()))
-    }),
+    ("ceil", 0, |_, cv| once_with(move || cv.1.round(f64::ceil))),
     ("tojson", 0, |_, cv| {
         once_with(move || Ok(Val::str(cv.1.to_string())))
     }),

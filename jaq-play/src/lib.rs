@@ -18,14 +18,14 @@ struct PpOpts {
 impl PpOpts {
     fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
         if !self.compact {
-            write!(f, "{}", self.indent.repeat(level))?
+            write!(f, "{}", self.indent.repeat(level))?;
         }
         Ok(())
     }
 
     fn newline(&self, f: &mut Formatter) -> fmt::Result {
         if !self.compact {
-            writeln!(f)?
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -159,7 +159,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
             Val::Str(s) if settings.raw_output => span(f, "string", escape(s)),
             y => fmt_val(f, &pp_opts, 0, y),
         });
-        scope.post_message(&s.to_string().into()).unwrap()
+        scope.post_message(&s.to_string().into()).unwrap();
     };
     match process(filter, input, &settings, post_value) {
         Ok(()) => (),
@@ -237,7 +237,7 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     for x in if settings.null_input { &null } else { &inputs } {
         let x = x.map_err(Error::Hifijson)?;
         for y in filter.run((Ctx::new([], &inputs), x)) {
-            f(y.map_err(Error::Jaq)?)
+            f(y.map_err(Error::Jaq)?);
         }
     }
     Ok(())
