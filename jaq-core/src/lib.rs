@@ -366,11 +366,11 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
         once_with(move || cv.1.into_vec().and_then(|a| group_by(a, f)))
     }),
     // TODO: adapt std to return null if input is []
-    ("min_by", 1, |args, cv| {
+    ("min_by_or_empty", 1, |args, cv| {
         let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my);
         once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
     }),
-    ("max_by", 1, |args, cv| {
+    ("max_by_or_empty", 1, |args, cv| {
         let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my);
         once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
     }),

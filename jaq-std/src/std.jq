@@ -79,6 +79,8 @@ def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 def add: reduce .[] as $x (null; . + $x);
 def join(x): .[:-1][] += x | add;
+def min_by(f): [min_by_or_empty(f)] | if . == [] then null else .[] end;
+def max_by(f): [max_by_or_empty(f)] | if . == [] then null else .[] end;
 def min: min_by(.);
 def max: max_by(.);
 def unique_by(f): [group_by(f)[] | .[0]];
