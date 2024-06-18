@@ -917,7 +917,7 @@ impl fmt::Display for Val {
                 if let Some((k, v)) = iter.next() {
                     write!(f, "{k:?}:{v}")?;
                 }
-                iter.try_for_each(|(k, v)| write!(f, ",\"{k}\":{v}"))?;
+                iter.try_for_each(|(k, v)| write!(f, ",{k:?}:{v}"))?;
                 write!(f, "}}")
             }
         }
