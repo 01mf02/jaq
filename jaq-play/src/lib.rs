@@ -2,28 +2,17 @@ use core::fmt::{self, Debug, Display, Formatter};
 use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
-struct Pp<'a> {
-    val: &'a Val,
-    opts: &'a PpOpts,
-    level: usize,
-    indent_start: bool,
+struct FormatterFn<F>(F);
+
+impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.0(f)
+    }
 }
 
 struct PpOpts {
-    raw: bool,
     compact: bool,
     indent: String,
-}
-
-impl<'a> Pp<'a> {
-    fn new(val: &'a Val, opts: &'a PpOpts) -> Self {
-        Self {
-            val,
-            opts,
-            level: 0,
-            indent_start: false,
-        }
-    }
 }
 
 impl PpOpts {
@@ -42,6 +31,55 @@ impl PpOpts {
     }
 }
 
+fn fmt_seq<T, I, F>(fmt: &mut Formatter, opts: &PpOpts, level: usize, xs: I, f: F) -> fmt::Result
+where
+    I: IntoIterator<Item = T>,
+    F: Fn(&mut Formatter, T) -> fmt::Result,
+{
+    opts.newline(fmt)?;
+    let mut iter = xs.into_iter().peekable();
+    while let Some(x) = iter.next() {
+        opts.indent(fmt, level + 1)?;
+        f(fmt, x)?;
+        if iter.peek().is_some() {
+            write!(fmt, ",")?;
+        }
+        opts.newline(fmt)?;
+    }
+    opts.indent(fmt, level)
+}
+
+fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
+    match v {
+        Val::Null => span(f, "null", "null"),
+        Val::Bool(b) => span(f, "boolean", b),
+        Val::Int(i) => span(f, "number", i),
+        Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
+        Val::Float(_) => span(f, "null", "null"),
+        Val::Num(n) => span(f, "number", n),
+        Val::Str(s) => span_dbg(f, "string", escape(s)),
+        Val::Arr(a) if a.is_empty() => write!(f, "[]"),
+        Val::Arr(a) => {
+            write!(f, "[")?;
+            fmt_seq(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
+            write!(f, "]")
+        }
+        Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
+        Val::Obj(o) => {
+            write!(f, "{{")?;
+            fmt_seq(f, opts, level, &**o, |f, (k, val)| {
+                span_dbg(f, "key", escape(k))?;
+                write!(f, ":")?;
+                if !opts.compact {
+                    write!(f, " ")?;
+                }
+                fmt_val(f, opts, level + 1, val)
+            })?;
+            write!(f, "}}")
+        }
+    }
+}
+
 fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
 }
@@ -56,73 +94,6 @@ fn escape(s: &str) -> String {
     let replaces = &["&amp;", "&lt;", "&gt;"];
     let ac = AhoCorasick::new(patterns).unwrap();
     ac.replace_all(s, replaces)
-}
-
-impl<'a> Display for Pp<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.indent_start {
-            self.opts.indent(f, self.level)?;
-        }
-
-        match self.val {
-            Val::Null => span(f, "null", "null"),
-            Val::Bool(b) => span(f, "boolean", b),
-            Val::Int(i) => span(f, "number", i),
-            Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
-            Val::Float(_) => span(f, "null", "null"),
-            Val::Num(n) => span(f, "number", n),
-            Val::Str(s) if self.opts.raw => span(f, "string", escape(s)),
-            Val::Str(s) => span_dbg(f, "string", escape(s)),
-            Val::Arr(a) if a.is_empty() => write!(f, "[]"),
-            Val::Arr(a) => {
-                write!(f, "[")?;
-                self.opts.newline(f)?;
-                let mut iter = a.iter().peekable();
-                while let Some(val) = iter.next() {
-                    Pp {
-                        val,
-                        opts: self.opts,
-                        level: self.level + 1,
-                        indent_start: true,
-                    }
-                    .fmt(f)?;
-                    if iter.peek().is_some() {
-                        write!(f, ",")?;
-                    }
-                    self.opts.newline(f)?;
-                }
-                self.opts.indent(f, self.level)?;
-                write!(f, "]")
-            }
-            Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
-            Val::Obj(o) => {
-                write!(f, "{{")?;
-                self.opts.newline(f)?;
-                let mut iter = o.iter().peekable();
-                while let Some((k, val)) = iter.next() {
-                    self.opts.indent(f, self.level + 1)?;
-                    span_dbg(f, "key", escape(k))?;
-                    write!(f, ":")?;
-                    if !self.opts.compact {
-                        write!(f, " ")?;
-                    }
-                    Pp {
-                        val,
-                        opts: self.opts,
-                        level: self.level + 1,
-                        indent_start: false,
-                    }
-                    .fmt(f)?;
-                    if iter.peek().is_some() {
-                        write!(f, ",")?;
-                    }
-                    self.opts.newline(f)?;
-                }
-                self.opts.indent(f, self.level)?;
-                write!(f, "}}")
-            }
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -179,15 +150,16 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     };
 
     let pp_opts = PpOpts {
-        raw: settings.raw_output,
         compact: settings.compact,
         indent,
     };
 
     let post_value = |y| {
-        scope
-            .post_message(&Pp::new(&y, &pp_opts).to_string().into())
-            .unwrap()
+        let s = FormatterFn(|f: &mut Formatter| match &y {
+            Val::Str(s) if settings.raw_output => span(f, "string", escape(s)),
+            y => fmt_val(f, &pp_opts, 0, y),
+        });
+        scope.post_message(&s.to_string().into()).unwrap()
     };
     match process(filter, input, &settings, post_value) {
         Ok(()) => (),

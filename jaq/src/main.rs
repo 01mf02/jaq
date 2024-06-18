@@ -126,6 +126,12 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
 
+    if !cli.in_place && cli.color.use_if(|| atty::is(atty::Stream::Stdout)) {
+        yansi::enable();
+    } else {
+        yansi::disable();
+    }
+
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
@@ -162,7 +168,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let last = if files.is_empty() {
         let inputs = read_buffered(cli, io::stdin().lock());
-        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(cli, v, out)))?
+        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
         for file in files {
@@ -177,7 +183,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                     .tempfile_in(location)?;
 
                 last = run(cli, &filter, ctx.clone(), inputs, |output| {
-                    print(cli, output, tmp.as_file_mut())
+                    print(tmp.as_file_mut(), cli, &output)
                 })?;
 
                 // replace the input file with the temporary file
@@ -186,7 +192,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(|out| {
-                    run(cli, &filter, ctx.clone(), inputs, |v| print(cli, v, out))
+                    run(cli, &filter, ctx.clone(), inputs, |v| print(out, cli, &v))
                 })?;
             }
         }
@@ -453,34 +459,108 @@ fn run(
     Ok(last)
 }
 
-fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
-    use atty::Stream::Stdout;
-    use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, PrettyFormatter};
-    match val {
-        Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
-        _ => {
-            let val = serde_json::Value::from(val);
-            let color = !cli.in_place && cli.color.use_if(|| atty::is(Stdout));
-            let mode = if color { ColorMode::On } else { ColorMode::Off };
-            let indent = if cli.tab {
-                String::from("\t")
-            } else {
-                " ".repeat(cli.indent)
-            };
+struct FormatterFn<F>(F);
 
-            // this looks ugly, but it is hard to abstract over the `Formatter` because
-            // we cannot create a `Box<dyn Formatter>` because
-            // Rust says that the `Formatter` trait is not "object safe"
-            if cli.compact_output {
-                ColoredFormatter::new(CompactFormatter).write_colored_json(&val, writer, mode)
-            } else {
-                ColoredFormatter::new(PrettyFormatter::with_indent(indent.as_bytes()))
-                    .write_colored_json(&val, writer, mode)
-            }?;
+impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.0(f)
+    }
+}
+
+struct PpOpts {
+    compact: bool,
+    indent: String,
+}
+
+impl PpOpts {
+    fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
+        if !self.compact {
+            write!(f, "{}", self.indent.repeat(level))?
+        }
+        Ok(())
+    }
+
+    fn newline(&self, f: &mut Formatter) -> fmt::Result {
+        if !self.compact {
+            writeln!(f)?
+        }
+        Ok(())
+    }
+}
+
+fn fmt_seq<T, I, F>(fmt: &mut Formatter, opts: &PpOpts, level: usize, xs: I, f: F) -> fmt::Result
+where
+    I: IntoIterator<Item = T>,
+    F: Fn(&mut Formatter, T) -> fmt::Result,
+{
+    opts.newline(fmt)?;
+    let mut iter = xs.into_iter().peekable();
+    while let Some(x) = iter.next() {
+        opts.indent(fmt, level + 1)?;
+        f(fmt, x)?;
+        if iter.peek().is_some() {
+            write!(fmt, ",")?;
+        }
+        opts.newline(fmt)?;
+    }
+    opts.indent(fmt, level)
+}
+
+fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
+    use yansi::Paint;
+    match v {
+        Val::Null => "null".fmt(f),
+        Val::Bool(b) => b.fmt(f),
+        Val::Int(i) => i.fmt(f),
+        Val::Float(x) if x.is_finite() => write!(f, "{x:?}"),
+        Val::Float(_) => "null".fmt(f),
+        Val::Num(n) => n.fmt(f),
+        Val::Str(s) => write!(f, "{:?}", s.green()),
+        Val::Arr(a) => {
+            '['.bold().fmt(f)?;
+            if !a.is_empty() {
+                fmt_seq(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
+            }
+            ']'.bold().fmt(f)
+        }
+        Val::Obj(o) => {
+            '{'.bold().fmt(f)?;
+            if !o.is_empty() {
+                fmt_seq(f, opts, level, &**o, |f, (k, val)| {
+                    write!(f, "{:?}:", k.bold())?;
+                    if !opts.compact {
+                        write!(f, " ")?;
+                    }
+                    fmt_val(f, opts, level + 1, val)
+                })?;
+            }
+            '}'.bold().fmt(f)
+        }
+    }
+}
+
+fn print(writer: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
+    let f = |f: &mut Formatter| fmt_val_root(f, cli, val);
+    write!(writer, "{}", FormatterFn(f))
+}
+
+fn fmt_val_root(f: &mut Formatter, cli: &Cli, val: &Val) -> fmt::Result {
+    match val {
+        Val::Str(s) if cli.raw_output => write!(f, "{s}")?,
+        _ => {
+            let opts = PpOpts {
+                compact: cli.compact_output,
+                indent: if cli.tab {
+                    String::from("\t")
+                } else {
+                    " ".repeat(cli.indent)
+                },
+            };
+            fmt_val(f, &opts, 0, val)?;
         }
     };
     if !cli.join_output {
-        writeln!(writer)?;
+        writeln!(f)?;
     }
     Ok(())
 }
