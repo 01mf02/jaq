@@ -460,7 +460,7 @@ fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
         Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
         _ => {
             let val = serde_json::Value::from(val);
-            let color = cli.color.use_if(|| atty::is(Stdout) && !cli.in_place);
+            let color = !cli.in_place && cli.color.use_if(|| atty::is(Stdout));
             let mode = if color { ColorMode::On } else { ColorMode::Off };
             let indent = if cli.tab {
                 String::from("\t")
