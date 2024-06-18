@@ -130,9 +130,9 @@ fn main() -> ExitCode {
         Ok(exit) => exit,
         Err(e) => {
             if cli.color.use_if(|| atty::is(atty::Stream::Stderr)) {
-                yansi::enable()
+                yansi::enable();
             } else {
-                yansi::disable()
+                yansi::disable();
             }
             e.report()
         }
@@ -594,8 +594,8 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
 
     let filter = parse(&test.filter, Vec::new())?;
 
-    use hifijson::token::Lex;
     let json = |s: String| {
+        use hifijson::token::Lex;
         hifijson::SliceLexer::new(s.as_bytes())
             .exactly_one(Val::parse)
             .map_err(invalid_data)
@@ -607,7 +607,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
 }
 
 fn run_tests(file: std::fs::File) -> ExitCode {
-    let lines = io::BufReader::new(file).lines().map(|l| l.unwrap());
+    let lines = io::BufReader::new(file).lines().map(Result::unwrap);
     let tests = jaq_syn::test::Parser::new(lines);
 
     let (mut passed, mut total) = (0, 0);
