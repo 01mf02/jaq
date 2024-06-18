@@ -104,6 +104,9 @@ textarea {
 .null    { color: magenta; }
 .key     { color: red; }
 
+.red     { color: #dc322f; }
+.yellow  { color: #b58900; }
+
 
 .settings { display: inline-block; }
 
