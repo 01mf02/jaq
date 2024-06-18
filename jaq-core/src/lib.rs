@@ -334,7 +334,7 @@ const CORE_RUN: &[(&str, usize, RunPtr)] = &[
     }),
     ("ceil", 0, |_, cv| once_with(move || cv.1.round(f64::ceil))),
     ("tojson", 0, |_, cv| {
-        once_with(move || Ok(Val::from(cv.1.to_string())))
+        once_with(move || Ok(cv.1.to_string().into()))
     }),
     ("utf8bytelength", 0, |_, cv| {
         once_with(move || cv.1.as_str().map(|s| Val::from(s.len() as isize)))
