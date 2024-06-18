@@ -107,35 +107,39 @@ enum ColorWhen {
     Never,
 }
 
-impl Cli {
-    fn color_mode(&self) -> colored_json::ColorMode {
-        use colored_json::{ColorMode, Output};
-        match self.color {
-            ColorWhen::Always => ColorMode::On,
-            ColorWhen::Auto if self.in_place => ColorMode::Off,
-            ColorWhen::Auto => ColorMode::Auto(Output::StdOut),
-            ColorWhen::Never => ColorMode::Off,
+impl ColorWhen {
+    fn use_if(&self, f: impl Fn() -> bool) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Auto => f(),
+            Self::Never => false,
         }
     }
 }
 
 fn main() -> ExitCode {
-    match real_main() {
-        Ok(exit) => exit,
-        Err(e) => e.report(),
-    }
-}
-
-fn real_main() -> Result<ExitCode, Error> {
-    // TODO: move into `main`
-    let cli = Cli::parse();
-
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
         // omit name of module that emitted log message
         .format_target(false)
         .init();
 
+    let cli = Cli::parse();
+
+    match real_main(&cli) {
+        Ok(exit) => exit,
+        Err(e) => {
+            if cli.color.use_if(|| atty::is(atty::Stream::Stderr)) {
+                yansi::enable()
+            } else {
+                yansi::disable()
+            }
+            e.report()
+        }
+    }
+}
+
+fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     if let Some(test_file) = &cli.run_tests {
         return Ok(run_tests(std::fs::File::open(test_file)?));
     }
@@ -369,12 +373,6 @@ enum Error {
 
 impl Termination for Error {
     fn report(self) -> ExitCode {
-        if atty::is(atty::Stream::Stderr) {
-            yansi::enable();
-        } else {
-            yansi::disable();
-        };
-
         let exit = match self {
             Self::FalseOrNull => 1,
             Self::Io(prefix, e) => {
@@ -456,12 +454,14 @@ fn run(
 }
 
 fn print(cli: &Cli, val: Val, writer: &mut impl Write) -> io::Result<()> {
-    use colored_json::{ColoredFormatter, CompactFormatter, PrettyFormatter};
+    use atty::Stream::Stdout;
+    use colored_json::{ColorMode, ColoredFormatter, CompactFormatter, PrettyFormatter};
     match val {
         Val::Str(s) if cli.raw_output => write!(writer, "{s}")?,
         _ => {
             let val = serde_json::Value::from(val);
-            let mode = cli.color_mode();
+            let color = cli.color.use_if(|| atty::is(Stdout) && !cli.in_place);
+            let mode = if color { ColorMode::On } else { ColorMode::Off };
             let indent = if cli.tab {
                 String::from("\t")
             } else {
