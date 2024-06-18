@@ -495,9 +495,14 @@ yields!(
 
 yields!(
     format_sh,
-    r#"[0, 0 == 0, {}.a, "O'Hara!", ["Here", "there"] | @sh]"#,
-    ["0", "true", "null", r#"'O'\''Hara!'"#, r#"'Here' 'there'"#,]
+    r#"[0, 0 == 0, "O'Hara!", ["Here", "there"] | @sh]"#,
+    ["0", "true", r#"'O'\''Hara!'"#, r#"'Here' 'there'"#,]
 );
+// here, we diverge from jq, which returns "null"
+// jaq's behaviour is more consistent with other functions like @csv and @tsv,
+// which also substitute null with an empty string instead of "null"
+yields!(format_sh_null, r#"{}.a | @sh"#, "");
+
 yields!(
     format_sh_rejects_objects,
     r#"{a: "b"} | try @sh catch -1"#,
