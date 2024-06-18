@@ -170,5 +170,5 @@ def @csv: .[] |= fmt_row("\"\(escape_str_csv)\"") | join("," );
 def @tsv: .[] |= fmt_row(     escape_str_tsv    ) | join("\t");
 def @sh: [if isarray then .[] end | fmt_row("'\(escape_str_sh)'")] | join(" ");
 def @text: "\(.)";
-def @json: if isstring then "\([.])"[1:-1] else "\(.)" end;
+def @json: tojson;
 def @html: @text | escape_str_html;
