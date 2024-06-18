@@ -1,4 +1,4 @@
-def null:  [] | .[0];
+def null:  [][0];
 
 def error(f): f | error;
 
