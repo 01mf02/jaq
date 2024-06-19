@@ -41,6 +41,9 @@ pub enum Term<S> {
     Pipe(Box<Self>, Option<S>, Box<Self>),
     BinOp(Box<Self>, Vec<(S, Self)>),
 
+    Label(S, Box<Self>),
+    Break(S),
+
     Fold(S, Box<Self>, S, Vec<Self>),
     TryCatch(Box<Self>, Option<Box<Self>>),
     IfThenElse(Vec<(Self, Self)>, Option<Box<Self>>),
@@ -187,7 +190,26 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn pipe(&mut self) -> Result<'a, ()> {
+        match self.i.next() {
+            Some(Token::Op("|")) => Ok(()),
+            next => Err((Expect::Char('|'), next)),
+        }
+    }
+
     pub fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
+        if let Some(tm) = self.try_maybe(|p| match p.i.next() {
+            Some(Token::Word("label")) => {
+                let v = p.var()?;
+                p.pipe()?;
+                let tm = p.term_with_comma(with_comma)?;
+                Ok(Some(Term::Label(v, Box::new(tm))))
+            }
+            _ => Ok(None),
+        })? {
+            return Ok(tm);
+        }
+
         let head = self.atom_path()?;
         let mut tail = Vec::new();
         while let Some(op) = self.op(with_comma) {
@@ -204,10 +226,8 @@ impl<'a> Parser<'a> {
             Some(Token::Op("|")) => Ok(Some(None)),
             Some(Token::Word("as")) => {
                 let x = p.var()?;
-                match p.i.next() {
-                    Some(Token::Op("|")) => Ok(Some(Some(x))),
-                    next => Err((Expect::Char('|'), next)),
-                }
+                p.pipe()?;
+                Ok(Some(Some(x)))
             }
             _ => Ok(None),
         })?;
@@ -249,6 +269,7 @@ impl<'a> Parser<'a> {
                 })?;
                 Term::TryCatch(Box::new(try_), catch.map(Box::new))
             }
+            Some(Token::Word("break")) => Term::Break(self.var()?),
             Some(Token::Word(fold)) if self.fold.contains(fold) => {
                 let xs = self.atom_path()?;
                 self.keyword("as")?;
