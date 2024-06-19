@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use serde_json::Value;
 
 fn yields(x: jaq_interpret::Val, f: &str, ys: impl Iterator<Item = jaq_interpret::ValR>) {

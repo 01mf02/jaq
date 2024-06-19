@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use crate::filter::Filter;
 use crate::Spanned;
 use alloc::{string::String, vec::Vec};

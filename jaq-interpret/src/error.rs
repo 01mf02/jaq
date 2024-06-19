@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Runtime errors.
 use crate::val::{Val, ValT};
 use alloc::string::ToString;

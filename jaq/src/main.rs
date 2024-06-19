@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
 use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};

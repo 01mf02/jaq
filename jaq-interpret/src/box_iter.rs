@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use alloc::boxed::Box;
 
 pub type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;

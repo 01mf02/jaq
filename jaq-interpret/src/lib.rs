@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! JSON query language interpreter.
 //!
 //! This crate allows you to execute jq-like filters.

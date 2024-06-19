@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Functions and types for `IntoIterator` and `FnOnce() -> Iterator`.
 
 #[derive(Clone)]

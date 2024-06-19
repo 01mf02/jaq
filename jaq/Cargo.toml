@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2021 Michael Färber
+#
+# SPDX-License-Identifier: MIT
+
 [package]
 name = "jaq"
 version = "1.4.0"

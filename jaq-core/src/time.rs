@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use alloc::string::{String, ToString};
 use jaq_interpret::{Error, Val, ValR};
 

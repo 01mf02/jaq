@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! JSON values with reference-counted sharing.
 
 use crate::box_iter::{box_once, BoxIter};

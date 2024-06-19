@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use super::{Delim, Token};
 use chumsky::prelude::*;
 use jaq_syn::path::{Opt, Part, Path};

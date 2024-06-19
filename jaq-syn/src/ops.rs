@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
 #[cfg(feature = "serde")]

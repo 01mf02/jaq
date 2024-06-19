@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 use jaq_interpret::{Error, Val};
 
 /// Use a value as an i32 to be given as an argument to a libm

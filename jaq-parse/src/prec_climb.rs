@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 pub trait Op {
     fn prec(&self) -> usize;
     fn right_assoc(&self) -> bool;

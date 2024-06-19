@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2021 Michael Färber
+//
+// SPDX-License-Identifier: MIT
+
 //! Helpers to interface with the `regex` crate.
 
 use alloc::string::{String, ToString};
