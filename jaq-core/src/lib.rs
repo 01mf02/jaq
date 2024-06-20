@@ -16,8 +16,9 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
+use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{box_once, run_if_ok, then};
-use jaq_interpret::{Args, Error, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs, ValT};
+use jaq_interpret::{Args, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs, ValT};
 
 type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
 type ValR2<V> = Result<V, Error<V>>;
@@ -29,31 +30,45 @@ type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 ///
 /// Does not return filters from the standard library, such as `map`.
 pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
-    run(BLA).chain(run(CORE_RUN)).chain(upd(CORE_UPDATE))
+    run(BLA)
+        .chain(run(&*core_run()).collect::<Vec<_>>().into_iter())
+        .chain(upd(CORE_UPDATE))
 }
 
 trait ValT2: ValT + Ord + From<f64> {
     fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self>;
     fn as_isize(&self) -> Option<isize>;
-    fn as_f64(&self) -> Result<f64, Error>;
+    fn as_f64(&self) -> Result<f64, Error<Self>>;
 }
 
 trait ValTx: Sized + ValT2 {
-    fn into_vec(self) -> Result<Vec<Self>, Error> {
-        self.into_seq().map_err(|e| todo!())
+    fn into_vec(self) -> Result<Vec<Self>, Error<Self>> {
+        self.into_seq()
+            .map_err(|e| Error::Type(e, error::Type::Arr))
+    }
+
+    fn into_str(&self) -> Result<&str, Error<Self>> {
+        self.as_str()
+            .ok_or_else(|| Error::Type(self.clone(), error::Type::Str))
     }
 
     /// Apply a function to an array.
-    fn mutate_arr<F>(self, f: F) -> Result<Self, Error>
+    fn mutate_arr<F>(self, f: F) -> ValR2<Self>
     where
-        F: FnOnce(&mut Vec<Self>) -> Result<(), Error>,
+        F: FnOnce(&mut Vec<Self>) -> Result<(), Error<Self>>,
     {
         let mut a = self.into_vec()?;
         f(&mut a)?;
         Ok(Self::from_iter(a))
     }
 
-    fn round(self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
+    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR2<Self> {
+        let mut s = self.into_str()?.to_owned();
+        f(&mut s);
+        Ok(Self::from(s))
+    }
+
+    fn round(self, f: impl FnOnce(f64) -> f64) -> ValR2<Self> {
         if self.as_isize().is_some() {
             Ok(self)
         } else {
@@ -73,18 +88,6 @@ impl ValT2 for Val {
             _ => Err(self),
         }
     }
-
-    /*
-    fn abs(self) -> Result<Self, Self> {
-        match self {
-            Self::Int(i) => Ok(Self::Int(i.abs())),
-            Self::Float(f) => Ok(Self::Float(f.abs())),
-            Self::Num(n) if n.starts_with('-') => Ok(Self::Num(Rc::new(n[1..].to_string()))),
-            Self::Num(_) => Ok(self),
-            _ => Err(self),
-        }
-    }
-    */
 
     fn as_isize(&self) -> Option<isize> {
         match self {
@@ -217,20 +220,20 @@ where
 }
 
 /// Convert a string into an array of its Unicode codepoints.
-fn explode(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
+fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR2<V>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
-    let conv = |c: char| Ok(Val::Int(isize::try_from(c as u32).map_err(Error::str)?));
+    let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
     s.chars().map(conv)
 }
 
 /// Convert an array of Unicode codepoints into a string.
-fn implode(xs: &[Val]) -> Result<String, Error> {
+fn implode<V: ValT2>(xs: &[V]) -> Result<String, Error<V>> {
     xs.iter().map(as_codepoint).collect()
 }
 
 /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
-fn as_codepoint(v: &Val) -> Result<char, Error> {
-    let i = v.as_int()?;
+fn as_codepoint<V: ValT2>(v: &V) -> Result<char, Error<V>> {
+    let i = v.as_isize().ok_or_else(|| todo!())?;
     // conversion from isize to u32 may fail on 64-bit systems for high values of c
     let u = u32::try_from(i).map_err(Error::str)?;
     // may fail e.g. on `[1114112] | implode`
@@ -245,9 +248,9 @@ fn as_codepoint(v: &Val) -> Result<char, Error> {
 ///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
-fn range(mut from: ValR, to: Val, by: Val) -> impl Iterator<Item = ValR> {
+fn range<V: ValT2>(mut from: ValR2<V>, to: V, by: V) -> impl Iterator<Item = ValR2<V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
-    let cmp = by.cmp(&Val::Int(0));
+    let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
         Ok(x) => match cmp {
             Greater => x < to,
@@ -320,111 +323,113 @@ const BLA: &[(&str, usize, RunPtr)] = &[
     ("has", 1, |args, cv| {
         bla(args, cv, |v, k| v.has(&k).map(Val::from))
     }),
-];
-
-const CORE_RUN: &[(&str, usize, RunPtr)] = &[
-    ("inputs", 0, |_, cv| {
-        Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
-    }),
-    ("floor", 0, |_, cv| {
-        once_with(move || cv.1.round(f64::floor))
-    }),
-    ("round", 0, |_, cv| {
-        once_with(move || cv.1.round(f64::round))
-    }),
-    ("ceil", 0, |_, cv| once_with(move || cv.1.round(f64::ceil))),
-    ("tojson", 0, |_, cv| {
-        once_with(move || Ok(cv.1.to_string().into()))
-    }),
-    ("utf8bytelength", 0, |_, cv| {
-        once_with(move || cv.1.as_str().map(|s| Val::from(s.len() as isize)))
-    }),
-    ("explode", 0, |_, cv| {
-        once_with(move || cv.1.as_str().and_then(|s| explode(s).collect()))
-    }),
-    ("implode", 0, |_, cv| {
-        once_with(move || cv.1.into_vec().and_then(|s| implode(&s)).map(Val::from))
-    }),
-    ("ascii_downcase", 0, |_, cv| {
-        once_with(move || cv.1.mutate_str(|s| s.make_ascii_lowercase()))
-    }),
-    ("ascii_upcase", 0, |_, cv| {
-        once_with(move || cv.1.mutate_str(|s| s.make_ascii_uppercase()))
-    }),
-    ("reverse", 0, |_, cv| {
-        once_with(move || cv.1.mutate_arr(|a| Ok(a.reverse())))
-    }),
-    ("sort", 0, |_, cv| {
-        once_with(move || cv.1.mutate_arr(|a| Ok(a.sort())))
-    }),
-    ("sort_by", 1, |args, cv| {
-        let f = move |v| args.get(0).run((cv.0.clone(), v));
-        once_with(move || cv.1.mutate_arr(|a| sort_by(a, f)))
-    }),
-    ("group_by", 1, |args, cv| {
-        let f = move |v| args.get(0).run((cv.0.clone(), v));
-        once_with(move || cv.1.into_vec().and_then(|a| group_by(a, f)))
-    }),
-    // TODO: adapt std to return null if input is []
-    ("min_by_or_empty", 1, |args, cv| {
-        let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my);
-        once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
-    }),
-    ("max_by_or_empty", 1, |args, cv| {
-        let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my);
-        once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
-    }),
     ("indices", 1, |args, cv| {
         let to_int = |i: usize| Val::Int(i.try_into().unwrap());
         bla(args, cv, move |x, v| {
             indices(x, &v).map(|idxs| Val::from_iter(idxs.map(to_int)))
         })
     }),
-    ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
-    ("limit", 2, |args, cv| {
-        let n = args.get(0).run(cv.clone()).map(|n| n?.as_int());
-        let f = move |n| args.get(1).run(cv.clone()).take(n);
-        let pos = |n: isize| n.try_into().unwrap_or(0usize);
-        Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
-    }),
-    ("range", 3, |args, cv| {
-        let (from, to, by) = (args.get(0), args.get(1), args.get(2));
-        Box::new(from.cartesian3(to, by, cv).flat_map(|(from, to, by)| {
-            let to_by = to.and_then(|to| Ok((to, by?)));
-            then(to_by, |(to, by)| Box::new(range(from, to, by)))
-        }))
-    }),
-    ("startswith", 1, |args, cv| {
-        bla(args, cv, |v, s| {
-            Ok(Val::from(v.as_str()?.starts_with(&**s.as_str()?)))
-        })
-    }),
-    ("endswith", 1, |args, cv| {
-        bla(args, cv, |v, s| {
-            Ok(Val::from(v.as_str()?.ends_with(&**s.as_str()?)))
-        })
-    }),
-    ("ltrimstr", 1, |args, cv| {
-        bla(args, cv, |v, pre| {
-            Ok(v.as_str()?
-                .strip_prefix(&**pre.to_str()?)
-                .map_or_else(|| v.clone(), |s| Val::from(s.to_string())))
-        })
-    }),
-    ("rtrimstr", 1, |args, cv| {
-        bla(args, cv, |v, suf| {
-            Ok(v.as_str()?
-                .strip_suffix(&**suf.to_str()?)
-                .map_or_else(|| v.clone(), |s| Val::from(s.to_string())))
-        })
-    }),
-    ("escape_str_csv", 0, |_, cv| {
-        once_with(move || Ok(Val::from(cv.1.as_str()?.replace('"', "\"\""))))
-    }),
-    ("escape_str_sh", 0, |_, cv| {
-        once_with(move || Ok(Val::from(cv.1.as_str()?.replace('\'', r"'\''"))))
-    }),
 ];
+
+macro_rules! ow {
+    ( $f:expr ) => {
+        once_with(move || $f)
+    };
+}
+
+fn core_run<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+    Box::new([
+        ("inputs", 0, |_, cv| {
+            Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
+        }),
+        ("tojson", 0, |_, cv| ow!(Ok(cv.1.to_string().into()))),
+        ("floor", 0, |_, cv| ow!(cv.1.round(f64::floor))),
+        ("round", 0, |_, cv| ow!(cv.1.round(f64::round))),
+        ("ceil", 0, |_, cv| ow!(cv.1.round(f64::ceil))),
+        ("utf8bytelength", 0, |_, cv| {
+            ow!(cv.1.into_str().map(|s| (s.len() as isize).into()))
+        }),
+        ("explode", 0, |_, cv| {
+            ow!(cv.1.into_str().and_then(|s| explode(s).collect()))
+        }),
+        ("implode", 0, |_, cv| {
+            ow!(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
+        }),
+        ("ascii_downcase", 0, |_, cv| {
+            ow!(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
+        }),
+        ("ascii_upcase", 0, |_, cv| {
+            ow!(cv.1.mutate_str(|s| s.make_ascii_uppercase()))
+        }),
+        ("reverse", 0, |_, cv| {
+            ow!(cv.1.mutate_arr(|a| Ok(a.reverse())))
+        }),
+        ("sort", 0, |_, cv| ow!(cv.1.mutate_arr(|a| Ok(a.sort())))),
+        ("sort_by", 1, |args, cv| {
+            let f = move |v| args.get(0).run((cv.0.clone(), v));
+            ow!(cv.1.mutate_arr(|a| sort_by(a, f)))
+        }),
+        ("group_by", 1, |args, cv| {
+            let f = move |v| args.get(0).run((cv.0.clone(), v));
+            ow!(cv.1.into_vec().and_then(|a| group_by(a, f)))
+        }),
+        ("min_by_or_empty", 1, |args, cv| {
+            let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my);
+            once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
+        }),
+        ("max_by_or_empty", 1, |args, cv| {
+            let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my);
+            once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
+        }),
+        ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
+        ("limit", 2, |args, cv| {
+            let n = args
+                .get(0)
+                .run(cv.clone())
+                .map(|n| n?.as_isize().ok_or_else(|| todo!()));
+            let f = move |n| args.get(1).run(cv.clone()).take(n);
+            let pos = |n: isize| n.try_into().unwrap_or(0usize);
+            Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
+        }),
+        ("range", 3, |args, cv| {
+            let (from, to, by) = (args.get(0), args.get(1), args.get(2));
+            Box::new(from.cartesian3(to, by, cv).flat_map(|(from, to, by)| {
+                let to_by = to.and_then(|to| Ok((to, by?)));
+                then(to_by, |(to, by)| Box::new(range(from, to, by)))
+            }))
+        }),
+        ("startswith", 1, |args, cv| {
+            bla(args, cv, |v, s| {
+                Ok(v.into_str()?.starts_with(s.into_str()?).into())
+            })
+        }),
+        ("endswith", 1, |args, cv| {
+            bla(args, cv, |v, s| {
+                Ok(v.into_str()?.ends_with(s.into_str()?).into())
+            })
+        }),
+        ("ltrimstr", 1, |args, cv| {
+            bla(args, cv, |v, pre| {
+                Ok(v.into_str()?
+                    .strip_prefix(pre.into_str()?)
+                    .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
+            })
+        }),
+        ("rtrimstr", 1, |args, cv| {
+            bla(args, cv, |v, suf| {
+                Ok(v.into_str()?
+                    .strip_suffix(suf.into_str()?)
+                    .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
+            })
+        }),
+        ("escape_str_csv", 0, |_, cv| {
+            ow!(Ok(cv.1.into_str()?.replace('"', "\"\"").into()))
+        }),
+        ("escape_str_sh", 0, |_, cv| {
+            ow!(Ok(cv.1.into_str()?.replace('\'', r"'\''").into()))
+        }),
+    ])
+}
 
 #[cfg(feature = "std")]
 fn now() -> Result<f64, Error> {
