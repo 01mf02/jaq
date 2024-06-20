@@ -190,7 +190,7 @@ impl<V> Native<V> {
     }
 
     /// Create a native filter from a run function and an update function (used for `filter |= ...`).
-    // TODO for v2.0: remove this
+    // TODO for v2.0: change run to self
     pub const fn with_update(run: RunPtr<V>, update: UpdatePtr<V>) -> Self {
         Self { run, update }
     }

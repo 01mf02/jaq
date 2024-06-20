@@ -73,12 +73,12 @@ yields!(first_some, "first(1, 2, 3)", 1);
 
 yields!(
     format_base64,
-    r#""hello cruel world" | @base64"#,
+    r#""hello cruel world" | encode_base64"#,
     "aGVsbG8gY3J1ZWwgd29ybGQ="
 );
 yields!(
     format_unformat_base64,
-    r#""hello cruel world" | @base64 | @base64d"#,
+    r#""hello cruel world" | encode_base64 | decode_base64"#,
     "hello cruel world"
 );
 

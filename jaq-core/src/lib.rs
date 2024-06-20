@@ -17,7 +17,7 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
-use jaq_interpret::results::{box_once, run_if_ok, then};
+use jaq_interpret::results::{run_if_ok, then};
 use jaq_interpret::{Args, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs, ValT};
 
 type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
@@ -30,9 +30,11 @@ type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 ///
 /// Does not return filters from the standard library, such as `map`.
 pub fn minimal() -> impl Iterator<Item = (String, usize, Native)> {
-    run(BLA)
-        .chain(run(&*core_run()).collect::<Vec<_>>().into_iter())
-        .chain(upd(CORE_UPDATE))
+    run(BLA).chain(generic_min())
+}
+
+fn generic_min<V: ValT2>() -> impl Iterator<Item = (String, usize, Native<V>)> {
+    run2(core_run()).chain([upd(error())])
 }
 
 trait ValT2: ValT + Ord + From<f64> {
@@ -117,13 +119,13 @@ impl ValT2 for Val {
 ))]
 pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     minimal()
-        .chain(run(STD))
-        .chain(run(FORMAT))
-        .chain(upd(LOG))
+        .chain(run2(std()))
+        .chain(run2(format()))
+        .chain([upd(debug2())])
         .chain(run(MATH))
         .chain(run(PARSE_JSON))
         .chain(run(REGEX))
-        .chain(run(TIME))
+        .chain(run2(time()))
 }
 
 fn run<'a, V>(
@@ -133,12 +135,18 @@ fn run<'a, V>(
         .map(|&(name, arity, f)| (name.to_string(), arity, Native::new(f)))
 }
 
-fn upd<'a, V>(
-    fs: &'a [(&str, usize, RunPtr<V>, UpdatePtr<V>)],
-) -> impl Iterator<Item = (String, usize, Native<V>)> + 'a {
-    fs.iter().map(|&(name, arity, run, update)| {
-        (name.to_string(), arity, Native::with_update(run, update))
-    })
+fn run2<V>(
+    fs: Box<[(&'static str, usize, RunPtr<V>)]>,
+) -> impl Iterator<Item = (String, usize, Native<V>)> {
+    fs.into_vec()
+        .into_iter()
+        .map(|(name, arity, f)| (name.to_string(), arity, Native::new(f)))
+}
+
+fn upd<V>(
+    (name, arity, run, update): (&str, usize, RunPtr<V>, UpdatePtr<V>),
+) -> (String, usize, Native<V>) {
+    (name.to_string(), arity, Native::with_update(run, update))
 }
 
 /// Return 0 for null, the absolute value for numbers, and
@@ -432,7 +440,7 @@ fn core_run<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
 }
 
 #[cfg(feature = "std")]
-fn now() -> Result<f64, Error> {
+fn now<V: From<String>>() -> Result<f64, Error<V>> {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -441,13 +449,15 @@ fn now() -> Result<f64, Error> {
 }
 
 #[cfg(feature = "std")]
-const STD: &[(&str, usize, RunPtr)] = &[
-    ("env", 0, |_, _| {
-        let vars = std::env::vars().map(|(k, v)| (Rc::new(k), Val::str(v)));
-        once_with(|| Ok(Val::obj(vars.collect())))
-    }),
-    ("now", 0, |_, _| once_with(|| now().map(Val::Float))),
-];
+fn std<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+    use std::env::vars;
+    Box::new([
+        ("env", 0, |_, _| {
+            ow!(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
+        }),
+        ("now", 0, |_, _| ow!(now().map(V::from))),
+    ])
+}
 
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
@@ -471,39 +481,36 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 }
 
 #[cfg(feature = "format")]
-const FORMAT: &[(&str, usize, RunPtr)] = &[
-    ("escape_str_html", 0, |_, cv| {
-        let pats = ["<", ">", "&", "\'", "\""];
-        let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-        once_with(move || Ok(Val::from(replace(cv.1.as_str()?, &pats, &reps))))
-    }),
-    ("escape_str_tsv", 0, |_, cv| {
-        let pats = ["\n", "\r", "\t", "\\"];
-        let reps = ["\\n", "\\r", "\\t", "\\\\"];
-        once_with(move || Ok(Val::from(replace(cv.1.as_str()?, &pats, &reps))))
-    }),
-    ("@uri", 0, |_, cv| {
-        use urlencoding::encode;
-        once_with(move || Ok(Val::str(encode(&cv.1.to_string_or_clone()).into_owned())))
-    }),
-    ("@base64", 0, |_, cv| {
-        use base64::{engine::general_purpose::STANDARD, Engine};
-        once_with(move || Ok(Val::str(STANDARD.encode(cv.1.to_string_or_clone()))))
-    }),
-    ("@base64d", 0, |_, cv| {
-        use base64::{engine::general_purpose::STANDARD, Engine};
-        once_with(move || {
-            STANDARD
-                .decode(cv.1.to_string_or_clone())
-                .map_err(Error::str)
-                .and_then(|d| {
-                    std::str::from_utf8(&d)
-                        .map_err(Error::str)
-                        .map(|s| Val::str(s.to_owned()))
-                })
-        })
-    }),
-];
+fn format<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+    Box::new([
+        ("escape_str_html", 0, |_, cv| {
+            let pats = ["<", ">", "&", "\'", "\""];
+            let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
+            ow!(Ok(replace(cv.1.into_str()?, &pats, &reps).into()))
+        }),
+        ("escape_str_tsv", 0, |_, cv| {
+            let pats = ["\n", "\r", "\t", "\\"];
+            let reps = ["\\n", "\\r", "\\t", "\\\\"];
+            ow!(Ok(replace(cv.1.into_str()?, &pats, &reps).into()))
+        }),
+        ("encode_uri", 0, |_, cv| {
+            use urlencoding::encode;
+            ow!(Ok(encode(cv.1.into_str()?).into_owned().into()))
+        }),
+        ("encode_base64", 0, |_, cv| {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            ow!(Ok(STANDARD.encode(cv.1.into_str()?).into()))
+        }),
+        ("decode_base64", 0, |_, cv| {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            use core::str::from_utf8;
+            ow!({
+                let d = STANDARD.decode(cv.1.into_str()?).map_err(Error::str)?;
+                Ok(from_utf8(&d).map_err(Error::str)?.to_owned().into())
+            })
+        }),
+    ])
+}
 
 #[cfg(feature = "math")]
 const MATH: &[(&str, usize, RunPtr)] = &[
@@ -567,7 +574,6 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::fff_f!(fma),
 ];
 
-#[cfg(feature = "regex")]
 type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
@@ -598,23 +604,25 @@ const REGEX: &[(&str, usize, RunPtr)] = &[
 ];
 
 #[cfg(feature = "time")]
-const TIME: &[(&str, usize, RunPtr)] = &[
-    ("fromdateiso8601", 0, |_, cv| {
-        once_with(move || cv.1.as_str().and_then(|s| time::from_iso8601(s)))
-    }),
-    ("todateiso8601", 0, |_, cv| {
-        once_with(move || time::to_iso8601(&cv.1).map(Val::str))
-    }),
-];
+fn time<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+    Box::new([
+        ("fromdateiso8601", 0, |_, cv| {
+            ow!(Ok(time::from_iso8601(cv.1.into_str()?)?))
+        }),
+        ("todateiso8601", 0, |_, cv| {
+            ow!(Ok(time::to_iso8601(&cv.1)?.into()))
+        }),
+    ])
+}
 
-const CORE_UPDATE: &[(&str, usize, RunPtr, UpdatePtr)] = &[
+fn error<V>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
     (
         "error",
         0,
-        |_, cv| box_once(Err(Error::Val(cv.1))),
-        |_, cv, _| box_once(Err(Error::Val(cv.1))),
-    ),
-];
+        |_, cv| ow!(Err(Error::Val(cv.1))),
+        |_, cv, _| ow!(Err(Error::Val(cv.1))),
+    )
+}
 
 #[cfg(feature = "log")]
 fn debug<T: core::fmt::Display>(x: T) -> T {
@@ -623,9 +631,11 @@ fn debug<T: core::fmt::Display>(x: T) -> T {
 }
 
 #[cfg(feature = "log")]
-const LOG: &[(&str, usize, RunPtr, UpdatePtr)] = &[(
-    "debug",
-    0,
-    |_, cv| once_with(move || Ok(debug(cv.1))),
-    |_, cv, f| f(debug(cv.1)),
-)];
+fn debug2<V: core::fmt::Display>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
+    (
+        "debug",
+        0,
+        |_, cv| ow!(Ok(debug(cv.1))),
+        |_, cv, f| f(debug(cv.1)),
+    )
+}
