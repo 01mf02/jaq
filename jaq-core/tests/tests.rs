@@ -27,7 +27,7 @@ yields!(
 
 yields!(
     rec_update,
-    "def upto($x): .[$x], (if $x > 0 then upto($x-1) else empty end); [1, 2, 3, 4] | upto(1) |= .+1",
+    "def upto($x): .[$x], (if $x > 0 then upto($x-1) else {}[] as $x | . end); [1, 2, 3, 4] | upto(1) |= .+1",
     [2, 3, 3, 4]
 );
 

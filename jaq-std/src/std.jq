@@ -1,3 +1,4 @@
+def empty: {}[] as $x | .;
 def null:  [][0];
 
 def error(f): f | error;

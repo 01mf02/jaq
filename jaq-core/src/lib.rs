@@ -609,12 +609,6 @@ const TIME: &[(&str, usize, RunPtr)] = &[
 
 const CORE_UPDATE: &[(&str, usize, RunPtr, UpdatePtr)] = &[
     (
-        "empty",
-        0,
-        |_, _| Box::new(core::iter::empty()),
-        |_, cv, _| box_once(Ok(cv.1)),
-    ),
-    (
         "error",
         0,
         |_, cv| box_once(Err(Error::Val(cv.1))),
