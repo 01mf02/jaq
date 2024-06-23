@@ -344,7 +344,7 @@ impl<'a> Parser<'a> {
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", Self::term);
                 self.char1(':')?;
-                return Ok((k, Some(self.term()?)));
+                return Ok((k, Some(self.term_with_comma(false)?)));
             }
             next => return Err((Expect::Key, next)),
         };
