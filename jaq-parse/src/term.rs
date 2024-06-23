@@ -198,22 +198,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
-        if let Some(tm) = self.try_maybe(|p| match p.i.next() {
-            Some(Token::Word("label")) => {
-                let v = p.var()?;
-                p.pipe()?;
-                let tm = p.term_with_comma(with_comma)?;
-                Ok(Some(Term::Label(v, Box::new(tm))))
-            }
-            _ => Ok(None),
-        })? {
-            return Ok(tm);
-        }
-
-        let head = self.atom_path()?;
+        let head = self.atom()?;
         let mut tail = Vec::new();
         while let Some(op) = self.op(with_comma) {
-            tail.push((op, self.atom_path()?));
+            tail.push((op, self.atom()?));
         }
 
         let tm = if tail.is_empty() {
@@ -238,8 +226,14 @@ impl<'a> Parser<'a> {
     }
 
     fn atom(&mut self) -> Result<'a, Term<&'a str>> {
-        Ok(match self.i.next() {
-            Some(Token::Op("-")) => Term::Neg(Box::new(self.atom_path()?)),
+        let tm = match self.i.next() {
+            Some(Token::Op("-")) => Term::Neg(Box::new(self.atom()?)),
+            Some(Token::Word("def")) => {
+                let head = self.def_tail()?;
+                let tail = self.defs()?;
+                let tm = self.term()?;
+                Term::Def(core::iter::once(head).chain(tail).collect(), Box::new(tm))
+            }
             Some(Token::Word("if")) => {
                 let if_then = |p: &mut Self| {
                     let if_ = p.term()?;
@@ -262,16 +256,22 @@ impl<'a> Parser<'a> {
                 Term::IfThenElse(if_thens, else_.map(Box::new))
             }
             Some(Token::Word("try")) => {
-                let try_ = self.atom_path()?;
+                let try_ = self.atom()?;
                 let catch = self.try_maybe(|p| match p.i.next() {
-                    Some(Token::Word("catch")) => Ok(Some(p.atom_path()?)),
+                    Some(Token::Word("catch")) => Ok(Some(p.atom()?)),
                     _ => Ok(None),
                 })?;
                 Term::TryCatch(Box::new(try_), catch.map(Box::new))
             }
+            Some(Token::Word("label")) => {
+                let x = self.var()?;
+                self.pipe()?;
+                let tm = self.term()?;
+                Term::Label(x, Box::new(tm))
+            }
             Some(Token::Word("break")) => Term::Break(self.var()?),
             Some(Token::Word(fold)) if self.fold.contains(fold) => {
-                let xs = self.atom_path()?;
+                let xs = self.term()?;
                 self.keyword("as")?;
                 let x = self.var()?;
                 let args = self.args(Self::term);
@@ -285,7 +285,7 @@ impl<'a> Parser<'a> {
                 });
                 match s {
                     None => Term::Call(*id, Vec::new()),
-                    Some(parts) => Term::Str(Some(id), parts),
+                    Some(parts) => Term::Str(Some(*id), parts),
                 }
             }
             Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
@@ -311,30 +311,14 @@ impl<'a> Parser<'a> {
             }),
             Some(Token::Str(parts)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
-        })
-    }
-
-    fn atom_path(&mut self) -> Result<'a, Term<&'a str>> {
-        let tm = self.atom()?;
+        };
 
         let tm = match self.opt() {
             path::Opt::Optional => Term::TryCatch(Box::new(tm), None),
             path::Opt::Essential => tm,
         };
 
-        let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
-        while self.char0('.').is_some() {
-            use path::Opt;
-            let key = match self.i.next() {
-                Some(Token::Word(id)) if !id.starts_with(['$', '@']) => *id,
-                next => return Err((Expect::Key, next)),
-            };
-            let opt = self.char0('?').is_some();
-            let key = Term::Str(None, Vec::from([StrPart::Str(key)]));
-            let opt = if opt { Opt::Optional } else { Opt::Essential };
-            path.push((path::Part::Index(key), opt));
-            path.extend(core::iter::from_fn(|| self.path_part_opt()));
-        }
+        let path = self.path()?;
         Ok(if path.is_empty() {
             tm
         } else {
@@ -343,14 +327,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn term(&mut self) -> Result<'a, Term<&'a str>> {
-        let defs = self.defs()?;
-        let tm = self.term_with_comma(true)?;
-
-        Ok(if defs.is_empty() {
-            tm
-        } else {
-            Term::Def(defs, Box::new(tm))
-        })
+        self.term_with_comma(true)
     }
 
     fn obj_entry(&mut self) -> Result<'a, (Term<&'a str>, Option<Term<&'a str>>)> {
@@ -389,6 +366,23 @@ impl<'a> Parser<'a> {
             StrPart::Unicode(u) => StrPart::Unicode(*u),
         });
         parts.collect()
+    }
+
+    fn path(&mut self) -> Result<'a, Vec<(path::Part<Term<&'a str>>, path::Opt)>> {
+        let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
+        while self.char0('.').is_some() {
+            use path::Opt;
+            let key = match self.i.next() {
+                Some(Token::Word(id)) if !id.starts_with(['$', '@']) => *id,
+                next => return Err((Expect::Key, next)),
+            };
+            let opt = self.char0('?').is_some();
+            let key = Term::Str(None, Vec::from([StrPart::Str(key)]));
+            let opt = if opt { Opt::Optional } else { Opt::Essential };
+            path.push((path::Part::Index(key), opt));
+            path.extend(core::iter::from_fn(|| self.path_part_opt()));
+        }
+        Ok(path)
     }
 
     fn path_part(&mut self) -> Result<'a, path::Part<Term<&'a str>>> {
