@@ -18,7 +18,7 @@ use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{run_if_ok, then};
-use jaq_interpret::{Args, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValRs, ValT};
+use jaq_interpret::{Args, FilterT, Native, RunPtr, UpdatePtr, Val, ValR, ValT};
 
 type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
 type ValR2<V> = Result<V, Error<V>>;
@@ -121,10 +121,10 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
     minimal()
         .chain(run2(std()))
         .chain(run2(format()))
-        .chain([upd(debug2())])
+        .chain([upd(debug())])
         .chain(run(MATH))
         .chain(run(PARSE_JSON))
-        .chain(run(REGEX))
+        .chain(run2(regex()))
         .chain(run2(time()))
 }
 
@@ -577,31 +577,42 @@ const MATH: &[(&str, usize, RunPtr)] = &[
 type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
-fn re<'a, F: FilterT<'a>>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a>) -> ValRs<'a> {
+fn re<'a, V: ValT2, F>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a, V>) -> ValR2s<'a, V>
+where
+    F: FilterT<'a, V>,
+{
     let re_flags = re.cartesian(flags, (cv.0, cv.1.clone()));
 
     Box::new(re_flags.map(move |(re, flags)| {
-        Ok(Val::arr(regex::regex(
-            cv.1.as_str()?,
-            re?.as_str()?,
-            flags?.as_str()?,
-            (s, m),
-        )?))
+        let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
+        let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
+
+        let flags = regex::Flags::new(flags?.into_str()?).map_err(fail_flag)?;
+        let re = flags.regex(re?.into_str()?).map_err(fail_re)?;
+        let out = regex::regex(cv.1.into_str()?, &re, flags, (s, m));
+        use regex::Part::{Matches, Mismatch};
+        let out = out.into_iter().map(|out| match out {
+            Matches(ms) => ms.into_iter().map(|m| V::from_map(m.fields())).collect(),
+            Mismatch(s) => Ok(V::from(s.to_string())),
+        });
+        out.collect()
     }))
 }
 
 #[cfg(feature = "regex")]
-const REGEX: &[(&str, usize, RunPtr)] = &[
-    ("matches", 2, |args, cv| {
-        re(args.get(0), args.get(1), false, true, cv)
-    }),
-    ("split_matches", 2, |args, cv| {
-        re(args.get(0), args.get(1), true, true, cv)
-    }),
-    ("split_", 2, |args, cv| {
-        re(args.get(0), args.get(1), true, false, cv)
-    }),
-];
+fn regex<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+    Box::new([
+        ("matches", 2, |args, cv| {
+            re(args.get(0), args.get(1), false, true, cv)
+        }),
+        ("split_matches", 2, |args, cv| {
+            re(args.get(0), args.get(1), true, true, cv)
+        }),
+        ("split_", 2, |args, cv| {
+            re(args.get(0), args.get(1), true, false, cv)
+        }),
+    ])
+}
 
 #[cfg(feature = "time")]
 fn time<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
@@ -625,17 +636,17 @@ fn error<V>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
 }
 
 #[cfg(feature = "log")]
-fn debug<T: core::fmt::Display>(x: T) -> T {
+fn with_debug<T: core::fmt::Display>(x: T) -> T {
     log::debug!("{}", x);
     x
 }
 
 #[cfg(feature = "log")]
-fn debug2<V: core::fmt::Display>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
+fn debug<V: core::fmt::Display>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
     (
         "debug",
         0,
-        |_, cv| ow!(Ok(debug(cv.1))),
-        |_, cv, f| f(debug(cv.1)),
+        |_, cv| ow!(Ok(with_debug(cv.1))),
+        |_, cv, f| f(with_debug(cv.1)),
     )
 }
