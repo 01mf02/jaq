@@ -323,7 +323,7 @@ fn once_or_empty<'a, T>(f: impl FnOnce() -> Option<T> + 'a) -> Box<dyn Iterator<
     Box::new(core::iter::once_with(f).flatten())
 }
 
-fn bla<'a, V: ValT, F>(args: Args<'a, V>, cv: Cv<'a, V>, f: F) -> ValR2s<'a, V>
+fn unary<'a, V: ValT, F>(args: Args<'a, V>, cv: Cv<'a, V>, f: F) -> ValR2s<'a, V>
 where
     F: Fn(&V, V) -> ValR2<V> + 'a,
 {
@@ -337,14 +337,14 @@ const BLA: &[(&str, usize, RunPtr)] = &[
         once_with(move || cv.1.keys_unsorted().map(Val::arr))
     }),
     ("contains", 1, |args, cv| {
-        bla(args, cv, |x, y| Ok(Val::from(x.contains(&y))))
+        unary(args, cv, |x, y| Ok(Val::from(x.contains(&y))))
     }),
     ("has", 1, |args, cv| {
-        bla(args, cv, |v, k| v.has(&k).map(Val::from))
+        unary(args, cv, |v, k| v.has(&k).map(Val::from))
     }),
     ("indices", 1, |args, cv| {
         let to_int = |i: usize| Val::Int(i.try_into().unwrap());
-        bla(args, cv, move |x, v| {
+        unary(args, cv, move |x, v| {
             indices(x, &v).map(|idxs| Val::from_iter(idxs.map(to_int)))
         })
     }),
@@ -415,24 +415,24 @@ fn core_run<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
             }))
         }),
         ("startswith", 1, |args, cv| {
-            bla(args, cv, |v, s| {
+            unary(args, cv, |v, s| {
                 Ok(v.into_str()?.starts_with(s.into_str()?).into())
             })
         }),
         ("endswith", 1, |args, cv| {
-            bla(args, cv, |v, s| {
+            unary(args, cv, |v, s| {
                 Ok(v.into_str()?.ends_with(s.into_str()?).into())
             })
         }),
         ("ltrimstr", 1, |args, cv| {
-            bla(args, cv, |v, pre| {
+            unary(args, cv, |v, pre| {
                 Ok(v.into_str()?
                     .strip_prefix(pre.into_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
         ("rtrimstr", 1, |args, cv| {
-            bla(args, cv, |v, suf| {
+            unary(args, cv, |v, suf| {
                 Ok(v.into_str()?
                     .strip_suffix(suf.into_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
