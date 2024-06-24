@@ -54,6 +54,17 @@ trait ValTx: Sized + ValT2 {
             .ok_or_else(|| Error::Type(self.clone(), error::Type::Str))
     }
 
+    fn into_isize(&self) -> Result<isize, Error<Self>> {
+        self.as_isize()
+            .ok_or_else(|| Error::Type(self.clone(), error::Type::Int))
+    }
+
+    /// Use a value as an i32 to be given as an argument to a libm
+    /// function.
+    fn into_i32(&self) -> Result<i32, Error<Self>> {
+        self.into_isize()?.try_into().map_err(Error::str)
+    }
+
     /// Apply a function to an array.
     fn mutate_arr<F>(self, f: F) -> ValR2<Self>
     where
@@ -122,7 +133,7 @@ pub fn core() -> impl Iterator<Item = (String, usize, Native)> {
         .chain(run2(std()))
         .chain(run2(format()))
         .chain([upd(debug())])
-        .chain(run(MATH))
+        .chain(run2(math()))
         .chain(run(PARSE_JSON))
         .chain(run2(regex()))
         .chain(run2(time()))
@@ -241,7 +252,7 @@ fn implode<V: ValT2>(xs: &[V]) -> Result<String, Error<V>> {
 
 /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
 fn as_codepoint<V: ValT2>(v: &V) -> Result<char, Error<V>> {
-    let i = v.as_isize().ok_or_else(|| todo!())?;
+    let i = v.into_isize()?;
     // conversion from isize to u32 may fail on 64-bit systems for high values of c
     let u = u32::try_from(i).map_err(Error::str)?;
     // may fail e.g. on `[1114112] | implode`
@@ -391,10 +402,7 @@ fn core_run<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
         }),
         ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
         ("limit", 2, |args, cv| {
-            let n = args
-                .get(0)
-                .run(cv.clone())
-                .map(|n| n?.as_isize().ok_or_else(|| todo!()));
+            let n = args.get(0).run(cv.clone()).map(|n| n?.into_isize());
             let f = move |n| args.get(1).run(cv.clone()).take(n);
             let pos = |n: isize| n.try_into().unwrap_or(0usize);
             Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
@@ -512,8 +520,9 @@ fn format<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     ])
 }
 
-#[cfg(feature = "math")]
-const MATH: &[(&str, usize, RunPtr)] = &[
+fn math<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+    let rename = |name, (_name, arity, f): (&'static str, usize, RunPtr<V>)| (name, arity, f);
+    Box::new([
     math::f_f!(acos),
     math::f_f!(acosh),
     math::f_f!(asin),
@@ -541,7 +550,7 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::f_f!(log2),
     // logb is implemented in jaq-std
     math::f_ff!(modf),
-    math::f_f!("nearbyint", round),
+    rename("nearbyint", math::f_f!(round)),
     // pow10 is implemented in jaq-std
     math::f_f!(rint),
     // significand is implemented in jaq-std
@@ -569,10 +578,11 @@ const MATH: &[(&str, usize, RunPtr)] = &[
     math::ff_f!(pow),
     math::ff_f!(remainder),
     // scalb is implemented in jaq-std
-    math::fi_f!("scalbln", scalbn),
+    rename("scalbln", math::fi_f!(scalbn)),
     math::if_f!(yn),
     math::fff_f!(fma),
-];
+    ])
+}
 
 type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
