@@ -331,10 +331,16 @@ where
     Box::new(vals.map(move |y| f(&cv.1, y?)))
 }
 
+macro_rules! ow {
+    ( $f:expr ) => {
+        once_with(move || $f)
+    };
+}
+
 const BLA: &[(&str, usize, RunPtr)] = &[
-    ("length", 0, |_, cv| once_with(move || length(&cv.1))),
+    ("length", 0, |_, cv| ow!(length(&cv.1))),
     ("keys_unsorted", 0, |_, cv| {
-        once_with(move || cv.1.keys_unsorted().map(Val::arr))
+        ow!(cv.1.keys_unsorted().map(Val::arr))
     }),
     ("contains", 1, |args, cv| {
         unary(args, cv, |x, y| Ok(Val::from(x.contains(&y))))
@@ -349,12 +355,6 @@ const BLA: &[(&str, usize, RunPtr)] = &[
         })
     }),
 ];
-
-macro_rules! ow {
-    ( $f:expr ) => {
-        once_with(move || $f)
-    };
-}
 
 fn core_run<V: ValT2>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     Box::new([
