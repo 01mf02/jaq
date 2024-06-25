@@ -534,6 +534,7 @@ fn format<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     ])
 }
 
+#[cfg(feature = "math")]
 fn math<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     let rename = |name, (_name, arity, f): (&'static str, usize, RunPtr<V>)| (name, arity, f);
     Box::new([
