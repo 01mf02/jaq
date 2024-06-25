@@ -1,10 +1,10 @@
-use crate::{ValR2, ValT2};
+use crate::{ValR2, ValT};
 use alloc::string::{String, ToString};
 use jaq_interpret::Error;
 
 /// Parse an ISO-8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).
-pub fn from_iso8601<V: ValT2>(s: &str) -> ValR2<V> {
+pub fn from_iso8601<V: ValT>(s: &str) -> ValR2<V> {
     use time::format_description::well_known::Iso8601;
     use time::OffsetDateTime;
     let datetime = OffsetDateTime::parse(s, &Iso8601::DEFAULT)
@@ -21,7 +21,7 @@ pub fn from_iso8601<V: ValT2>(s: &str) -> ValR2<V> {
 }
 
 /// Format a number as an ISO-8601 timestamp string.
-pub fn to_iso8601<V: ValT2>(v: &V) -> Result<String, Error<V>> {
+pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
     use time::format_description::well_known::iso8601;
     use time::OffsetDateTime;
     const SECONDS_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
