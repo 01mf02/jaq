@@ -79,20 +79,19 @@ trait ValTx: ValT + Sized {
             .map_err(|e| Error::Type(e, error::Type::Arr))
     }
 
-    fn into_str(&self) -> Result<&str, Error<Self>> {
+    fn try_as_str(&self) -> Result<&str, Error<Self>> {
         self.as_str()
             .ok_or_else(|| Error::Type(self.clone(), error::Type::Str))
     }
 
-    fn into_isize(&self) -> Result<isize, Error<Self>> {
+    fn try_as_isize(&self) -> Result<isize, Error<Self>> {
         self.as_isize()
             .ok_or_else(|| Error::Type(self.clone(), error::Type::Int))
     }
 
-    /// Use a value as an i32 to be given as an argument to a libm
-    /// function.
-    fn into_i32(&self) -> Result<i32, Error<Self>> {
-        self.into_isize()?.try_into().map_err(Error::str)
+    /// Use as an i32 to be given as an argument to a libm function.
+    fn try_as_i32(&self) -> Result<i32, Error<Self>> {
+        self.try_as_isize()?.try_into().map_err(Error::str)
     }
 
     /// Apply a function to an array.
@@ -106,7 +105,7 @@ trait ValTx: ValT + Sized {
     }
 
     fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR2<Self> {
-        let mut s = self.into_str()?.to_owned();
+        let mut s = self.try_as_str()?.to_owned();
         f(&mut s);
         Ok(Self::from(s))
     }
@@ -266,7 +265,7 @@ fn implode<V: ValT>(xs: &[V]) -> Result<String, Error<V>> {
 
 /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
 fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
-    let i = v.into_isize()?;
+    let i = v.try_as_isize()?;
     // conversion from isize to u32 may fail on 64-bit systems for high values of c
     let u = u32::try_from(i).map_err(Error::str)?;
     // may fail e.g. on `[1114112] | implode`
@@ -370,6 +369,7 @@ const JSON_MINIMAL: &[(&str, usize, RunPtr)] = &[
     }),
 ];
 
+#[allow(clippy::unit_arg)]
 fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     Box::new([
         ("inputs", 0, |_, cv| {
@@ -380,10 +380,10 @@ fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
         ("round", 0, |_, cv| ow!(cv.1.round(f64::round))),
         ("ceil", 0, |_, cv| ow!(cv.1.round(f64::ceil))),
         ("utf8bytelength", 0, |_, cv| {
-            ow!(cv.1.into_str().map(|s| (s.len() as isize).into()))
+            ow!(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
         }),
         ("explode", 0, |_, cv| {
-            ow!(cv.1.into_str().and_then(|s| explode(s).collect()))
+            ow!(cv.1.try_as_str().and_then(|s| explode(s).collect()))
         }),
         ("implode", 0, |_, cv| {
             ow!(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
@@ -416,7 +416,7 @@ fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
         }),
         ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
         ("limit", 2, |args, cv| {
-            let n = args.get(0).run(cv.clone()).map(|n| n?.into_isize());
+            let n = args.get(0).run(cv.clone()).map(|n| n?.try_as_isize());
             let f = move |n| args.get(1).run(cv.clone()).take(n);
             let pos = |n: isize| n.try_into().unwrap_or(0usize);
             Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
@@ -430,33 +430,33 @@ fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
         }),
         ("startswith", 1, |args, cv| {
             unary(args, cv, |v, s| {
-                Ok(v.into_str()?.starts_with(s.into_str()?).into())
+                Ok(v.try_as_str()?.starts_with(s.try_as_str()?).into())
             })
         }),
         ("endswith", 1, |args, cv| {
             unary(args, cv, |v, s| {
-                Ok(v.into_str()?.ends_with(s.into_str()?).into())
+                Ok(v.try_as_str()?.ends_with(s.try_as_str()?).into())
             })
         }),
         ("ltrimstr", 1, |args, cv| {
             unary(args, cv, |v, pre| {
-                Ok(v.into_str()?
-                    .strip_prefix(pre.into_str()?)
+                Ok(v.try_as_str()?
+                    .strip_prefix(pre.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
         ("rtrimstr", 1, |args, cv| {
             unary(args, cv, |v, suf| {
-                Ok(v.into_str()?
-                    .strip_suffix(suf.into_str()?)
+                Ok(v.try_as_str()?
+                    .strip_suffix(suf.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
         ("escape_csv", 0, |_, cv| {
-            ow!(Ok(cv.1.into_str()?.replace('"', "\"\"").into()))
+            ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
         }),
         ("escape_sh", 0, |_, cv| {
-            ow!(Ok(cv.1.into_str()?.replace('\'', r"'\''").into()))
+            ow!(Ok(cv.1.try_as_str()?.replace('\'', r"'\''").into()))
         }),
     ])
 }
@@ -508,26 +508,26 @@ fn format<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
         ("escape_html", 0, |_, cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-            ow!(Ok(replace(cv.1.into_str()?, &pats, &reps).into()))
+            ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
         }),
         ("escape_tsv", 0, |_, cv| {
             let pats = ["\n", "\r", "\t", "\\"];
             let reps = ["\\n", "\\r", "\\t", "\\\\"];
-            ow!(Ok(replace(cv.1.into_str()?, &pats, &reps).into()))
+            ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
         }),
         ("encode_uri", 0, |_, cv| {
             use urlencoding::encode;
-            ow!(Ok(encode(cv.1.into_str()?).into_owned().into()))
+            ow!(Ok(encode(cv.1.try_as_str()?).into_owned().into()))
         }),
         ("encode_base64", 0, |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            ow!(Ok(STANDARD.encode(cv.1.into_str()?).into()))
+            ow!(Ok(STANDARD.encode(cv.1.try_as_str()?).into()))
         }),
         ("decode_base64", 0, |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             use core::str::from_utf8;
             ow!({
-                let d = STANDARD.decode(cv.1.into_str()?).map_err(Error::str)?;
+                let d = STANDARD.decode(cv.1.try_as_str()?).map_err(Error::str)?;
                 Ok(from_utf8(&d).map_err(Error::str)?.to_owned().into())
             })
         }),
@@ -613,9 +613,9 @@ where
         let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
         let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
 
-        let flags = regex::Flags::new(flags?.into_str()?).map_err(fail_flag)?;
-        let re = flags.regex(re?.into_str()?).map_err(fail_re)?;
-        let out = regex::regex(cv.1.into_str()?, &re, flags, (s, m));
+        let flags = regex::Flags::new(flags?.try_as_str()?).map_err(fail_flag)?;
+        let re = flags.regex(re?.try_as_str()?).map_err(fail_re)?;
+        let out = regex::regex(cv.1.try_as_str()?, &re, flags, (s, m));
         let out = out.into_iter().map(|out| match out {
             Matches(ms) => ms.into_iter().map(|m| V::from_map(m.fields())).collect(),
             Mismatch(s) => Ok(V::from(s.to_string())),
@@ -643,7 +643,7 @@ fn regex<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
 fn time<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     Box::new([
         ("fromdateiso8601", 0, |_, cv| {
-            ow!(time::from_iso8601(cv.1.into_str()?))
+            ow!(time::from_iso8601(cv.1.try_as_str()?))
         }),
         ("todateiso8601", 0, |_, cv| {
             ow!(Ok(time::to_iso8601(&cv.1)?.into()))

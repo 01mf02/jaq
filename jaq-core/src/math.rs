@@ -77,14 +77,14 @@ macro_rules! ff_f {
 /// Build a filter from (int, float) to float
 macro_rules! if_f {
     ($f: ident) => {
-        crate::math::math!($f, V::into_i32, V::as_f64, V::from)
+        crate::math::math!($f, V::try_as_i32, V::as_f64, V::from)
     };
 }
 
 /// Build a filter from (float, int) to float
 macro_rules! fi_f {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, V::into_i32, V::from)
+        crate::math::math!($f, V::as_f64, V::try_as_i32, V::from)
     };
 }
 
