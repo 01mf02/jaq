@@ -379,6 +379,9 @@ yields!(
     [-1.929, -1.1, -1.0, -1.0, 0.0, 1.31072, 1.0, 1.0, 1.1, 1.929]
 );
 
+yields!(tostring_str, r#""\n" | tostring"#, "\n");
+yields!(tostring_arr_str, r#"["\n"] | tostring"#, "[\"\\n\"]");
+
 #[test]
 fn transpose() {
     let y = json!([[1, 2], [3, null]]);
@@ -471,16 +474,6 @@ yields!(
     format_json,
     r#"[0, 0 == 0, {}.a, "hello", {}, [] | @json]"#,
     ["0", "true", "null", "\"hello\"", "{}", "[]"]
-);
-yields!(
-    format_html,
-    r#""<p style='visibility: hidden'>sneaky</p>" | @html"#,
-    "&lt;p style=&apos;visibility: hidden&apos;&gt;sneaky&lt;/p&gt;"
-);
-yields!(
-    format_uri,
-    r#""abc123 ?#+&[]" | @uri"#,
-    "abc123%20%3F%23%2B%26%5B%5D"
 );
 yields!(
     format_csv,

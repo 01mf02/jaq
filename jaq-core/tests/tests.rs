@@ -72,14 +72,25 @@ yields!(first_empty, "[first({}[])]", json!([]));
 yields!(first_some, "first(1, 2, 3)", 1);
 
 yields!(
-    format_base64,
+    encode_base64,
     r#""hello cruel world" | encode_base64"#,
     "aGVsbG8gY3J1ZWwgd29ybGQ="
 );
 yields!(
-    format_unformat_base64,
+    encode_decode_base64,
     r#""hello cruel world" | encode_base64 | decode_base64"#,
     "hello cruel world"
+);
+
+yields!(
+    escape_html,
+    r#""<p style='visibility: hidden'>sneaky</p>" | escape_html"#,
+    "&lt;p style=&apos;visibility: hidden&apos;&gt;sneaky&lt;/p&gt;"
+);
+yields!(
+    escape_uri,
+    r#""abc123 ?#+&[]" | escape_uri"#,
+    "abc123%20%3F%23%2B%26%5B%5D"
 );
 
 #[test]

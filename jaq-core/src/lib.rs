@@ -452,10 +452,10 @@ fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("escape_str_csv", 0, |_, cv| {
+        ("escape_csv", 0, |_, cv| {
             ow!(Ok(cv.1.into_str()?.replace('"', "\"\"").into()))
         }),
-        ("escape_str_sh", 0, |_, cv| {
+        ("escape_sh", 0, |_, cv| {
             ow!(Ok(cv.1.into_str()?.replace('\'', r"'\''").into()))
         }),
     ])
@@ -505,12 +505,12 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 #[cfg(feature = "format")]
 fn format<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     Box::new([
-        ("escape_str_html", 0, |_, cv| {
+        ("escape_html", 0, |_, cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
             ow!(Ok(replace(cv.1.into_str()?, &pats, &reps).into()))
         }),
-        ("escape_str_tsv", 0, |_, cv| {
+        ("escape_tsv", 0, |_, cv| {
             let pats = ["\n", "\r", "\t", "\\"];
             let reps = ["\\n", "\\r", "\\t", "\\\\"];
             ow!(Ok(replace(cv.1.into_str()?, &pats, &reps).into()))

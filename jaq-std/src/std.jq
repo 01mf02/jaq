@@ -167,11 +167,11 @@ def fromdate: fromdateiso8601;
 
 # Formatting
 def fmt_row(n; s): if . >= "" then s elif . == null then n else "\(.)" end;
-def @csv: .[] |= fmt_row(""; "\"\(escape_str_csv)\"") | join("," );
-def @tsv: .[] |= fmt_row("";      escape_str_tsv    ) | join("\t");
-def @sh: [if isarray then .[] end | fmt_row("null"; "'\(escape_str_sh)'")] | join(" ");
+def @csv: .[] |= fmt_row(""; "\"\(escape_csv)\"") | join("," );
+def @tsv: .[] |= fmt_row("";      escape_tsv    ) | join("\t");
+def @sh: [if isarray then .[] end | fmt_row("null"; "'\(escape_sh)'")] | join(" ");
 def @text: "\(.)";
 def @json: tojson;
-def @html: tostring | escape_str_html;
-def @uri : tostring | encode_uri;
+def @html  : tostring | escape_html;
+def @uri   : tostring | encode_uri;
 def @base64: tostring | encode_base64;
