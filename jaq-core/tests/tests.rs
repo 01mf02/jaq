@@ -88,8 +88,8 @@ yields!(
     "&lt;p style=&apos;visibility: hidden&apos;&gt;sneaky&lt;/p&gt;"
 );
 yields!(
-    escape_uri,
-    r#""abc123 ?#+&[]" | escape_uri"#,
+    encode_uri,
+    r#""abc123 ?#+&[]" | encode_uri"#,
     "abc123%20%3F%23%2B%26%5B%5D"
 );
 
