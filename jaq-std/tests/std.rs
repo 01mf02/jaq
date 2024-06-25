@@ -194,6 +194,20 @@ fn min_max() {
     );
 }
 
+yields!(min_empty, "[] | min_by(.)", json!(null));
+// when output is equal, min_by selects the left element and max_by the right one
+yields!(
+    min_max_eq,
+    "[{a: 1, b: 3}, {a: 1, b: 2}] | [(min_by(.a), max_by(.a)) | .b]",
+    [3, 2]
+);
+// multiple-output functions can be used to differentiate elements
+yields!(
+    max_mult,
+    "[{a: 1, b: 3}, {a: 1, b: 2}] | max_by(.a, .b) | .b",
+    3
+);
+
 #[test]
 fn nth() {
     let fib = "[0,1] | recurse([.[1], add]) | .[0]";
@@ -365,6 +379,9 @@ yields!(
     [-1.929, -1.1, -1.0, -1.0, 0.0, 1.31072, 1.0, 1.0, 1.1, 1.929]
 );
 
+yields!(tostring_str, r#""\n" | tostring"#, "\n");
+yields!(tostring_arr_str, r#"["\n"] | tostring"#, "[\"\\n\"]");
+
 #[test]
 fn transpose() {
     let y = json!([[1, 2], [3, null]]);
@@ -446,4 +463,41 @@ yields!(
     gsub_many,
     r#""XxYy" | [gsub("(?<upper>[A-Z])"; .upper, "!" + .upper)]"#,
     ["XxYy", "Xx!Yy", "!XxYy", "!Xx!Yy"]
+);
+
+yields!(
+    format_text,
+    r#"[0, 0 == 0, {}.a, "hello", {}, [] | @text]"#,
+    ["0", "true", "null", "hello", "{}", "[]"]
+);
+yields!(
+    format_json,
+    r#"[0, 0 == 0, {}.a, "hello", {}, [] | @json]"#,
+    ["0", "true", "null", "\"hello\"", "{}", "[]"]
+);
+yields!(
+    format_csv,
+    r#"[0, 0 == 0, {}.a, "hello \"quotes\" and, commas"] | @csv"#,
+    r#"0,true,,"hello ""quotes"" and, commas""#
+);
+yields!(
+    format_tsv,
+    r#"[0, 0 == 0, {}.a, "hello \"quotes\" and \n\r\t\\ escapes"] | @tsv"#,
+    "0\ttrue\t\thello \"quotes\" and \\n\\r\\t\\\\ escapes"
+);
+
+yields!(
+    format_sh,
+    r#"[0, 0 == 0, {}.a, "O'Hara!", ["Here", "there"] | @sh]"#,
+    ["0", "true", "null", r#"'O'\''Hara!'"#, r#"'Here' 'there'"#,]
+);
+yields!(
+    format_sh_rejects_objects,
+    r#"{a: "b"} | try @sh catch -1"#,
+    -1
+);
+yields!(
+    format_sh_rejects_nested_arrays,
+    r#"["fine, but", []] | try @sh catch -1"#,
+    -1
 );

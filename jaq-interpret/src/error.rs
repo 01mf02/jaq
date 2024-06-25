@@ -1,6 +1,6 @@
 //! Runtime errors.
 use crate::val::{Val, ValT};
-use alloc::string::ToString;
+use alloc::string::{String, ToString};
 use core::fmt;
 
 /// Errors that can occur during filter execution.
@@ -59,7 +59,9 @@ impl<V: ValT> Error<V> {
             _ => V::from(self.to_string()),
         }
     }
+}
 
+impl<V: From<String>> Error<V> {
     /// Build an error from something that can be converted to a string.
     pub fn str(s: impl ToString) -> Self {
         Self::Val(V::from(s.to_string()))

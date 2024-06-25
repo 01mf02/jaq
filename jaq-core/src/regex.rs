@@ -1,10 +1,10 @@
 //! Helpers to interface with the `regex` crate.
 
 use alloc::string::{String, ToString};
-use alloc::{rc::Rc, vec::Vec};
-use jaq_interpret::{Error, Val};
+use alloc::vec::Vec;
+use regex::{Error, Regex, RegexBuilder};
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct Flags {
     // global search
     g: bool,
@@ -44,15 +44,15 @@ impl Flags {
         Ok(out)
     }
 
-    pub fn ignore_empty(&self) -> bool {
+    pub fn ignore_empty(self) -> bool {
         self.n
     }
 
-    pub fn global(&self) -> bool {
+    pub fn global(self) -> bool {
         self.g
     }
 
-    fn impact<'a>(&'a self, builder: &'a mut regex::RegexBuilder) -> &mut regex::RegexBuilder {
+    fn impact(self, builder: &mut RegexBuilder) -> &mut RegexBuilder {
         builder
             .case_insensitive(self.i)
             .multi_line(self.m)
@@ -61,8 +61,8 @@ impl Flags {
             .ignore_whitespace(self.x)
     }
 
-    pub fn regex(&self, re: &str) -> Result<regex::Regex, regex::Error> {
-        let mut builder = regex::RegexBuilder::new(re);
+    pub fn regex(self, re: &str) -> Result<Regex, Error> {
+        let mut builder = RegexBuilder::new(re);
         self.impact(&mut builder).build()
     }
 }
@@ -99,35 +99,38 @@ impl<'a> ByteChar<'a> {
     }
 }
 
-pub struct Match {
+pub struct Match<S> {
     pub offset: usize,
     pub length: usize,
-    pub string: String,
-    pub name: Option<String>,
+    pub string: S,
+    pub name: Option<S>,
 }
 
-impl Match {
-    pub fn new<'a>(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
+impl<'a> Match<&'a str> {
+    pub fn new(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
         Self {
             offset: bc.char_of_byte(m.start()),
             length: m.as_str().chars().count(),
-            string: m.as_str().to_string(),
-            name: name.map(|s| s.to_string()),
+            string: m.as_str(),
+            name,
         }
+    }
+
+    pub fn fields<T: From<isize> + From<String> + 'a>(&self) -> impl Iterator<Item = (T, T)> + '_ {
+        [
+            ("offset", (self.offset as isize).into()),
+            ("length", (self.length as isize).into()),
+            ("string", self.string.to_string().into()),
+        ]
+        .into_iter()
+        .chain(self.name.iter().map(|n| ("name", (*n).to_string().into())))
+        .map(|(k, v)| (k.to_string().into(), v))
     }
 }
 
-impl From<Match> for Val {
-    fn from(m: crate::regex::Match) -> Self {
-        let obj = [
-            ("offset", Self::Int(m.offset as isize)),
-            ("length", Self::Int(m.length as isize)),
-            ("string", Self::str(m.string)),
-            ("name", m.name.map_or(Self::Null, Self::str)),
-        ];
-        let obj = obj.into_iter().filter(|(_, v)| *v != Self::Null);
-        Self::obj(obj.map(|(k, v)| (Rc::new(k.to_string()), v)).collect())
-    }
+pub enum Part<S> {
+    Matches(Vec<Match<S>>),
+    Mismatch(S),
 }
 
 /// Apply a regular expression to the given input value.
@@ -135,12 +138,8 @@ impl From<Match> for Val {
 /// `sm` indicates whether to
 /// 1. output strings that do *not* match the regex, and
 /// 2. output the matches.
-pub fn regex(s: &str, re: &str, flags: &str, sm: (bool, bool)) -> Result<Vec<Val>, Error> {
-    let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
-    let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
-    let flags = Flags::new(flags).map_err(fail_flag)?;
-    let re = flags.regex(re).map_err(fail_re)?;
-    let (split, matches) = sm;
+pub fn regex<'a>(s: &'a str, re: &'a Regex, flags: Flags, sm: (bool, bool)) -> Vec<Part<&'a str>> {
+    let (mi, ma) = sm;
 
     let mut last_byte = 0;
     let mut bc = ByteChar::new(s);
@@ -151,24 +150,21 @@ pub fn regex(s: &str, re: &str, flags: &str, sm: (bool, bool)) -> Result<Vec<Val
         if whole.start() >= s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
             continue;
         }
-        let vs = c
-            .iter()
-            .zip(re.capture_names())
-            .filter_map(|(match_, name)| Some(Match::new(&mut bc, match_?, name)))
-            .map(Val::from);
-        if split {
-            out.push(Val::str(s[last_byte..whole.start()].to_string()));
+        let match_names = c.iter().zip(re.capture_names());
+        let matches = match_names.filter_map(|(m, n)| Some(Match::new(&mut bc, m?, n)));
+        if mi {
+            out.push(Part::Mismatch(&s[last_byte..whole.start()]));
             last_byte = whole.end();
         }
-        if matches {
-            out.push(Val::arr(vs.collect()));
+        if ma {
+            out.push(Part::Matches(matches.collect()));
         }
         if !flags.global() {
             break;
         }
     }
-    if split {
-        out.push(Val::str(s[last_byte..].to_string()));
+    if mi {
+        out.push(Part::Mismatch(&s[last_byte..]));
     }
-    Ok(out)
+    out
 }
