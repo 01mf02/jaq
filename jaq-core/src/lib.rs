@@ -354,7 +354,7 @@ const JSON_MINIMAL: &[(&str, usize, RunPtr)] = &[
     ("indices", 1, |args, cv| {
         let to_int = |i: usize| Val::Int(i.try_into().unwrap());
         unary(args, cv, move |x, v| {
-            indices(x, &v).map(|idxs| Val::from_iter(idxs.map(to_int)))
+            indices(x, &v).map(|idxs| idxs.map(to_int).collect())
         })
     }),
 ];
@@ -378,10 +378,10 @@ fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
             ow!(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
         }),
         ("ascii_downcase", 0, |_, cv| {
-            ow!(cv.1.mutate_str(|s| s.make_ascii_lowercase()))
+            ow!(cv.1.mutate_str(str::make_ascii_lowercase))
         }),
         ("ascii_upcase", 0, |_, cv| {
-            ow!(cv.1.mutate_str(|s| s.make_ascii_uppercase()))
+            ow!(cv.1.mutate_str(str::make_ascii_uppercase))
         }),
         ("reverse", 0, |_, cv| {
             ow!(cv.1.mutate_arr(|a| Ok(a.reverse())))
@@ -473,15 +473,15 @@ fn std<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
 fn from_json(s: &str) -> ValR {
-    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
     use hifijson::token::Lex;
+    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
     lexer
         .exactly_one(Val::parse)
         .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
 }
 
 #[cfg(feature = "parse_json")]
-const PARSE_JSON: (&'static str, usize, RunPtr) = ("fromjson", 0, |_, cv| {
+const PARSE_JSON: (&str, usize, RunPtr) = ("fromjson", 0, |_, cv| {
     ow!(cv.1.as_str().and_then(|s| from_json(s)))
 });
 
@@ -597,13 +597,13 @@ where
     let re_flags = re.cartesian(flags, (cv.0, cv.1.clone()));
 
     Box::new(re_flags.map(move |(re, flags)| {
+        use regex::Part::{Matches, Mismatch};
         let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
         let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
 
         let flags = regex::Flags::new(flags?.into_str()?).map_err(fail_flag)?;
         let re = flags.regex(re?.into_str()?).map_err(fail_re)?;
         let out = regex::regex(cv.1.into_str()?, &re, flags, (s, m));
-        use regex::Part::{Matches, Mismatch};
         let out = out.into_iter().map(|out| match out {
             Matches(ms) => ms.into_iter().map(|m| V::from_map(m.fields())).collect(),
             Mismatch(s) => Ok(V::from(s.to_string())),
@@ -631,7 +631,7 @@ fn regex<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
 fn time<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
     Box::new([
         ("fromdateiso8601", 0, |_, cv| {
-            ow!(Ok(time::from_iso8601(cv.1.into_str()?)?))
+            ow!(time::from_iso8601(cv.1.into_str()?))
         }),
         ("todateiso8601", 0, |_, cv| {
             ow!(Ok(time::to_iso8601(&cv.1)?.into()))

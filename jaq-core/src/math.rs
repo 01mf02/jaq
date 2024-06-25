@@ -1,6 +1,7 @@
 macro_rules! math {
     // Build a 0-ary filter from a 1-ary math function.
     ($f: ident, $domain: expr, $codomain: expr) => {
+        #[allow(clippy::redundant_closure_call)]
         (stringify!($f), 0, |_, cv| {
             once_with(move || Ok($codomain(libm::$f($domain(&cv.1)?))))
         })

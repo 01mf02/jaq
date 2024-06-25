@@ -4,7 +4,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use regex::{Error, Regex, RegexBuilder};
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct Flags {
     // global search
     g: bool,
@@ -44,15 +44,15 @@ impl Flags {
         Ok(out)
     }
 
-    pub fn ignore_empty(&self) -> bool {
+    pub fn ignore_empty(self) -> bool {
         self.n
     }
 
-    pub fn global(&self) -> bool {
+    pub fn global(self) -> bool {
         self.g
     }
 
-    fn impact<'a>(&'a self, builder: &'a mut RegexBuilder) -> &mut RegexBuilder {
+    fn impact(self, builder: &mut RegexBuilder) -> &mut RegexBuilder {
         builder
             .case_insensitive(self.i)
             .multi_line(self.m)
@@ -61,7 +61,7 @@ impl Flags {
             .ignore_whitespace(self.x)
     }
 
-    pub fn regex(&self, re: &str) -> Result<Regex, Error> {
+    pub fn regex(self, re: &str) -> Result<Regex, Error> {
         let mut builder = RegexBuilder::new(re);
         self.impact(&mut builder).build()
     }
@@ -123,7 +123,7 @@ impl<'a> Match<&'a str> {
             ("string", self.string.to_string().into()),
         ]
         .into_iter()
-        .chain(self.name.iter().map(|n| ("name", n.to_string().into())))
+        .chain(self.name.iter().map(|n| ("name", (*n).to_string().into())))
         .map(|(k, v)| (k.to_string().into(), v))
     }
 }
