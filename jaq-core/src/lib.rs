@@ -32,13 +32,15 @@ type Filter<V = Val> = (String, usize, Native<V>);
 ///
 /// Does not return filters from the standard library, such as `map`.
 pub fn minimal() -> impl Iterator<Item = Filter> {
-    run_many(JSON_MINIMAL.into()).chain(generic_min())
+    run_many(JSON_MINIMAL.into()).chain(generic_base())
 }
 
-fn generic_min<V: ValT>() -> impl Iterator<Item = Filter<V>> {
+/// Minimal set of filters that are generic over the value type.
+pub fn generic_base<V: ValT>() -> impl Iterator<Item = Filter<V>> {
     run_many(core_run()).chain([upd(error())])
 }
 
+/// Supplementary set of filters that are generic over the value type.
 #[cfg(all(
     feature = "std",
     feature = "format",
@@ -47,21 +49,30 @@ fn generic_min<V: ValT>() -> impl Iterator<Item = Filter<V>> {
     feature = "regex",
     feature = "time",
 ))]
-fn generic_max<V: ValT>() -> impl Iterator<Item = Filter<V>> {
-    run_many(std())
-        .chain(run_many(format()))
-        .chain([upd(debug())])
-        .chain(run_many(math()))
-        .chain(run_many(regex()))
-        .chain(run_many(time()))
+pub fn generic_extra<V: ValT>() -> impl Iterator<Item = Filter<V>> {
+    let filters = [std(), format(), math(), regex(), time()];
+    filters.into_iter().flat_map(run_many).chain([upd(debug())])
 }
 
-trait ValT: jaq_interpret::ValT + Ord + From<f64> {
+/// Values that the core library can operate on.
+pub trait ValT: jaq_interpret::ValT + Ord + From<f64> {
+    /// Convert an array into a sequence.
+    ///
+    /// This returns the original value as `Err` if it is not an array.
     fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self>;
+
+    /// Use the value as integer.
     fn as_isize(&self) -> Option<isize>;
+
+    /// Use the value as floating-point number.
+    ///
+    /// This may fail in more complex ways than [`Self::as_isize`],
+    /// because the value may either be
+    /// not a number or a number that does not fit into [`f64`].
     fn as_f64(&self) -> Result<f64, Error<Self>>;
 }
 
+/// Convenience trait for implementing the core functions.
 trait ValTx: ValT + Sized {
     fn into_vec(self) -> Result<Vec<Self>, Error<Self>> {
         self.into_seq()
@@ -148,7 +159,7 @@ impl ValT for Val {
     feature = "time",
 ))]
 pub fn core() -> impl Iterator<Item = Filter> {
-    minimal().chain(generic_max()).chain([run(PARSE_JSON)])
+    minimal().chain(generic_extra()).chain([run(PARSE_JSON)])
 }
 
 fn run_many<V>(fs: Box<[(&'static str, usize, RunPtr<V>)]>) -> impl Iterator<Item = Filter<V>> {
