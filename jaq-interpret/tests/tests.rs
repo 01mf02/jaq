@@ -137,9 +137,13 @@ yields!(
     "Here be nestings"
 );
 
-yields!(interpolation_obj_str, r#""\({"\n": 0})""#, "{\"\\n\":0}");
-yields!(interpolation_arr_str, r#""\(["\n"]   )""#, "[\"\\n\"]");
-yields!(interpolation_str, r#""\("\n")""#, "\n");
+yields!(interpolation_str, r#""\("\tHi'\"\n❤\\")""#, "\tHi'\"\n❤\\");
+yields!(
+    interpolation_arr_str,
+    r#""\(["\tHi'\"\n❤\\"])""#,
+    "[\"\\tHi'\\\"\\n❤\\\\\"]"
+);
+yields!(interpolation_obj_str, r#""\({"❤\n": 0})""#, "{\"❤\\n\":0}");
 
 yields!(
     obj_trailing_comma,
