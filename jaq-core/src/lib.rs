@@ -609,7 +609,7 @@ where
     let re_flags = re.cartesian(flags, (cv.0, cv.1.clone()));
 
     Box::new(re_flags.map(move |(re, flags)| {
-        use regex::Part::{Matches, Mismatch};
+        use crate::regex::Part::{Matches, Mismatch};
         let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
         let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
 
