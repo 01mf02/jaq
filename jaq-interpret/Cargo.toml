@@ -1,6 +1,6 @@
 [package]
 name = "jaq-interpret"
-version = "1.4.0"
+version = "1.5.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
