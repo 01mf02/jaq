@@ -11,10 +11,6 @@
 //!
 //! This was adapted from
 //! <https://ycpcs.github.io/cs340-fall2017/lectures/lecture06.html#implementation>.
-//!
-//!
-//! ~~~
-//! ~~~
 
 use core::iter::Peekable;
 
