@@ -510,10 +510,10 @@ pub struct Module<S, B> {
 
 #[derive(Debug)]
 pub struct Def<S, F> {
-    name: S,
-    args: Vec<S>,
+    pub(crate) name: S,
+    pub(crate) args: Vec<S>,
     /// Body of the filter, e.g. `[.[] | f]`.
-    body: F,
+    pub(crate) body: F,
 }
 
 fn ident_key<'a>(token: &Token<&'a str>) -> Option<&'a str> {
