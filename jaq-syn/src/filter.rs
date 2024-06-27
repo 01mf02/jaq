@@ -245,7 +245,7 @@ impl From<&parse::Term<&str>> for Filter {
                 else_.as_deref().map(span),
             ),
 
-            Def(defs, tm) => panic!(),
+            Def(defs, tm) => unimplemented!("definitions inside terms are not supported yet"),
             Call(c, args) => Self::Call(c.to_string(), args.iter().map(|a| *span(a)).collect()),
             Var(v) => Self::Var(v.to_string()),
 
