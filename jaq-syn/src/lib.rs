@@ -14,6 +14,7 @@ pub mod test;
 
 pub mod lex;
 pub mod parse;
+mod prec_climb;
 
 pub use def::{Arg, Call, Def, Main};
 pub use ops::{MathOp, OrdOp};

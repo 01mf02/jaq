@@ -5,7 +5,6 @@ pub enum StrPart<S, F> {
     Str(S),
     Filter(F),
     Char(char),
-    Unicode(u32),
 }
 
 /// Token (tree) generic over string type `S`.
@@ -179,7 +178,7 @@ impl<'a> Lexer<'a> {
                         }
                     }
                 }
-                StrPart::Unicode(hex)
+                StrPart::Char(char::from_u32(hex).unwrap())
             }
             Some('(') => return Some(StrPart::Filter(self.delim())),
             Some(_) | None => {

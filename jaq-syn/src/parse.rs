@@ -1,6 +1,6 @@
 use crate::lex::{StrPart, Token};
-use alloc::{boxed::Box, vec::Vec};
 use crate::path;
+use alloc::{boxed::Box, vec::Vec};
 
 type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
 #[derive(Debug)]
@@ -363,7 +363,6 @@ impl<'a> Parser<'a> {
             }
             StrPart::Filter(_) => unreachable!(),
             StrPart::Char(c) => StrPart::Char(*c),
-            StrPart::Unicode(u) => StrPart::Unicode(*u),
         });
         parts.collect()
     }
