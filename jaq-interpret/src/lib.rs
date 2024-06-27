@@ -67,7 +67,7 @@ mod exn;
 pub use error::Error;
 pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
-pub use val::{Val, ValR, ValRs};
+pub use val::{Val, ValR, ValRs, ValT};
 
 use alloc::{string::String, vec::Vec};
 use jaq_syn::Arg as Bind;

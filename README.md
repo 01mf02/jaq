@@ -8,6 +8,9 @@
 jaq (pronounced like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
+You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
+Instructions for the playground can be found [here](jaq-play/).
+
 jaq focuses on three goals:
 
 * **Correctness**:
@@ -54,6 +57,20 @@ This should allow users proficient in jq to easily use jaq.
 # Installation
 
 
+## Binaries
+
+You can download binaries for Linux, Mac, and Windows on the [releases page](https://github.com/01mf02/jaq/releases).
+
+You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
+
+    $ brew install jaq
+    $ brew install --HEAD jaq # latest development version
+
+Or using [scoop](https://scoop.sh/#/apps?q=jaq&id=59dbaf2bb778402cd8ec50d0ad4cdae8a6814fc3) on Windows:
+
+    $ scoop install main/jaq
+
+
 ## From Source
 
 To compile jaq, you need a Rust toolchain.
@@ -76,17 +93,6 @@ If you have cloned this repository, you can also build jaq by executing one of t
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
 
-
-## Binaries
-
-You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
-
-    $ brew install jaq
-    $ brew install --HEAD jaq # latest development version
-
-Or using [scoop](https://scoop.sh/#/apps?q=jaq&id=59dbaf2bb778402cd8ec50d0ad4cdae8a6814fc3) on Windows:
-
-    > scoop install main/jaq
 
 
 # Examples
@@ -156,37 +162,37 @@ I then processed the results with a "one-liner" (stretching the term and the lin
 (Of course, you can also use jaq here instead of jq.)
 Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
-[^binaries]: The binaries for jq-1.7 and gojq-0.12.13 were retrieved from their GitHub release pages,
+[^binaries]: The binaries for jq-1.7.1 and gojq-0.12.15 were retrieved from their GitHub release pages,
   the binary for jq-1.6 was installed from the standard Ubuntu repository.
 
 Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
 
-| Benchmark      |       n | jaq-1.2 |  jq-1.7 | gojq-0.12.13 | jq-1.6 |
-| -------------- | ------: | ------: | ------: | -----------: | -----: |
-| `empty`        |     512 | **650** |     790 |          740 |   8340 |
-| `bf-fib`       |      13 | **410** |    1280 |          820 |   1420 |
-| `reverse`      | 1048576 |  **60** |     680 |          310 |    630 |
-| `sort`         | 1048576 | **140** |     530 |          600 |    670 |
-| `group-by`     | 1048576 | **420** |    1850 |         1680 |   2830 |
-| `min-max`      | 1048576 | **220** |     320 |          290 |    310 |
-| `add`          | 1048576 | **480** |     650 |         1540 |    750 |
-| `kv`           |  131072 |     160 | **150** |          250 |    200 |
-| `kv-update`    |  131072 | **190** |     530 |          570 |    N/A |
-| `kv-entries`   |  131072 | **580** |    1170 |          820 |   1110 |
-| `ex-implode`   | 1048576 | **460** |    1110 |          740 |   1080 |
-| `reduce`       | 1048576 | **740** |     880 |          N/A |    850 |
-| `try-catch`    | 1048576 | **180** |     330 |          480 |    650 |
-| `tree-flatten` |      17 |     650 |     360 |        **0** |    480 |
-| `tree-update`  |      17 | **450** |     980 |         1850 |   1180 |
-| `tree-paths`   |      17 |     450 | **380** |          920 |    470 |
-| `to-fromjson`  |   65536 |  **40** |     370 |          100 |    380 |
-| `ack`          |       7 | **570** |     680 |         1090 |    610 |
-| `range-prop`   |     128 | **260** |     310 |          320 |    580 |
+| Benchmark      |       n | jaq-1.4 | jq-1.7.1 | gojq-0.12.15 | jq-1.6 |
+| -------------- | ------: | ------: | -------: | -----------: | -----: |
+| `empty`        |     512 | **610** |      660 |          740 |   8310 |
+| `bf-fib`       |      13 | **470** |     1220 |          570 |   1440 |
+| `reverse`      | 1048576 |  **50** |      680 |          270 |    650 |
+| `sort`         | 1048576 | **140** |      550 |          580 |    680 |
+| `group-by`     | 1048576 | **400** |     1890 |         1550 |   2860 |
+| `min-max`      | 1048576 | **210** |      320 |          250 |    350 |
+| `add`          | 1048576 | **520** |      640 |         1310 |    730 |
+| `kv`           |  131072 |     170 |  **140** |          220 |    190 |
+| `kv-update`    |  131072 | **190** |      540 |          440 |    N/A |
+| `kv-entries`   |  131072 | **630** |     1150 |          830 |   1120 |
+| `ex-implode`   | 1048576 | **510** |     1100 |          610 |   1090 |
+| `reduce`       | 1048576 | **820** |      890 |          N/A |    860 |
+| `try-catch`    | 1048576 | **180** |      320 |          370 |    670 |
+| `tree-flatten` |      17 |     730 |      360 |       **10** |    480 |
+| `tree-update`  |      17 | **560** |      970 |         1330 |   1190 |
+| `tree-paths`   |      17 |     470 |  **250** |          880 |    460 |
+| `to-fromjson`  |   65536 |  **30** |      370 |          120 |    390 |
+| `ack`          |       7 | **530** |      700 |         1230 |    620 |
+| `range-prop`   |     128 |     280 |      310 |      **210** |    590 |
 
 The results show that
-jaq-1.2 is fastest on 16 benchmarks, whereas
-jq-1.7 is fastest on 2 benchmarks and
-gojq-0.12.13 is fastest on 1 benchmark.
+jaq-1.4 is fastest on 15 benchmarks, whereas
+jq-1.7.1 is fastest on 2 benchmarks and
+gojq-0.12.15 is fastest on 2 benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [gojq]: https://github.com/itchyny/gojq
@@ -727,10 +733,13 @@ Please make sure that after your change, `cargo test` runs successfully.
 
 # Acknowledgements
 
-This project has been kindly supported by
-the [NLnet foundation](https://nlnet.nl/project/jaq/) as part of an NGI0 grant.
+[This project](https://nlnet.nl/project/jaq/) was funded through the
+<a href="/entrust">NGI0 Entrust</a> Fund, a fund established by
+<a href="https://nlnet.nl">NLnet</a> with financial support from the
+European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
+programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.
 
-jaq has profited tremendously from:
+jaq has also profited from:
 
 * [serde_json] to read and [colored_json] to output JSON,
 * [chumsky] to parse and [ariadne] to pretty-print parse errors,

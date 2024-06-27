@@ -1,4 +1,5 @@
-def null:  [] | .[0];
+def empty: {}[] as $x | .;
+def null:  [][0];
 
 def error(f): f | error;
 
@@ -61,7 +62,7 @@ def iterables: select(. >= []);
 def scalars:   select(. <  []);
 
 # Conversion
-def tostring: if isstring then . else   tojson end;
+def tostring: "\(.)";
 def tonumber: if isnumber then . else fromjson end;
 
 # Generators
@@ -79,6 +80,8 @@ def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 def add: reduce .[] as $x (null; . + $x);
 def join(x): .[:-1][] += x | add;
+def min_by(f): reduce min_by_or_empty(f) as $x (null; $x);
+def max_by(f): reduce max_by_or_empty(f) as $x (null; $x);
 def min: min_by(.);
 def max: max_by(.);
 def unique_by(f): [group_by(f)[] | .[0]];
@@ -161,3 +164,14 @@ def input: first(inputs);
 # Date
 def   todate:   todateiso8601;
 def fromdate: fromdateiso8601;
+
+# Formatting
+def fmt_row(n; s): if . >= "" then s elif . == null then n else "\(.)" end;
+def @csv: .[] |= fmt_row(""; "\"\(escape_csv)\"") | join("," );
+def @tsv: .[] |= fmt_row("";      escape_tsv    ) | join("\t");
+def @sh: [if isarray then .[] end | fmt_row("null"; "'\(escape_sh)'")] | join(" ");
+def @text: "\(.)";
+def @json: tojson;
+def @html  : tostring | escape_html;
+def @uri   : tostring | encode_uri;
+def @base64: tostring | encode_base64;

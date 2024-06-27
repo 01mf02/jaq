@@ -2,43 +2,81 @@ use core::fmt::{self, Debug, Display, Formatter};
 use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
-struct Pp<'a> {
-    val: &'a Val,
-    opts: &'a PpOpts,
-    level: usize,
-    indent_start: bool,
+struct FormatterFn<F>(F);
+
+impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.0(f)
+    }
 }
 
 struct PpOpts {
-    raw: bool,
     compact: bool,
     indent: String,
-}
-
-impl<'a> Pp<'a> {
-    fn new(val: &'a Val, opts: &'a PpOpts) -> Self {
-        Self {
-            val,
-            opts,
-            level: 0,
-            indent_start: false,
-        }
-    }
 }
 
 impl PpOpts {
     fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
         if !self.compact {
-            write!(f, "{}", self.indent.repeat(level))?
+            write!(f, "{}", self.indent.repeat(level))?;
         }
         Ok(())
     }
 
     fn newline(&self, f: &mut Formatter) -> fmt::Result {
         if !self.compact {
-            writeln!(f)?
+            writeln!(f)?;
         }
         Ok(())
+    }
+}
+
+fn fmt_seq<T, I, F>(fmt: &mut Formatter, opts: &PpOpts, level: usize, xs: I, f: F) -> fmt::Result
+where
+    I: IntoIterator<Item = T>,
+    F: Fn(&mut Formatter, T) -> fmt::Result,
+{
+    opts.newline(fmt)?;
+    let mut iter = xs.into_iter().peekable();
+    while let Some(x) = iter.next() {
+        opts.indent(fmt, level + 1)?;
+        f(fmt, x)?;
+        if iter.peek().is_some() {
+            write!(fmt, ",")?;
+        }
+        opts.newline(fmt)?;
+    }
+    opts.indent(fmt, level)
+}
+
+fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
+    match v {
+        Val::Null => span(f, "null", "null"),
+        Val::Bool(b) => span(f, "boolean", b),
+        Val::Int(i) => span(f, "number", i),
+        Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
+        Val::Float(_) => span(f, "null", "null"),
+        Val::Num(n) => span(f, "number", n),
+        Val::Str(s) => span_dbg(f, "string", escape(s)),
+        Val::Arr(a) if a.is_empty() => write!(f, "[]"),
+        Val::Arr(a) => {
+            write!(f, "[")?;
+            fmt_seq(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
+            write!(f, "]")
+        }
+        Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
+        Val::Obj(o) => {
+            write!(f, "{{")?;
+            fmt_seq(f, opts, level, &**o, |f, (k, val)| {
+                span_dbg(f, "key", escape(k))?;
+                write!(f, ":")?;
+                if !opts.compact {
+                    write!(f, " ")?;
+                }
+                fmt_val(f, opts, level + 1, val)
+            })?;
+            write!(f, "}}")
+        }
     }
 }
 
@@ -56,73 +94,6 @@ fn escape(s: &str) -> String {
     let replaces = &["&amp;", "&lt;", "&gt;"];
     let ac = AhoCorasick::new(patterns).unwrap();
     ac.replace_all(s, replaces)
-}
-
-impl<'a> Display for Pp<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if self.indent_start {
-            self.opts.indent(f, self.level)?;
-        }
-
-        match self.val {
-            Val::Null => span(f, "null", "null"),
-            Val::Bool(b) => span(f, "boolean", b),
-            Val::Int(i) => span(f, "number", i),
-            Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
-            Val::Float(_) => span(f, "null", "null"),
-            Val::Num(n) => span(f, "number", n),
-            Val::Str(s) if self.opts.raw => span(f, "string", escape(s)),
-            Val::Str(s) => span_dbg(f, "string", escape(s)),
-            Val::Arr(a) if a.is_empty() => write!(f, "[]"),
-            Val::Arr(a) => {
-                write!(f, "[")?;
-                self.opts.newline(f)?;
-                let mut iter = a.iter().peekable();
-                while let Some(val) = iter.next() {
-                    Pp {
-                        val,
-                        opts: self.opts,
-                        level: self.level + 1,
-                        indent_start: true,
-                    }
-                    .fmt(f)?;
-                    if iter.peek().is_some() {
-                        write!(f, ",")?;
-                    }
-                    self.opts.newline(f)?;
-                }
-                self.opts.indent(f, self.level)?;
-                write!(f, "]")
-            }
-            Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
-            Val::Obj(o) => {
-                write!(f, "{{")?;
-                self.opts.newline(f)?;
-                let mut iter = o.iter().peekable();
-                while let Some((k, val)) = iter.next() {
-                    self.opts.indent(f, self.level + 1)?;
-                    span_dbg(f, "key", escape(k))?;
-                    write!(f, ":")?;
-                    if !self.opts.compact {
-                        write!(f, " ")?;
-                    }
-                    Pp {
-                        val,
-                        opts: self.opts,
-                        level: self.level + 1,
-                        indent_start: false,
-                    }
-                    .fmt(f)?;
-                    if iter.peek().is_some() {
-                        write!(f, ",")?;
-                    }
-                    self.opts.newline(f)?;
-                }
-                self.opts.indent(f, self.level)?;
-                write!(f, "}}")
-            }
-        }
-    }
 }
 
 #[allow(dead_code)]
@@ -179,30 +150,29 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     };
 
     let pp_opts = PpOpts {
-        raw: settings.raw_output,
         compact: settings.compact,
         indent,
     };
 
     let post_value = |y| {
-        scope
-            .post_message(&Pp::new(&y, &pp_opts).to_string().into())
-            .unwrap()
+        let s = FormatterFn(|f: &mut Formatter| match &y {
+            Val::Str(s) if settings.raw_output => span(f, "string", escape(s)),
+            y => fmt_val(f, &pp_opts, 0, y),
+        });
+        scope.post_message(&s.to_string().into()).unwrap();
     };
     match process(filter, input, &settings, post_value) {
         Ok(()) => (),
         Err(Error::Chumsky(errs)) => {
             for e in errs {
-                let mut buf = Vec::new();
-                let cache = ariadne::Source::from(filter);
-                report(e).write(cache, &mut buf).unwrap();
-                let s = String::from_utf8(buf).unwrap();
-                scope.post_message(&format!("⚠️ Parse {s}").into()).unwrap();
+                scope
+                    .post_message(&format!("⚠️ Parse error: {}", report(filter, &e)).into())
+                    .unwrap();
             }
         }
         Err(Error::Hifijson(e)) => {
             scope
-                .post_message(&format!("⚠️ Parse Error: {e}").into())
+                .post_message(&format!("⚠️ Parse error: {e}").into())
                 .unwrap();
         }
         Err(Error::Jaq(e)) => {
@@ -267,7 +237,7 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     for x in if settings.null_input { &null } else { &inputs } {
         let x = x.map_err(Error::Hifijson)?;
         for y in filter.run((Ctx::new([], &inputs), x)) {
-            f(y.map_err(Error::Jaq)?)
+            f(y.map_err(Error::Jaq)?);
         }
     }
     Ok(())
@@ -296,14 +266,33 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ChumskyError
     }
 }
 
-fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
-    use ariadne::{Color, Fmt, Label, Report, ReportKind};
+#[derive(Debug)]
+struct Report<'a> {
+    code: &'a str,
+    message: String,
+    labels: Vec<(core::ops::Range<usize>, String, Color)>,
+}
+
+#[derive(Clone, Debug)]
+enum Color {
+    Yellow,
+    Red,
+}
+
+impl Color {
+    fn apply(&self, d: impl Display) -> String {
+        let mut color = format!("{self:?}");
+        color.make_ascii_lowercase();
+        format!("<span class={color}>{d}</span>",)
+    }
+}
+
+fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
     use chumsky::error::SimpleReason;
 
-    let (red, yellow) = (Color::Unset, Color::Unset);
-    let config = ariadne::Config::default().with_color(false);
+    let eof = || "end of input".to_string();
 
-    let msg = if let SimpleReason::Custom(msg) = e.reason() {
+    let message = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
         let found = if e.found().is_some() {
@@ -319,13 +308,8 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
         let expected = if e.expected().len() == 0 {
             "something else".to_string()
         } else {
-            e.expected()
-                .map(|expected| match expected {
-                    Some(expected) => expected.to_string(),
-                    None => "end of input".to_string(),
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
+            let f = |e: &Option<String>| e.as_ref().map_or_else(eof, |e| e.to_string());
+            e.expected().map(f).collect::<Vec<_>>().join(", ")
         };
         format!("{found}{when}, expected {expected}",)
     };
@@ -333,27 +317,44 @@ fn report<'a>(e: chumsky::error::Simple<String>) -> ariadne::Report<'a> {
     let label = if let SimpleReason::Custom(msg) = e.reason() {
         msg.clone()
     } else {
-        format!(
-            "Unexpected {}",
-            e.found()
-                .map(|c| format!("token {}", c.fg(red)))
-                .unwrap_or_else(|| "end of input".to_string())
-        )
+        let token = |c: &String| format!("token {}", Color::Red.apply(c));
+        format!("Unexpected {}", e.found().map_or_else(eof, token))
     };
-
-    let report = Report::build(ReportKind::Error, (), e.span().start)
-        .with_message(msg)
-        .with_label(Label::new(e.span()).with_message(label).with_color(red));
-
-    let report = match e.reason() {
-        SimpleReason::Unclosed { span, delimiter } => report.with_label(
-            Label::new(span.clone())
-                .with_message(format!("Unclosed delimiter {}", delimiter.fg(yellow)))
-                .with_color(yellow),
-        ),
-        SimpleReason::Unexpected => report,
-        SimpleReason::Custom(_) => report,
+    // convert character indices to byte offsets
+    let char_to_byte = |i| {
+        code.char_indices()
+            .map(|(i, _c)| i)
+            .chain([code.len(), code.len()])
+            .nth(i)
+            .unwrap()
     };
+    let conv = |span: &core::ops::Range<_>| char_to_byte(span.start)..char_to_byte(span.end);
+    let mut labels = Vec::from([(conv(&e.span()), label, Color::Red)]);
 
-    report.with_config(config).finish()
+    if let SimpleReason::Unclosed { span, delimiter } = e.reason() {
+        let text = format!("Unclosed delimiter {}", Color::Yellow.apply(delimiter));
+        labels.insert(0, (conv(span), text, Color::Yellow));
+    }
+    Report {
+        code,
+        message,
+        labels,
+    }
+}
+
+impl Display for Report<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        use codesnake::{Block, CodeWidth, Label, LineIndex};
+        let idx = LineIndex::new(self.code);
+        let labels = self.labels.clone().into_iter().map(|(range, text, color)| {
+            Label::new(range, text).with_style(move |s| color.apply(s).to_string())
+        });
+        let block = Block::new(&idx, labels).unwrap().map_code(|c| {
+            let c = c.replace('\t', "    ");
+            let w = unicode_width::UnicodeWidthStr::width(&*c);
+            CodeWidth::new(c, core::cmp::max(w, 1))
+        });
+        writeln!(f, "{}", self.message)?;
+        write!(f, "{}\n{}{}", block.prologue(), block, block.epilogue())
+    }
 }

@@ -59,6 +59,13 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
 
+// This makes `f64::from_str` accessible as intra-doc link.
+#[cfg(doc)]
+use core::str::FromStr;
+
+/// Values that can be processed by the interpreter.
+///
+/// Implement this trait if you want jaq to process your own type of values.
 pub trait ValT:
     Clone
     + Display
@@ -75,26 +82,66 @@ pub trait ValT:
     + Rem<Output = ValR2<Self>>
     + Neg<Output = ValR2<Self>>
 {
-    fn from_num(n: String) -> ValR2<Self>;
+    /// Create a number from a string.
+    ///
+    /// The number should adhere to the format accepted by [`f64::from_str`].
+    fn from_num(n: &str) -> ValR2<Self>;
+
+    /// Create an associative map (or object) from a sequence of key-value pairs.
+    ///
+    /// This is used when creating values with the syntax `{k: v}`.
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
 
-    /// If `Ok(k)` is in `v.keys()`, then
-    /// `v.index(k)` must be `Ok(_)` and in `v.range(Range::default())`.
+    /// Yield the children of a value.
+    ///
+    /// This is used by `.[]`.
     fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>>;
+
+    /// Yield the child of a value at the given index.
+    ///
+    /// This is used by `.[k]`.
+    ///
+    /// If `v.index(k)` is `Ok(_)`, then it is contained in `v.values()`.
     fn index(self, index: &Self) -> ValR2<Self>;
+
+    /// Yield a slice of the value with the given range.
+    ///
+    /// This is used by `.[s:e]`, `.[s:]`, and `.[:e]`.
     fn range(self, range: Range<&Self>) -> ValR2<Self>;
 
+    /// Map a function over the children of the value.
+    ///
+    /// This is used by
+    /// - `.[]  |= f` (`opt` = [`Opt::Essential`]) and
+    /// - `.[]? |= f` (`opt` = [`Opt::Optional`]).
+    ///
+    /// If the children of the value are undefined, then:
+    ///
+    /// - If `opt` is [`Opt::Essential`], return an error.
+    /// - If `opt` is [`Opt::Optional`] , return the input value.
     fn map_values<I: Iterator<Item = ValR2<Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
+
+    /// Map a function over the child of the value at the given index.
+    ///
+    /// This is used by `.[k] |= f`.
+    ///
+    /// See [`Self::map_values`] for the behaviour of `opt`.
     fn map_index<I: Iterator<Item = ValR2<Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
+
+    /// Map a function over the slice of the value with the given range.
+    ///
+    /// This is used by `.[s:e] |= f`, `.[s:] |= f`, and `.[:e] |= f`.
+    ///
+    /// See [`Self::map_values`] for the behaviour of `opt`.
     fn map_range<I: Iterator<Item = ValR2<Self>>>(
         self,
         range: Range<&Self>,
@@ -102,15 +149,24 @@ pub trait ValT:
         f: impl Fn(Self) -> I,
     ) -> ValR2<Self>;
 
+    /// Return a boolean representation of the value.
+    ///
+    /// This is used by `if v then ...`.
     fn as_bool(&self) -> bool;
+
+    /// If the value is a string, return it.
+    ///
+    /// If `v.as_str()` yields `Some(s)`, then
+    /// `"\(v)"` yields `s`, otherwise it yields `v.to_string()`
+    /// (provided by [`Display`]).
     fn as_str(&self) -> Option<&str>;
 }
 
 type Range<V> = core::ops::Range<Option<V>>;
 
 impl ValT for Val {
-    fn from_num(n: String) -> ValR2<Self> {
-        Ok(Val::Num(Rc::new(n)))
+    fn from_num(n: &str) -> ValR2<Self> {
+        Ok(Val::Num(Rc::new(n.to_string())))
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self> {
@@ -199,7 +255,9 @@ impl ValT for Val {
                     Occupied(mut e) => {
                         match f(e.get().clone()).next().transpose()? {
                             Some(y) => e.insert(y),
-                            None => e.remove(),
+                            // this runs in constant time, at the price of
+                            // changing the order of the elements
+                            None => e.swap_remove(),
                         };
                     }
                     Vacant(e) => {
@@ -579,6 +637,12 @@ impl From<isize> for Val {
     }
 }
 
+impl From<f64> for Val {
+    fn from(f: f64) -> Self {
+        Self::Float(f)
+    }
+}
+
 impl From<String> for Val {
     fn from(s: String) -> Self {
         Self::Str(Rc::new(s))
@@ -739,9 +803,9 @@ impl PartialEq for Val {
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Int(x), Self::Int(y)) => x == y,
             (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
-                float_eq(&(*i as f64), f)
+                float_eq(*i as f64, *f)
             }
-            (Self::Float(x), Self::Float(y)) => float_eq(x, y),
+            (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
             (Self::Num(n), y) => &Self::from_dec_str(n) == y,
             (x, Self::Num(n)) => x == &Self::from_dec_str(n),
@@ -768,9 +832,9 @@ impl Ord for Val {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Int(x), Self::Int(y)) => x.cmp(y),
-            (Self::Int(i), Self::Float(f)) => float_cmp(&(*i as f64), f),
-            (Self::Float(f), Self::Int(i)) => float_cmp(f, &(*i as f64)),
-            (Self::Float(x), Self::Float(y)) => float_cmp(x, y),
+            (Self::Int(i), Self::Float(f)) => float_cmp(*i as f64, *f),
+            (Self::Float(f), Self::Int(i)) => float_cmp(*f, *i as f64),
+            (Self::Float(x), Self::Float(y)) => float_cmp(*x, *y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
             (Self::Num(n), y) => Self::from_dec_str(n).cmp(y),
             (x, Self::Num(n)) => x.cmp(&Self::from_dec_str(n)),
@@ -812,15 +876,15 @@ impl Ord for Val {
     }
 }
 
-fn float_eq(left: &f64, right: &f64) -> bool {
+fn float_eq(left: f64, right: f64) -> bool {
     float_cmp(left, right) == Ordering::Equal
 }
 
-fn float_cmp(left: &f64, right: &f64) -> Ordering {
-    if *left == 0. && *right == 0. {
+fn float_cmp(left: f64, right: f64) -> Ordering {
+    if left == 0. && right == 0. {
         Ordering::Equal
     } else {
-        f64::total_cmp(left, right)
+        f64::total_cmp(&left, &right)
     }
 }
 
@@ -833,7 +897,7 @@ impl fmt::Display for Val {
             Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
             Self::Float(_) => write!(f, "null"),
             Self::Num(n) => write!(f, "{n}"),
-            Self::Str(s) => write!(f, "\"{s}\""),
+            Self::Str(s) => write!(f, "{s:?}"),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();
@@ -847,9 +911,9 @@ impl fmt::Display for Val {
                 write!(f, "{{")?;
                 let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
-                    write!(f, "\"{k}\":{v}")?;
+                    write!(f, "{k:?}:{v}")?;
                 }
-                iter.try_for_each(|(k, v)| write!(f, ",\"{k}\":{v}"))?;
+                iter.try_for_each(|(k, v)| write!(f, ",{k:?}:{v}"))?;
                 write!(f, "}}")
             }
         }
