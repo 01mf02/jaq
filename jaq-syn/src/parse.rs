@@ -1,6 +1,6 @@
 use crate::lex::{StrPart, Token};
 use alloc::{boxed::Box, vec::Vec};
-use jaq_syn::path;
+use crate::path;
 
 type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
 #[derive(Debug)]

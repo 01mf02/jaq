@@ -258,9 +258,9 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     defs.insert_defs(jaq_std::std());
 
     let std = include_str!("../../jaq-std/src/std.jq");
-    let (tokens, lex_errs) = jaq_parse::lex::Lex::new(std).lex();
+    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(std).lex();
     assert!(lex_errs.is_empty());
-    let mut parser = jaq_parse::term::Parser::new(&tokens);
+    let mut parser = jaq_syn::parse::Parser::new(&tokens);
     let _std = parser.defs();
     assert!(parser.e.is_empty());
 

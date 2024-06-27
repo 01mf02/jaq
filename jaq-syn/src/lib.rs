@@ -12,6 +12,9 @@ pub mod path;
 pub mod string;
 pub mod test;
 
+pub mod lex;
+pub mod parse;
+
 pub use def::{Arg, Call, Def, Main};
 pub use ops::{MathOp, OrdOp};
 use path::Path;

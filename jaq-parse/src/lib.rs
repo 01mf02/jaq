@@ -7,11 +7,9 @@ extern crate alloc;
 
 mod def;
 mod filter;
-pub mod lex;
 mod path;
 mod prec_climb;
 mod string;
-pub mod term;
 mod token;
 
 pub use def::{defs, main};

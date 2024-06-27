@@ -36,7 +36,7 @@ pub enum Expect<'a> {
 }
 
 impl<'a> Expect<'a> {
-    pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, jaq_syn::Span) {
+    pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, crate::Span) {
         let mut pos = span(full, pos);
         pos.end = pos.start;
         let s = match self {
@@ -57,12 +57,12 @@ impl<'a> Expect<'a> {
 
 type Error<'a> = (Expect<'a>, &'a str);
 
-pub struct Lex<'a> {
+pub struct Lexer<'a> {
     i: &'a str,
     e: Vec<Error<'a>>,
 }
 
-impl<'a> Lex<'a> {
+impl<'a> Lexer<'a> {
     #[must_use]
     pub fn new(i: &'a str) -> Self {
         let e = Vec::new();
@@ -269,7 +269,7 @@ impl<'a> Lex<'a> {
     }
 }
 
-fn span(whole_buffer: &str, part: &str) -> jaq_syn::Span {
+fn span(whole_buffer: &str, part: &str) -> crate::Span {
     let start = part.as_ptr() as usize - whole_buffer.as_ptr() as usize;
     let end = start + part.len();
     start..end
