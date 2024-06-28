@@ -209,7 +209,7 @@ impl From<&parse::Term<&str>> for Filter {
             Neg(tm) => Self::Neg(span(&*tm)),
             Pipe(l, v, r) => Self::Binary(
                 span(&*l),
-                BinaryOp::Pipe(v.map(ToString::to_string)),
+                BinaryOp::Pipe(v.map(|v| v[1..].to_string())),
                 span(&*r),
             ),
             BinOp(head, tail) => {
@@ -230,7 +230,7 @@ impl From<&parse::Term<&str>> for Filter {
                 let [init, update] = &args[..] else { panic!() };
                 let fold = self::Fold {
                     xs: span(&*xs),
-                    x: v.to_string(),
+                    x: v[1..].to_string(),
                     init: span(&init),
                     f: span(&update),
                 };
@@ -247,7 +247,7 @@ impl From<&parse::Term<&str>> for Filter {
 
             Def(defs, tm) => unimplemented!("definitions inside terms are not supported yet"),
             Call(c, args) => Self::Call(c.to_string(), args.iter().map(|a| *span(a)).collect()),
-            Var(v) => Self::Var(v.to_string()),
+            Var(v) => Self::Var(v[1..].to_string()),
 
             Key(s) => {
                 let s = Self::Str(Box::new(crate::Str::from(s.to_string())));
