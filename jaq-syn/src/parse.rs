@@ -271,7 +271,7 @@ impl<'a> Parser<'a> {
             }
             Some(Token::Word("break")) => Term::Break(self.var()?),
             Some(Token::Word(fold)) if self.fold.contains(fold) => {
-                let xs = self.term()?;
+                let xs = self.atom()?;
                 self.keyword("as")?;
                 let x = self.var()?;
                 let args = self.args(Self::term);
