@@ -74,31 +74,38 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn verify_last(&mut self, last: &'a str) {
+        let last_char = || last.chars().next().unwrap();
+        match (self.i.as_slice(), last) {
+            ([], "") => (),
+            ([Token::Char(c)], last) if *c == last => (),
+            ([], _) => self.e.push((Expect::Char(last_char()), None)),
+            ([next, ..], "") => self.e.push((Expect::Nothing, Some(next))),
+            ([next, ..], _) => self.e.push((Expect::Char(last_char()), Some(next))),
+        }
+    }
+
+    /// Run given parse function with given tokens, then reset tokens to previous tokens.
+    fn with_tok<T>(&mut self, tokens: &'a [Token<&'a str>], f: impl FnOnce(&mut Self) -> T) -> T {
+        let i = core::mem::replace(&mut self.i, tokens.iter());
+        let y = f(self);
+        self.i = i;
+        y
+    }
+
+    pub fn ok_or_default<T: Default>(&mut self, y: Result<'a, T>) -> T {
+        y.unwrap_or_else(|e| {
+            self.e.push(e);
+            T::default()
+        })
+    }
+
     fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], last: &'a str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
     {
-        let i = core::mem::replace(&mut self.i, tokens.iter());
-        let y = match f(self) {
-            Ok(y) => {
-                match (self.i.as_slice(), last) {
-                    ([], "") => (),
-                    ([], _) => panic!(),
-                    ([next, ..], "") => self.e.push((Expect::Nothing, Some(next))),
-                    ([Token::Char(c)], last) if *c == last => (),
-                    ([next, ..], last) => self
-                        .e
-                        .push((Expect::Char(last.chars().next().unwrap()), Some(next))),
-                }
-                y
-            }
-            Err(e) => {
-                self.e.push(e);
-                T::default()
-            }
-        };
-        self.i = i;
-        y
+        let y = self.with_tok(tokens, |p| f(p).inspect(|_| p.verify_last(last)));
+        self.ok_or_default(y)
     }
 
     fn maybe<T>(&mut self, f: impl Fn(&mut Self) -> Option<T>) -> Option<T> {
