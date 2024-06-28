@@ -155,7 +155,6 @@ impl From<&parse::Def<&str, parse::Term<&str>>> for Def {
 
 impl From<&parse::Term<&str>> for Main {
     fn from(tm: &parse::Term<&str>) -> Self {
-        use alloc::string::ToString;
         match tm {
             parse::Term::Def(defs, tm) => Main {
                 defs: defs.iter().map(Def::from).collect(),
@@ -163,7 +162,7 @@ impl From<&parse::Term<&str>> for Main {
             },
             tm => Main {
                 defs: Vec::new(),
-                body: ((&*tm).into(), 0..42),
+                body: (tm.into(), 0..42),
             },
         }
     }

@@ -206,11 +206,11 @@ impl From<&parse::Term<&str>> for Filter {
             })),
             Arr(a) => Self::Array(a.as_deref().map(span)),
             Obj(o) => Self::Object(o.iter().map(from_obj).collect()),
-            Neg(tm) => Self::Neg(span(&*tm)),
+            Neg(tm) => Self::Neg(span(tm)),
             Pipe(l, v, r) => Self::Binary(
-                span(&*l),
+                span(l),
                 BinaryOp::Pipe(v.map(|v| v[1..].to_string())),
-                span(&*r),
+                span(r),
             ),
             BinOp(head, tail) => {
                 let head = *span(head);
@@ -218,7 +218,7 @@ impl From<&parse::Term<&str>> for Filter {
                 prec_climb::climb(head, tail).0
             }
 
-            Label(v, ..) | Break(v) => unimplemented!("label-break is not supported yet"),
+            Label(_v, ..) | Break(_v) => unimplemented!("label-break is not supported yet"),
 
             Fold(fold, xs, v, args) => {
                 let fold_type = match *fold {
@@ -227,12 +227,15 @@ impl From<&parse::Term<&str>> for Filter {
                     "for" => FoldType::For,
                     _ => panic!(),
                 };
-                let [init, update] = &args[..] else { panic!() };
+                let (init, update) = match &args[..] {
+                    [init, update] => (init, update),
+                    _ => todo!(),
+                };
                 let fold = self::Fold {
-                    xs: span(&*xs),
+                    xs: span(xs),
                     x: v[1..].to_string(),
-                    init: span(&init),
-                    f: span(&update),
+                    init: span(init),
+                    f: span(update),
                 };
                 Self::Fold(fold_type, fold)
             }

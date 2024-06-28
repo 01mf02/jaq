@@ -74,14 +74,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn verify_last(&mut self, last: &'a str) {
+    fn verify_last(&mut self, last: &'a str) -> Result<'a, ()> {
         let last_char = || last.chars().next().unwrap();
         match (self.i.as_slice(), last) {
-            ([], "") => (),
-            ([Token::Char(c)], last) if *c == last => (),
-            ([], _) => self.e.push((Expect::Char(last_char()), None)),
-            ([next, ..], "") => self.e.push((Expect::Nothing, Some(next))),
-            ([next, ..], _) => self.e.push((Expect::Char(last_char()), Some(next))),
+            ([], "") => Ok(()),
+            ([Token::Char(c)], last) if *c == last => Ok(()),
+            ([], _) => Err((Expect::Char(last_char()), None)),
+            ([next, ..], "") => Err((Expect::Nothing, Some(next))),
+            ([next, ..], _) => Err((Expect::Char(last_char()), Some(next))),
         }
     }
 
@@ -93,19 +93,26 @@ impl<'a> Parser<'a> {
         y
     }
 
-    pub fn ok_or_default<T: Default>(&mut self, y: Result<'a, T>) -> T {
-        y.unwrap_or_else(|e| {
-            self.e.push(e);
-            T::default()
-        })
+    pub fn finish<T: Default, F>(&mut self, last: &'a str, f: F) -> T
+    where
+        F: FnOnce(&mut Self) -> Result<'a, T>,
+    {
+        f(self)
+            .and_then(|y| {
+                self.verify_last(last)?;
+                Ok(y)
+            })
+            .unwrap_or_else(|e| {
+                self.e.push(e);
+                T::default()
+            })
     }
 
     fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], last: &'a str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
     {
-        let y = self.with_tok(tokens, |p| f(p).inspect(|_| p.verify_last(last)));
-        self.ok_or_default(y)
+        self.with_tok(tokens, |p| p.finish(last, f))
     }
 
     fn maybe<T>(&mut self, f: impl Fn(&mut Self) -> Option<T>) -> Option<T> {
