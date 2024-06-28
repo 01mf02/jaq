@@ -255,20 +255,27 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut defs = ParseCtx::new(vars);
     defs.insert_natives(jaq_core::core());
-    defs.insert_defs(jaq_std::std());
 
     let std = include_str!("../../jaq-std/src/std.jq");
     let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(std).lex();
     assert!(lex_errs.is_empty());
     let mut parser = jaq_syn::parse::Parser::new(&tokens);
-    let _std = parser.defs();
+    let std = parser
+        .module(|p| p.defs())
+        .inspect(|_| parser.verify_last(""));
+    let std = parser.ok_or_default(std);
     assert!(parser.e.is_empty());
+    let std: Vec<_> = std.body.iter().map(jaq_syn::Def::from).collect();
+    defs.insert_defs(std);
 
     /*
-    let (tokens, lex_errs) = jaq_parse::lex::Lex::new(filter_str).lex();
+    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(filter_str).lex();
     if lex_errs.is_empty() {
-        let mut parser = jaq_parse::term::Parser::new(&tokens);
-        std::println!("{:?}", parser.module(|p| p.term()));
+        let mut parser = jaq_syn::parse::Parser::new(&tokens);
+        let main = parser.module(|p| p.term()).inspect(|_| parser.verify_last(""));
+        let main = parser.ok_or_default(main);
+        std::println!("{:?}", main);
+        std::println!("{:?}", jaq_syn::Main::from(&main.body));
         std::println!("{:?}", parser.e);
     } else {
         std::println!("{:?}", lex_errs);

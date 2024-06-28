@@ -255,7 +255,6 @@ dependencies = [
  "jaq-core",
  "jaq-interpret",
  "jaq-parse",
- "jaq-std",
  "jaq-syn",
  "memmap2",
  "mimalloc",
