@@ -508,11 +508,11 @@ impl<'a> Parser<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Module<S, B> {
     meta: Option<Term<S>>,
     mods: Vec<(S, Option<S>)>,
-    body: B,
+    pub body: B,
 }
 
 #[derive(Debug)]
