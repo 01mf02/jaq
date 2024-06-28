@@ -71,6 +71,10 @@ struct Cli {
     join_output: bool,
 
     /// Color output
+    ///
+    /// When this is set to `auto`, colors are enabled if
+    /// output is written to a terminal and
+    /// the `NO_COLOR` environment variable is not set.
     #[arg(long, value_name = "WHEN", default_value = "auto")]
     color: ColorWhen,
 
@@ -126,20 +130,22 @@ fn main() -> ExitCode {
 
     let cli = Cli::parse();
 
-    if !cli.in_place && cli.color.use_if(|| atty::is(atty::Stream::Stdout)) {
-        yansi::enable();
-    } else {
-        yansi::disable();
-    }
+    let no_color = std::env::var("NO_COLOR").map_or(false, |v| !v.is_empty());
+    let detect_color = |stream| atty::is(stream) && !no_color;
+    let set_color = |on| {
+        if on {
+            yansi::enable();
+        } else {
+            yansi::disable();
+        }
+    };
+
+    set_color(!cli.in_place && cli.color.use_if(|| detect_color(atty::Stream::Stdout)));
 
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            if cli.color.use_if(|| atty::is(atty::Stream::Stderr)) {
-                yansi::enable();
-            } else {
-                yansi::disable();
-            }
+            set_color(cli.color.use_if(|| detect_color(atty::Stream::Stderr)));
             e.report()
         }
     }
