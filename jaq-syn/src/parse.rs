@@ -142,14 +142,13 @@ impl<'a> Parser<'a> {
     where
         F: Fn(&mut Self) -> Result<'a, T>,
     {
-        let mut ys = Vec::from([f(self)?]);
-        loop {
-            match self.i.next() {
-                Some(Token::Char(c)) if c.chars().eq([sep]) => ys.push(f(self)?),
-                Some(Token::Char(")" | "}")) => return Ok(ys),
-                next => return Err((Expect::Char(sep), next)),
-            }
-        }
+        let head = core::iter::once(f(self));
+        let tail = core::iter::from_fn(|| match self.i.next() {
+            Some(Token::Char(c)) if c.chars().eq([sep]) => Some(f(self)),
+            Some(Token::Char(")" | "}")) => None,
+            next => Some(Err((Expect::Char(sep), next))),
+        });
+        head.chain(tail).collect()
     }
 
     fn args<T>(&mut self, f: impl Fn(&mut Self) -> Result<'a, T> + Copy) -> Vec<T> {
@@ -213,10 +212,8 @@ impl<'a> Parser<'a> {
 
     pub fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
         let head = self.atom()?;
-        let mut tail = Vec::new();
-        while let Some(op) = self.op(with_comma) {
-            tail.push((op, self.atom()?));
-        }
+        let tail = core::iter::from_fn(|| self.op(with_comma).map(|op| Ok((op, self.atom()?))))
+            .collect::<Result<Vec<_>>>()?;
 
         let tm = if tail.is_empty() {
             head
