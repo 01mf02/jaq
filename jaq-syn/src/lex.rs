@@ -136,8 +136,8 @@ impl<'a> Lexer<'a> {
 
     /// Lex a non-empty digit sequence.
     fn digits1(&mut self) {
-        if let Some(rest) = self.i.strip_prefix(|c: char| c.is_numeric()) {
-            self.i = rest.trim_start_matches(|c: char| c.is_numeric());
+        if let Some(rest) = self.i.strip_prefix(|c: char| c.is_ascii_digit()) {
+            self.i = rest.trim_start_matches(|c: char| c.is_ascii_digit());
         } else {
             self.e.push((Expect::Digit, self.i));
         }
