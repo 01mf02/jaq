@@ -95,9 +95,9 @@ impl<'a> Lexer<'a> {
         self.i = self.i.trim_start_matches(f);
     }
 
-    fn consumed(&mut self, chars: core::str::Chars<'a>, f: impl FnOnce(&mut Self)) -> &'a str {
+    fn consumed(&mut self, skip: usize, f: impl FnOnce(&mut Self)) -> &'a str {
         let start = self.i;
-        self.i = chars.as_str();
+        self.i = &self.i[skip..];
         f(self);
         &start[..start.len() - self.i.len()]
     }
@@ -200,7 +200,7 @@ impl<'a> Lexer<'a> {
         let mut parts = Vec::new();
 
         loop {
-            let s = self.consumed(self.i.chars(), |lex| lex.trim(|c| c != '\\' && c != '"'));
+            let s = self.consumed(0, |lex| lex.trim(|c| c != '\\' && c != '"'));
             if !s.is_empty() {
                 parts.push(StrPart::Str(s));
             }
@@ -224,10 +224,10 @@ impl<'a> Lexer<'a> {
 
         let mut chars = self.i.chars();
         Some(match chars.next()? {
-            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(chars, Self::mod_then_ident)),
-            '$' | '@' => Token::Word(self.consumed(chars, Self::ident1)),
-            '0'..='9' => Token::Num(self.consumed(chars, Self::num)),
-            c if is_op(c) => Token::Op(self.consumed(chars, |lex| lex.trim(is_op))),
+            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(1, Self::mod_then_ident)),
+            '$' | '@' => Token::Word(self.consumed(1, Self::ident1)),
+            '0'..='9' => Token::Num(self.consumed(1, Self::num)),
+            c if is_op(c) => Token::Op(self.consumed(1, |lex| lex.trim(is_op))),
             '?' if (chars.next(), chars.next()) == (Some('/'), Some('/')) => {
                 Token::Op(self.take(3))
             }
