@@ -12,6 +12,7 @@ pub mod path;
 pub mod string;
 pub mod test;
 
+mod convert;
 pub mod lex;
 pub mod parse;
 mod prec_climb;
