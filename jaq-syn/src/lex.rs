@@ -145,7 +145,7 @@ impl<'a> Lexer<'a> {
 
     /// Decimal with optional exponent.
     fn num(&mut self) {
-        self.trim(char::is_numeric);
+        self.trim(|c| c.is_ascii_digit());
         if let Some(i) = self.i.strip_prefix('.') {
             self.i = i;
             self.digits1();
