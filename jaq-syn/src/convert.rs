@@ -4,14 +4,34 @@ use crate::{parse, Arg, Call, Def, Main, MathOp, OrdOp, Path, Span, Spanned, Str
 use alloc::string::ToString;
 use alloc::{boxed::Box, string::String, vec::Vec};
 
+fn str_offset(large: &str, inner: &str) -> Option<usize> {
+    let large_beg = large.as_ptr() as usize;
+    let inner = inner.as_ptr() as usize;
+    if inner < large_beg || inner > large_beg.wrapping_add(large.len()) {
+        None
+    } else {
+        Some(inner.wrapping_sub(large_beg))
+    }
+}
+
 impl parse::Term<&str> {
+    fn span(&self, code: &str) -> Span {
+        match self {
+            Self::Num(s) | Self::Call(s, ..) | Self::Var(s) => {
+                let offset = str_offset(code, s).unwrap();
+                (offset..offset + s.len())
+            }
+            _ => (0..42),
+        }
+    }
+
     fn conv(&self, s: &str) -> Filter {
         use crate::lex::StrPart;
         use crate::path::{Opt, Part};
         use crate::string;
         use Filter::*;
 
-        let span = |tm: &Self| Box::new((tm.conv(s), 0..42));
+        let span = |tm: &Self| Box::new((tm.conv(s), tm.span(s)));
         let from_part = |(part, opt): &(Part<_>, Opt)| {
             let part = match part {
                 Part::Index(i) => Part::Index(*span(i)),
@@ -126,11 +146,11 @@ impl parse::Term<&str> {
         match self {
             parse::Term::Def(defs, tm) => Main {
                 defs: defs.iter().map(|def| def.conv(s)).collect(),
-                body: (tm.conv(s), 0..42),
+                body: (tm.conv(s), tm.span(s)),
             },
             tm => Main {
                 defs: Vec::new(),
-                body: (tm.conv(s), 0..42),
+                body: (tm.conv(s), tm.span(s)),
             },
         }
     }
