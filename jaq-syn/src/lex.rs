@@ -25,16 +25,16 @@ pub enum Token<S> {
 }
 
 #[derive(Clone, Debug)]
-pub enum Expect<'a> {
+pub enum Expect<S> {
     Digit,
     Ident,
-    Delim(&'a str),
+    Delim(S),
     Escape,
     Unicode,
     Token,
 }
 
-impl<'a> Expect<'a> {
+impl<'a> Expect<&'a str> {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Digit => "digit",
@@ -48,6 +48,7 @@ impl<'a> Expect<'a> {
             Self::Token => "token",
         }
     }
+
     pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, crate::Span) {
         let mut pos = span(full, pos);
         pos.end = pos.start;
@@ -67,14 +68,14 @@ impl<'a> Expect<'a> {
     }
 }
 
-type Error<'a> = (Expect<'a>, &'a str);
+pub type Error<S> = (Expect<S>, S);
 
-pub struct Lexer<'a> {
-    i: &'a str,
-    e: Vec<Error<'a>>,
+pub struct Lexer<S> {
+    i: S,
+    e: Vec<Error<S>>,
 }
 
-impl<'a> Lexer<'a> {
+impl<'a> Lexer<&'a str> {
     #[must_use]
     pub fn new(i: &'a str) -> Self {
         let e = Vec::new();
@@ -82,7 +83,7 @@ impl<'a> Lexer<'a> {
     }
 
     #[must_use]
-    pub fn lex(mut self) -> (Vec<Token<&'a str>>, Vec<Error<'a>>) {
+    pub fn lex(mut self) -> (Vec<Token<&'a str>>, Vec<Error<&'a str>>) {
         let tokens = self.tokens();
         self.space();
         if !self.i.is_empty() {
