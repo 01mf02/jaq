@@ -268,8 +268,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-fn span(whole_buffer: &str, part: &str) -> crate::Span {
+pub fn span(whole_buffer: &str, part: &str) -> crate::Span {
     let start = part.as_ptr() as usize - whole_buffer.as_ptr() as usize;
-    let end = start + part.len();
-    start..end
+    start..start + part.len()
 }
