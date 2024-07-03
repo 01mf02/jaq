@@ -260,12 +260,11 @@ impl<'a> Lexer<'a> {
     ///
     /// The input string has to start with either '(', '[', or '{'.
     fn delim(&mut self) -> Token<&'a str> {
-        let start = self.i;
-        let open = &self.i[..1];
-        let close = match self.next() {
-            Some('(') => ')',
-            Some('[') => ']',
-            Some('{') => '}',
+        let open = self.take(1);
+        let close = match open {
+            "(" => ')',
+            "[" => ']',
+            "{" => '}',
             _ => panic!(),
         };
         let mut tokens = self.tokens();
@@ -275,7 +274,7 @@ impl<'a> Lexer<'a> {
             tokens.push(Token::Char(&self.i[..1]));
             self.i = rest;
         } else {
-            self.e.push((Expect::Delim(start), self.i));
+            self.e.push((Expect::Delim(open), self.i));
         }
         Token::Block(open, tokens)
     }
