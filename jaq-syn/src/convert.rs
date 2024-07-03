@@ -4,24 +4,11 @@ use crate::{parse, Arg, Call, Def, Main, MathOp, OrdOp, Path, Span, Spanned, Str
 use alloc::string::ToString;
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-fn str_offset(large: &str, inner: &str) -> Option<usize> {
-    let large_beg = large.as_ptr() as usize;
-    let inner = inner.as_ptr() as usize;
-    if inner < large_beg || inner > large_beg.wrapping_add(large.len()) {
-        None
-    } else {
-        Some(inner.wrapping_sub(large_beg))
-    }
-}
-
 impl parse::Term<&str> {
     fn span(&self, code: &str) -> Span {
         match self {
-            Self::Num(s) | Self::Call(s, ..) | Self::Var(s) => {
-                let offset = str_offset(code, s).unwrap();
-                (offset..offset + s.len())
-            }
-            _ => (0..42),
+            Self::Num(s) | Self::Call(s, ..) | Self::Var(s) => crate::lex::span(code, s),
+            _ => 0..42,
         }
     }
 
