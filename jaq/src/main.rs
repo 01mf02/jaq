@@ -265,18 +265,21 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     let std: Vec<_> = std.body.iter().map(|def| def.conv(std_str)).collect();
     defs.insert_defs(std);
 
-    /*
     let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(filter_str).lex();
     if lex_errs.is_empty() {
         let mut parser = jaq_syn::parse::Parser::new(&tokens);
         let main = parser.finish("", |p| p.module(|p| p.term()));
+        /*
         std::println!("{:?}", main);
         std::println!("{:?}", main.body.conv_main(filter_str));
         std::println!("{:?}", parser.e);
+        */
     } else {
-        std::println!("{:?}", lex_errs);
+        //std::println!("{:?}", lex_errs);
+        for e in lex_errs {
+            println!("{}", report_lex(filter_str, e))
+        }
     }
-    */
 
     assert!(defs.errs.is_empty());
     let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
@@ -615,6 +618,32 @@ impl Color {
             Self::Red => Color::Red,
         };
         d.fg(color).to_string()
+    }
+}
+
+fn report_lex<'a>(code: &'a str, (expected, found): jaq_syn::lex::Error<&'a str>) -> Report<'a> {
+    use jaq_syn::lex::{span, Expect};
+
+    let mut found_range = span(code, found);
+    found_range.end = found_range.start;
+    let found = match found {
+        "" => "end of input",
+        _ => "character",
+    };
+    let label = (found_range, format!("unexpected {found}"), Color::Red);
+
+    let labels = match expected {
+        Expect::Delim(open) => {
+            let unclosed = "unclosed delimiter".to_string();
+            Vec::from([(span(code, open), unclosed, Color::Yellow), label])
+        }
+        _ => Vec::from([label]),
+    };
+
+    Report {
+        code,
+        message: format!("expected {}", expected.as_str()),
+        labels,
     }
 }
 
