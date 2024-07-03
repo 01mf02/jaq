@@ -35,6 +35,19 @@ pub enum Expect<'a> {
 }
 
 impl<'a> Expect<'a> {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Digit => "digit",
+            Self::Ident => "identifier",
+            Self::Delim("(") => "closing parenthesis",
+            Self::Delim("[") => "closing bracket",
+            Self::Delim("{") => "closing brace",
+            Self::Delim(_) => panic!(),
+            Self::Escape => "string escape sequence",
+            Self::Unicode => "4-digit hexadecimal UTF-8 code point",
+            Self::Token => "token",
+        }
+    }
     pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, crate::Span) {
         let mut pos = span(full, pos);
         pos.end = pos.start;
