@@ -2,12 +2,13 @@ use crate::lex::{StrPart, Token};
 use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
-pub type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
+// TODO: save which token raised the expectation
+pub type Error<'a> = (Expect<&'a str>, Option<&'a Token<&'a str>>);
 
 #[derive(Debug)]
-pub enum Expect {
-    Keyword(&'static str),
-    Char(char),
+pub enum Expect<S> {
+    Keyword(S),
+    Char(S),
     Var,
     ElseOrEnd,
     Term,
@@ -16,6 +17,22 @@ pub enum Expect {
     Arg,
     Str,
     Nothing,
+}
+
+impl<'a> Expect<&'a str> {
+    pub fn as_str(&self) -> &'a str {
+        match self {
+            Self::Keyword(s) | Self::Char(s) => s,
+            Self::Var => "variable",
+            Self::ElseOrEnd => "else or end",
+            Self::Term => "term",
+            Self::Key => "key",
+            Self::Ident => "ident",
+            Self::Arg => "argument",
+            Self::Str => "string",
+            Self::Nothing => "nothing",
+        }
+    }
 }
 
 type Result<'a, T> = core::result::Result<T, Error<'a>>;
@@ -75,14 +92,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn verify_last(&mut self, last: &'a str) -> Result<'a, ()> {
-        let last_char = || last.chars().next().unwrap();
+    fn verify_last(&mut self, last: &'static str) -> Result<'a, ()> {
         match (self.i.as_slice(), last) {
             ([], "") => Ok(()),
             ([Token::Char(c)], last) if *c == last => Ok(()),
-            ([], _) => Err((Expect::Char(last_char()), None)),
+            ([], _) => Err((Expect::Char(last), None)),
             ([next, ..], "") => Err((Expect::Nothing, Some(next))),
-            ([next, ..], _) => Err((Expect::Char(last_char()), Some(next))),
+            ([next, ..], _) => Err((Expect::Char(last), Some(next))),
         }
     }
 
@@ -94,7 +110,7 @@ impl<'a> Parser<'a> {
         y
     }
 
-    pub fn finish<T: Default, F>(&mut self, last: &'a str, f: F) -> T
+    pub fn finish<T: Default, F>(&mut self, last: &'static str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
     {
@@ -109,7 +125,7 @@ impl<'a> Parser<'a> {
             })
     }
 
-    fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], last: &'a str, f: F) -> T
+    fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], last: &'static str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
     {
@@ -139,13 +155,13 @@ impl<'a> Parser<'a> {
         Ok(y)
     }
 
-    fn sep_by1<T, F>(&mut self, sep: char, f: F) -> Result<'a, Vec<T>>
+    fn sep_by1<T, F>(&mut self, sep: &'static str, f: F) -> Result<'a, Vec<T>>
     where
         F: Fn(&mut Self) -> Result<'a, T>,
     {
         let head = core::iter::once(f(self));
         let tail = core::iter::from_fn(|| match self.i.next() {
-            Some(Token::Char(c)) if c.chars().eq([sep]) => Some(f(self)),
+            Some(Token::Char(c)) if *c == sep => Some(f(self)),
             Some(Token::Char(")" | "}")) => None,
             next => Some(Err((Expect::Char(sep), next))),
         });
@@ -154,7 +170,7 @@ impl<'a> Parser<'a> {
 
     fn args<T>(&mut self, f: impl Fn(&mut Self) -> Result<'a, T> + Copy) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
-            Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.sep_by1(';', f))),
+            Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.sep_by1(";", f))),
             _ => None,
         })
         .unwrap_or_default()
@@ -179,13 +195,13 @@ impl<'a> Parser<'a> {
 
     fn terminated<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<'a, T>) -> Result<'a, T> {
         let y = f(self)?;
-        self.char1(';')?;
+        self.char1(";")?;
         Ok(y)
     }
 
-    fn char1(&mut self, c: char) -> Result<'a, &'a str> {
+    fn char1(&mut self, c: &'static str) -> Result<'a, &'a str> {
         match self.i.next() {
-            Some(Token::Char(s)) if s.chars().eq([c]) => Ok(*s),
+            Some(Token::Char(s)) if *s == c => Ok(*s),
             next => Err((Expect::Char(c), next)),
         }
     }
@@ -207,7 +223,7 @@ impl<'a> Parser<'a> {
     fn pipe(&mut self) -> Result<'a, ()> {
         match self.i.next() {
             Some(Token::Op("|")) => Ok(()),
-            next => Err((Expect::Char('|'), next)),
+            next => Err((Expect::Char("|"), next)),
         }
     }
 
@@ -321,7 +337,7 @@ impl<'a> Parser<'a> {
                 Term::Arr(Some(Box::new(self.with(tokens, "]", Self::term))))
             }
             Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
-                p.sep_by1(',', Self::obj_entry).map(Term::Obj)
+                p.sep_by1(",", Self::obj_entry).map(Term::Obj)
             }),
             Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
@@ -357,7 +373,7 @@ impl<'a> Parser<'a> {
             }
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", Self::term);
-                self.char1(':')?;
+                self.char1(":")?;
                 return Ok((k, Some(self.term_with_comma(false)?)));
             }
             next => return Err((Expect::Key, next)),
@@ -457,10 +473,10 @@ impl<'a> Parser<'a> {
                 next => return Err((Expect::Arg, next)),
             })
         });
-        self.char1(':')?;
+        self.char1(":")?;
 
         let body = self.term()?;
-        self.char1(';')?;
+        self.char1(";")?;
 
         Ok(Def { name, args, body })
     }

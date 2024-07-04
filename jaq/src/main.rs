@@ -263,15 +263,18 @@ fn parse2(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
     if lex_errs.is_empty() {
         let mut parser = jaq_syn::parse::Parser::new(&tokens);
         let main = parser.finish("", |p| p.module(|p| p.term()));
-        //std::println!("{:?}", main);
-        //std::println!("{:?}", parser.e);
-        let main = main.body.conv_main(filter_str);
-        Ok(main)
+        if parser.e.is_empty() {
+            //std::println!("{:?}", main);
+            let main = main.body.conv_main(filter_str);
+            Ok(main)
+        } else {
+            std::println!("{:?}", parser.e);
+            let errs = parser.e.into_iter();
+            Err(errs.map(|e| report_parse(filter_str, e)).collect())
+        }
     } else {
-        Err(lex_errs
-            .into_iter()
-            .map(|e| report_lex(filter_str, e))
-            .collect())
+        let errs = lex_errs.into_iter();
+        Err(errs.map(|e| report_lex(filter_str, e)).collect())
     }
 }
 
@@ -666,6 +669,20 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     Report {
         message: format!("expected {}", expected.as_str()),
         labels,
+    }
+}
+
+fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error) -> Report {
+    let found_range = match found {
+        None => code.len()..code.len(),
+        Some(found) => found.span(code),
+    };
+    let found = found.map_or("unexpected end of input", |_| "unexpected token");
+    let found = [(found.to_string(), None)].into();
+
+    Report {
+        message: format!("expected {}", expected.as_str()),
+        labels: Vec::from([(found_range, found, Color::Red)]),
     }
 }
 
