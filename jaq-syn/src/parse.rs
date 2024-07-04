@@ -292,7 +292,9 @@ impl<'a> Parser<'a> {
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if id.starts_with('@') => {
                 let s = self.maybe(|p| match p.i.next() {
-                    Some(Token::Str(parts)) if id.starts_with('@') => Some(p.str_parts(parts)),
+                    Some(Token::Str(_, parts, _)) if id.starts_with('@') => {
+                        Some(p.str_parts(parts))
+                    }
                     _ => None,
                 });
                 match s {
@@ -321,7 +323,7 @@ impl<'a> Parser<'a> {
             Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
                 p.sep_by1(',', Self::obj_entry).map(Term::Obj)
             }),
-            Some(Token::Str(parts)) => Term::Str(None, self.str_parts(parts)),
+            Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
         };
 
@@ -344,9 +346,9 @@ impl<'a> Parser<'a> {
 
     fn obj_entry(&mut self) -> Result<'a, (Term<&'a str>, Option<Term<&'a str>>)> {
         let key = match self.i.next() {
-            Some(Token::Str(parts)) => Term::Str(None, self.str_parts(parts)),
+            Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
             Some(Token::Word(k)) if k.starts_with('@') => match self.i.next() {
-                Some(Token::Str(parts)) => Term::Str(Some(*k), self.str_parts(parts)),
+                Some(Token::Str(_, parts, _)) => Term::Str(Some(*k), self.str_parts(parts)),
                 next => return Err((Expect::Str, next)),
             },
             Some(Token::Word(k)) if k.starts_with('$') => Term::Var(*k),
@@ -465,7 +467,7 @@ impl<'a> Parser<'a> {
 
     fn bare_str(&mut self) -> Result<'a, &'a str> {
         match self.i.next() {
-            Some(Token::Str(parts)) => match parts[..] {
+            Some(Token::Str(_, parts, _)) => match parts[..] {
                 [StrPart::Str(s)] => Ok(s),
                 _ => todo!(),
             },

@@ -14,8 +14,8 @@ pub enum Token<S> {
     Word(S),
     /// number
     Num(S),
-    /// interpolated string
-    Str(Vec<StrPart<S, Self>>),
+    /// (interpolated) string, surrounded by opening and closing '"'
+    Str(S, Vec<StrPart<S, Self>>, S),
     /// operator, such as `|` or `+=`
     Op(S),
     /// punctuation, such as `.` or `;`
@@ -209,7 +209,7 @@ impl<'a> Lexer<&'a str> {
     /// Lex a (possibly interpolated) string.
     ///
     /// The input string has to start with '"'.
-    fn str(&mut self) -> Vec<StrPart<&'a str, Token<&'a str>>> {
+    fn str(&mut self) -> Token<&'a str> {
         let start = self.take(1);
         assert_eq!(start, "\"");
         let mut parts = Vec::new();
@@ -219,14 +219,15 @@ impl<'a> Lexer<&'a str> {
             if !s.is_empty() {
                 parts.push(StrPart::Str(s));
             }
+            let i = self.i;
             match self.next() {
-                Some('"') => return parts,
+                Some('"') => return Token::Str(start, parts, &i[..1]),
                 Some('\\') => self.escape().map(|part| parts.push(part)),
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
                 None => {
                     self.e.push((Expect::Delim(start), self.i));
-                    return parts;
+                    return Token::Str(start, parts, &i[..0]);
                 }
             };
         }
@@ -248,7 +249,7 @@ impl<'a> Lexer<&'a str> {
             }
             '.' if chars.next() == Some('.') => Token::Char(self.take(2)),
             '.' | ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
-            '"' => Token::Str(self.str()),
+            '"' => self.str(),
             '(' | '[' | '{' => self.delim(),
             _ => return None,
         })
@@ -279,6 +280,18 @@ impl<'a> Lexer<&'a str> {
             self.e.push((Expect::Delim(open), self.i));
         }
         Token::Block(open, tokens)
+    }
+}
+
+impl<'a> Token<&'a str> {
+    pub fn span(&self, code: &str) -> crate::Span {
+        match self {
+            Self::Word(s) | Self::Char(s) | Self::Op(s) | Self::Num(s) => span(code, s),
+            Self::Str(open, _, close) => span(code, open).start..span(code, close).end,
+            Self::Block(open, block) => {
+                span(code, open).start..block.last().unwrap().span(code).end
+            }
+        }
     }
 }
 
