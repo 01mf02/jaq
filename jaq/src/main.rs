@@ -154,17 +154,23 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let mut args = cli.args.iter();
     let filter = match &cli.from_file {
-        Some(file) => parse(&std::fs::read_to_string(file)?, vars)?,
-        None => {
-            if let Some(filter) = args.next() {
-                parse(filter, vars)?
-            } else {
-                Filter::default()
-            }
-        }
+        Some(file) => Some(std::fs::read_to_string(file)?),
+        None => args.next().cloned(),
+    };
+    let files: Vec<_> = args.collect();
+
+    /*
+    let filter2 = match filter.clone() {
+        None => todo!(),
+        Some(filter) => parse2(&filter).map_err(|e| Error::Report(filter, e))?,
+    };
+    */
+
+    let filter = match filter {
+        Some(filter) => parse(&filter, vars)?,
+        None => Filter::default(),
     };
     //println!("Filter: {:?}", filter);
-    let files: Vec<_> = args.collect();
 
     let last = if files.is_empty() {
         let inputs = read_buffered(cli, io::stdin().lock());
@@ -252,6 +258,23 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
+fn parse2(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
+    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(filter_str).lex();
+    if lex_errs.is_empty() {
+        let mut parser = jaq_syn::parse::Parser::new(&tokens);
+        let main = parser.finish("", |p| p.module(|p| p.term()));
+        //std::println!("{:?}", main);
+        //std::println!("{:?}", parser.e);
+        let main = main.body.conv_main(filter_str);
+        Ok(main)
+    } else {
+        Err(lex_errs
+            .into_iter()
+            .map(|e| report_lex(filter_str, e))
+            .collect())
+    }
+}
+
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
     let mut defs = ParseCtx::new(vars);
     defs.insert_natives(jaq_core::core());
@@ -264,22 +287,6 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>>
     assert!(parser.e.is_empty());
     let std: Vec<_> = std.body.iter().map(|def| def.conv(std_str)).collect();
     defs.insert_defs(std);
-
-    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(filter_str).lex();
-    if lex_errs.is_empty() {
-        let mut parser = jaq_syn::parse::Parser::new(&tokens);
-        let main = parser.finish("", |p| p.module(|p| p.term()));
-        /*
-        std::println!("{:?}", main);
-        std::println!("{:?}", main.body.conv_main(filter_str));
-        std::println!("{:?}", parser.e);
-        */
-    } else {
-        //std::println!("{:?}", lex_errs);
-        for e in lex_errs {
-            println!("{}", report_lex(filter_str, e))
-        }
-    }
 
     assert!(defs.errs.is_empty());
     let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
@@ -394,6 +401,7 @@ struct ParseError {
 #[derive(Debug)]
 enum Error {
     Io(Option<String>, io::Error),
+    Report(String, Vec<Report>),
     Chumsky(Vec<ParseError>),
     Parse(String),
     Jaq(jaq_interpret::Error),
@@ -418,9 +426,22 @@ impl Termination for Error {
                 eprintln!("Error: {e}");
                 2
             }
+            Self::Report(code, reports) => {
+                let idx = codesnake::LineIndex::new(&code);
+                for e in reports {
+                    eprintln!("Error: {}", e.message);
+                    let block = e.to_block(&idx);
+                    eprintln!("{}\n{}{}", block.prologue(), block, block.epilogue())
+                }
+                3
+            }
             Self::Chumsky(errs) => {
                 for e in errs {
-                    eprintln!("Error: {}", report(&e.filter, &e.error));
+                    let idx = codesnake::LineIndex::new(&e.filter);
+                    let report = report(&e.filter, &e.error);
+                    eprintln!("Error: {}", report.message);
+                    let block = report.to_block(&idx);
+                    eprintln!("{}\n{}{}", block.prologue(), block, block.epilogue())
                 }
                 3
             }
@@ -598,10 +619,9 @@ fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Re
 }
 
 #[derive(Debug)]
-struct Report<'a> {
-    code: &'a str,
+struct Report {
     message: String,
-    labels: Vec<(core::ops::Range<usize>, String, Color)>,
+    labels: Vec<(core::ops::Range<usize>, Vec<(String, Option<Color>)>, Color)>,
 }
 
 #[derive(Clone, Debug)]
@@ -621,33 +641,35 @@ impl Color {
     }
 }
 
-fn report_lex<'a>(code: &'a str, (expected, found): jaq_syn::lex::Error<&'a str>) -> Report<'a> {
+fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
     use jaq_syn::lex::{span, Expect};
 
     let mut found_range = span(code, found);
-    found_range.end = found_range.start;
+    found_range.end = core::cmp::min(found_range.start + 1, code.len());
     let found = match found {
-        "" => "end of input",
-        _ => "character",
+        "" => [("unexpected end of input".to_string(), None)].into(),
+        c => [("unexpected character ", None), (c, Some(Color::Red))]
+            .map(|(s, c)| (s.into(), c))
+            .into(),
     };
-    let label = (found_range, format!("unexpected {found}"), Color::Red);
+    let label = (found_range, found, Color::Red);
 
     let labels = match expected {
         Expect::Delim(open) => {
-            let unclosed = "unclosed delimiter".to_string();
-            Vec::from([(span(code, open), unclosed, Color::Yellow), label])
+            let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
+                .map(|(s, c)| (s.into(), c));
+            Vec::from([(span(code, open), text.into(), Color::Yellow), label])
         }
         _ => Vec::from([label]),
     };
 
     Report {
-        code,
         message: format!("expected {}", expected.as_str()),
         labels,
     }
 }
 
-fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
+fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report {
     use chumsky::error::SimpleReason;
 
     let eof = || "end of input".to_string();
@@ -675,10 +697,14 @@ fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
     };
 
     let label = if let SimpleReason::Custom(msg) = e.reason() {
-        msg.clone()
+        [(msg.clone(), None)].into()
     } else {
-        let token = |c: &String| format!("token {}", Color::Red.apply(c));
-        format!("Unexpected {}", e.found().map_or_else(eof, token))
+        match e.found() {
+            None => [("Unexpected end of input".to_string(), None)].into(),
+            Some(c) => [("Unexpected token ", None), (c, Some(Color::Red))]
+                .map(|(s, c)| (s.into(), c))
+                .into(),
+        }
     };
     // convert character indices to byte offsets
     let char_to_byte = |i| {
@@ -692,30 +718,31 @@ fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
     let mut labels = Vec::from([(conv(&e.span()), label, Color::Red)]);
 
     if let SimpleReason::Unclosed { span, delimiter } = e.reason() {
-        let text = format!("Unclosed delimiter {}", Color::Yellow.apply(delimiter));
-        labels.insert(0, (conv(span), text, Color::Yellow));
+        let text = ("Unclosed delimiter ".to_string(), None);
+        let bla = (delimiter.to_string(), Some(Color::Yellow));
+        labels.insert(0, (conv(span), [text, bla].into(), Color::Yellow));
     }
-    Report {
-        code,
-        message,
-        labels,
-    }
+    Report { message, labels }
 }
 
-impl Display for Report<'_> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        use codesnake::{Block, CodeWidth, Label, LineIndex};
-        let idx = LineIndex::new(self.code);
-        let labels = self.labels.clone().into_iter().map(|(range, text, color)| {
-            Label::new(range, text).with_style(move |s| color.apply(s).to_string())
+type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
+
+impl Report {
+    fn to_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
+        use codesnake::{Block, CodeWidth, Label};
+        let color_maybe = |(text, color): (_, Option<Color>)| match color {
+            None => text,
+            Some(color) => color.apply(text).to_string(),
+        };
+        let labels = self.labels.into_iter().map(|(range, text, color)| {
+            let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
+            Label::new(range, text.join("")).with_style(move |s| color.apply(s).to_string())
         });
-        let block = Block::new(&idx, labels).unwrap().map_code(|c| {
+        Block::new(&idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))
-        });
-        writeln!(f, "{}", self.message)?;
-        write!(f, "{}\n{}{}", block.prologue(), block, block.epilogue())
+        })
     }
 }
 
