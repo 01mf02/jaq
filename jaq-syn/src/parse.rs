@@ -2,7 +2,8 @@ use crate::lex::{StrPart, Token};
 use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
-type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
+pub type Error<'a> = (Expect, Option<&'a Token<&'a str>>);
+
 #[derive(Debug)]
 pub enum Expect {
     Keyword(&'static str),
