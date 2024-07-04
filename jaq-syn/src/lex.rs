@@ -42,6 +42,7 @@ impl<'a> Expect<&'a str> {
             Self::Delim("(") => "closing parenthesis",
             Self::Delim("[") => "closing bracket",
             Self::Delim("{") => "closing brace",
+            Self::Delim("\"") => "closing quote",
             Self::Delim(_) => panic!(),
             Self::Escape => "string escape sequence",
             Self::Unicode => "4-digit hexadecimal UTF-8 code point",
@@ -209,8 +210,8 @@ impl<'a> Lexer<&'a str> {
     ///
     /// The input string has to start with '"'.
     fn str(&mut self) -> Vec<StrPart<&'a str, Token<&'a str>>> {
-        let start = self.i;
-        assert_eq!(self.next(), Some('"'));
+        let start = self.take(1);
+        assert_eq!(start, "\"");
         let mut parts = Vec::new();
 
         loop {
