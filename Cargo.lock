@@ -244,7 +244,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
 name = "jaq"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "atty",
  "chumsky",
@@ -327,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "1.5.0"
+version = "1.5.1"
 dependencies = [
  "bincode",
  "jaq-core",
