@@ -159,16 +159,9 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     };
     let files: Vec<_> = args.collect();
 
-    /*
-    let filter2 = match filter.clone() {
-        None => todo!(),
-        Some(filter) => parse2(&filter).map_err(|e| Error::Report(filter, e))?,
-    };
-    */
-
     let filter = match filter {
-        Some(filter) => parse(&filter, vars)?,
         None => Filter::default(),
+        Some(filter_str) => parse(&filter_str, vars).map_err(|e| Error::Report(filter_str, e))?,
     };
     //println!("Filter: {:?}", filter);
 
@@ -258,7 +251,16 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
-fn parse2(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
+fn parse_defs(std_str: &str) -> Vec<jaq_syn::Def> {
+    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(std_str).lex();
+    assert!(lex_errs.is_empty());
+    let mut parser = jaq_syn::parse::Parser::new(&tokens);
+    let std = parser.finish("", |p| p.module(|p| p.defs()));
+    assert!(parser.e.is_empty());
+    std.body.iter().map(|def| def.conv(std_str)).collect()
+}
+
+fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
     let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(filter_str).lex();
     if !lex_errs.is_empty() {
         let errs = lex_errs.into_iter();
@@ -278,42 +280,20 @@ fn parse2(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
     Ok(main)
 }
 
-fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ParseError>> {
-    let mut defs = ParseCtx::new(vars);
-    defs.insert_natives(jaq_core::core());
-
-    let std_str = include_str!("../../jaq-std/src/std.jq");
-    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(std_str).lex();
-    assert!(lex_errs.is_empty());
-    let mut parser = jaq_syn::parse::Parser::new(&tokens);
-    let std = parser.finish("", |p| p.module(|p| p.defs()));
-    assert!(parser.e.is_empty());
-    let std: Vec<_> = std.body.iter().map(|def| def.conv(std_str)).collect();
-    defs.insert_defs(std);
-
-    assert!(defs.errs.is_empty());
-    let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
-    if !errs.is_empty() {
-        return Err(errs
-            .into_iter()
-            .map(|error| ParseError {
-                error,
-                filter: filter_str.to_owned(),
-            })
-            .collect());
-    }
-    let filter = defs.compile(filter.unwrap());
-    if defs.errs.is_empty() {
+fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
+    let mut ctx = ParseCtx::new(vars);
+    ctx.insert_natives(jaq_core::core());
+    ctx.insert_defs(parse_defs(include_str!("../../jaq-std/src/std.jq")));
+    let filter = parse_term(filter_str)?;
+    let filter = ctx.compile(filter);
+    if ctx.errs.is_empty() {
         Ok(filter)
     } else {
-        Err(defs
-            .errs
-            .into_iter()
-            .map(|error| ParseError {
-                error: chumsky::error::Simple::custom(error.1, error.0.to_string()),
-                filter: filter_str.to_owned(),
-            })
-            .collect())
+        let reports = ctx.errs.into_iter().map(|error| Report {
+            message: error.0.to_string(),
+            labels: Vec::from([(error.1, [(error.0.to_string(), None)].into(), Color::Red)]),
+        });
+        Err(reports.collect())
     }
 }
 
@@ -396,16 +376,9 @@ fn collect_if<'a, T: 'a, E: 'a>(
 }
 
 #[derive(Debug)]
-struct ParseError {
-    error: chumsky::error::Simple<String>,
-    filter: String,
-}
-
-#[derive(Debug)]
 enum Error {
     Io(Option<String>, io::Error),
     Report(String, Vec<Report>),
-    Chumsky(Vec<ParseError>),
     Parse(String),
     Jaq(jaq_interpret::Error),
     Persist(tempfile::PersistError),
@@ -438,16 +411,6 @@ impl Termination for Error {
                 }
                 3
             }
-            Self::Chumsky(errs) => {
-                for e in errs {
-                    let idx = codesnake::LineIndex::new(&e.filter);
-                    let report = report(&e.filter, &e.error);
-                    eprintln!("Error: {}", report.message);
-                    let block = report.to_block(&idx);
-                    eprintln!("{}\n{}{}", block.prologue(), block, block.epilogue())
-                }
-                3
-            }
             Self::NoOutput => 4,
             Self::Parse(e) => {
                 eprintln!("Error: failed to parse: {e}");
@@ -465,12 +428,6 @@ impl Termination for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(None, e)
-    }
-}
-
-impl From<Vec<ParseError>> for Error {
-    fn from(e: Vec<ParseError>) -> Self {
-        Self::Chumsky(e)
     }
 }
 
@@ -686,62 +643,6 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error) -> Report 
     }
 }
 
-fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report {
-    use chumsky::error::SimpleReason;
-
-    let eof = || "end of input".to_string();
-
-    let message = if let SimpleReason::Custom(msg) = e.reason() {
-        msg.clone()
-    } else {
-        let found = if e.found().is_some() {
-            "Unexpected token"
-        } else {
-            "Unexpected end of input"
-        };
-        let when = if let Some(label) = e.label() {
-            format!(" while parsing {label}")
-        } else {
-            String::new()
-        };
-        let expected = if e.expected().len() == 0 {
-            "something else".to_string()
-        } else {
-            let f = |e: &Option<String>| e.as_ref().map_or_else(eof, |e| e.to_string());
-            e.expected().map(f).collect::<Vec<_>>().join(", ")
-        };
-        format!("{found}{when}, expected {expected}",)
-    };
-
-    let label = if let SimpleReason::Custom(msg) = e.reason() {
-        [(msg.clone(), None)].into()
-    } else {
-        match e.found() {
-            None => [("Unexpected end of input".to_string(), None)].into(),
-            Some(c) => [("Unexpected token ", None), (c, Some(Color::Red))]
-                .map(|(s, c)| (s.into(), c))
-                .into(),
-        }
-    };
-    // convert character indices to byte offsets
-    let char_to_byte = |i| {
-        code.char_indices()
-            .map(|(i, _c)| i)
-            .chain([code.len(), code.len()])
-            .nth(i)
-            .unwrap()
-    };
-    let conv = |span: &core::ops::Range<_>| char_to_byte(span.start)..char_to_byte(span.end);
-    let mut labels = Vec::from([(conv(&e.span()), label, Color::Red)]);
-
-    if let SimpleReason::Unclosed { span, delimiter } = e.reason() {
-        let text = ("Unclosed delimiter ".to_string(), None);
-        let bla = (delimiter.to_string(), Some(Color::Yellow));
-        labels.insert(0, (conv(span), [text, bla].into(), Color::Yellow));
-    }
-    Report { message, labels }
-}
-
 type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
 
 impl Report {
@@ -767,7 +668,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(Vec::new(), &inputs);
 
-    let filter = parse(&test.filter, Vec::new())?;
+    let filter = parse(&test.filter, Vec::new()).map_err(|e| Error::Report(test.filter, e))?;
 
     let json = |s: String| {
         use hifijson::token::Lex;
