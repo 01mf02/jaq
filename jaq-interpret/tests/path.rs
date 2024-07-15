@@ -74,6 +74,9 @@ fn iter_assign() {
     );
 }
 
+yields!(key_update1, "{} | .a  |= .+1", json!({"a": 1}));
+yields!(key_update2, "{} | .a? |= .+1", json!({"a": 1}));
+
 #[test]
 fn index_update() {
     give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
