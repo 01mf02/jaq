@@ -87,9 +87,14 @@ pub enum Term<S> {
     /// Variable, such as `$x` (including leading '$')
     Var(S),
 
-    Key(S),
     /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Box<Self>, Vec<(path::Part<Self>, path::Opt)>),
+}
+
+impl<S> Term<S> {
+    fn str(s: S) -> Self {
+        Self::Str(None, [StrPart::Str(s)].into())
+    }
 }
 
 /// Keywords that may not appear at the beginning of an expression.
@@ -339,9 +344,13 @@ impl<'a> Parser<'a> {
             Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
                 Term::Call(*id, self.args(Self::term))
             }
-            Some(Token::Char(".")) => self
-                .maybe(|p| p.i.next().and_then(ident_key))
-                .map_or(Term::Id, Term::Key),
+            Some(Token::Char(".")) => match self.maybe(|p| p.i.next().and_then(ident_key)) {
+                None => Term::Id,
+                Some(k) => Term::Path(
+                    Box::new(Term::Id),
+                    [(path::Part::Index(Term::str(k)), path::Opt::Essential)].into(),
+                ),
+            },
             Some(Token::Char("..")) => Term::Recurse,
             Some(Token::Num(n)) => Term::Num(*n),
             Some(Token::Block("[", tokens)) if matches!(tokens[..], [Token::Char("]")]) => {
@@ -386,9 +395,7 @@ impl<'a> Parser<'a> {
                 next => return Err((Expect::Str, next)),
             },
             Some(Token::Word(k)) if k.starts_with('$') => Term::Var(*k),
-            Some(Token::Word(k)) if !KEYWORDS.contains(k) => {
-                Term::Str(None, Vec::from([StrPart::Str(*k)]))
-            }
+            Some(Token::Word(k)) if !KEYWORDS.contains(k) => Term::str(*k),
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", Self::term);
                 self.char1(":")?;
@@ -424,9 +431,8 @@ impl<'a> Parser<'a> {
                 next => return Err((Expect::Key, next)),
             };
             let opt = self.char0('?').is_some();
-            let key = Term::Str(None, Vec::from([StrPart::Str(key)]));
             let opt = if opt { Opt::Optional } else { Opt::Essential };
-            path.push((path::Part::Index(key), opt));
+            path.push((path::Part::Index(Term::str(key)), opt));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
         Ok(path)

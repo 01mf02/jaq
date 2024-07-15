@@ -126,7 +126,6 @@ impl parse::Term<&str> {
             Self::Call(c, args) => Call(c.to_string(), args.iter().map(|a| *span(a)).collect()),
             Self::Var(v) => Var(v[1..].to_string()),
 
-            Self::Key(s) => index_path((Str(Box::new(crate::Str::from(s.to_string()))), 0..42)),
             Self::Path(tm, path) => Path(span(tm), path.iter().map(from_part).collect()),
         }
     }
