@@ -1,3 +1,5 @@
+//! Lexing.
+
 use alloc::vec::Vec;
 
 #[derive(Debug)]

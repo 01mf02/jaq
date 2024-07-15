@@ -1,3 +1,5 @@
+//! Parsing.
+
 use crate::lex::{StrPart, Token};
 use crate::path;
 use alloc::{boxed::Box, vec::Vec};
