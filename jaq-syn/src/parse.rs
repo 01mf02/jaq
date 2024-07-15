@@ -48,31 +48,47 @@ pub struct Parser<'a> {
 
 #[derive(Debug, Default)]
 pub enum Term<S> {
+    /// Identity, i.e. `.`
     #[default]
     Id,
+    /// Recursion (`..`)
     Recurse,
 
+    /// Integer or floating-point number.
     Num(S),
+    /// String
     Str(Option<S>, Vec<StrPart<S, Self>>),
+    /// Array, empty if `None`
     Arr(Option<Box<Self>>),
+    /// Object, specifying its key-value pairs
     Obj(Vec<(Self, Option<Self>)>),
 
     Neg(Box<Self>),
     Pipe(Box<Self>, Option<S>, Box<Self>),
+    /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
     BinOp(Box<Self>, Vec<(S, Self)>),
 
+    /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
+    /// Break out from control flow to location variable, e.g. `break $x`
     Break(S),
 
+    /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
     Fold(S, Box<Self>, S, Vec<Self>),
+    /// `try` and optional `catch`
     TryCatch(Box<Self>, Option<Box<Self>>),
+    /// If-then-else
     IfThenElse(Vec<(Self, Self)>, Option<Box<Self>>),
 
+    /// Local definition
     Def(Vec<Def<S, Self>>, Box<Self>),
+    /// Call to another filter, e.g. `map(.+1)`
     Call(S, Vec<Self>),
+    /// Variable, such as `$x` (including leading '$')
     Var(S),
 
     Key(S),
+    /// Path such as `.`, `.a`, `.[][]."b"`
     Path(Box<Self>, Vec<(path::Part<Self>, path::Opt)>),
 }
 
