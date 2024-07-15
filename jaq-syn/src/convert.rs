@@ -101,7 +101,7 @@ impl parse::Term<&str> {
                 };
                 let (init, update) = match &args[..] {
                     [init, update] => (init, update),
-                    _ => todo!(),
+                    _ => unimplemented!("folding filters currently only take two arguments"),
                 };
                 let fold = self::Fold {
                     xs: span(xs),
@@ -120,7 +120,7 @@ impl parse::Term<&str> {
                 else_.as_deref().map(span),
             ),
 
-            Self::Def(defs, tm) => unimplemented!("definitions inside terms are not supported yet"),
+            Self::Def(_defs, _tm) => unimplemented!("definitions inside terms are not supported yet"),
             Self::Call(c, args) => Call(c.to_string(), args.iter().map(|a| *span(a)).collect()),
             Self::Var(v) => Var(v[1..].to_string()),
 
