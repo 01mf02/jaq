@@ -247,14 +247,12 @@ name = "jaq"
 version = "1.5.0"
 dependencies = [
  "atty",
- "chumsky",
  "clap",
  "codesnake",
  "env_logger",
  "hifijson",
  "jaq-core",
  "jaq-interpret",
- "jaq-parse",
  "jaq-syn",
  "memmap2",
  "mimalloc",
