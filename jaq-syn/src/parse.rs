@@ -331,9 +331,7 @@ impl<'a> Parser<'a> {
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if id.starts_with('@') => {
                 let s = self.maybe(|p| match p.i.next() {
-                    Some(Token::Str(_, parts, _)) if id.starts_with('@') => {
-                        Some(p.str_parts(parts))
-                    }
+                    Some(Token::Str(_, parts, _)) => Some(p.str_parts(parts)),
                     _ => None,
                 });
                 match s {
