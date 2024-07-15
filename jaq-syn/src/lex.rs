@@ -51,24 +51,6 @@ impl<'a> Expect<&'a str> {
             Self::Token => "token",
         }
     }
-
-    pub fn to_simple_error(&self, pos: &'a str, full: &'a str) -> (&'static str, crate::Span) {
-        let mut pos = span(full, pos);
-        pos.end = pos.start;
-        let s = match self {
-            Self::Digit => "expected digit",
-            Self::Ident => "expected identifier",
-            Self::Delim(start) => {
-                let mut start = span(full, start);
-                start.end = pos.start;
-                return ("unclosed delimiter", start);
-            }
-            Self::Escape => "expected string escape sequence",
-            Self::Unicode => "expected 4-digit hexadecimal UTF-8 code point",
-            Self::Token => "expected token",
-        };
-        (s, pos)
-    }
 }
 
 /// Lexer error, storing what we expected and what we got instead.
