@@ -46,6 +46,7 @@ pub struct Parser<'a> {
     fold: &'a [&'a str],
 }
 
+/// Function from value to stream of values, such as `.[] | add / length`.
 #[derive(Debug, Default)]
 pub enum Term<S> {
     /// Identity, i.e. `.`
@@ -63,7 +64,9 @@ pub enum Term<S> {
     /// Object, specifying its key-value pairs
     Obj(Vec<(Self, Option<Self>)>),
 
+    /// Negation
     Neg(Box<Self>),
+    /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
     Pipe(Box<Self>, Option<S>, Box<Self>),
     /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
     BinOp(Box<Self>, Vec<(S, Self)>),
@@ -345,7 +348,7 @@ impl<'a> Parser<'a> {
             Some(Token::Char(".")) => {
                 let key = self.maybe(|p| match p.i.next() {
                     Some(Token::Word(id)) if ident_key(id) => Some(*id),
-                    next => None,
+                    _ => None,
                 });
                 let key = key.map(|key| (path::Part::Index(Term::str(key)), self.opt()));
 

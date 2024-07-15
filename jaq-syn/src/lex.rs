@@ -71,20 +71,24 @@ impl<'a> Expect<&'a str> {
     }
 }
 
+/// Lexer error, storing what we expected and what we got instead.
 pub type Error<S> = (Expect<S>, S);
 
+/// Lexer for jq files.
 pub struct Lexer<S> {
     i: S,
     e: Vec<Error<S>>,
 }
 
 impl<'a> Lexer<&'a str> {
+    /// Initialise a new lexer for the given input.
     #[must_use]
     pub fn new(i: &'a str) -> Self {
         let e = Vec::new();
         Self { i, e }
     }
 
+    /// Lex, returning the resulting tokens and errors.
     #[must_use]
     pub fn lex(mut self) -> (Vec<Token<&'a str>>, Vec<Error<&'a str>>) {
         let tokens = self.tokens();
@@ -286,6 +290,7 @@ impl<'a> Lexer<&'a str> {
 }
 
 impl<'a> Token<&'a str> {
+    /// Return the span of a token that was lexed from some given input.
     pub fn span(&self, code: &str) -> crate::Span {
         match self {
             Self::Word(s) | Self::Char(s) | Self::Op(s) | Self::Num(s) => span(code, s),
@@ -297,7 +302,10 @@ impl<'a> Token<&'a str> {
     }
 }
 
-pub fn span(whole_buffer: &str, part: &str) -> crate::Span {
-    let start = part.as_ptr() as usize - whole_buffer.as_ptr() as usize;
+/// Return the span of a string slice `part` relative to a string slice `whole`.
+///
+/// The caller must ensure that `part` is fully contained inside `whole`.
+pub fn span(whole: &str, part: &str) -> crate::Span {
+    let start = part.as_ptr() as usize - whole.as_ptr() as usize;
     start..start + part.len()
 }
