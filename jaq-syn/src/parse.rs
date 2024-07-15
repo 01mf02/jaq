@@ -342,13 +342,20 @@ impl<'a> Parser<'a> {
             Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
                 Term::Call(*id, self.args(Self::term))
             }
-            Some(Token::Char(".")) => match self.maybe(|p| p.i.next().and_then(ident_key)) {
-                None => Term::Id,
-                Some(k) => Term::Path(
-                    Box::new(Term::Id),
-                    [(path::Part::Index(Term::str(k)), path::Opt::Essential)].into(),
-                ),
-            },
+            Some(Token::Char(".")) => {
+                let key = self.maybe(|p| match p.i.next() {
+                    Some(Token::Word(id)) if ident_key(id) => Some(*id),
+                    next => None,
+                });
+                let key = key.map(|key| (path::Part::Index(Term::str(key)), self.opt()));
+
+                let path: Vec<_> = key.into_iter().chain(self.path()?).collect();
+                if path.is_empty() {
+                    Term::Id
+                } else {
+                    Term::Path(Box::new(Term::Id), path)
+                }
+            }
             Some(Token::Char("..")) => Term::Recurse,
             Some(Token::Num(n)) => Term::Num(*n),
             Some(Token::Block("[", tokens)) if matches!(tokens[..], [Token::Char("]")]) => {
@@ -423,14 +430,11 @@ impl<'a> Parser<'a> {
     fn path(&mut self) -> Result<'a, Vec<(path::Part<Term<&'a str>>, path::Opt)>> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while self.char0('.').is_some() {
-            use path::Opt;
             let key = match self.i.next() {
-                Some(Token::Word(id)) if !id.starts_with(['$', '@']) => *id,
+                Some(Token::Word(id)) if ident_key(id) => *id,
                 next => return Err((Expect::Key, next)),
             };
-            let opt = self.char0('?').is_some();
-            let opt = if opt { Opt::Optional } else { Opt::Essential };
-            path.push((path::Part::Index(Term::str(key)), opt));
+            path.push((path::Part::Index(Term::str(key)), self.opt()));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
         Ok(path)
@@ -568,9 +572,6 @@ pub struct Def<S, F> {
     pub(crate) body: F,
 }
 
-fn ident_key<'a>(token: &Token<&'a str>) -> Option<&'a str> {
-    match token {
-        Token::Word(id) if !id.starts_with(['$', '@']) && !KEYWORDS.contains(id) => Some(*id),
-        _ => None,
-    }
+fn ident_key(id: &str) -> bool {
+    !id.starts_with(['$', '@']) && !KEYWORDS.contains(&id)
 }
