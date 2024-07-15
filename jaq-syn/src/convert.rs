@@ -120,7 +120,9 @@ impl parse::Term<&str> {
                 else_.as_deref().map(span),
             ),
 
-            Self::Def(_defs, _tm) => unimplemented!("definitions inside terms are not supported yet"),
+            Self::Def(_defs, _tm) => {
+                unimplemented!("definitions inside terms are not supported yet")
+            }
             Self::Call(c, args) => Call(c.to_string(), args.iter().map(|a| *span(a)).collect()),
             Self::Var(v) => Var(v[1..].to_string()),
 
@@ -204,7 +206,6 @@ impl parse::Module<&str, Vec<parse::Def<&str, parse::Term<&str>>>> {
         self.body.iter().map(|def| def.conv(s)).collect()
     }
 }
-
 
 impl parse::Module<&str, parse::Term<&str>> {
     pub fn conv(&self, s: &str) -> Main {
