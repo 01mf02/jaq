@@ -1,8 +1,8 @@
 use crate::filter::{AssignOp, BinaryOp, Filter, Fold, FoldType, KeyVal};
 use crate::prec_climb::{self, Associativity};
-use crate::{parse, Arg, Call, Def, Main, MathOp, OrdOp, Path, Span, Spanned, Str};
+use crate::{parse, Arg, Call, Def, Main, MathOp, OrdOp, Span, Spanned};
 use alloc::string::ToString;
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 
 impl parse::Term<&str> {
     fn span(&self, code: &str) -> Span {
