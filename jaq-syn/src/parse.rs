@@ -536,8 +536,8 @@ impl<'a> Parser<'a> {
 #[derive(Debug, Default)]
 pub struct Module<S, B> {
     meta: Option<Term<S>>,
-    mods: Vec<(S, Option<S>)>,
-    pub body: B,
+    pub(crate) mods: Vec<(S, Option<S>)>,
+    pub(crate) body: B,
 }
 
 #[derive(Debug)]

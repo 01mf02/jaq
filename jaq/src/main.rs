@@ -257,7 +257,7 @@ fn parse_defs(std_str: &str) -> Vec<jaq_syn::Def> {
     let mut parser = jaq_syn::parse::Parser::new(&tokens);
     let std = parser.finish("", |p| p.module(|p| p.defs()));
     assert!(parser.e.is_empty());
-    std.body.iter().map(|def| def.conv(std_str)).collect()
+    std.conv(std_str)
 }
 
 fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
@@ -276,7 +276,7 @@ fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
     }
 
     //std::println!("{:?}", main);
-    let main = main.body.conv_main(filter_str);
+    let main = main.conv(filter_str);
     Ok(main)
 }
 

@@ -129,7 +129,7 @@ impl parse::Term<&str> {
         }
     }
 
-    pub fn conv_main(&self, s: &str) -> Main {
+    fn conv_main(&self, s: &str) -> Main {
         match self {
             parse::Term::Def(defs, tm) => Main {
                 defs: defs.iter().map(|def| def.conv(s)).collect(),
@@ -196,5 +196,21 @@ impl parse::Def<&str, parse::Term<&str>> {
             },
             rhs: self.body.conv_main(s),
         }
+    }
+}
+
+impl parse::Module<&str, Vec<parse::Def<&str, parse::Term<&str>>>> {
+    pub fn conv(&self, s: &str) -> Vec<Def> {
+        self.body.iter().map(|def| def.conv(s)).collect()
+    }
+}
+
+
+impl parse::Module<&str, parse::Term<&str>> {
+    pub fn conv(&self, s: &str) -> Main {
+        if !self.mods.is_empty() {
+            panic!("include / import is not supported yet");
+        }
+        self.body.conv_main(s)
     }
 }
