@@ -4,9 +4,10 @@ fn yields(x: jaq_interpret::Val, f: &str, ys: impl Iterator<Item = jaq_interpret
     let mut ctx = jaq_interpret::ParseCtx::new(Vec::new());
     ctx.insert_natives(jaq_core::core());
 
-    let (f, errs) = jaq_parse::parse(f, jaq_parse::main());
-    assert!(errs.is_empty());
-    ctx.yields(x, f.unwrap(), ys)
+    let f = jaq_syn::parse(f, |p| p.module(|p| p.term()))
+        .unwrap()
+        .conv(f);
+    ctx.yields(x, f, ys)
 }
 
 pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {
