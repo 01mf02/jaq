@@ -414,9 +414,9 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token::Block("[", tokens)) => {
                 Term::Arr(Some(Box::new(self.with(tokens, "]", Self::term))))
             }
-            Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
-                p.obj_items(Self::obj_entry).map(Term::Obj)
-            }),
+            Some(Token::Block("{", tokens)) => {
+                self.with(tokens, "", |p| p.obj_items(Self::obj_entry).map(Term::Obj))
+            }
             Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
         };
