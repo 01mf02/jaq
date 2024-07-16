@@ -168,7 +168,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
             for e in reports {
                 let error = format!("⚠️ Parse error: {}", e.message);
                 scope.post_message(&error.into()).unwrap();
-                let block = e.to_block(&idx);
+                let block = e.into_block(&idx);
                 let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
                 scope.post_message(&block.into()).unwrap();
             }
@@ -280,10 +280,12 @@ fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
     }
 }
 
+type StringColors = Vec<(String, Option<Color>)>;
+
 #[derive(Debug)]
 struct Report {
     message: String,
-    labels: Vec<(core::ops::Range<usize>, Vec<(String, Option<Color>)>, Color)>,
+    labels: Vec<(core::ops::Range<usize>, StringColors, Color)>,
 }
 
 #[derive(Clone, Debug)]
@@ -345,7 +347,7 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error) -> Report 
 type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
 
 impl Report {
-    fn to_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
+    fn into_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
         use codesnake::{Block, CodeWidth, Label};
         let color_maybe = |(text, color): (_, Option<Color>)| match color {
             None => text,
@@ -355,7 +357,7 @@ impl Report {
             let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
             Label::new(range, text.join("")).with_style(move |s| color.apply(s).to_string())
         });
-        Block::new(&idx, labels).unwrap().map_code(|c| {
+        Block::new(idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))

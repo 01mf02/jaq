@@ -402,7 +402,7 @@ impl Termination for Error {
                 let idx = codesnake::LineIndex::new(&code);
                 for e in reports {
                     eprintln!("Error: {}", e.message);
-                    let block = e.to_block(&idx);
+                    let block = e.into_block(&idx);
                     eprintln!("{}\n{}{}", block.prologue(), block, block.epilogue())
                 }
                 3
@@ -574,10 +574,12 @@ fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Re
     Ok(y)
 }
 
+type StringColors = Vec<(String, Option<Color>)>;
+
 #[derive(Debug)]
 struct Report {
     message: String,
-    labels: Vec<(core::ops::Range<usize>, Vec<(String, Option<Color>)>, Color)>,
+    labels: Vec<(core::ops::Range<usize>, StringColors, Color)>,
 }
 
 #[derive(Clone, Debug)]
@@ -642,7 +644,7 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error) -> Report 
 type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
 
 impl Report {
-    fn to_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
+    fn into_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
         use codesnake::{Block, CodeWidth, Label};
         let color_maybe = |(text, color): (_, Option<Color>)| match color {
             None => text,
@@ -652,7 +654,7 @@ impl Report {
             let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
             Label::new(range, text.join("")).with_style(move |s| color.apply(s).to_string())
         });
-        Block::new(&idx, labels).unwrap().map_code(|c| {
+        Block::new(idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))
