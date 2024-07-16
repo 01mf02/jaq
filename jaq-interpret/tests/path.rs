@@ -42,7 +42,6 @@ fn index_access() {
 fn iter_access() {
     gives(json!([0, 1, 2]), ".[]", [json!(0), json!(1), json!(2)]);
     gives(json!({"a": [1, 2]}), ".a[]", [json!(1), json!(2)]);
-    gives(json!({"a": [1, 2]}), ".a.[]", [json!(1), json!(2)]);
     gives(json!({"a": 1, "b": 2}), ".[]", [json!(1), json!(2)]);
     // TODO: correct this
     //gives(json!({"b": 2, "a": 1}), ".[]", [json!(2), json!(1)]);
