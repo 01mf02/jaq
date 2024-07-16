@@ -14,6 +14,8 @@ pub enum Expect<S> {
     Char(S),
     Var,
     ElseOrEnd,
+    CommaOrRBrace,
+    SemicolonOrRParen,
     Term,
     Key,
     Ident,
@@ -29,6 +31,8 @@ impl<'a> Expect<&'a str> {
             Self::Keyword(s) | Self::Char(s) => s,
             Self::Var => "variable",
             Self::ElseOrEnd => "else or end",
+            Self::CommaOrRBrace => "comma or right brace",
+            Self::SemicolonOrRParen => "semicolon or right parenthesis",
             Self::Term => "term",
             Self::Key => "key",
             Self::Ident => "ident",
@@ -201,22 +205,43 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(y)
     }
 
-    fn sep_by1<T, F>(&mut self, sep: &'static str, f: F) -> Result<'s, 't, Vec<T>>
+    /// Parse sequence of shape `f ("," f)* ","? "}"`.
+    fn obj_items<T, F>(&mut self, f: F) -> Result<'s, 't, Vec<T>>
     where
         F: Fn(&mut Self) -> Result<'s, 't, T>,
     {
-        let head = core::iter::once(f(self));
-        let tail = core::iter::from_fn(|| match self.i.next() {
-            Some(Token::Char(c)) if *c == sep => Some(f(self)),
-            Some(Token::Char(")" | "}")) => None,
-            next => Some(Err((Expect::Char(sep), next))),
-        });
-        head.chain(tail).collect()
+        let mut y = Vec::from([f(self)?]);
+        let rbrace = |p: &mut Self| p.i.next().filter(|tk| matches!(tk, Token::Char("}")));
+        loop {
+            match self.i.next() {
+                Some(Token::Char("}")) => break,
+                Some(Token::Char(",")) if self.maybe(rbrace).is_some() => break,
+                Some(Token::Char(",")) => y.push(f(self)?),
+                next => return Err((Expect::CommaOrRBrace, next)),
+            }
+        }
+        Ok(y)
+    }
+
+    /// Parse sequence of shape `f (";" f)* ")"`.
+    fn arg_items<T, F>(&mut self, f: F) -> Result<'s, 't, Vec<T>>
+    where
+        F: Fn(&mut Self) -> Result<'s, 't, T>,
+    {
+        let mut y = Vec::from([f(self)?]);
+        loop {
+            match self.i.next() {
+                Some(Token::Char(";")) => y.push(f(self)?),
+                Some(Token::Char(")")) => break,
+                next => return Err((Expect::SemicolonOrRParen, next)),
+            }
+        }
+        Ok(y)
     }
 
     fn args<T>(&mut self, f: fn(&mut Self) -> Result<'s, 't, T>) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
-            Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.sep_by1(";", f))),
+            Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.arg_items(f))),
             _ => None,
         })
         .unwrap_or_default()
@@ -390,7 +415,7 @@ impl<'s, 't> Parser<'s, 't> {
                 Term::Arr(Some(Box::new(self.with(tokens, "]", Self::term))))
             }
             Some(Token::Block("{", tokens)) => self.with(tokens, "", |p| {
-                p.sep_by1(",", Self::obj_entry).map(Term::Obj)
+                p.obj_items(Self::obj_entry).map(Term::Obj)
             }),
             Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
@@ -489,10 +514,14 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn key_opt(&mut self) -> Result<'s, 't, (path::Part<Term<&'s str>>, path::Opt)> {
         let key = match self.i.next() {
-            Some(Token::Word(id)) if !id.starts_with(['$', '@']) && !KEYWORDS.contains(id) => *id,
+            Some(Token::Word(id)) if id.starts_with('@') => todo!(),
+            Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
+            Some(Token::Word(id)) if !id.starts_with('$') && !KEYWORDS.contains(id) => {
+                Term::str(*id)
+            }
             next => return Err((Expect::Key, next)),
         };
-        Ok((path::Part::Index(Term::str(key)), self.opt()))
+        Ok((path::Part::Index(key), self.opt()))
     }
 
     fn opt(&mut self) -> path::Opt {
