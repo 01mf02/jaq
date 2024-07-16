@@ -29,3 +29,11 @@ pub type Span = core::ops::Range<usize>;
 
 /// An object with position information.
 pub type Spanned<T> = (T, Span);
+
+/// Lex a string and parse resulting tokens, returning [`None`] if any error occurred.
+pub fn parse<'s, T: Default, F>(s: &'s str, f: F) -> Option<T>
+where
+    F: for<'t> FnOnce(&mut Parser<'s, 't>) -> parse::Result<'s, 't, T>,
+{
+    Parser::new(&Lexer::new(s).lex().ok()?).parse(f).ok()
+}

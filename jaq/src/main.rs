@@ -258,9 +258,9 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 }
 
 fn parse_defs(std_str: &str) -> Vec<jaq_syn::Def> {
-    let tokens = jaq_syn::Lexer::new(std_str).lex().unwrap();
-    let std = jaq_syn::Parser::new(&tokens).parse(|p| p.module(|p| p.defs()));
-    std.unwrap().conv(std_str)
+    jaq_syn::parse(std_str, |p| p.module(|p| p.defs()))
+        .unwrap()
+        .conv(std_str)
 }
 
 fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {

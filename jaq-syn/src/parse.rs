@@ -5,7 +5,7 @@ use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
-pub type Error<'a> = (Expect<&'a str>, Option<&'a Token<&'a str>>);
+pub type Error<'s, 't> = (Expect<&'s str>, Option<&'t Token<&'s str>>);
 
 /// Type of token that we expected.
 #[derive(Debug)]
@@ -40,14 +40,14 @@ impl<'a> Expect<&'a str> {
 }
 
 /// Output of a fallible parsing operation.
-pub type Result<'a, T> = core::result::Result<T, Error<'a>>;
+pub type Result<'s, 't, T> = core::result::Result<T, Error<'s, 't>>;
 
 /// Parser for jq programs.
-pub struct Parser<'a> {
-    i: core::slice::Iter<'a, Token<&'a str>>,
-    e: Vec<Error<'a>>,
+pub struct Parser<'s, 't> {
+    i: core::slice::Iter<'t, Token<&'s str>>,
+    e: Vec<Error<'s, 't>>,
     /// names of fold-like filters, e.g. "reduce" and "foreach"
-    fold: &'a [&'a str],
+    fold: &'s [&'s str],
 }
 
 /// Function from value to stream of values, such as `.[] | add / length`.
@@ -112,10 +112,10 @@ const KEYWORDS: &[&str] = &[
     "include", "import", "def", "as", "and", "or", "catch", "then", "elif", "else", "end",
 ];
 
-impl<'a> Parser<'a> {
+impl<'s, 't> Parser<'s, 't> {
     /// Initialise a new parser on a sequence of [`Token`]s.
     #[must_use]
-    pub fn new(i: &'a [Token<&'a str>]) -> Self {
+    pub fn new(i: &'t [Token<&'s str>]) -> Self {
         Self {
             i: i.iter(),
             e: Vec::new(),
@@ -126,9 +126,9 @@ impl<'a> Parser<'a> {
     /// Parse tokens with the given function.
     ///
     /// Returns [`Ok`] if the function consumes the whole output without producing any error.
-    pub fn parse<T: Default, F>(mut self, f: F) -> core::result::Result<T, Vec<Error<'a>>>
+    pub fn parse<T: Default, F>(mut self, f: F) -> core::result::Result<T, Vec<Error<'s, 't>>>
     where
-        F: FnOnce(&mut Self) -> Result<'a, T>,
+        F: FnOnce(&mut Self) -> Result<'s, 't, T>,
     {
         let y = self.finish("", f);
         if self.e.is_empty() {
@@ -138,7 +138,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn verify_last(&mut self, last: &'static str) -> Result<'a, ()> {
+    fn verify_last(&mut self, last: &'static str) -> Result<'s, 't, ()> {
         match (self.i.as_slice(), last) {
             ([], "") => Ok(()),
             ([Token::Char(c)], last) if *c == last => Ok(()),
@@ -149,7 +149,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Run given parse function with given tokens, then reset tokens to previous tokens.
-    fn with_tok<T>(&mut self, tokens: &'a [Token<&'a str>], f: impl FnOnce(&mut Self) -> T) -> T {
+    fn with_tok<T>(&mut self, tokens: &'t [Token<&'s str>], f: impl FnOnce(&mut Self) -> T) -> T {
         let i = core::mem::replace(&mut self.i, tokens.iter());
         let y = f(self);
         self.i = i;
@@ -158,7 +158,7 @@ impl<'a> Parser<'a> {
 
     fn finish<T: Default, F>(&mut self, last: &'static str, f: F) -> T
     where
-        F: FnOnce(&mut Self) -> Result<'a, T>,
+        F: FnOnce(&mut Self) -> Result<'s, 't, T>,
     {
         f(self)
             .and_then(|y| {
@@ -171,9 +171,9 @@ impl<'a> Parser<'a> {
             })
     }
 
-    fn with<T: Default, F>(&mut self, tokens: &'a [Token<&'a str>], last: &'static str, f: F) -> T
+    fn with<T: Default, F>(&mut self, tokens: &'t [Token<&'s str>], last: &'static str, f: F) -> T
     where
-        F: FnOnce(&mut Self) -> Result<'a, T>,
+        F: FnOnce(&mut Self) -> Result<'s, 't, T>,
     {
         self.with_tok(tokens, |p| p.finish(last, f))
     }
@@ -188,9 +188,9 @@ impl<'a> Parser<'a> {
         y
     }
 
-    fn try_maybe<T, F>(&mut self, f: F) -> Result<'a, Option<T>>
+    fn try_maybe<T, F>(&mut self, f: F) -> Result<'s, 't, Option<T>>
     where
-        F: Fn(&mut Self) -> Result<'a, Option<T>>,
+        F: Fn(&mut Self) -> Result<'s, 't, Option<T>>,
     {
         let i = self.i.clone();
         let y = f(self)?;
@@ -201,9 +201,9 @@ impl<'a> Parser<'a> {
         Ok(y)
     }
 
-    fn sep_by1<T, F>(&mut self, sep: &'static str, f: F) -> Result<'a, Vec<T>>
+    fn sep_by1<T, F>(&mut self, sep: &'static str, f: F) -> Result<'s, 't, Vec<T>>
     where
-        F: Fn(&mut Self) -> Result<'a, T>,
+        F: Fn(&mut Self) -> Result<'s, 't, T>,
     {
         let head = core::iter::once(f(self));
         let tail = core::iter::from_fn(|| match self.i.next() {
@@ -214,7 +214,7 @@ impl<'a> Parser<'a> {
         head.chain(tail).collect()
     }
 
-    fn args<T>(&mut self, f: impl Fn(&mut Self) -> Result<'a, T> + Copy) -> Vec<T> {
+    fn args<T>(&mut self, f: fn(&mut Self) -> Result<'s, 't, T>) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
             Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.sep_by1(";", f))),
             _ => None,
@@ -222,7 +222,7 @@ impl<'a> Parser<'a> {
         .unwrap_or_default()
     }
 
-    fn op(&mut self, with_comma: bool) -> Option<&'a str> {
+    fn op(&mut self, with_comma: bool) -> Option<&'s str> {
         self.maybe(|p| match p.i.next() {
             // handle pipe directly in `term()`
             Some(Token::Op("|")) => None,
@@ -232,48 +232,51 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn char0(&mut self, c: char) -> Option<&'a str> {
+    fn char0(&mut self, c: char) -> Option<&'s str> {
         self.maybe(|p| match p.i.next() {
             Some(Token::Char(s)) if s.chars().eq([c]) => Some(*s),
             _ => None,
         })
     }
 
-    fn terminated<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<'a, T>) -> Result<'a, T> {
+    fn terminated<T, F>(&mut self, f: F) -> Result<'s, 't, T>
+    where
+        F: FnOnce(&mut Self) -> Result<'s, 't, T>,
+    {
         let y = f(self)?;
         self.char1(";")?;
         Ok(y)
     }
 
-    fn char1(&mut self, c: &'static str) -> Result<'a, &'a str> {
+    fn char1(&mut self, c: &'static str) -> Result<'s, 't, &'s str> {
         match self.i.next() {
             Some(Token::Char(s)) if *s == c => Ok(*s),
             next => Err((Expect::Char(c), next)),
         }
     }
 
-    fn keyword(&mut self, kw: &'static str) -> Result<'a, ()> {
+    fn keyword(&mut self, kw: &'static str) -> Result<'s, 't, ()> {
         match self.i.next() {
             Some(Token::Word(w)) if *w == kw => Ok(()),
             next => Err((Expect::Keyword(kw), next)),
         }
     }
 
-    fn var(&mut self) -> Result<'a, &'a str> {
+    fn var(&mut self) -> Result<'s, 't, &'s str> {
         match self.i.next() {
             Some(Token::Word(x)) if x.starts_with('$') => Ok(*x),
             next => Err((Expect::Var, next)),
         }
     }
 
-    fn pipe(&mut self) -> Result<'a, ()> {
+    fn pipe(&mut self) -> Result<'s, 't, ()> {
         match self.i.next() {
             Some(Token::Op("|")) => Ok(()),
             next => Err((Expect::Char("|"), next)),
         }
     }
 
-    fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
+    fn term_with_comma(&mut self, with_comma: bool) -> Result<'s, 't, Term<&'s str>> {
         let head = self.atom()?;
         let tail = core::iter::from_fn(|| self.op(with_comma).map(|op| Ok((op, self.atom()?))))
             .collect::<Result<Vec<_>>>()?;
@@ -299,7 +302,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn atom(&mut self) -> Result<'a, Term<&'a str>> {
+    fn atom(&mut self) -> Result<'s, 't, Term<&'s str>> {
         let tm = match self.i.next() {
             Some(Token::Op("-")) => Term::Neg(Box::new(self.atom()?)),
             Some(Token::Word("def")) => {
@@ -407,11 +410,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a term such as `.[] | .+1`.
-    pub fn term(&mut self) -> Result<'a, Term<&'a str>> {
+    pub fn term(&mut self) -> Result<'s, 't, Term<&'s str>> {
         self.term_with_comma(true)
     }
 
-    fn obj_entry(&mut self) -> Result<'a, (Term<&'a str>, Option<Term<&'a str>>)> {
+    fn obj_entry(&mut self) -> Result<'s, 't, (Term<&'s str>, Option<Term<&'s str>>)> {
         let key = match self.i.next() {
             Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
             Some(Token::Word(k)) if k.starts_with('@') => match self.i.next() {
@@ -433,8 +436,8 @@ impl<'a> Parser<'a> {
 
     fn str_parts(
         &mut self,
-        parts: &'a [StrPart<&'a str, Token<&'a str>>],
-    ) -> Vec<StrPart<&'a str, Term<&'a str>>> {
+        parts: &'t [StrPart<&'s str, Token<&'s str>>],
+    ) -> Vec<StrPart<&'s str, Term<&'s str>>> {
         let parts = parts.iter().map(|part| match part {
             StrPart::Str(s) => StrPart::Str(*s),
             StrPart::Filter(Token::Block("(", tokens)) => {
@@ -446,7 +449,7 @@ impl<'a> Parser<'a> {
         parts.collect()
     }
 
-    fn path(&mut self) -> Result<'a, Vec<(path::Part<Term<&'a str>>, path::Opt)>> {
+    fn path(&mut self) -> Result<'s, 't, Vec<(path::Part<Term<&'s str>>, path::Opt)>> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while self.char0('.').is_some() {
             path.push(self.key_opt()?);
@@ -455,7 +458,7 @@ impl<'a> Parser<'a> {
         Ok(path)
     }
 
-    fn path_part(&mut self) -> Result<'a, path::Part<Term<&'a str>>> {
+    fn path_part(&mut self) -> Result<'s, 't, path::Part<Term<&'s str>>> {
         use path::Part::{Index, Range};
         let done = |p: &Self| matches!(p.i.as_slice(), [Token::Char("]")]);
         Ok(if done(self) {
@@ -476,7 +479,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn path_part_opt(&mut self) -> Option<(path::Part<Term<&'a str>>, path::Opt)> {
+    fn path_part_opt(&mut self) -> Option<(path::Part<Term<&'s str>>, path::Opt)> {
         let part = self.maybe(|p| match p.i.next() {
             Some(Token::Block("[", tokens)) => Some(p.with(tokens, "]", Self::path_part)),
             _ => None,
@@ -484,7 +487,7 @@ impl<'a> Parser<'a> {
         Some((part, self.opt()))
     }
 
-    fn key_opt(&mut self) -> Result<'a, (path::Part<Term<&'a str>>, path::Opt)> {
+    fn key_opt(&mut self) -> Result<'s, 't, (path::Part<Term<&'s str>>, path::Opt)> {
         let key = match self.i.next() {
             Some(Token::Word(id)) if !id.starts_with(['$', '@']) && !KEYWORDS.contains(id) => *id,
             next => return Err((Expect::Key, next)),
@@ -501,7 +504,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a sequence of definitions, such as `def x: 1; def y: 2;`.
-    pub fn defs(&mut self) -> Result<'a, Vec<Def<&'a str, Term<&'a str>>>> {
+    pub fn defs(&mut self) -> Result<'s, 't, Vec<Def<&'s str, Term<&'s str>>>> {
         core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
     }
 
@@ -512,7 +515,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn def_tail(&mut self) -> Result<'a, Def<&'a str, Term<&'a str>>> {
+    fn def_tail(&mut self) -> Result<'s, 't, Def<&'s str, Term<&'s str>>> {
         let name = match self.i.next() {
             Some(Token::Word(name)) if !name.starts_with(['$']) => name,
             next => return Err((Expect::Ident, next)),
@@ -531,7 +534,7 @@ impl<'a> Parser<'a> {
         Ok(Def { name, args, body })
     }
 
-    fn bare_str(&mut self) -> Result<'a, &'a str> {
+    fn bare_str(&mut self) -> Result<'s, 't, &'s str> {
         match self.i.next() {
             Some(Token::Str(_, parts, _)) => match parts[..] {
                 [StrPart::Str(s)] => Ok(s),
@@ -541,11 +544,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn include(&mut self) -> Result<'a, (&'a str, Option<&'a str>)> {
+    fn include(&mut self) -> Result<'s, 't, (&'s str, Option<&'s str>)> {
         self.bare_str().map(|path| (path, None))
     }
 
-    fn import(&mut self) -> Result<'a, (&'a str, Option<&'a str>)> {
+    fn import(&mut self) -> Result<'s, 't, (&'s str, Option<&'s str>)> {
         let path = self.bare_str()?;
         self.keyword("as")?;
         let name = match self.i.next() {
@@ -556,9 +559,9 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse a module with a body returned by the given function.
-    pub fn module<B, F>(&mut self, f: F) -> Result<'a, Module<&'a str, B>>
+    pub fn module<B, F>(&mut self, f: F) -> Result<'s, 't, Module<&'s str, B>>
     where
-        F: FnOnce(&mut Self) -> Result<'a, B>,
+        F: FnOnce(&mut Self) -> Result<'s, 't, B>,
     {
         let meta = self
             .maybe(|p| match p.i.next() {
