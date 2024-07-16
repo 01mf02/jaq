@@ -48,15 +48,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
 
 [[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,7 +260,7 @@ dependencies = [
  "base64",
  "hifijson",
  "jaq-interpret",
- "jaq-parse",
+ "jaq-syn",
  "libm",
  "log",
  "regex",
@@ -286,7 +277,6 @@ dependencies = [
  "dyn-clone",
  "hifijson",
  "indexmap",
- "jaq-parse",
  "jaq-syn",
  "once_cell",
  "serde_json",
@@ -326,17 +316,15 @@ dependencies = [
 name = "jaq-std"
 version = "1.5.1"
 dependencies = [
- "bincode",
  "jaq-core",
  "jaq-interpret",
- "jaq-parse",
  "jaq-syn",
  "serde_json",
 ]
 
 [[package]]
 name = "jaq-syn"
-version = "1.1.0"
+version = "1.6.0"
 dependencies = [
  "serde",
 ]
