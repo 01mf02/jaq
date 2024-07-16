@@ -10,17 +10,8 @@ repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 rust-version = "1.64"
 
-[features]
-default = ["bincode"]
-
-[build-dependencies]
-jaq-parse = { version = "1.0.0", path = "../jaq-parse" }
-bincode = { version = "1.3.3", optional = true }
-
 [dependencies]
 jaq-syn   = { version = "1.0.0", path = "../jaq-syn" }
-jaq-parse = { version = "1.0.0", path = "../jaq-parse" }
-bincode = { version = "1.3.3", optional = true }
 
 [dev-dependencies]
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
