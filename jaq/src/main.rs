@@ -257,12 +257,6 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
-fn parse_defs(std_str: &str) -> Vec<jaq_syn::Def> {
-    jaq_syn::parse(std_str, |p| p.module(|p| p.defs()))
-        .unwrap()
-        .conv(std_str)
-}
-
 fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
     let tokens = jaq_syn::Lexer::new(filter_str).lex().map_err(|errs| {
         errs.into_iter()
@@ -285,7 +279,7 @@ fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
     let mut ctx = ParseCtx::new(vars);
     ctx.insert_natives(jaq_core::core());
-    ctx.insert_defs(parse_defs(include_str!("../../jaq-std/src/std.jq")));
+    ctx.insert_defs(jaq_std::std());
     let filter = parse_term(filter_str)?;
     let filter = ctx.compile(filter);
     if ctx.errs.is_empty() {
