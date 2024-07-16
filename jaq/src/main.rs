@@ -258,32 +258,28 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 }
 
 fn parse_defs(std_str: &str) -> Vec<jaq_syn::Def> {
-    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(std_str).lex();
-    assert!(lex_errs.is_empty());
-    let mut parser = jaq_syn::parse::Parser::new(&tokens);
-    let std = parser.finish("", |p| p.module(|p| p.defs()));
-    assert!(parser.e.is_empty());
-    std.conv(std_str)
+    let tokens = jaq_syn::Lexer::new(std_str).lex().unwrap();
+    let std = jaq_syn::Parser::new(&tokens).parse(|p| p.module(|p| p.defs()));
+    std.unwrap().conv(std_str)
 }
 
 fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
-    let (tokens, lex_errs) = jaq_syn::lex::Lexer::new(filter_str).lex();
-    if !lex_errs.is_empty() {
-        let errs = lex_errs.into_iter();
-        return Err(errs.map(|e| report_lex(filter_str, e)).collect());
-    }
+    let tokens = jaq_syn::Lexer::new(filter_str).lex().map_err(|errs| {
+        errs.into_iter()
+            .map(|e| report_lex(filter_str, e))
+            .collect::<Vec<_>>()
+    })?;
 
-    let mut parser = jaq_syn::parse::Parser::new(&tokens);
-    let main = parser.finish("", |p| p.module(|p| p.term()));
-    if !parser.e.is_empty() {
-        std::println!("{:?}", parser.e);
-        let errs = parser.e.into_iter();
-        return Err(errs.map(|e| report_parse(filter_str, e)).collect());
-    }
+    let main = jaq_syn::Parser::new(&tokens).parse(|p| p.module(|p| p.term()));
+    let main = main.map_err(|errs| {
+        //std::println!("{:?}", errs);
+        errs.into_iter()
+            .map(|e| report_parse(filter_str, e))
+            .collect::<Vec<_>>()
+    })?;
 
     //std::println!("{:?}", main);
-    let main = main.conv(filter_str);
-    Ok(main)
+    Ok(main.conv(filter_str))
 }
 
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {

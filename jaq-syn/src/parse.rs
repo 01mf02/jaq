@@ -37,11 +37,11 @@ impl<'a> Expect<&'a str> {
     }
 }
 
-type Result<'a, T> = core::result::Result<T, Error<'a>>;
+pub type Result<'a, T> = core::result::Result<T, Error<'a>>;
 
 pub struct Parser<'a> {
     i: core::slice::Iter<'a, Token<&'a str>>,
-    pub e: Vec<Error<'a>>,
+    e: Vec<Error<'a>>,
     /// names of fold-like filters, e.g. "reduce" and "foreach"
     fold: &'a [&'a str],
 }
@@ -118,6 +118,18 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn parse<T: Default, F>(mut self, f: F) -> core::result::Result<T, Vec<Error<'a>>>
+    where
+        F: FnOnce(&mut Self) -> Result<'a, T>,
+    {
+        let y = self.finish("", f);
+        if self.e.is_empty() {
+            Ok(y)
+        } else {
+            Err(self.e)
+        }
+    }
+
     fn verify_last(&mut self, last: &'static str) -> Result<'a, ()> {
         match (self.i.as_slice(), last) {
             ([], "") => Ok(()),
@@ -136,7 +148,7 @@ impl<'a> Parser<'a> {
         y
     }
 
-    pub fn finish<T: Default, F>(&mut self, last: &'static str, f: F) -> T
+    fn finish<T: Default, F>(&mut self, last: &'static str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
     {
@@ -253,7 +265,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
+    fn term_with_comma(&mut self, with_comma: bool) -> Result<'a, Term<&'a str>> {
         let head = self.atom()?;
         let tail = core::iter::from_fn(|| self.op(with_comma).map(|op| Ok((op, self.atom()?))))
             .collect::<Result<Vec<_>>>()?;

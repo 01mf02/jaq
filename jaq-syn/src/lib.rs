@@ -18,7 +18,9 @@ pub mod parse;
 mod prec_climb;
 
 pub use def::{Arg, Call, Def, Main};
+pub use lex::Lexer;
 pub use ops::{MathOp, OrdOp};
+pub use parse::Parser;
 use path::Path;
 pub use string::Str;
 

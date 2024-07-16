@@ -72,13 +72,18 @@ impl<'a> Lexer<&'a str> {
 
     /// Lex, returning the resulting tokens and errors.
     #[must_use]
-    pub fn lex(mut self) -> (Vec<Token<&'a str>>, Vec<Error<&'a str>>) {
+    pub fn lex(mut self) -> Result<Vec<Token<&'a str>>, Vec<Error<&'a str>>> {
         let tokens = self.tokens();
         self.space();
         if !self.i.is_empty() {
             self.e.push((Expect::Token, self.i));
         }
-        (tokens, self.e)
+
+        if self.e.is_empty() {
+            Ok(tokens)
+        } else {
+            Err(self.e)
+        }
     }
 
     fn next(&mut self) -> Option<char> {
