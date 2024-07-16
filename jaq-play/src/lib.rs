@@ -130,7 +130,7 @@ impl Settings {
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
 enum Error {
-    Chumsky(Vec<ChumskyError>),
+    Report(String, Vec<Report>),
     Hifijson(String),
     Jaq(jaq_interpret::Error),
 }
@@ -163,11 +163,14 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     };
     match process(filter, input, &settings, post_value) {
         Ok(()) => (),
-        Err(Error::Chumsky(errs)) => {
-            for e in errs {
-                scope
-                    .post_message(&format!("⚠️ Parse error: {}", report(filter, &e)).into())
-                    .unwrap();
+        Err(Error::Report(code, reports)) => {
+            let idx = codesnake::LineIndex::new(&code);
+            for e in reports {
+                let error = format!("⚠️ Parse error: {}", e.message);
+                scope.post_message(&error.into()).unwrap();
+                let block = e.to_block(&idx);
+                let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
+                scope.post_message(&block.into()).unwrap();
             }
         }
         Err(Error::Hifijson(e)) => {
@@ -224,7 +227,7 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let filter = parse(filter, Vec::new()).map_err(Error::Chumsky)?;
+    let filter = parse(filter, Vec::new()).map_err(|e| Error::Report(filter.to_owned(), e))?;
 
     let inputs = read_str(settings, input);
 
@@ -243,34 +246,44 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     Ok(())
 }
 
-type ChumskyError = chumsky::error::Simple<String>;
+fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
+    let tokens = jaq_syn::Lexer::new(filter_str).lex().map_err(|errs| {
+        errs.into_iter()
+            .map(|e| report_lex(filter_str, e))
+            .collect::<Vec<_>>()
+    })?;
 
-fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<ChumskyError>> {
-    let mut defs = ParseCtx::new(vars);
-    defs.insert_natives(jaq_core::core());
-    defs.insert_defs(jaq_std::std());
-    assert!(defs.errs.is_empty());
-    let (filter, errs) = jaq_parse::parse(filter_str, jaq_parse::main());
-    if !errs.is_empty() {
-        return Err(errs);
-    }
-    let filter = defs.compile(filter.unwrap());
-    if defs.errs.is_empty() {
+    let main = jaq_syn::Parser::new(&tokens).parse(|p| p.module(|p| p.term()));
+    let main = main.map_err(|errs| {
+        errs.into_iter()
+            .map(|e| report_parse(filter_str, e))
+            .collect::<Vec<_>>()
+    })?;
+
+    Ok(main.conv(filter_str))
+}
+
+fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
+    let mut ctx = ParseCtx::new(vars);
+    ctx.insert_natives(jaq_core::core());
+    ctx.insert_defs(jaq_std::std());
+    let filter = parse_term(filter_str)?;
+    let filter = ctx.compile(filter);
+    if ctx.errs.is_empty() {
         Ok(filter)
     } else {
-        Err(defs
-            .errs
-            .into_iter()
-            .map(|error| ChumskyError::custom(error.1, error.0.to_string()))
-            .collect())
+        let reports = ctx.errs.into_iter().map(|error| Report {
+            message: error.0.to_string(),
+            labels: Vec::from([(error.1, [(error.0.to_string(), None)].into(), Color::Red)]),
+        });
+        Err(reports.collect())
     }
 }
 
 #[derive(Debug)]
-struct Report<'a> {
-    code: &'a str,
+struct Report {
     message: String,
-    labels: Vec<(core::ops::Range<usize>, String, Color)>,
+    labels: Vec<(core::ops::Range<usize>, Vec<(String, Option<Color>)>, Color)>,
 }
 
 #[derive(Clone, Debug)]
@@ -287,74 +300,65 @@ impl Color {
     }
 }
 
-fn report<'a>(code: &'a str, e: &chumsky::error::Simple<String>) -> Report<'a> {
-    use chumsky::error::SimpleReason;
+fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
+    use jaq_syn::lex::{span, Expect};
 
-    let eof = || "end of input".to_string();
+    let mut found_range = span(code, found);
+    found_range.end = core::cmp::min(found_range.start + 1, code.len());
+    let found = match found {
+        "" => [("unexpected end of input".to_string(), None)].into(),
+        c => [("unexpected character ", None), (c, Some(Color::Red))]
+            .map(|(s, c)| (s.into(), c))
+            .into(),
+    };
+    let label = (found_range, found, Color::Red);
 
-    let message = if let SimpleReason::Custom(msg) = e.reason() {
-        msg.clone()
-    } else {
-        let found = if e.found().is_some() {
-            "Unexpected token"
-        } else {
-            "Unexpected end of input"
-        };
-        let when = if let Some(label) = e.label() {
-            format!(" while parsing {label}")
-        } else {
-            String::new()
-        };
-        let expected = if e.expected().len() == 0 {
-            "something else".to_string()
-        } else {
-            let f = |e: &Option<String>| e.as_ref().map_or_else(eof, |e| e.to_string());
-            e.expected().map(f).collect::<Vec<_>>().join(", ")
-        };
-        format!("{found}{when}, expected {expected}",)
+    let labels = match expected {
+        Expect::Delim(open) => {
+            let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
+                .map(|(s, c)| (s.into(), c));
+            Vec::from([(span(code, open), text.into(), Color::Yellow), label])
+        }
+        _ => Vec::from([label]),
     };
 
-    let label = if let SimpleReason::Custom(msg) = e.reason() {
-        msg.clone()
-    } else {
-        let token = |c: &String| format!("token {}", Color::Red.apply(c));
-        format!("Unexpected {}", e.found().map_or_else(eof, token))
-    };
-    // convert character indices to byte offsets
-    let char_to_byte = |i| {
-        code.char_indices()
-            .map(|(i, _c)| i)
-            .chain([code.len(), code.len()])
-            .nth(i)
-            .unwrap()
-    };
-    let conv = |span: &core::ops::Range<_>| char_to_byte(span.start)..char_to_byte(span.end);
-    let mut labels = Vec::from([(conv(&e.span()), label, Color::Red)]);
-
-    if let SimpleReason::Unclosed { span, delimiter } = e.reason() {
-        let text = format!("Unclosed delimiter {}", Color::Yellow.apply(delimiter));
-        labels.insert(0, (conv(span), text, Color::Yellow));
-    }
     Report {
-        code,
-        message,
+        message: format!("expected {}", expected.as_str()),
         labels,
     }
 }
 
-impl Display for Report<'_> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        use codesnake::{Block, CodeWidth, Label, LineIndex};
-        let idx = LineIndex::new(self.code);
-        let labels = self.labels.clone().into_iter().map(|(range, text, color)| {
-            Label::new(range, text).with_style(move |s| color.apply(s).to_string())
+fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error) -> Report {
+    let found_range = match found {
+        None => code.len()..code.len(),
+        Some(found) => found.span(code),
+    };
+    let found = found.map_or("unexpected end of input", |_| "unexpected token");
+    let found = [(found.to_string(), None)].into();
+
+    Report {
+        message: format!("expected {}", expected.as_str()),
+        labels: Vec::from([(found_range, found, Color::Red)]),
+    }
+}
+
+type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
+
+impl Report {
+    fn to_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
+        use codesnake::{Block, CodeWidth, Label};
+        let color_maybe = |(text, color): (_, Option<Color>)| match color {
+            None => text,
+            Some(color) => color.apply(text).to_string(),
+        };
+        let labels = self.labels.into_iter().map(|(range, text, color)| {
+            let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
+            Label::new(range, text.join("")).with_style(move |s| color.apply(s).to_string())
         });
-        let block = Block::new(&idx, labels).unwrap().map_code(|c| {
+        Block::new(&idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))
-        });
-        writeln!(f, "{}", self.message)?;
-        write!(f, "{}\n{}{}", block.prologue(), block, block.epilogue())
+        })
     }
 }
