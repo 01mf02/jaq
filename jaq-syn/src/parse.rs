@@ -4,9 +4,10 @@ use crate::lex::{StrPart, Token};
 use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
-// TODO: save which token raised the expectation
+/// Parse error, storing what we expected and what we got instead.
 pub type Error<'a> = (Expect<&'a str>, Option<&'a Token<&'a str>>);
 
+/// Type of token that we expected.
 #[derive(Debug)]
 pub enum Expect<S> {
     Keyword(S),
@@ -22,6 +23,7 @@ pub enum Expect<S> {
 }
 
 impl<'a> Expect<&'a str> {
+    /// String representation of an expected token.
     pub fn as_str(&self) -> &'a str {
         match self {
             Self::Keyword(s) | Self::Char(s) => s,
@@ -37,8 +39,10 @@ impl<'a> Expect<&'a str> {
     }
 }
 
+/// Output of a fallible parsing operation.
 pub type Result<'a, T> = core::result::Result<T, Error<'a>>;
 
+/// Parser for jq programs.
 pub struct Parser<'a> {
     i: core::slice::Iter<'a, Token<&'a str>>,
     e: Vec<Error<'a>>,
@@ -109,15 +113,19 @@ const KEYWORDS: &[&str] = &[
 ];
 
 impl<'a> Parser<'a> {
+    /// Initialise a new parser on a sequence of [`Token`]s.
     #[must_use]
     pub fn new(i: &'a [Token<&'a str>]) -> Self {
         Self {
             i: i.iter(),
             e: Vec::new(),
-            fold: &["reduce", "foreach"],
+            fold: &["reduce", "foreach", "for"],
         }
     }
 
+    /// Parse tokens with the given function.
+    ///
+    /// Returns [`Ok`] if the function consumes the whole output without producing any error.
     pub fn parse<T: Default, F>(mut self, f: F) -> core::result::Result<T, Vec<Error<'a>>>
     where
         F: FnOnce(&mut Self) -> Result<'a, T>,
@@ -398,6 +406,7 @@ impl<'a> Parser<'a> {
         })
     }
 
+    /// Parse a term such as `.[] | .+1`.
     pub fn term(&mut self) -> Result<'a, Term<&'a str>> {
         self.term_with_comma(true)
     }
@@ -491,6 +500,7 @@ impl<'a> Parser<'a> {
         opt
     }
 
+    /// Parse a sequence of definitions, such as `def x: 1; def y: 2;`.
     pub fn defs(&mut self) -> Result<'a, Vec<Def<&'a str, Term<&'a str>>>> {
         core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
     }
@@ -545,6 +555,7 @@ impl<'a> Parser<'a> {
         Ok((path, Some(name)))
     }
 
+    /// Parse a module with a body returned by the given function.
     pub fn module<B, F>(&mut self, f: F) -> Result<'a, Module<&'a str, B>>
     where
         F: FnOnce(&mut Self) -> Result<'a, B>,
