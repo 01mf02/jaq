@@ -346,13 +346,8 @@ impl<'a> Parser<'a> {
                 Term::Call(*id, self.args(Self::term))
             }
             Some(Token::Char(".")) => {
-                let key = self.maybe(|p| match p.i.next() {
-                    Some(Token::Word(id)) if ident_key(id) => Some(*id),
-                    _ => None,
-                });
-                let key = key.map(|key| (path::Part::Index(Term::str(key)), self.opt()));
-
-                let path: Vec<_> = key.into_iter().chain(self.path()?).collect();
+                let key_opt = self.maybe(|p| p.key_opt().ok());
+                let path: Vec<_> = key_opt.into_iter().chain(self.path()?).collect();
                 if path.is_empty() {
                     Term::Id
                 } else {
@@ -433,11 +428,7 @@ impl<'a> Parser<'a> {
     fn path(&mut self) -> Result<'a, Vec<(path::Part<Term<&'a str>>, path::Opt)>> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while self.char0('.').is_some() {
-            let key = match self.i.next() {
-                Some(Token::Word(id)) if ident_key(id) => *id,
-                next => return Err((Expect::Key, next)),
-            };
-            path.push((path::Part::Index(Term::str(key)), self.opt()));
+            path.push(self.key_opt()?);
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
         Ok(path)
@@ -470,6 +461,14 @@ impl<'a> Parser<'a> {
             _ => None,
         })?;
         Some((part, self.opt()))
+    }
+
+    fn key_opt(&mut self) -> Result<'a, (path::Part<Term<&'a str>>, path::Opt)> {
+        let key = match self.i.next() {
+            Some(Token::Word(id)) if !id.starts_with(['$', '@']) && !KEYWORDS.contains(id) => *id,
+            next => return Err((Expect::Key, next)),
+        };
+        Ok((path::Part::Index(Term::str(key)), self.opt()))
     }
 
     fn opt(&mut self) -> path::Opt {
@@ -573,8 +572,4 @@ pub struct Def<S, F> {
     pub(crate) args: Vec<S>,
     /// Body of the filter, e.g. `[.[] | f]`.
     pub(crate) body: F,
-}
-
-fn ident_key(id: &str) -> bool {
-    !id.starts_with(['$', '@']) && !KEYWORDS.contains(&id)
 }
