@@ -240,8 +240,12 @@ impl<'a> Lexer<&'a str> {
             '?' if (chars.next(), chars.next()) == (Some('/'), Some('/')) => {
                 Token::Op(self.take(3))
             }
-            '.' if chars.next() == Some('.') => Token::Char(self.take(2)),
-            '.' | ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
+            '.' => match chars.next() {
+                Some('.') => Token::Char(self.take(2)),
+                Some('a'..='z' | 'A'..='Z' | '_') => Token::Char(self.consumed(2, Self::ident0)),
+                _ => Token::Char(self.take(1)),
+            },
+            ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
             '"' => self.str(),
             '(' | '[' | '{' => self.delim(),
             _ => return None,

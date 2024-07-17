@@ -265,6 +265,13 @@ impl<'s, 't> Parser<'s, 't> {
         })
     }
 
+    fn dot(&mut self) -> Option<&'s str> {
+        self.maybe(|p| match p.i.next() {
+            Some(Token::Char(c)) if *c != ".." => c.strip_prefix("."),
+            _ => None,
+        })
+    }
+
     fn terminated<T, F>(&mut self, f: F) -> Result<'s, 't, T>
     where
         F: FnOnce(&mut Self) -> Result<'s, 't, T>,
@@ -394,16 +401,24 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
                 Term::Call(*id, self.args(Self::term))
             }
-            Some(Token::Char(".")) => {
-                let key_opt = self.maybe(|p| p.key_opt().ok());
-                let path: Vec<_> = key_opt.into_iter().chain(self.path()?).collect();
-                if path.is_empty() {
-                    Term::Id
+            Some(Token::Char("..")) => Term::Recurse,
+            Some(Token::Char(c)) if c.starts_with('.') => {
+                let key = if c.len() > 1 {
+                    Some(Term::str(&c[1..]))
                 } else {
+                    // TODO: this returns None on things like "@json .",
+                    // whereas it should return an error instead
+                    self.maybe(|p| p.key().ok())
+                };
+
+                if let Some(key) = key {
+                    let head = (path::Part::Index(key), self.opt());
+                    let path = core::iter::once(head).chain(self.path()?).collect();
                     Term::Path(Box::new(Term::Id), path)
+                } else {
+                    Term::Id
                 }
             }
-            Some(Token::Char("..")) => Term::Recurse,
             Some(Token::Num(n)) => Term::Num(*n),
             Some(Token::Block("[", tokens)) if matches!(tokens[..], [Token::Char("]")]) => {
                 Term::Arr(None)
@@ -441,18 +456,23 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     fn obj_entry(&mut self) -> Result<'s, 't, (Term<&'s str>, Option<Term<&'s str>>)> {
-        match self.i.next() {
+        let i = self.i.clone();
+        let key = match self.i.next() {
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", Self::term);
                 self.char1(":")?;
-                Ok((k, Some(self.term_with_comma(false)?)))
+                return Ok((k, Some(self.term_with_comma(false)?)));
             }
-            next => {
-                let key = self.key(next)?;
-                let v = self.char0(':').map(|_| self.term_with_comma(false));
-                Ok((key, v.transpose()?))
+            Some(Token::Word(id)) if !id.starts_with(['$', '@']) && !id.contains("::") => {
+                Term::str(*id)
             }
-        }
+            _ => {
+                self.i = i;
+                self.key()?
+            }
+        };
+        let v = self.char0(':').map(|_| self.term_with_comma(false));
+        Ok((key, v.transpose()?))
     }
 
     fn str_parts(
@@ -472,8 +492,13 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn path(&mut self) -> Result<'s, 't, Vec<(path::Part<Term<&'s str>>, path::Opt)>> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
-        while self.char0('.').is_some() {
-            path.push(self.key_opt()?);
+        while let Some(key) = self.dot() {
+            let key = if key.is_empty() {
+                self.key()?
+            } else {
+                Term::str(key)
+            };
+            path.push((path::Part::Index(key), self.opt()));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
         Ok(path)
@@ -508,22 +533,16 @@ impl<'s, 't> Parser<'s, 't> {
         Some((part, self.opt()))
     }
 
-    fn key(&mut self, next: Option<&'t Token<&'s str>>) -> Result<'s, 't, Term<&'s str>> {
-        Ok(match next {
+    fn key(&mut self) -> Result<'s, 't, Term<&'s str>> {
+        Ok(match self.i.next() {
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if id.starts_with('@') => match self.i.next() {
                 Some(Token::Str(_, parts, _)) => Term::Str(Some(*id), self.str_parts(parts)),
                 next => return Err((Expect::Str, next)),
             },
             Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
-            Some(Token::Word(id)) if !id.contains("::") => Term::str(*id),
             next => return Err((Expect::Key, next)),
         })
-    }
-
-    fn key_opt(&mut self) -> Result<'s, 't, (path::Part<Term<&'s str>>, path::Opt)> {
-        let next = self.i.next();
-        Ok((path::Part::Index(self.key(next)?), self.opt()))
     }
 
     fn opt(&mut self) -> path::Opt {
