@@ -565,9 +565,9 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn bare_str(&mut self) -> Result<'s, 't, &'s str> {
         match self.i.next() {
-            Some(Token::Str(_, parts, _)) => match parts[..] {
+            next @ Some(Token::Str(_, parts, _)) => match parts[..] {
                 [StrPart::Str(s)] => Ok(s),
-                _ => todo!(),
+                _ => Err((Expect::Str, next)),
             },
             next => Err((Expect::Str, next)),
         }
