@@ -546,12 +546,12 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn def_tail(&mut self) -> Result<'s, 't, Def<&'s str, Term<&'s str>>> {
         let name = match self.i.next() {
-            Some(Token::Word(name)) if !name.starts_with(['$']) => name,
+            Some(Token::Word(name)) if !name.starts_with('$') && is_id(name) => name,
             next => return Err((Expect::Ident, next)),
         };
         let args = self.args(|p| {
             Ok(match p.i.next() {
-                Some(Token::Word(arg)) if !arg.starts_with('@') => *arg,
+                Some(Token::Word(arg)) if is_id(arg) => *arg,
                 next => return Err((Expect::Arg, next)),
             })
         });
@@ -581,7 +581,7 @@ impl<'s, 't> Parser<'s, 't> {
         let path = self.bare_str()?;
         self.keyword("as")?;
         let name = match self.i.next() {
-            Some(Token::Word(name)) if !name.starts_with(['$', '@']) => *name,
+            Some(Token::Word(name)) if !name.starts_with(['$', '@']) && is_id(name) => *name,
             next => return Err((Expect::Ident, next)),
         };
         Ok((path, Some(name)))
@@ -612,6 +612,10 @@ impl<'s, 't> Parser<'s, 't> {
 
         Ok(Module { meta, mods, body })
     }
+}
+
+fn is_id(s: &str) -> bool {
+    !s.contains("::") && !KEYWORDS.contains(&s)
 }
 
 #[derive(Debug, Default)]
