@@ -696,6 +696,8 @@ In jaq however, this holds:
 * Slurping: When files are slurped in (via the `-s` / `--slurp` option),
   jq combines the inputs of all files into one single array, whereas
   jaq yields an array for every file.
+  This is motivated by the `-i` / `--in-place` option,
+  which could not work with the behaviour implemented by jq.
   The behaviour of jq can be approximated in jaq;
   for example, to achieve the output of
   `jq -s . a b`, you may use
