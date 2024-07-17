@@ -10,19 +10,33 @@ pub type Error<'s, 't> = (Expect<&'s str>, Option<&'t Token<&'s str>>);
 type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 
 /// Type of token that we expected.
+///
+/// Each variant is annoted with jq programs that trigger it.
 #[derive(Debug)]
 pub enum Expect<S> {
+    /// `if 0`, `reduce .`
     Keyword(S),
+    /// `0 as $x`, `{(.)}`
     Char(S),
+    /// `0 as`, `label`, `break`
     Var,
+    /// `if 0 then 0`
     ElseOrEnd,
+    /// `{a;}`
     CommaOrRBrace,
+    /// `f(0:)`
     SemicolonOrRParen,
+    /// `` (empty input), `-`, `()`
     Term,
+    /// `.[].`
     Key,
+    /// `def`, `import "foo" as`
     Ident,
+    /// `def f()`
     Arg,
+    /// `import`
     Str,
+    /// `0;`
     Nothing,
 }
 
@@ -37,7 +51,7 @@ impl<'a> Expect<&'a str> {
             Self::SemicolonOrRParen => "semicolon or right parenthesis",
             Self::Term => "term",
             Self::Key => "key",
-            Self::Ident => "ident",
+            Self::Ident => "identifier",
             Self::Arg => "argument",
             Self::Str => "string",
             Self::Nothing => "nothing",
@@ -636,6 +650,18 @@ fn is_id(s: &str) -> bool {
     !s.contains("::") && !KEYWORDS.contains(&s)
 }
 
+/// jq module, consisting of metadata, imports/includes, and a body.
+///
+/// Example (where the body is a sequence of definitions):
+///
+/// ~~~ jq
+/// module {};
+///
+/// import "foo" as foo;
+/// include "bar";
+///
+/// def iter: .[];
+/// ~~~
 #[derive(Debug, Default)]
 pub struct Module<S, B> {
     meta: Option<Term<S>>,
@@ -643,6 +669,16 @@ pub struct Module<S, B> {
     pub(crate) body: B,
 }
 
+/// jq definition, consisting of a name, optional arguments, and a body.
+///
+/// Examples:
+///
+/// ~~~ jq
+/// def pi: 3.1415;
+/// def double($x): $x + $x;
+/// def map(f): [.[] | f];
+/// def recurse(f; cond): recurse(f | select(cond));
+/// ~~~
 #[derive(Debug)]
 pub struct Def<S, F> {
     pub(crate) name: S,
