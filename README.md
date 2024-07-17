@@ -734,7 +734,7 @@ Please make sure that after your change, `cargo test` runs successfully.
 # Acknowledgements
 
 [This project](https://nlnet.nl/project/jaq/) was funded through the
-<a href="/entrust">NGI0 Entrust</a> Fund, a fund established by
+<a href="https://nlnet.nl/entrust">NGI0 Entrust</a> Fund, a fund established by
 <a href="https://nlnet.nl">NLnet</a> with financial support from the
 European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
 programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.
