@@ -512,16 +512,22 @@ impl<'s, 't> Parser<'s, 't> {
         Some((part, self.opt()))
     }
 
-    fn key_opt(&mut self) -> Result<'s, 't, (path::Part<Term<&'s str>>, path::Opt)> {
-        let key = match self.i.next() {
-            Some(Token::Word(id)) if id.starts_with('@') => todo!(),
+    fn key(&mut self, next: Option<&'t Token<&'s str>>) -> Result<'s, 't, Term<&'s str>> {
+        Ok(match next {
+            Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
+            Some(Token::Word(id)) if id.starts_with('@') => match self.i.next() {
+                Some(Token::Str(_, parts, _)) => Term::Str(Some(*id), self.str_parts(parts)),
+                next => return Err((Expect::Str, next)),
+            },
             Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
-            Some(Token::Word(id)) if !id.starts_with('$') && !KEYWORDS.contains(id) => {
-                Term::str(*id)
-            }
+            Some(Token::Word(id)) if !id.contains("::") => Term::str(*id),
             next => return Err((Expect::Key, next)),
-        };
-        Ok((path::Part::Index(key), self.opt()))
+        })
+    }
+
+    fn key_opt(&mut self) -> Result<'s, 't, (path::Part<Term<&'s str>>, path::Opt)> {
+        let next = self.i.next();
+        Ok((path::Part::Index(self.key(next)?), self.opt()))
     }
 
     fn opt(&mut self) -> path::Opt {
