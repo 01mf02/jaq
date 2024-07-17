@@ -555,15 +555,8 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Parse a sequence of definitions, such as `def x: 1; def y: 2;`.
     pub fn defs(&mut self) -> Result<'s, 't, Vec<Def<&'s str, Term<&'s str>>>> {
-        core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
-    }
-
-    /// Parse `def`.
-    fn def_head(&mut self) -> Option<()> {
-        self.maybe(|p| match p.i.next() {
-            Some(Token::Word("def")) => Some(()),
-            _ => None,
-        })
+        let head = |p: &mut Self| p.keyword("def").ok();
+        core::iter::from_fn(|| self.maybe(head).map(|_| self.def_tail())).collect()
     }
 
     /// Parse `name args ":" term ";"`.
