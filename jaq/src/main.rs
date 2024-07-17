@@ -602,7 +602,7 @@ impl Color {
 fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
     use jaq_syn::lex::{span, Expect};
     // truncate found string to its first character
-    let found = &found[..found.char_indices().skip(1).next().map_or(found.len(), |(i, _)| i)];
+    let found = &found[..found.char_indices().nth(1).map_or(found.len(), |(i, _)| i)];
 
     let found_range = span(code, found);
     let found = match found {
