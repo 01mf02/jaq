@@ -33,17 +33,27 @@ pub enum Token<S> {
     Block(S, Vec<Self>),
 }
 
+/// Type of character that we expected.
+///
+/// Each variant is annoted with jq programs that trigger it.
 #[derive(Clone, Debug)]
 pub enum Expect<S> {
+    /// `0e`, `0.`
     Digit,
+    /// `$`, `@`
     Ident,
+    /// `(`, `[`, `{`
     Delim(S),
+    /// `"\a"`
     Escape,
+    /// `"\ux"`
     Unicode,
+    /// `&`, `§`, `💣`
     Token,
 }
 
 impl<'a> Expect<&'a str> {
+    /// Return human-readable description of what we expected.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Digit => "digit",

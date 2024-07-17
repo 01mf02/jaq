@@ -664,6 +664,7 @@ fn is_id(s: &str) -> bool {
 /// ~~~
 #[derive(Debug, Default)]
 pub struct Module<S, B> {
+    #[allow(dead_code)]
     meta: Option<Term<S>>,
     pub(crate) mods: Vec<(S, Option<S>)>,
     pub(crate) body: B,
