@@ -7,6 +7,8 @@ use alloc::{boxed::Box, vec::Vec};
 /// Parse error, storing what we expected and what we got instead.
 pub type Error<'s, 't> = (Expect<&'s str>, Option<&'t Token<&'s str>>);
 
+type Path<T> = Vec<(path::Part<T>, path::Opt)>;
+
 /// Type of token that we expected.
 #[derive(Debug)]
 pub enum Expect<S> {
@@ -99,7 +101,7 @@ pub enum Term<S> {
     Var(S),
 
     /// Path such as `.`, `.a`, `.[][]."b"`
-    Path(Box<Self>, Vec<(path::Part<Self>, path::Opt)>),
+    Path(Box<Self>, Path<Self>),
 }
 
 impl<S> Term<S> {
@@ -267,7 +269,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn dot(&mut self) -> Option<&'s str> {
         self.maybe(|p| match p.i.next() {
-            Some(Token::Char(c)) if *c != ".." => c.strip_prefix("."),
+            Some(Token::Char(c)) if *c != ".." => c.strip_prefix('.'),
             _ => None,
         })
     }
@@ -490,7 +492,7 @@ impl<'s, 't> Parser<'s, 't> {
         parts.collect()
     }
 
-    fn path(&mut self) -> Result<'s, 't, Vec<(path::Part<Term<&'s str>>, path::Opt)>> {
+    fn path(&mut self) -> Result<'s, 't, Path<Term<&'s str>>> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while let Some(key) = self.dot() {
             let key = if key.is_empty() {

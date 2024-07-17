@@ -71,7 +71,6 @@ impl<'a> Lexer<&'a str> {
     }
 
     /// Lex, returning the resulting tokens and errors.
-    #[must_use]
     pub fn lex(mut self) -> Result<Vec<Token<&'a str>>, Vec<Error<&'a str>>> {
         let tokens = self.tokens();
         self.space();
