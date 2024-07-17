@@ -73,6 +73,9 @@ fn iter_assign() {
     );
 }
 
+yields!(index_keyword, r#"{"if": 0} | .if"#, 0);
+yields!(obj_keyword, "{if: 0} | .if", 0);
+
 yields!(key_update1, "{} | .a  |= .+1", json!({"a": 1}));
 yields!(key_update2, "{} | .a? |= .+1", json!({"a": 1}));
 
