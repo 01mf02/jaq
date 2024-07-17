@@ -117,6 +117,9 @@ fn precedence() {
     give(json!(null), "2 * 3 + 1", json!(7));
 }
 
+yields!(neg_arr_iter1, "[-[][]]", json!([]));
+yields!(neg_arr_iter2, "try (-[])[] catch 0", 0);
+
 yields!(interpolation, r#"1 | "yields \(.+1)!""#, "yields 2!");
 // this diverges from jq, which yields ["2 2", "3 2", "2 4", "3 4"],
 // probably due to different order of evaluation addition
