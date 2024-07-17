@@ -239,6 +239,7 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(y)
     }
 
+    /// Parse `("(" arg (";" arg)* ")")?`.
     fn args<T>(&mut self, f: fn(&mut Self) -> Result<'s, 't, T>) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
             Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.arg_items(f))),
@@ -538,6 +539,7 @@ impl<'s, 't> Parser<'s, 't> {
         core::iter::from_fn(|| self.def_head().map(|()| self.def_tail())).collect()
     }
 
+    /// Parse `def`.
     fn def_head(&mut self) -> Option<()> {
         self.maybe(|p| match p.i.next() {
             Some(Token::Word("def")) => Some(()),
@@ -545,6 +547,7 @@ impl<'s, 't> Parser<'s, 't> {
         })
     }
 
+    /// Parse `name args ":" term ";"`.
     fn def_tail(&mut self) -> Result<'s, 't, Def<&'s str, Term<&'s str>>> {
         let name = match self.i.next() {
             Some(Token::Word(name)) if !name.starts_with('$') && is_id(name) => name,
