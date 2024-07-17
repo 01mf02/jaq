@@ -696,6 +696,8 @@ In jaq however, this holds:
 * Slurping: When files are slurped in (via the `-s` / `--slurp` option),
   jq combines the inputs of all files into one single array, whereas
   jaq yields an array for every file.
+  This is motivated by the `-i` / `--in-place` option,
+  which could not work with the behaviour implemented by jq.
   The behaviour of jq can be approximated in jaq;
   for example, to achieve the output of
   `jq -s . a b`, you may use
@@ -734,7 +736,7 @@ Please make sure that after your change, `cargo test` runs successfully.
 # Acknowledgements
 
 [This project](https://nlnet.nl/project/jaq/) was funded through the
-<a href="/entrust">NGI0 Entrust</a> Fund, a fund established by
+<a href="https://nlnet.nl/entrust">NGI0 Entrust</a> Fund, a fund established by
 <a href="https://nlnet.nl">NLnet</a> with financial support from the
 European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
 programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.

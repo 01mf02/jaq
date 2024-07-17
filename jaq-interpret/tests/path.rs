@@ -76,6 +76,11 @@ fn iter_assign() {
 yields!(key_update1, "{} | .a  |= .+1", json!({"a": 1}));
 yields!(key_update2, "{} | .a? |= .+1", json!({"a": 1}));
 
+// `.[f]?` is *not* the same as `(.[f])?`
+// (we're writing `0[]` to simulate `error` here)
+yields!(index_opt_inner, "try .[0[]]? catch 1", 1);
+yields!(index_opt_outer, "1, (.[0[]])?", 1);
+
 #[test]
 fn index_update() {
     give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
