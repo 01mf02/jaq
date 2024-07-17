@@ -440,23 +440,18 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     fn obj_entry(&mut self) -> Result<'s, 't, (Term<&'s str>, Option<Term<&'s str>>)> {
-        let key = match self.i.next() {
-            Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
-            Some(Token::Word(k)) if k.starts_with('@') => match self.i.next() {
-                Some(Token::Str(_, parts, _)) => Term::Str(Some(*k), self.str_parts(parts)),
-                next => return Err((Expect::Str, next)),
-            },
-            Some(Token::Word(k)) if k.starts_with('$') => Term::Var(*k),
-            Some(Token::Word(k)) if !KEYWORDS.contains(k) => Term::str(*k),
+        match self.i.next() {
             Some(Token::Block("(", tokens)) => {
                 let k = self.with(tokens, ")", Self::term);
                 self.char1(":")?;
-                return Ok((k, Some(self.term_with_comma(false)?)));
+                Ok((k, Some(self.term_with_comma(false)?)))
             }
-            next => return Err((Expect::Key, next)),
-        };
-        let v = self.char0(':').map(|_| self.term_with_comma(false));
-        Ok((key, v.transpose()?))
+            next => {
+                let key = self.key(next)?;
+                let v = self.char0(':').map(|_| self.term_with_comma(false));
+                Ok((key, v.transpose()?))
+            }
+        }
     }
 
     fn str_parts(
