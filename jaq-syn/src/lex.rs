@@ -2,10 +2,17 @@
 
 use alloc::vec::Vec;
 
+/// Component of a string potentially containing escape sequences.
+///
+/// `S` is a type of strings (without escape sequences), and
+/// `F` is a type of interpolated filters.
 #[derive(Debug)]
 pub enum StrPart<S, F> {
+    /// string without escape sequences
     Str(S),
+    /// interpolated filter (`\(...)`)
     Filter(F),
+    /// escaped character (e.g. `\n`, `t`, `\u0041`)
     Char(char),
 }
 
