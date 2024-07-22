@@ -537,6 +537,7 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(path)
     }
 
+    /// Parse `[]`, `[t]`, `[t:]`, `[t:t]`, `[:t]` (all without brackets).
     fn path_part(&mut self) -> Result<'s, 't, path::Part<Term<&'s str>>> {
         use path::Part::{Index, Range};
         let done = |p: &Self| matches!(p.i.as_slice(), [Token::Char("]")]);
