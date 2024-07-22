@@ -127,14 +127,6 @@ impl<S> Term<S> {
     }
 }
 
-/// Keywords that may not appear at the beginning of an expression.
-///
-/// Note that for example `reduce` is not part of this list,
-/// because it *can* appear at the beginning of an expression.
-const KEYWORDS: &[&str] = &[
-    "include", "import", "def", "as", "and", "or", "catch", "then", "elif", "else", "end",
-];
-
 impl<'s, 't> Parser<'s, 't> {
     /// Initialise a new parser on a sequence of [`Token`]s.
     #[must_use]
@@ -428,9 +420,7 @@ impl<'s, 't> Parser<'s, 't> {
                     Some(parts) => Term::Str(Some(*id), parts),
                 }
             }
-            Some(Token::Word(id)) if !KEYWORDS.contains(id) => {
-                Term::Call(*id, self.args(Self::term))
-            }
+            Some(Token::Word(id)) => Term::Call(*id, self.args(Self::term)),
             Some(Token::Char("..")) => Term::Recurse,
             Some(Token::Char(c)) if c.starts_with('.') => {
                 let key = if c.len() > 1 {
@@ -598,12 +588,12 @@ impl<'s, 't> Parser<'s, 't> {
     /// Parse `name args ":" term ";"`.
     fn def_tail(&mut self) -> Result<'s, 't, Def<&'s str, Term<&'s str>>> {
         let name = match self.i.next() {
-            Some(Token::Word(name)) if !name.starts_with('$') && is_id(name) => name,
+            Some(Token::Word(w)) if !w.starts_with('$') && !w.contains("::") => w,
             next => return Err((Expect::Ident, next)),
         };
         let args = self.args(|p| {
             Ok(match p.i.next() {
-                Some(Token::Word(arg)) if is_id(arg) => *arg,
+                Some(Token::Word(w)) if !w.contains("::") => *w,
                 next => return Err((Expect::Arg, next)),
             })
         });
@@ -633,7 +623,7 @@ impl<'s, 't> Parser<'s, 't> {
         let path = self.bare_str()?;
         self.keyword("as")?;
         let name = match self.i.next() {
-            Some(Token::Word(name)) if !name.starts_with(['$', '@']) && is_id(name) => *name,
+            Some(Token::Word(w)) if !w.starts_with(['$', '@']) && !w.contains("::") => *w,
             next => return Err((Expect::Ident, next)),
         };
         Ok((path, Some(name)))
@@ -664,10 +654,6 @@ impl<'s, 't> Parser<'s, 't> {
 
         Ok(Module { meta, mods, body })
     }
-}
-
-fn is_id(s: &str) -> bool {
-    !s.contains("::") && !KEYWORDS.contains(&s)
 }
 
 /// jq module, consisting of metadata, imports/includes, and a body.
