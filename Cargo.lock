@@ -25,12 +25,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "allocator-api2"
-version = "0.2.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -46,15 +40,6 @@ name = "base64"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9475866fec1451be56a3c2400fd081ff546538961565ccb5b7142cbd22bc7a51"
-
-[[package]]
-name = "bincode"
-version = "1.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1f45e9417d87227c7a56d22e471c6206462cba514c7590c09aff4cf6d1ddcad"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "bitflags"
@@ -79,15 +64,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "chumsky"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eebd66744a15ded14960ab4ccdbfb51ad3b81f51f3f04a80adac98c985396c9"
-dependencies = [
- "hashbrown",
-]
 
 [[package]]
 name = "clap"
@@ -191,10 +167,6 @@ name = "hashbrown"
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f93e7192158dbcda357bdec5fb5788eebf8bbac027f3f33e719d29135ae84156"
-dependencies = [
- "ahash",
- "allocator-api2",
-]
 
 [[package]]
 name = "heck"
@@ -247,14 +219,12 @@ name = "jaq"
 version = "1.5.1"
 dependencies = [
  "atty",
- "chumsky",
  "clap",
  "codesnake",
  "env_logger",
  "hifijson",
  "jaq-core",
  "jaq-interpret",
- "jaq-parse",
  "jaq-std",
  "jaq-syn",
  "memmap2",
@@ -272,7 +242,7 @@ dependencies = [
  "base64",
  "hifijson",
  "jaq-interpret",
- "jaq-parse",
+ "jaq-syn",
  "libm",
  "log",
  "regex",
@@ -289,18 +259,9 @@ dependencies = [
  "dyn-clone",
  "hifijson",
  "indexmap",
- "jaq-parse",
  "jaq-syn",
  "once_cell",
  "serde_json",
-]
-
-[[package]]
-name = "jaq-parse"
-version = "1.0.2"
-dependencies = [
- "chumsky",
- "jaq-syn",
 ]
 
 [[package]]
@@ -308,14 +269,12 @@ name = "jaq-play"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "chumsky",
  "codesnake",
  "console_log",
  "getrandom",
  "hifijson",
  "jaq-core",
  "jaq-interpret",
- "jaq-parse",
  "jaq-std",
  "jaq-syn",
  "js-sys",
@@ -329,17 +288,15 @@ dependencies = [
 name = "jaq-std"
 version = "1.5.1"
 dependencies = [
- "bincode",
  "jaq-core",
  "jaq-interpret",
- "jaq-parse",
  "jaq-syn",
  "serde_json",
 ]
 
 [[package]]
 name = "jaq-syn"
-version = "1.1.0"
+version = "1.6.0"
 dependencies = [
  "serde",
 ]

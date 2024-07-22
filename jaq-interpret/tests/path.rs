@@ -42,7 +42,6 @@ fn index_access() {
 fn iter_access() {
     gives(json!([0, 1, 2]), ".[]", [json!(0), json!(1), json!(2)]);
     gives(json!({"a": [1, 2]}), ".a[]", [json!(1), json!(2)]);
-    gives(json!({"a": [1, 2]}), ".a.[]", [json!(1), json!(2)]);
     gives(json!({"a": 1, "b": 2}), ".[]", [json!(1), json!(2)]);
     // TODO: correct this
     //gives(json!({"b": 2, "a": 1}), ".[]", [json!(2), json!(1)]);
@@ -73,6 +72,9 @@ fn iter_assign() {
         json!({"a": [6,6], "b": 3}),
     );
 }
+
+yields!(index_keyword, r#"{"if": 0} | .if"#, 0);
+yields!(obj_keyword, "{if: 0} | .if", 0);
 
 yields!(key_update1, "{} | .a  |= .+1", json!({"a": 1}));
 yields!(key_update2, "{} | .a? |= .+1", json!({"a": 1}));

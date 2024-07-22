@@ -20,9 +20,9 @@ yields!(cartesian_arith, "[(1,2) * (3,4)]", [3, 4, 6, 8]);
 #[test]
 fn add() {
     give(json!(1), ". + 2", json!(3));
-    give(json!(1.0), ". + 2.", json!(3.0));
+    give(json!(1.0), ". + 2.0", json!(3.0));
     give(json!(1), "2.0 + .", json!(3.0));
-    give(json!(null), "1.e1 + 2.1e2", json!(220.0));
+    give(json!(null), "1.0e1 + 2.1e2", json!(220.0));
 
     give(json!("Hello "), ". + \"world\"", json!("Hello world"));
     give(json!([1, 2]), ". + [3, 4]", json!([1, 2, 3, 4]));
@@ -48,7 +48,7 @@ yields!(sub_arr, "[1, 2, 3] - [2, 3, 4]", json!([1]));
 #[test]
 fn mul() {
     give(json!(1), ". * 2", json!(2));
-    give(json!(1.0), ". * 2.", json!(2.0));
+    give(json!(1.0), ". * 2.0", json!(2.0));
     give(json!(1), "2.0 * .", json!(2.0));
 
     give(json!("Hello"), "2 * .", json!("HelloHello"));
@@ -117,6 +117,27 @@ fn precedence() {
     give(json!(null), "2 * 3 + 1", json!(7));
 }
 
+// these tests use the trick that `try t catch c` is valid syntax only for atomic terms `t`
+// TODO for v2.0
+//yields!(atomic_def, "try def x: 1; x + x catch 0", 2);
+yields!(atomic_neg, "try - 1 catch 0", -1);
+yields!(atomic_if, "try if 0 then 1 end catch 2", 1);
+yields!(atomic_try, "try try 0[0] catch 1 catch 2", 1);
+yields!(atomic_fold, "try reduce [][] as $x (0; 0) catch 1", 0);
+yields!(atomic_var, "0 as $x | try $x catch 1", 0);
+yields!(atomic_call, "def x: 0; try x catch 1", 0);
+yields!(atomic_str1, r#"try "" catch 1"#, "");
+yields!(atomic_str2, r#"def @f: .; try @f "" catch 1"#, "");
+yields!(atomic_rec, "try .. catch 0", json!(null));
+yields!(atomic_id, "try . catch 0", json!(null));
+yields!(atomic_key1, "{key: 0} | try .key catch 1", 0);
+yields!(atomic_key2, r#"{key: 0} | try . "key" catch 1"#, 0);
+yields!(atomic_key3, r#"def @f: .; {key: 0} | try .@f"key" catch 1"#, 0);
+yields!(atomic_num, "try 0 catch 1", 0);
+yields!(atomic_block, "try (1 + 1) catch 0", 2);
+yields!(atomic_path, "try [1][0] catch 0", 1);
+yields!(atomic_opt, "def x: 0; try x? catch 1", 0);
+
 yields!(neg_arr_iter1, "[-[][]]", json!([]));
 yields!(neg_arr_iter2, "try (-[])[] catch 0", 0);
 
@@ -164,6 +185,8 @@ yields!(
     "{a: 1, b: 2} | {a, c: 3}",
     json!({"a": 1, "c": 3})
 );
+yields!(obj_var, r#""x" as $k | {$k}"#, json!({"k": "x"}));
+yields!(obj_var_val, r#""x" as $k | {$k: 0}"#, json!({"x": 0}));
 yields!(
     obj_multi_keys,
     r#"[{("a", "b"): 1}]"#,

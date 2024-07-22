@@ -22,11 +22,10 @@
 //! let mut defs = ParseCtx::new(Vec::new());
 //!
 //! // parse the filter
-//! let (f, errs) = jaq_parse::parse(filter, jaq_parse::main());
-//! assert_eq!(errs, Vec::new());
+//! let f = jaq_syn::parse(filter, |p| p.module(|p| p.term())).unwrap().conv(filter);
 //!
 //! // compile the filter in the context of the given definitions
-//! let f = defs.compile(f.unwrap());
+//! let f = defs.compile(f);
 //! assert!(defs.errs.is_empty());
 //!
 //! let inputs = RcIter::new(core::iter::empty());

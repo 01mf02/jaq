@@ -127,6 +127,6 @@ impl<V: Deref, F: Deref> Arg<V, F> {
 pub struct Main<F = Filter> {
     /// Definitions at the top of the filter
     pub defs: Vec<Def<Self>>,
-    /// Body of the filter, e.g. `[.[] | f`.
+    /// Body of the filter, e.g. `[.[] | f]`.
     pub body: Spanned<F>,
 }
