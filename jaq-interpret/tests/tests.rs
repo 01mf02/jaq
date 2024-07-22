@@ -117,6 +117,27 @@ fn precedence() {
     give(json!(null), "2 * 3 + 1", json!(7));
 }
 
+// these tests use the trick that `try t catch c` is valid syntax only for atomic terms `t`
+// TODO for v2.0
+//yields!(atomic_def, "try def x: 1; x + x catch 0", 2);
+yields!(atomic_neg, "try - 1 catch 0", -1);
+yields!(atomic_if, "try if 0 then 1 end catch 2", 1);
+yields!(atomic_try, "try try 0[0] catch 1 catch 2", 1);
+yields!(atomic_fold, "try reduce [][] as $x (0; 0) catch 1", 0);
+yields!(atomic_var, "0 as $x | try $x catch 1", 0);
+yields!(atomic_call, "def x: 0; try x catch 1", 0);
+yields!(atomic_str1, r#"try "" catch 1"#, "");
+yields!(atomic_str2, r#"def @f: .; try @f "" catch 1"#, "");
+yields!(atomic_rec, "try .. catch 0", json!(null));
+yields!(atomic_id, "try . catch 0", json!(null));
+yields!(atomic_key1, "{key: 0} | try .key catch 1", 0);
+yields!(atomic_key2, r#"{key: 0} | try . "key" catch 1"#, 0);
+yields!(atomic_key3, r#"def @f: .; {key: 0} | try .@f"key" catch 1"#, 0);
+yields!(atomic_num, "try 0 catch 1", 0);
+yields!(atomic_block, "try (1 + 1) catch 0", 2);
+yields!(atomic_path, "try [1][0] catch 0", 1);
+yields!(atomic_opt, "def x: 0; try x? catch 0", 0);
+
 yields!(neg_arr_iter1, "[-[][]]", json!([]));
 yields!(neg_arr_iter2, "try (-[])[] catch 0", 0);
 
