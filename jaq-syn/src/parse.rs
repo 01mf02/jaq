@@ -153,6 +153,7 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
+    /// Verifies that the remaining input tokens correspond to the given string.
     fn verify_last(&mut self, last: &'static str) -> Result<'s, 't, ()> {
         match (self.i.as_slice(), last) {
             ([], "") => Ok(()),
@@ -171,6 +172,9 @@ impl<'s, 't> Parser<'s, 't> {
         y
     }
 
+    /// Parse with given function, then
+    /// ensure that remaining input tokens correspond to `last`, and
+    /// return default if any error occurred.
     fn finish<T: Default, F>(&mut self, last: &'static str, f: F) -> T
     where
         F: FnOnce(&mut Self) -> Result<'s, 't, T>,
@@ -193,6 +197,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.with_tok(tokens, |p| p.finish(last, f))
     }
 
+    /// Parse with the given function, and rewind input if it returns `None`.
     fn maybe<T>(&mut self, f: impl Fn(&mut Self) -> Option<T>) -> Option<T> {
         let i = self.i.clone();
         let y = f(self);
@@ -203,6 +208,7 @@ impl<'s, 't> Parser<'s, 't> {
         y
     }
 
+    /// Parse with the given function, and rewind input if it returns `Ok(None)`.
     fn try_maybe<T, F>(&mut self, f: F) -> Result<'s, 't, Option<T>>
     where
         F: Fn(&mut Self) -> Result<'s, 't, Option<T>>,
@@ -259,6 +265,7 @@ impl<'s, 't> Parser<'s, 't> {
         .unwrap_or_default()
     }
 
+    /// Parse a binary operator, including `,` if `with_comma` is true.
     fn op(&mut self, with_comma: bool) -> Option<&'s str> {
         self.maybe(|p| match p.i.next() {
             // handle pipe directly in `term()`

@@ -25,7 +25,9 @@ pub enum Token<S> {
     Num(S),
     /// (interpolated) string, surrounded by opening and closing '"'
     Str(S, Vec<StrPart<S, Self>>, S),
-    /// operator, such as `|` or `+=`
+    /// binary operator, such as `|` or `+=`
+    ///
+    /// Note that this includes `-` (negation) also when it is used as unary operator.
     Op(S),
     /// punctuation, such as `.` or `;`
     Char(S),
