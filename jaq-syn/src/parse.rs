@@ -14,9 +14,9 @@ type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 /// Each variant is annoted with jq programs that trigger it.
 #[derive(Debug)]
 pub enum Expect<S> {
-    /// `if 0`, `reduce .`
+    /// `if 0` (expected "then"), `reduce .` (expected "as")
     Keyword(S),
-    /// `0 as $x`, `{(.)}`
+    /// `0 as $x` (expected "|"), `{(.)}` (expected ":")
     Char(S),
     /// `0 as`, `label`, `break`
     Var,
