@@ -136,7 +136,7 @@ yields!(atomic_key3, r#"def @f: .; {key: 0} | try .@f"key" catch 1"#, 0);
 yields!(atomic_num, "try 0 catch 1", 0);
 yields!(atomic_block, "try (1 + 1) catch 0", 2);
 yields!(atomic_path, "try [1][0] catch 0", 1);
-yields!(atomic_opt, "def x: 0; try x? catch 0", 0);
+yields!(atomic_opt, "def x: 0; try x? catch 1", 0);
 
 yields!(neg_arr_iter1, "[-[][]]", json!([]));
 yields!(neg_arr_iter2, "try (-[])[] catch 0", 0);
