@@ -31,6 +31,13 @@ pub type Span = core::ops::Range<usize>;
 pub type Spanned<T> = (T, Span);
 
 /// Lex a string and parse resulting tokens, returning [`None`] if any error occurred.
+///
+/// Example:
+///
+/// ~~~
+/// # use jaq_syn::parse;
+/// let t = parse("[] | .[]", |p| p.term());
+/// ~~~
 pub fn parse<'s, T: Default, F>(s: &'s str, f: F) -> Option<T>
 where
     F: for<'t> FnOnce(&mut Parser<'s, 't>) -> parse::Result<'s, 't, T>,
