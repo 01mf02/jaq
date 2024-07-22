@@ -64,7 +64,7 @@ impl parse::Term<&str> {
             ">=" => BinaryOp::Ord(OrdOp::Ge),
             "==" => BinaryOp::Ord(OrdOp::Eq),
             "!=" => BinaryOp::Ord(OrdOp::Ne),
-            _ => todo!("unknown operator"),
+            op => panic!("unknown operator: {op}"),
         };
         match self {
             Self::Id => Id,
