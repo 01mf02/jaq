@@ -164,6 +164,8 @@ yields!(
     "{a: 1, b: 2} | {a, c: 3}",
     json!({"a": 1, "c": 3})
 );
+yields!(obj_var, r#""x" as $k | {$k}"#, json!({"k": "x"}));
+yields!(obj_var_val, r#""x" as $k | {$k: 0}"#, json!({"x": 0}));
 yields!(
     obj_multi_keys,
     r#"[{("a", "b"): 1}]"#,

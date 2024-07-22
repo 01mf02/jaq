@@ -122,7 +122,7 @@ pub enum Term<S> {
 }
 
 impl<S> Term<S> {
-    fn str(s: S) -> Self {
+    pub(crate) fn str(s: S) -> Self {
         Self::Str(None, [StrPart::Str(s)].into())
     }
 }
