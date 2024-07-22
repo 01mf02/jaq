@@ -328,6 +328,12 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
+    /// Parse a term.
+    ///
+    /// Only if `with_comma` is true, the parsed term may be of the shape `t, u`.
+    /// This matters for the parsing of object values, such as `{k1: v1, k2: v2}`:
+    /// if we would permit terms of the shape `t, u` inside objects,
+    /// then this would be parsed like `{k1: (v1, k2): v2}`, which is invalid.
     fn term_with_comma(&mut self, with_comma: bool) -> Result<'s, 't, Term<&'s str>> {
         let head = self.atom()?;
         let tail = core::iter::from_fn(|| self.op(with_comma).map(|op| Ok((op, self.atom()?))))
@@ -354,6 +360,11 @@ impl<'s, 't> Parser<'s, 't> {
         })
     }
 
+    /// Parse an atomic term.
+    ///
+    /// A term `t` is atomic if and only if `try t catch 0` is syntactically correct.
+    /// For example, the term `1 + 2` is not atomic, because `try 1 + 2 catch 0` is invalid.
+    /// However, the term `.[]` is atomic, because `try .[] catch 0` is valid.
     fn atom(&mut self) -> Result<'s, 't, Term<&'s str>> {
         let tm = match self.i.next() {
             Some(Token::Op("-")) => Term::Neg(Box::new(self.atom()?)),
@@ -474,6 +485,12 @@ impl<'s, 't> Parser<'s, 't> {
         self.term_with_comma(true)
     }
 
+    /// Parse an object entry.
+    ///
+    /// An object is written as `{e1, ..., en}`, where `ei` is an object entry.
+    /// An example of an object entry is `"key": value` or `(key): value`.
+    /// When the key is a term surrounded by parentheses, a value is required,
+    /// otherwise the value may be omitted (e.g. `"key"` or `$x`).
     fn obj_entry(&mut self) -> Result<'s, 't, (Term<&'s str>, Option<Term<&'s str>>)> {
         let i = self.i.clone();
         let key = match self.i.next() {
