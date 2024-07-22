@@ -79,9 +79,12 @@ pub enum Term<S> {
     /// Recursion (`..`)
     Recurse,
 
-    /// Integer or floating-point number.
+    /// Integer or floating-point number
     Num(S),
     /// String
+    ///
+    /// This consists of an optional format filter starting with `@` (such as `@text`),
+    /// followed by quoted string parts (such as `"Hello, \(.name)! \u263A"`).
     Str(Option<S>, Vec<StrPart<S, Self>>),
     /// Array, empty if `None`
     Arr(Option<Box<Self>>),
@@ -114,7 +117,7 @@ pub enum Term<S> {
     /// Variable, such as `$x` (including leading '$')
     Var(S),
 
-    /// Path such as `.`, `.a`, `.[][]."b"`
+    /// Path such as `.a`, `.[][]."b"`, `f[0]`
     Path(Box<Self>, Path<Self>),
 }
 
