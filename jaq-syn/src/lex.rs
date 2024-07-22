@@ -255,9 +255,6 @@ impl<'a> Lexer<&'a str> {
             '$' | '@' => Token::Word(self.consumed(1, Self::ident1)),
             '0'..='9' => Token::Num(self.consumed(1, Self::num)),
             c if is_op(c) => Token::Op(self.consumed(1, |lex| lex.trim(is_op))),
-            '?' if (chars.next(), chars.next()) == (Some('/'), Some('/')) => {
-                Token::Op(self.take(3))
-            }
             '.' => match chars.next() {
                 Some('.') => Token::Char(self.take(2)),
                 Some('a'..='z' | 'A'..='Z' | '_') => Token::Char(self.consumed(2, Self::ident0)),
