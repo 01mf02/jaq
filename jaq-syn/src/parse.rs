@@ -677,11 +677,19 @@ impl<'s, 't> Parser<'s, 't> {
 /// def iter: .[];
 /// ~~~
 #[derive(Debug, Default)]
-pub struct Module<S, B> {
+pub struct Module<S, B, P = S> {
     #[allow(dead_code)]
     meta: Option<Term<S>>,
-    pub(crate) mods: Vec<(S, Option<S>)>,
+    pub(crate) mods: Vec<(P, Option<S>)>,
     pub(crate) body: B,
+}
+
+impl<S, B, P> Module<S, B, P> {
+    pub(crate) fn map_paths<P2>(self, mut f: impl FnMut(P) -> P2) -> Module<S, B, P2> {
+        let Module { meta, mods, body } = self;
+        let mods = mods.into_iter().map(|(path, as_)| (f(path), as_)).collect();
+        Module { meta, mods, body }
+    }
 }
 
 /// jq definition, consisting of a name, optional arguments, and a body.
