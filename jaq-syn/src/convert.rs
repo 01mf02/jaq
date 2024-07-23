@@ -40,7 +40,7 @@ impl parse::Term<&str> {
         let from_obj = |(k, v): &(_, Option<_>)| {
             let f = || (index_path(*span(k)), 0..42);
             let (k, v) = if let (Self::Var(x), None) = (k, v) {
-                 (*span(&Self::str(&x[1..])), *span(k))
+                (*span(&Self::str(&x[1..])), *span(k))
             } else {
                 (*span(k), v.as_ref().map_or_else(f, |v| *span(v)))
             };
