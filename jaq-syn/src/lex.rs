@@ -125,7 +125,8 @@ impl<'a> Lexer<&'a str> {
         self.with_consumed(|l| {
             l.i = &l.i[skip..];
             f(l)
-        }).0
+        })
+        .0
     }
 
     fn with_consumed<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> (&'a str, T) {
