@@ -685,6 +685,8 @@ pub struct Module<S, B, P = S> {
 }
 
 impl<S, B, P> Module<S, B, P> {
+    // TODO: remove dead_code
+    #[allow(dead_code)]
     pub(crate) fn map_paths<P2>(self, mut f: impl FnMut(P) -> P2) -> Module<S, B, P2> {
         let Module { meta, mods, body } = self;
         let mods = mods.into_iter().map(|(path, as_)| (f(path), as_)).collect();
