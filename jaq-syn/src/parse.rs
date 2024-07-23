@@ -259,7 +259,9 @@ impl<'s, 't> Parser<'s, 't> {
     /// Parse `("(" arg (";" arg)* ")")?`.
     fn args<T>(&mut self, f: fn(&mut Self) -> Result<'s, 't, T>) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
-            Some(Token::Block("(", tokens)) => Some(p.with(tokens, "", |p| p.arg_items(f))),
+            Some(Token::Block(full, tokens)) if full.starts_with('(') => {
+                Some(p.with(tokens, "", |p| p.arg_items(f)))
+            }
             _ => None,
         })
         .unwrap_or_default()
@@ -447,19 +449,14 @@ impl<'s, 't> Parser<'s, 't> {
                 }
             }
             Some(Token::Num(n)) => Term::Num(*n),
-            Some(Token::Block("[", tokens)) if matches!(tokens[..], [Token::Char("]")]) => {
-                Term::Arr(None)
-            }
-            Some(Token::Block("{", tokens)) if matches!(tokens[..], [Token::Char("}")]) => {
-                Term::Obj(Vec::new())
-            }
-            Some(Token::Block("(", tokens)) => self.with(tokens, ")", Self::term),
-            Some(Token::Block("[", tokens)) => {
-                Term::Arr(Some(Box::new(self.with(tokens, "]", Self::term))))
-            }
-            Some(Token::Block("{", tokens)) => {
-                self.with(tokens, "", |p| p.obj_items(Self::obj_entry).map(Term::Obj))
-            }
+            Some(Token::Block(full, tokens)) => match &full[..1] {
+                "[" if matches!(tokens[..], [Token::Char("]")]) => Term::Arr(None),
+                "{" if matches!(tokens[..], [Token::Char("}")]) => Term::Obj(Vec::new()),
+                "[" => Term::Arr(Some(Box::new(self.with(tokens, "]", Self::term)))),
+                "{" => self.with(tokens, "", |p| p.obj_items(Self::obj_entry).map(Term::Obj)),
+                "(" => self.with(tokens, ")", Self::term),
+                _ => panic!(),
+            },
             Some(Token::Str(_, parts)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
         };
@@ -491,7 +488,7 @@ impl<'s, 't> Parser<'s, 't> {
     fn obj_entry(&mut self) -> Result<'s, 't, (Term<&'s str>, Option<Term<&'s str>>)> {
         let i = self.i.clone();
         let key = match self.i.next() {
-            Some(Token::Block("(", tokens)) => {
+            Some(Token::Block(full, tokens)) if full.starts_with('(') => {
                 let k = self.with(tokens, ")", Self::term);
                 self.char1(":")?;
                 return Ok((k, Some(self.term_with_comma(false)?)));
@@ -514,7 +511,7 @@ impl<'s, 't> Parser<'s, 't> {
     ) -> Vec<StrPart<&'s str, Term<&'s str>>> {
         let parts = parts.iter().map(|part| match part {
             StrPart::Str(s) => StrPart::Str(*s),
-            StrPart::Filter(Token::Block("(", tokens)) => {
+            StrPart::Filter(Token::Block(full, tokens)) if full.starts_with('(') => {
                 StrPart::Filter(self.with(tokens, ")", Self::term))
             }
             StrPart::Filter(_) => unreachable!(),
@@ -561,7 +558,9 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn path_part_opt(&mut self) -> Option<(path::Part<Term<&'s str>>, path::Opt)> {
         let part = self.maybe(|p| match p.i.next() {
-            Some(Token::Block("[", tokens)) => Some(p.with(tokens, "]", Self::path_part)),
+            Some(Token::Block(full, tokens)) if full.starts_with('[') => {
+                Some(p.with(tokens, "]", Self::path_part))
+            }
             _ => None,
         })?;
         Some((part, self.opt()))
