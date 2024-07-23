@@ -132,7 +132,7 @@ yields!(atomic_rec, "try .. catch 0", json!(null));
 yields!(atomic_id, "try . catch 0", json!(null));
 yields!(atomic_key1, "{key: 0} | try .key catch 1", 0);
 yields!(atomic_key2, r#"{key: 0} | try . "key" catch 1"#, 0);
-yields!(atomic_key3, r#"def @f: .; {key: 0} | try .@f"key" catch 1"#, 0);
+yields!(atomic_key3, r#"def @f: .; {k: 0} | try .@f"k" catch 1"#, 0);
 yields!(atomic_num, "try 0 catch 1", 0);
 yields!(atomic_block, "try (1 + 1) catch 0", 2);
 yields!(atomic_path, "try [1][0] catch 0", 1);
