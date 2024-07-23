@@ -24,7 +24,7 @@ pub enum Token<S> {
     /// number
     Num(S),
     /// (interpolated) string, surrounded by opening and closing '"'
-    Str(S, Vec<StrPart<S, Self>>, S),
+    Str(S, Vec<StrPart<S, Self>>),
     /// binary operator, such as `|` or `+=`
     ///
     /// Note that this includes `-` (negation) also when it is used as unary operator.
@@ -122,10 +122,16 @@ impl<'a> Lexer<&'a str> {
     }
 
     fn consumed(&mut self, skip: usize, f: impl FnOnce(&mut Self)) -> &'a str {
+        self.with_consumed(|l| {
+            l.i = &l.i[skip..];
+            f(l)
+        }).0
+    }
+
+    fn with_consumed<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> (&'a str, T) {
         let start = self.i;
-        self.i = &self.i[skip..];
-        f(self);
-        &start[..start.len() - self.i.len()]
+        let y = f(self);
+        (&start[..start.len() - self.i.len()], y)
     }
 
     /// Whitespace and comments.
@@ -206,7 +212,10 @@ impl<'a> Lexer<&'a str> {
                 }
                 StrPart::Char(char::from_u32(hex).unwrap())
             }
-            Some('(') => return Some(StrPart::Filter(self.delim())),
+            Some('(') => {
+                let (full, tokens) = self.with_consumed(Self::delim);
+                return Some(StrPart::Filter(Token::Block(full, tokens)));
+            }
             Some(_) | None => {
                 self.e.push((Expect::Escape, self.i));
                 return None;
@@ -220,7 +229,7 @@ impl<'a> Lexer<&'a str> {
     /// Lex a (possibly interpolated) string.
     ///
     /// The input string has to start with '"'.
-    fn str(&mut self) -> Token<&'a str> {
+    fn str(&mut self) -> Vec<StrPart<&'a str, Token<&'a str>>> {
         let start = self.take(1);
         assert_eq!(start, "\"");
         let mut parts = Vec::new();
@@ -230,15 +239,14 @@ impl<'a> Lexer<&'a str> {
             if !s.is_empty() {
                 parts.push(StrPart::Str(s));
             }
-            let i = self.i;
             match self.next() {
-                Some('"') => return Token::Str(start, parts, &i[..1]),
+                Some('"') => return parts,
                 Some('\\') => self.escape().map(|part| parts.push(part)),
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
                 None => {
                     self.e.push((Expect::Delim(start), self.i));
-                    return Token::Str(start, parts, &i[..0]);
+                    return parts;
                 }
             };
         }
@@ -261,8 +269,14 @@ impl<'a> Lexer<&'a str> {
                 _ => Token::Char(self.take(1)),
             },
             ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
-            '"' => self.str(),
-            '(' | '[' | '{' => self.delim(),
+            '"' => {
+                let (full, parts) = self.with_consumed(Self::str);
+                Token::Str(full, parts)
+            }
+            '(' | '[' | '{' => {
+                let (full, tokens) = self.with_consumed(Self::delim);
+                Token::Block(full, tokens)
+            }
             _ => return None,
         })
     }
@@ -274,7 +288,7 @@ impl<'a> Lexer<&'a str> {
     /// Lex a sequence of tokens that is surrounded by parentheses, curly braces, or brackets.
     ///
     /// The input string has to start with either '(', '[', or '{'.
-    fn delim(&mut self) -> Token<&'a str> {
+    fn delim(&mut self) -> Vec<Token<&'a str>> {
         let open = self.take(1);
         let close = match open {
             "(" => ')',
@@ -291,20 +305,22 @@ impl<'a> Lexer<&'a str> {
         } else {
             self.e.push((Expect::Delim(open), self.i));
         }
-        Token::Block(open, tokens)
+        tokens
     }
 }
 
 impl<'a> Token<&'a str> {
+    /// Return the string slice corresponding to the token.
+    pub fn as_str(&self) -> &'a str {
+        match self {
+            Self::Word(s) | Self::Char(s) | Self::Op(s) | Self::Num(s) => s,
+            Self::Str(s, _) | Self::Block(s, _) => s,
+        }
+    }
+
     /// Return the span of a token that was lexed from some given input.
     pub fn span(&self, code: &str) -> crate::Span {
-        match self {
-            Self::Word(s) | Self::Char(s) | Self::Op(s) | Self::Num(s) => span(code, s),
-            Self::Str(open, _, close) => span(code, open).start..span(code, close).end,
-            Self::Block(open, block) => {
-                span(code, open).start..block.last().unwrap().span(code).end
-            }
-        }
+        span(code, self.as_str())
     }
 }
 

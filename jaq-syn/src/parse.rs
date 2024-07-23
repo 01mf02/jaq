@@ -419,7 +419,7 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if id.starts_with('@') => {
                 let s = self.maybe(|p| match p.i.next() {
-                    Some(Token::Str(_, parts, _)) => Some(p.str_parts(parts)),
+                    Some(Token::Str(_, parts)) => Some(p.str_parts(parts)),
                     _ => None,
                 });
                 match s {
@@ -460,7 +460,7 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token::Block("{", tokens)) => {
                 self.with(tokens, "", |p| p.obj_items(Self::obj_entry).map(Term::Obj))
             }
-            Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
+            Some(Token::Str(_, parts)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Term, next)),
         };
 
@@ -571,10 +571,10 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(match self.i.next() {
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if id.starts_with('@') => match self.i.next() {
-                Some(Token::Str(_, parts, _)) => Term::Str(Some(*id), self.str_parts(parts)),
+                Some(Token::Str(_, parts)) => Term::Str(Some(*id), self.str_parts(parts)),
                 next => return Err((Expect::Str, next)),
             },
-            Some(Token::Str(_, parts, _)) => Term::Str(None, self.str_parts(parts)),
+            Some(Token::Str(_, parts)) => Term::Str(None, self.str_parts(parts)),
             next => return Err((Expect::Key, next)),
         })
     }
@@ -615,7 +615,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     fn bare_str(&mut self) -> Result<'s, 't, &'s str> {
         match self.i.next() {
-            next @ Some(Token::Str(_, parts, _)) => match parts[..] {
+            next @ Some(Token::Str(_, parts)) => match parts[..] {
                 [StrPart::Str(s)] => Ok(s),
                 _ => Err((Expect::Str, next)),
             },
