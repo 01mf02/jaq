@@ -5,7 +5,9 @@ use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
-pub type Error<'s, 't> = (Expect<&'s str>, Option<&'t Token<&'s str>>);
+pub type Error<S, T = S> = (Expect<S>, T);
+/// Parse error that stores what token it found.
+pub(crate) type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
 
 type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 
@@ -60,12 +62,12 @@ impl<'a> Expect<&'a str> {
 }
 
 /// Output of a fallible parsing operation.
-pub type Result<'s, 't, T> = core::result::Result<T, Error<'s, 't>>;
+pub type Result<'s, 't, T> = core::result::Result<T, TError<'t, &'s str>>;
 
 /// Parser for jq programs.
 pub struct Parser<'s, 't> {
     i: core::slice::Iter<'t, Token<&'s str>>,
-    e: Vec<Error<'s, 't>>,
+    e: Vec<TError<'t, &'s str>>,
     /// names of fold-like filters, e.g. "reduce" and "foreach"
     fold: &'s [&'s str],
 }
@@ -141,7 +143,7 @@ impl<'s, 't> Parser<'s, 't> {
     /// Parse tokens with the given function.
     ///
     /// Returns [`Ok`] if the function consumes the whole output without producing any error.
-    pub fn parse<T: Default, F>(mut self, f: F) -> core::result::Result<T, Vec<Error<'s, 't>>>
+    pub fn parse<T: Default, F>(mut self, f: F) -> core::result::Result<T, Vec<TError<'t, &'s str>>>
     where
         F: FnOnce(&mut Self) -> Result<'s, 't, T>,
     {
@@ -587,7 +589,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Parse a sequence of definitions, such as `def x: 1; def y: 2;`.
-    pub fn defs(&mut self) -> Result<'s, 't, Vec<Def<&'s str, Term<&'s str>>>> {
+    pub fn defs(&mut self) -> Result<'s, 't, Defs<&'s str>> {
         let head = |p: &mut Self| p.keyword("def").ok();
         core::iter::from_fn(|| self.maybe(head).map(|_| self.def_tail())).collect()
     }
@@ -648,7 +650,7 @@ impl<'s, 't> Parser<'s, 't> {
             })
             .transpose()?;
 
-        let mods = core::iter::from_fn(|| {
+        let deps = core::iter::from_fn(|| {
             self.maybe(|p| match p.i.next() {
                 Some(Token::Word("include")) => Some(p.terminated(Self::include)),
                 Some(Token::Word("import")) => Some(p.terminated(Self::import)),
@@ -659,7 +661,7 @@ impl<'s, 't> Parser<'s, 't> {
 
         let body = f(self)?;
 
-        Ok(Module { meta, mods, body })
+        Ok(Module { meta, deps, body })
     }
 }
 
@@ -676,21 +678,11 @@ impl<'s, 't> Parser<'s, 't> {
 /// def iter: .[];
 /// ~~~
 #[derive(Debug, Default)]
-pub struct Module<S, B, P = S> {
+pub struct Module<S, B> {
     #[allow(dead_code)]
-    meta: Option<Term<S>>,
-    pub(crate) mods: Vec<(P, Option<S>)>,
+    pub(crate) meta: Option<Term<S>>,
+    pub(crate) deps: Vec<(S, Option<S>)>,
     pub(crate) body: B,
-}
-
-impl<S, B, P> Module<S, B, P> {
-    // TODO: remove dead_code
-    #[allow(dead_code)]
-    pub(crate) fn map_paths<P2>(self, mut f: impl FnMut(P) -> P2) -> Module<S, B, P2> {
-        let Module { meta, mods, body } = self;
-        let mods = mods.into_iter().map(|(path, as_)| (f(path), as_)).collect();
-        Module { meta, mods, body }
-    }
 }
 
 /// jq definition, consisting of a name, optional arguments, and a body.
@@ -710,3 +702,5 @@ pub struct Def<S, F> {
     /// Body of the filter, e.g. `[.[] | f]`.
     pub(crate) body: F,
 }
+
+pub(crate) type Defs<S> = Vec<Def<S, Term<S>>>;

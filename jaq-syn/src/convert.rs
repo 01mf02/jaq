@@ -215,7 +215,7 @@ impl parse::Module<&str, Vec<parse::Def<&str, parse::Term<&str>>>> {
 impl parse::Module<&str, parse::Term<&str>> {
     /// Convert a term module to a [`Main`].
     pub fn conv(&self, s: &str) -> Main {
-        if !self.mods.is_empty() {
+        if !self.deps.is_empty() {
             panic!("include / import is not supported yet");
         }
         self.body.conv_main(s)
