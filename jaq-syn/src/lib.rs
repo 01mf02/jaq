@@ -13,6 +13,7 @@ pub mod string;
 pub mod test;
 
 mod convert;
+mod graph;
 pub mod lex;
 pub mod parse;
 mod prec_climb;
