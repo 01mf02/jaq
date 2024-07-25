@@ -5,9 +5,39 @@ use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
-pub type Error<S, T = S> = (Expect<S>, T);
+pub struct Error<S, T = S>(Expect<S>, T);
 /// Parse error that stores what token it found.
-pub(crate) type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
+pub type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
+
+impl<S, T> Error<S, T> {
+    /// What we expected at the place of error.
+    pub fn expected(&self) -> &Expect<S> {
+        &self.0
+    }
+
+    /// What we found at the place of error.
+    pub fn found(&self) -> &T {
+        &self.1
+    }
+}
+
+impl<'s> TError<'_, &'s str> {
+    /// Convert token in error to a string slice of `file` corresponding to the token.
+    ///
+    /// If no token was found, convert it to an empty string pointing to the end of `file`.
+    pub fn weaken(self, file: &'s str) -> Error<&'s str> {
+        let found = self.1.map_or(&file[file.len()..], |found| found.as_str());
+        Error(self.0, found)
+    }
+}
+
+/// Convenience conversion so that we can use `Err((expected, found))?`
+/// (instead of `Err(Error(expected, found))`).
+impl<S, T> From<(Expect<S>, T)> for Error<S, T> {
+    fn from((expected, found): (Expect<S>, T)) -> Self {
+        Self(expected, found)
+    }
+}
 
 type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 
@@ -160,9 +190,9 @@ impl<'s, 't> Parser<'s, 't> {
         match (self.i.as_slice(), last) {
             ([], "") => Ok(()),
             ([Token::Char(c)], last) if *c == last => Ok(()),
-            ([], _) => Err((Expect::Char(last), None)),
-            ([next, ..], "") => Err((Expect::Nothing, Some(next))),
-            ([next, ..], _) => Err((Expect::Char(last), Some(next))),
+            ([], _) => Err((Expect::Char(last), None))?,
+            ([next, ..], "") => Err((Expect::Nothing, Some(next)))?,
+            ([next, ..], _) => Err((Expect::Char(last), Some(next)))?,
         }
     }
 
@@ -236,7 +266,7 @@ impl<'s, 't> Parser<'s, 't> {
                 Some(Token::Char("}")) => break,
                 Some(Token::Char(",")) if self.maybe(rbrace).is_some() => break,
                 Some(Token::Char(",")) => y.push(f(self)?),
-                next => return Err((Expect::CommaOrRBrace, next)),
+                next => Err((Expect::CommaOrRBrace, next))?,
             }
         }
         Ok(y)
@@ -252,7 +282,7 @@ impl<'s, 't> Parser<'s, 't> {
             match self.i.next() {
                 Some(Token::Char(";")) => y.push(f(self)?),
                 Some(Token::Char(")")) => break,
-                next => return Err((Expect::SemicolonOrRParen, next)),
+                next => Err((Expect::SemicolonOrRParen, next))?,
             }
         }
         Ok(y)
@@ -306,28 +336,28 @@ impl<'s, 't> Parser<'s, 't> {
     fn char1(&mut self, c: &'static str) -> Result<'s, 't, &'s str> {
         match self.i.next() {
             Some(Token::Char(s)) if *s == c => Ok(*s),
-            next => Err((Expect::Char(c), next)),
+            next => Err((Expect::Char(c), next))?,
         }
     }
 
     fn keyword(&mut self, kw: &'static str) -> Result<'s, 't, ()> {
         match self.i.next() {
             Some(Token::Word(w)) if *w == kw => Ok(()),
-            next => Err((Expect::Keyword(kw), next)),
+            next => Err((Expect::Keyword(kw), next))?,
         }
     }
 
     fn var(&mut self) -> Result<'s, 't, &'s str> {
         match self.i.next() {
             Some(Token::Word(x)) if x.starts_with('$') => Ok(*x),
-            next => Err((Expect::Var, next)),
+            next => Err((Expect::Var, next))?,
         }
     }
 
     fn pipe(&mut self) -> Result<'s, 't, ()> {
         match self.i.next() {
             Some(Token::Op("|")) => Ok(()),
-            next => Err((Expect::Char("|"), next)),
+            next => Err((Expect::Char("|"), next))?,
         }
     }
 
@@ -378,7 +408,7 @@ impl<'s, 't> Parser<'s, 't> {
                 Term::Def(core::iter::once(head).chain(tail).collect(), Box::new(tm))
             }
             Some(Token::Word("if")) => {
-                let if_then = |p: &mut Self| {
+                let if_then = |p: &mut Self| -> Result<_> {
                     let if_ = p.term()?;
                     p.keyword("then")?;
                     Ok((if_, p.term()?))
@@ -393,7 +423,7 @@ impl<'s, 't> Parser<'s, 't> {
                             break Some(else_);
                         }
                         Some(Token::Word("end")) => break None,
-                        next => return Err((Expect::ElseOrEnd, next)),
+                        next => Err((Expect::ElseOrEnd, next))?,
                     }
                 };
                 Term::IfThenElse(if_thens, else_.map(Box::new))
@@ -460,7 +490,7 @@ impl<'s, 't> Parser<'s, 't> {
                 _ => panic!(),
             },
             Some(Token::Str(_, parts)) => Term::Str(None, self.str_parts(parts)),
-            next => return Err((Expect::Term, next)),
+            next => Err((Expect::Term, next))?,
         };
 
         let tm = match self.opt() {
@@ -573,10 +603,10 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token::Word(id)) if id.starts_with('$') => Term::Var(*id),
             Some(Token::Word(id)) if id.starts_with('@') => match self.i.next() {
                 Some(Token::Str(_, parts)) => Term::Str(Some(*id), self.str_parts(parts)),
-                next => return Err((Expect::Str, next)),
+                next => Err((Expect::Str, next))?,
             },
             Some(Token::Str(_, parts)) => Term::Str(None, self.str_parts(parts)),
-            next => return Err((Expect::Key, next)),
+            next => Err((Expect::Key, next))?,
         })
     }
 
@@ -598,12 +628,12 @@ impl<'s, 't> Parser<'s, 't> {
     fn def_tail(&mut self) -> Result<'s, 't, Def<&'s str, Term<&'s str>>> {
         let name = match self.i.next() {
             Some(Token::Word(w)) if !w.starts_with('$') && !w.contains("::") => w,
-            next => return Err((Expect::Ident, next)),
+            next => Err((Expect::Ident, next))?,
         };
         let args = self.args(|p| {
             Ok(match p.i.next() {
                 Some(Token::Word(w)) if !w.contains("::") => *w,
-                next => return Err((Expect::Arg, next)),
+                next => Err((Expect::Arg, next))?,
             })
         });
         self.char1(":")?;
@@ -618,9 +648,9 @@ impl<'s, 't> Parser<'s, 't> {
         match self.i.next() {
             next @ Some(Token::Str(_, parts)) => match parts[..] {
                 [StrPart::Str(s)] => Ok(s),
-                _ => Err((Expect::Str, next)),
+                _ => Err((Expect::Str, next))?,
             },
-            next => Err((Expect::Str, next)),
+            next => Err((Expect::Str, next))?,
         }
     }
 
@@ -633,7 +663,7 @@ impl<'s, 't> Parser<'s, 't> {
         self.keyword("as")?;
         let name = match self.i.next() {
             Some(Token::Word(w)) if !w.starts_with(['$', '@']) && !w.contains("::") => *w,
-            next => return Err((Expect::Ident, next)),
+            next => Err((Expect::Ident, next))?,
         };
         Ok((path, Some(name)))
     }
