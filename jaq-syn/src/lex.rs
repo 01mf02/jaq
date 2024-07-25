@@ -311,6 +311,13 @@ impl<'a> Lexer<&'a str> {
 }
 
 impl<'a> Token<&'a str> {
+    /// Return the string slice corresponding to an optional token.
+    ///
+    /// If the token is not present, return an empty string slice starting at the end of `code`.
+    pub fn opt_as_str(found: Option<&Self>, code: &'a str) -> &'a str {
+        found.map_or(&code[code.len()..], |found| found.as_str())
+    }
+
     /// Return the string slice corresponding to the token.
     pub fn as_str(&self) -> &'a str {
         match self {

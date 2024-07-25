@@ -628,17 +628,14 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     }
 }
 
-fn report_parse(code: &str, error: jaq_syn::parse::TError<&str>) -> Report {
-    let found = error
-        .found()
-        .map_or("unexpected end of input", |_| "unexpected token");
+fn report_parse(code: &str, (expected, found): jaq_syn::parse::TError<&str>) -> Report {
+    use jaq_syn::lex::Token;
+    let found_range = jaq_syn::lex::span(code, Token::opt_as_str(found, code));
+    let found = found.map_or("unexpected end of input", |_| "unexpected token");
     let found = [(found.to_string(), None)].into();
 
-    let error = error.weaken(code);
-    let found_range = jaq_syn::lex::span(code, error.found());
-
     Report {
-        message: format!("expected {}", error.expected().as_str()),
+        message: format!("expected {}", expected.as_str()),
         labels: Vec::from([(found_range, found, Color::Red)]),
     }
 }

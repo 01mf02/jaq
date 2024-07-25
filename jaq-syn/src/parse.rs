@@ -5,39 +5,9 @@ use crate::path;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
-pub struct Error<S, T = S>(Expect<S>, T);
+pub type Error<S, T = S> = (Expect<S>, T);
 /// Parse error that stores what token it found.
 pub type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
-
-impl<S, T> Error<S, T> {
-    /// What we expected at the place of error.
-    pub fn expected(&self) -> &Expect<S> {
-        &self.0
-    }
-
-    /// What we found at the place of error.
-    pub fn found(&self) -> &T {
-        &self.1
-    }
-}
-
-impl<'s> TError<'_, &'s str> {
-    /// Convert token in error to a string slice of `file` corresponding to the token.
-    ///
-    /// If no token was found, convert it to an empty string pointing to the end of `file`.
-    pub fn weaken(self, file: &'s str) -> Error<&'s str> {
-        let found = self.1.map_or(&file[file.len()..], |found| found.as_str());
-        Error(self.0, found)
-    }
-}
-
-/// Convenience conversion so that we can use `Err((expected, found))?`
-/// (instead of `Err(Error(expected, found))`).
-impl<S, T> From<(Expect<S>, T)> for Error<S, T> {
-    fn from((expected, found): (Expect<S>, T)) -> Self {
-        Self(expected, found)
-    }
-}
 
 type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 
