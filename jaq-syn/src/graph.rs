@@ -13,11 +13,11 @@ enum Error<S> {
 }
 
 #[derive(Default)]
-struct Module<S, B> {
-    meta: Option<Term<S>>,
-    mods: Vec<(usize, Option<S>)>,
-    vars: Vec<(S, S)>,
-    body: B,
+pub struct Module<S, B> {
+    pub meta: Option<Term<S>>,
+    pub mods: Vec<(usize, Option<S>)>,
+    pub vars: Vec<(S, S)>,
+    pub body: B,
 }
 
 impl<'s, B> Module<&'s str, B> {

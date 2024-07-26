@@ -697,10 +697,10 @@ pub struct Module<S, B> {
 /// ~~~
 #[derive(Debug)]
 pub struct Def<S, F> {
-    pub(crate) name: S,
-    pub(crate) args: Vec<S>,
+    pub name: S,
+    pub args: Vec<S>,
     /// Body of the filter, e.g. `[.[] | f]`.
-    pub(crate) body: F,
+    pub body: F,
 }
 
-pub(crate) type Defs<S> = Vec<Def<S, Term<S>>>;
+pub type Defs<S> = Vec<Def<S, Term<S>>>;

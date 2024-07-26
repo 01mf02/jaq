@@ -49,6 +49,7 @@ mod box_iter;
 pub mod error;
 mod filter;
 mod hir;
+mod hir2;
 mod into_iter;
 mod lir;
 mod mir;
