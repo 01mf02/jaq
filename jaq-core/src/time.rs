@@ -1,50 +1,36 @@
 use crate::{ValR2, ValT};
 use alloc::string::{String, ToString};
+use chrono::DateTime;
 use jaq_interpret::Error;
 
-/// Parse an ISO-8601 timestamp string to a number holding the equivalent UNIX timestamp
+/// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).
+///
+/// Actually, this parses RFC 3339; see
+/// <https://ijmacd.github.io/rfc3339-iso8601/> for differences.
+/// jq also only parses a very restricted subset of ISO 8601.
 pub fn from_iso8601<V: ValT>(s: &str) -> ValR2<V> {
-    use time::format_description::well_known::Iso8601;
-    use time::OffsetDateTime;
-    let datetime = OffsetDateTime::parse(s, &Iso8601::DEFAULT)
+    let dt = DateTime::parse_from_rfc3339(s)
         .map_err(|e| Error::str(format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
-    let epoch_s = datetime.unix_timestamp();
     if s.contains('.') {
-        let seconds = epoch_s as f64 + (f64::from(datetime.nanosecond()) * 1e-9_f64);
-        Ok(seconds.into())
+        Ok((dt.timestamp_micros() as f64 * 1e-6_f64).into())
     } else {
-        isize::try_from(epoch_s)
+        let seconds = dt.timestamp();
+        isize::try_from(seconds)
             .map(V::from)
-            .or_else(|_| V::from_num(&epoch_s.to_string()))
+            .or_else(|_| V::from_num(&seconds.to_string()))
     }
 }
 
-/// Format a number as an ISO-8601 timestamp string.
+/// Format a number as an ISO 8601 timestamp string.
 pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
-    use time::format_description::well_known::iso8601;
-    use time::OffsetDateTime;
-    const SECONDS_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
-        .set_time_precision(iso8601::TimePrecision::Second {
-            decimal_digits: None,
-        })
-        .encode();
-
-    let fail1 = |e| Error::str(format_args!("cannot format {v} as ISO-8601 timestamp: {e}"));
-    let fail2 = |e| Error::str(format_args!("cannot format {v} as ISO-8601 timestamp: {e}"));
-
+    let fail = || Error::str(format_args!("cannot format {v} as ISO-8601 timestamp"));
     if let Some(i) = v.as_isize() {
-        let iso8601_fmt_s = iso8601::Iso8601::<SECONDS_CONFIG>;
-        OffsetDateTime::from_unix_timestamp(i as i64)
-            .map_err(fail1)?
-            .format(&iso8601_fmt_s)
-            .map_err(fail2)
+        let dt = DateTime::from_timestamp(i as i64, 0).ok_or_else(fail)?;
+        Ok(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
     } else {
         let f = v.as_f64()?;
-        let f_ns = (f * 1_000_000_000_f64).round() as i128;
-        OffsetDateTime::from_unix_timestamp_nanos(f_ns)
-            .map_err(fail1)?
-            .format(&iso8601::Iso8601::DEFAULT)
-            .map_err(fail2)
+        let dt = DateTime::from_timestamp_micros((f * 1e6_f64) as i64).ok_or_else(fail)?;
+        Ok(dt.format("%Y-%m-%dT%H:%M:%S%.fZ").to_string())
     }
 }

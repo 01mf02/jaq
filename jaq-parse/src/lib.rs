@@ -1,4 +1,8 @@
 //! JSON query language parser.
+//!
+//! **Note**:
+//! This crate is not maintained anymore.
+//! It has been superseded by the `jaq-syn` crate.
 #![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]

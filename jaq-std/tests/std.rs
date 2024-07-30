@@ -25,34 +25,33 @@ fn any() {
     give(json!({"a": false, "b": true}), "any", json!(true));
 }
 
-#[test]
-fn date() {
-    // aliases for fromdateiso8601 and todateiso8601
-    give(json!("1970-01-02T00:00:00Z"), "fromdate", json!(86400));
-    give(
-        json!("1970-01-02T00:00:00.123456789Z"),
-        "fromdate",
-        json!(86400.123456789),
-    );
-    give(json!(86400), "todate", json!("1970-01-02T00:00:00Z"));
-    give(
-        json!(86400.123456789),
-        "todate",
-        json!("1970-01-02T00:00:00.123456789Z"),
-    );
-}
+// aliases for fromdateiso8601 and todateiso8601
+yields!(fromdate, r#""1970-01-02T00:00:00Z" | fromdate"#, 86400);
+yields!(
+    fromdate_mu,
+    r#""1970-01-02T00:00:00.123456Z" | fromdate"#,
+    86400.123456
+);
+yields!(todate, r#"86400 | todate"#, "1970-01-02T00:00:00Z");
+yields!(
+    todate_mu,
+    r#"86400.123456 | todate"#,
+    "1970-01-02T00:00:00.123456Z"
+);
+
+yields!(tofromdate, "946684800|todate|fromdate", 946684800);
+yields!(
+    tofromdate_mu,
+    "946684800.123456|todate|fromdate",
+    946684800.123456
+);
 
 #[test]
-fn date_roundtrip() {
-    let epoch = 946684800;
-    give(json!(epoch), "todate|fromdate", json!(epoch));
-    let epoch_ns = 946684800.123456;
-    give(json!(epoch_ns), "todate|fromdate", json!(epoch_ns));
-
+fn fromtodate() {
     let iso = "2000-01-01T00:00:00Z";
     give(json!(iso), "fromdate|todate", json!(iso));
-    let iso_ns = "2000-01-01T00:00:00.123456000Z";
-    give(json!(iso_ns), "fromdate|todate", json!(iso_ns));
+    let iso_mu = "2000-01-01T00:00:00.123456Z";
+    give(json!(iso_mu), "fromdate|todate", json!(iso_mu));
 }
 
 yields!(

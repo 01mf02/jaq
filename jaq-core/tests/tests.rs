@@ -37,25 +37,22 @@ fn ascii() {
     give(json!("aAaAäの"), "ascii_downcase", json!("aaaaäの"));
 }
 
-#[test]
-fn dateiso8601() {
-    give(
-        json!("1970-01-02T00:00:00Z"),
-        "fromdateiso8601",
-        json!(86400),
-    );
-    give(
-        json!("1970-01-02T00:00:00.123456789Z"),
-        "fromdateiso8601",
-        json!(86400.123456789),
-    );
-    give(json!(86400), "todateiso8601", json!("1970-01-02T00:00:00Z"));
-    give(
-        json!(86400.123456789),
-        "todateiso8601",
-        json!("1970-01-02T00:00:00.123456789Z"),
-    );
-}
+yields!(
+    fromdate,
+    r#""1970-01-02T00:00:00Z" | fromdateiso8601"#,
+    86400
+);
+yields!(
+    fromdate_micros,
+    r#""1970-01-02T00:00:00.123456Z" | fromdateiso8601"#,
+    86400.123456
+);
+yields!(todate, r#"86400 | todateiso8601"#, "1970-01-02T00:00:00Z");
+yields!(
+    todate_micros,
+    r#"86400.123456 | todateiso8601"#,
+    "1970-01-02T00:00:00.123456Z"
+);
 
 #[test]
 fn explode_implode() {

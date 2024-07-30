@@ -179,7 +179,9 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
                 .unwrap();
         }
         Err(Error::Jaq(e)) => {
-            scope.post_message(&format!("⚠️ Error: {e}").into()).unwrap();
+            scope
+                .post_message(&format!("⚠️ Error: {e}").into())
+                .unwrap();
         }
     }
 
@@ -354,7 +356,9 @@ impl Report {
         };
         let labels = self.labels.into_iter().map(|(range, text, color)| {
             let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
-            Label::new(range, text.join("")).with_style(move |s| color.apply(s).to_string())
+            Label::new(range)
+                .with_text(text.join(""))
+                .with_style(move |s| color.apply(s).to_string())
         });
         Block::new(idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
