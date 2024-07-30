@@ -66,18 +66,18 @@ where
 /// Simple arithmetic expressions
 #[test]
 fn test() {
-    enum Op {
+    enum Arith {
         Add,
         Sub,
         Mul,
         Div,
     }
 
-    impl crate::prec_climb::Op for Op {
+    impl crate::prec_climb::Op for Arith {
         fn precedence(&self) -> usize {
             match self {
-                Op::Add | Op::Sub => 0,
-                Op::Mul | Op::Div => 1,
+                Arith::Add | Arith::Sub => 0,
+                Arith::Mul | Arith::Div => 1,
             }
         }
 
@@ -86,18 +86,18 @@ fn test() {
         }
     }
 
-    impl Expr<Op> for isize {
-        fn from_op(lhs: Self, op: Op, rhs: Self) -> Self {
+    impl Expr<Arith> for isize {
+        fn from_op(lhs: Self, op: Arith, rhs: Self) -> Self {
             match op {
-                Op::Add => lhs + rhs,
-                Op::Sub => lhs - rhs,
-                Op::Mul => lhs * rhs,
-                Op::Div => lhs / rhs,
+                Arith::Add => lhs + rhs,
+                Arith::Sub => lhs - rhs,
+                Arith::Mul => lhs * rhs,
+                Arith::Div => lhs / rhs,
             }
         }
     }
 
-    use Op::{Add, Div, Mul, Sub};
+    use Arith::{Add, Div, Mul, Sub};
     // 1 + 2 * 3 - 6 / 2 =
     // 1 +   6   -   3   = 4
     let head: isize = 1;
