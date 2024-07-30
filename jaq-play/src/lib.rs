@@ -356,7 +356,9 @@ impl Report {
         };
         let labels = self.labels.into_iter().map(|(range, text, color)| {
             let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
-            Label::new(range, text.join("")).with_style(move |s| color.apply(s).to_string())
+            Label::new(range)
+                .with_text(text.join(""))
+                .with_style(move |s| color.apply(s).to_string())
         });
         Block::new(idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");

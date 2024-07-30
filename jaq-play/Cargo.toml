@@ -21,7 +21,7 @@ jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 jaq-core      = { version = "1.2.0", path = "../jaq-core" }
 jaq-std       = { version = "1.2.0", path = "../jaq-std" }
 aho-corasick = "1.1.2"
-codesnake = { version = "0.1" }
+codesnake = { version = "0.2" }
 hifijson = "0.2"
 log = "0.4.17"
 unicode-width = "0.1.13"

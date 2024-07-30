@@ -119,9 +119,9 @@ dependencies = [
 
 [[package]]
 name = "codesnake"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cdbcda08384319005fd4b79b08aa04728dbafa702d304d737b5ccbd556df331"
+checksum = "458099206fe27887fff34f2f4bfdf482dbe874dd287aba1f068436babb4cac27"
 
 [[package]]
 name = "console_log"

@@ -20,7 +20,7 @@ jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 jaq-core      = { version = "1.2.0", path = "../jaq-core" }
 jaq-std       = { version = "1.5.0", path = "../jaq-std" }
 atty = "0.2"
-codesnake = { version = "0.1" }
+codesnake = { version = "0.2" }
 clap = { version = "4.0.0", features = ["derive"] }
 env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
