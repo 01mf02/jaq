@@ -179,7 +179,9 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
                 .unwrap();
         }
         Err(Error::Jaq(e)) => {
-            scope.post_message(&format!("⚠️ Error: {e}").into()).unwrap();
+            scope
+                .post_message(&format!("⚠️ Error: {e}").into())
+                .unwrap();
         }
     }
 
