@@ -16,11 +16,12 @@ std = []
 format = ["aho-corasick", "base64", "urlencoding"]
 math = ["libm"]
 parse_json = ["hifijson"]
+time = ["chrono"]
 
 [dependencies]
 jaq-interpret = { version = "1.5.0", path = "../jaq-interpret" }
 hifijson = { version = "0.2.0", optional = true }
-time = { version = "0.3.20", optional = true, features = ["formatting", "parsing"] }
+chrono = { version = "0.4.38", default-features = false, features = ["alloc"], optional = true }
 regex = { version = "1.9", optional = true }
 log = { version = "0.4.17", optional = true }
 libm = { version = "0.2.7", optional = true }
