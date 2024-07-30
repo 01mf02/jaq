@@ -1,6 +1,6 @@
 [package]
 name = "jaq-std"
-version = "1.5.1"
+version = "1.6.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -11,7 +11,7 @@ keywords = ["json", "query", "jq"]
 rust-version = "1.64"
 
 [dependencies]
-jaq-syn   = { version = "1.0.0", path = "../jaq-syn" }
+jaq-syn   = { version = "1.6.0", path = "../jaq-syn" }
 
 [dev-dependencies]
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
