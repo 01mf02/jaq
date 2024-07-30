@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use jaq_syn::parse;
 
 type NativeId = usize;
@@ -15,12 +15,26 @@ enum Tailrec {
 
 enum Term {
     Id,
+    Int(isize),
+    Num(String),
+    ObjEmpty,
+    ObjSingle(TermId, TermId),
+    TryCatch(TermId, TermId),
     Var(VarId),
+    Neg(TermId),
     Pipe(TermId, bool, TermId),
     Comma(TermId, TermId),
     CallDef(DefId, Vec<TermId>, usize, Option<Tailrec>),
     CallArg(VarId, usize),
+    Label(TermId),
+    Fold(FoldType, TermId, TermId, TermId),
     Break(usize),
+}
+
+enum FoldType {
+    Reduce,
+    Foreach,
+    For,
 }
 
 struct Ctx<S> {
@@ -113,12 +127,14 @@ impl<'s> Ctx<&'s str> {
         use parse::Term::*;
         match t {
             Id => Term::Id,
+            Neg(t) => Term::Neg(self.iterm(*t)),
             Pipe(l, Some(x), r) => Term::Pipe(
                 self.iterm(*l),
                 true,
                 self.with(Local::Var(x), |c| c.iterm_tr(*r)),
             ),
             Pipe(l, None, r) => Term::Pipe(self.iterm(*l), false, self.iterm_tr(*r)),
+            Label(x, t) => Term::Label(self.with(Local::Label(x), |c| c.iterm_tr(*t))),
             Break(x) => self.break_(x),
             Var(x) => self.var(x),
             Call(name, args) => {
@@ -136,6 +152,33 @@ impl<'s> Ctx<&'s str> {
                 (0..defs_len)
                     .for_each(|_| assert!(matches!(self.local.pop(), Some(Local::Sibling(_)))));
                 t
+            }
+            Num(n) => n
+                .parse()
+                .map_or_else(|_| Term::Num(n.to_owned()), Term::Int),
+            Obj(o) if o.is_empty() => Term::ObjEmpty,
+            Obj(o) => todo!(),
+            TryCatch(t, c) => Term::TryCatch(
+                self.iterm(*t),
+                self.iterm_tr(c.map_or_else(|| Call("!empty", Vec::new()), |c| *c)),
+            ),
+            Fold(fold, xs, x, args) => {
+                let fold = match fold {
+                    "reduce" => FoldType::Reduce,
+                    "foreach" => FoldType::Foreach,
+                    "for" => FoldType::For,
+                    _ => todo!(),
+                };
+                let mut args = args.into_iter();
+                let init = args.next().expect("init");
+                let update = args.next().expect("update");
+                assert!(args.next().is_none());
+
+                let xs = self.iterm(*xs);
+                let init = self.iterm(init);
+                let update = self.with(Local::Var(x), |c| c.iterm(update));
+
+                Term::Fold(fold, xs, init, update)
             }
             _ => todo!(),
         }
