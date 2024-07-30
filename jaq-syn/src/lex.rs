@@ -18,21 +18,28 @@ pub enum StrPart<S, F> {
 
 /// Token (tree) generic over string type `S`.
 #[derive(Debug)]
-pub enum Token<S> {
-    /// keywords such as `def`, but also identifiers such as `map`, `$x`, or `@csv`
-    Word(S),
+pub struct Token<S>(pub(crate) S, pub(crate) Tok<S>);
+
+#[derive(Debug)]
+pub(crate) enum Tok<S> {
+    /// keywords such as `def`, but also identifiers such as `map`, `f::g`
+    Word,
+    /// variables such as `$x`
+    Var,
+    /// formatters such as `@csv`
+    Fmt,
     /// number
-    Num(S),
+    Num,
     /// (interpolated) string, surrounded by opening and closing '"'
-    Str(S, Vec<StrPart<S, Self>>),
+    Str(Vec<StrPart<S, Token<S>>>),
     /// binary operator, such as `|` or `+=`
     ///
     /// Note that this includes `-` (negation) also when it is used as unary operator.
-    Op(S),
+    Op,
     /// punctuation, such as `.` or `;`
-    Char(S),
+    Char,
     /// delimited tokens, e.g. `(...)` or `[...]`
-    Block(S, Vec<Self>),
+    Block(Vec<Token<S>>),
 }
 
 /// Type of character that we expected.
@@ -214,8 +221,8 @@ impl<'a> Lexer<&'a str> {
                 StrPart::Char(char::from_u32(hex).unwrap())
             }
             Some('(') => {
-                let (full, tokens) = self.with_consumed(Self::delim);
-                return Some(StrPart::Filter(Token::Block(full, tokens)));
+                let (full, block) = self.with_consumed(Self::block);
+                return Some(StrPart::Filter(Token(full, block)));
             }
             Some(_) | None => {
                 self.e.push((Expect::Escape, self.i));
@@ -230,7 +237,7 @@ impl<'a> Lexer<&'a str> {
     /// Lex a (possibly interpolated) string.
     ///
     /// The input string has to start with '"'.
-    fn str(&mut self) -> Vec<StrPart<&'a str, Token<&'a str>>> {
+    fn str(&mut self) -> Tok<&'a str> {
         let start = self.take(1);
         assert_eq!(start, "\"");
         let mut parts = Vec::new();
@@ -241,16 +248,17 @@ impl<'a> Lexer<&'a str> {
                 parts.push(StrPart::Str(s));
             }
             match self.next() {
-                Some('"') => return parts,
+                Some('"') => break,
                 Some('\\') => self.escape().map(|part| parts.push(part)),
                 // SAFETY: due to `lex.trim()`
                 Some(_) => unreachable!(),
                 None => {
                     self.e.push((Expect::Delim(start), self.i));
-                    return parts;
+                    break;
                 }
             };
         }
+        Tok::Str(parts)
     }
 
     fn token(&mut self) -> Option<Token<&'a str>> {
@@ -259,27 +267,23 @@ impl<'a> Lexer<&'a str> {
         let is_op = |c| "|=!<>+-*/%".contains(c);
 
         let mut chars = self.i.chars();
-        Some(match chars.next()? {
-            'a'..='z' | 'A'..='Z' | '_' => Token::Word(self.consumed(1, Self::mod_then_ident)),
-            '$' | '@' => Token::Word(self.consumed(1, Self::ident1)),
-            '0'..='9' => Token::Num(self.consumed(1, Self::num)),
-            c if is_op(c) => Token::Op(self.consumed(1, |lex| lex.trim(is_op))),
+        let (s, tok) = match chars.next()? {
+            'a'..='z' | 'A'..='Z' | '_' => (self.consumed(1, Self::mod_then_ident), Tok::Word),
+            '$' => (self.consumed(1, Self::ident1), Tok::Var),
+            '@' => (self.consumed(1, Self::ident1), Tok::Fmt),
+            '0'..='9' => (self.consumed(1, Self::num), Tok::Num),
+            c if is_op(c) => (self.consumed(1, |lex| lex.trim(is_op)), Tok::Op),
             '.' => match chars.next() {
-                Some('.') => Token::Char(self.take(2)),
-                Some('a'..='z' | 'A'..='Z' | '_') => Token::Char(self.consumed(2, Self::ident0)),
-                _ => Token::Char(self.take(1)),
+                Some('.') => (self.take(2), Tok::Char),
+                Some('a'..='z' | 'A'..='Z' | '_') => (self.consumed(2, Self::ident0), Tok::Char),
+                _ => (self.take(1), Tok::Char),
             },
-            ':' | ';' | ',' | '?' => Token::Char(self.take(1)),
-            '"' => {
-                let (full, parts) = self.with_consumed(Self::str);
-                Token::Str(full, parts)
-            }
-            '(' | '[' | '{' => {
-                let (full, tokens) = self.with_consumed(Self::delim);
-                Token::Block(full, tokens)
-            }
+            ':' | ';' | ',' | '?' => (self.take(1), Tok::Char),
+            '"' => self.with_consumed(Self::str),
+            '(' | '[' | '{' => self.with_consumed(Self::block),
             _ => return None,
-        })
+        };
+        Some(Token(s, tok))
     }
 
     fn tokens(&mut self) -> Vec<Token<&'a str>> {
@@ -289,7 +293,7 @@ impl<'a> Lexer<&'a str> {
     /// Lex a sequence of tokens that is surrounded by parentheses, curly braces, or brackets.
     ///
     /// The input string has to start with either '(', '[', or '{'.
-    fn delim(&mut self) -> Vec<Token<&'a str>> {
+    fn block(&mut self) -> Tok<&'a str> {
         let open = self.take(1);
         let close = match open {
             "(" => ')',
@@ -301,12 +305,12 @@ impl<'a> Lexer<&'a str> {
 
         self.space();
         if let Some(rest) = self.i.strip_prefix(close) {
-            tokens.push(Token::Char(&self.i[..1]));
+            tokens.push(Token(&self.i[..1], Tok::Char));
             self.i = rest;
         } else {
             self.e.push((Expect::Delim(open), self.i));
         }
-        tokens
+        Tok::Block(tokens)
     }
 }
 
@@ -320,15 +324,7 @@ impl<'a> Token<&'a str> {
 
     /// Return the string slice corresponding to the token.
     pub fn as_str(&self) -> &'a str {
-        match self {
-            Self::Word(s) | Self::Char(s) | Self::Op(s) | Self::Num(s) => s,
-            Self::Str(s, _) | Self::Block(s, _) => s,
-        }
-    }
-
-    /// Return the span of a token that was lexed from some given input.
-    pub fn span(&self, code: &str) -> crate::Span {
-        span(code, self.as_str())
+        self.0
     }
 }
 
