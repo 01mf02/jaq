@@ -24,9 +24,8 @@ enum Term {
 }
 
 struct Ctx<S> {
+    /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
-    /// `def_map[did]` yields the body of a definition with ID `did`
-    def_map: Vec<Term>,
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
     mod_map: Vec<Vec<Sig<S, usize>>>,
 
@@ -87,19 +86,19 @@ impl<'s> Ctx<&'s str> {
     }
 
     fn def(&mut self, d: parse::Def<&'s str, parse::Term<&'s str>>) {
-        let did = self.def_map.len();
-        self.def_map.push(Term::Id);
+        let tid = self.term_map.len();
+        self.term_map.push(Term::Id);
 
         let arity = d.args.len();
         let sig = Sig {
             name: d.name,
             args: d.args,
-            id: did,
+            id: tid,
             tailrec: false,
         };
         self.local.push(Local::Parent(sig));
 
-        let t = self.term(d.body);
+        self.term_map[tid] = self.term(d.body);
 
         // turn the parent into a sibling
         match self.local.pop() {
