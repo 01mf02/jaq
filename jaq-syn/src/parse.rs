@@ -11,7 +11,7 @@ pub type Error<S, T = S> = (Expect<S>, T);
 /// Parse error that stores what token it found.
 pub type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
 
-type Path<T> = Vec<(path::Part<T>, path::Opt)>;
+pub type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 
 /// Type of token that we expected.
 ///

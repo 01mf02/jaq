@@ -6,6 +6,8 @@ type NativeId = usize;
 type TermId = usize;
 type ModId = usize;
 type VarId = usize;
+type VarSkip = usize;
+type LabelSkip = usize;
 
 enum Tailrec {
     Throw,
@@ -16,14 +18,16 @@ enum Term<T = TermId> {
     Id,
     Int(isize),
     Num(String),
+    Arr(T),
     ObjEmpty,
     ObjSingle(T, T),
     TryCatch(T, T),
     Var(VarId),
     Neg(T),
-    CallDef(TermId, Vec<T>, usize, Option<Tailrec>),
-    CallArg(VarId, usize),
+    CallDef(TermId, Vec<T>, VarSkip, Option<Tailrec>),
+    CallArg(VarId, LabelSkip),
     Label(T),
+    Ite(T, T, T),
     Fold(FoldType, T, T, T),
     Break(usize),
 
@@ -37,6 +41,7 @@ enum Term<T = TermId> {
     Ord(T, OrdOp, T),
     Alt(T, T),
     UpdateAlt(T, T),
+    Path(T, jaq_syn::parse::Path<T>),
 }
 
 enum FoldType {
@@ -108,8 +113,7 @@ impl<'s> Ctx<&'s str> {
     }
 
     fn def(&mut self, d: parse::Def<&'s str, parse::Term<&'s str>>) {
-        let tid = self.term_map.len();
-        self.term_map.push(Term::Id);
+        let tid = self.insert_term(Term::Id);
 
         let arity = d.args.len();
         let sig = Sig {
@@ -135,6 +139,8 @@ impl<'s> Ctx<&'s str> {
         use parse::Term::*;
         match t {
             Id => Term::Id,
+            Recurse => self.term(Call("!recurse", Vec::new())),
+            Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
             Neg(t) => Term::Neg(self.iterm(*t)),
             Pipe(l, Some(x), r) => Term::Pipe(
                 self.iterm(*l),
@@ -144,6 +150,12 @@ impl<'s> Ctx<&'s str> {
             Pipe(l, None, r) => Term::Pipe(self.iterm(*l), false, self.iterm_tr(*r)),
             Label(x, t) => Term::Label(self.with(Local::Label(x), |c| c.iterm_tr(*t))),
             Break(x) => self.break_(x),
+            IfThenElse(if_thens, else_) => {
+                let else_ = else_.map_or(Term::Id, |else_| self.term(*else_));
+                if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
+                    Term::Ite(self.iterm(if_), self.iterm_tr(then_), self.insert_term(acc))
+                })
+            }
             Var(x) => self.var(x),
             Call(name, args) => {
                 let args: Vec<_> = args.into_iter().map(|t| self.iterm(t)).collect();
@@ -205,7 +217,20 @@ impl<'s> Ctx<&'s str> {
                     UpdateAlt => Term::UpdateAlt(l, r),
                 }
             }
-            _ => todo!(),
+            Path(t, path) => {
+                use jaq_syn::path::Part;
+                let t = self.iterm(*t);
+                let path = path.into_iter().map(|(p, opt)| match p {
+                    Part::Index(i) => (Part::Index(self.iterm(i)), opt),
+                    Part::Range(lower, upper) => {
+                        let lower = lower.map(|f| self.iterm(f));
+                        let upper = upper.map(|f| self.iterm(f));
+                        (Part::Range(lower, upper), opt)
+                    }
+                });
+                Term::Path(t, path.collect())
+            }
+            Str(fmt, parts) => todo!(),
         }
     }
 
@@ -215,6 +240,10 @@ impl<'s> Ctx<&'s str> {
 
     fn iterm_tr(&mut self, t: parse::Term<&'s str>) -> TermId {
         let t = self.term(t);
+        self.insert_term(t)
+    }
+
+    fn insert_term(&mut self, t: Term) -> TermId {
         let tid = self.term_map.len();
         self.term_map.push(t);
         tid
