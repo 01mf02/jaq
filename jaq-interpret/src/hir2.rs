@@ -306,10 +306,7 @@ impl<'s> Ctx<&'s str> {
         };
         let mut defs = self.mod_map[*mid].iter().rev();
         let call = defs.find_map(|sig| sig.call(name, &args, vars));
-        call.unwrap_or_else(|| {
-            self.errs.push(Error(name, Undefined::Filter(args.len())));
-            Term::default()
-        })
+        call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
     }
 
     fn call(&mut self, name: &'s str, args: Vec<TermId>) -> Term {
