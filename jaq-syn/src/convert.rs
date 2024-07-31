@@ -34,7 +34,7 @@ impl parse::Term<&str> {
         };
         let from_str = |part: &StrPart<&str, _>| match part {
             StrPart::Str(s) => string::Part::Str(s.to_string()),
-            StrPart::Filter(tm) => string::Part::Fun(*span(tm)),
+            StrPart::Term(tm) => string::Part::Fun(*span(tm)),
             StrPart::Char(c) => string::Part::Str(c.to_string()),
         };
         let from_obj = |(k, v): &(_, Option<_>)| {

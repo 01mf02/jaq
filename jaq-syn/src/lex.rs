@@ -7,11 +7,11 @@ use alloc::vec::Vec;
 /// `S` is a type of strings (without escape sequences), and
 /// `F` is a type of interpolated filters.
 #[derive(Debug)]
-pub enum StrPart<S, F> {
+pub enum StrPart<S, T> {
     /// string without escape sequences
     Str(S),
-    /// interpolated filter (`\(...)`)
-    Filter(F),
+    /// interpolated term (`\(...)`)
+    Term(T),
     /// escaped character (e.g. `\n`, `t`, `\u0041`)
     Char(char),
 }
@@ -218,7 +218,7 @@ impl<'a> Lexer<&'a str> {
             }
             Some('(') => {
                 let (full, block) = self.with_consumed(Self::block);
-                return Some(StrPart::Filter(Token(full, block)));
+                return Some(StrPart::Term(Token(full, block)));
             }
             Some(_) | None => {
                 self.e.push((Expect::Escape, self.i));

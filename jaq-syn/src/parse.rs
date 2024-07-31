@@ -542,10 +542,10 @@ impl<'s, 't> Parser<'s, 't> {
     ) -> Vec<StrPart<&'s str, Term<&'s str>>> {
         let parts = parts.iter().map(|part| match part {
             StrPart::Str(s) => StrPart::Str(*s),
-            StrPart::Filter(Token(full, Tok::Block(tokens))) if full.starts_with('(') => {
-                StrPart::Filter(self.with(tokens, ")", Self::term))
+            StrPart::Term(Token(full, Tok::Block(tokens))) if full.starts_with('(') => {
+                StrPart::Term(self.with(tokens, ")", Self::term))
             }
-            StrPart::Filter(_) => unreachable!(),
+            StrPart::Term(_) => unreachable!(),
             StrPart::Char(c) => StrPart::Char(*c),
         });
         parts.collect()
