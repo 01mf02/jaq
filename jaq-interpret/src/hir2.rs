@@ -14,7 +14,9 @@ enum Tailrec {
     Catch,
 }
 
+#[derive(Default)]
 enum Term<T = TermId> {
+    #[default]
     Id,
     Int(isize),
     Num(String),
@@ -51,6 +53,15 @@ enum FoldType {
     For,
 }
 
+struct Error<S>(S, Undefined);
+
+enum Undefined {
+    Mod,
+    Var,
+    Label,
+    Filter(usize),
+}
+
 struct Ctx<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
@@ -63,6 +74,8 @@ struct Ctx<S> {
     global_vars: Vec<S>,
     imported_vars: Vec<(S, ModId)>,
     local: Vec<Local<S>>,
+
+    errs: Vec<Error<S>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,6 +96,17 @@ impl<S, A> Sig<S, A> {
             args: f(self.args),
             id: self.id,
             tailrec: self.tailrec,
+        }
+    }
+}
+
+impl<S: Eq> Sig<S, usize> {
+    fn call(&self, name: S, args: &[TermId], vars: usize) -> Option<Term> {
+        if name == self.name && args.len() == self.args {
+            let call = self.tailrec.then_some(Tailrec::Catch);
+            Some(Term::CallDef(self.id, args.into(), vars, call))
+        } else {
+            None
         }
     }
 }
@@ -179,18 +203,19 @@ impl<'s> Ctx<&'s str> {
                 self.iterm(*t),
                 self.iterm_tr(c.map_or_else(|| Call("!empty", Vec::new()), |c| *c)),
             ),
-            Fold(fold, xs, x, args) => {
-                let fold = match fold {
+            Fold(name, xs, x, args) => {
+                let arity = args.len();
+                let fold = match name {
                     "reduce" => FoldType::Reduce,
                     "foreach" => FoldType::Foreach,
                     "for" => FoldType::For,
-                    _ => todo!(),
+                    name => return self.fail(name, Undefined::Filter(arity)),
                 };
                 let mut args = args.into_iter();
-                let init = args.next().expect("init");
-                let update = args.next().expect("update");
-                assert!(args.next().is_none());
-
+                let (init, update) = match (args.next(), args.next(), args.next()) {
+                    (Some(init), Some(update), None) => (init, update),
+                    _ => return self.fail(name, Undefined::Filter(arity)),
+                };
                 let xs = self.iterm(*xs);
                 let init = self.iterm(init);
                 let update = self.with(Local::Var(x), |c| c.iterm(update));
@@ -261,6 +286,11 @@ impl<'s> Ctx<&'s str> {
         tid
     }
 
+    fn fail(&mut self, name: &'s str, undef: Undefined) -> Term {
+        self.errs.push(Error(name, undef));
+        Term::default()
+    }
+
     fn call_mod(&mut self, module: &'s str, name: &'s str, args: Vec<TermId>) -> Term {
         let local = self.local.iter();
         let vars = local.map(|l| match l {
@@ -270,13 +300,16 @@ impl<'s> Ctx<&'s str> {
         });
         let vars = vars.sum();
         let mut imported_mods = self.imported_mods.iter().rev();
-        let mid = imported_mods.find(|(mid, module_)| module == *module_);
-        let mid = mid.expect("module not included").0;
-        let mut defs = self.mod_map[mid].iter().rev();
-        let sig = defs.find(|sig| name == sig.name && args.len() == sig.args);
-        let sig = sig.unwrap();
-        let call = sig.tailrec.then_some(Tailrec::Catch);
-        return Term::CallDef(sig.id, args, vars, call);
+        let mid = match imported_mods.find(|(mid, module_)| module == *module_) {
+            Some((mid, _module)) => mid,
+            None => return self.fail(module, Undefined::Mod),
+        };
+        let mut defs = self.mod_map[*mid].iter().rev();
+        let call = defs.find_map(|sig| sig.call(name, &args, vars));
+        call.unwrap_or_else(|| {
+            self.errs.push(Error(name, Undefined::Filter(args.len())));
+            Term::default()
+        })
     }
 
     fn call(&mut self, name: &'s str, args: Vec<TermId>) -> Term {
@@ -288,9 +321,8 @@ impl<'s> Ctx<&'s str> {
                 Local::Var(_) => i += 1,
                 Local::Label(_) => labels += 1,
                 Local::Sibling(sig) => {
-                    if name == sig.name && args.len() == sig.args {
-                        let call = sig.tailrec.then_some(Tailrec::Catch);
-                        return Term::CallDef(sig.id, args, i, call);
+                    if let Some(call) = sig.call(name, &args, i) {
+                        return call;
                     }
                 }
                 Local::Parent(sig) => {
@@ -310,8 +342,11 @@ impl<'s> Ctx<&'s str> {
                 Local::TailrecObstacle => tailrec = false,
             }
         }
-        // TODO: consider included mods
-        panic!("undefined filter")
+        let call = self.included_mods.iter().rev().find_map(|mid| {
+            let mut defs = self.mod_map[*mid].iter().rev();
+            defs.find_map(|sig| sig.call(name, &args, i))
+        });
+        call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
     }
 
     fn var(&mut self, x: &'s str) -> Term {
@@ -346,7 +381,7 @@ impl<'s> Ctx<&'s str> {
                 i += 1
             }
         }
-        panic!("unbound variable")
+        self.fail(x, Undefined::Var)
     }
 
     fn break_(&mut self, x: &'s str) -> Term {
@@ -358,7 +393,7 @@ impl<'s> Ctx<&'s str> {
                 _ => (),
             }
         }
-        panic!("undefined label")
+        self.fail(x, Undefined::Label)
     }
 
     fn obj_entry(&mut self, k: parse::Term<&'s str>, v: Option<parse::Term<&'s str>>) -> Term {
