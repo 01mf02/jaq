@@ -2,6 +2,8 @@
 
 use crate::lex::{StrPart, Tok, Token};
 use crate::path;
+use crate::prec_climb::{self, Associativity};
+use crate::{MathOp, OrdOp};
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
@@ -96,8 +98,9 @@ pub enum Term<S> {
     Neg(Box<Self>),
     /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
     Pipe(Box<Self>, Option<S>, Box<Self>),
+
     /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
-    BinOp(Box<Self>, Vec<(S, Self)>),
+    BinOp(Box<Self>, BinaryOp, Box<Self>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
@@ -120,6 +123,32 @@ pub enum Term<S> {
 
     /// Path such as `.a`, `.[][]."b"`, `f[0]`
     Path(Box<Self>, Path<Self>),
+}
+
+/// Binary operators, such as `|`, `,`, `//`, ...
+#[derive(Debug)]
+pub enum BinaryOp {
+    /// Concatenation, i.e. `l, r`
+    Comma,
+    /// Alternation, i.e. `l // r`
+    Alt,
+    /// Logical disjunction, i.e. `l or r`
+    Or,
+    /// Logical conjunction, i.e. `l and r`
+    And,
+    /// Mathematical operation, e.g. `l + r`, `l - r`, ...
+    Math(MathOp),
+    /// Ordering operation, e.g. `l == r`, `l <= r`, ...
+    Ord(OrdOp),
+    /// Assignment, i.e. `l = r`,
+    Assign,
+    /// Update, i.e. `l |= r`
+    Update,
+    /// Mathematical assignment, i.e. `l += r`, `l -= r`, ...
+    /// (this is identical to `r as $x | l |= . + $x`, ...)
+    UpdateMath(MathOp),
+    /// `l //= r`
+    UpdateAlt,
 }
 
 impl<S> Term<S> {
@@ -269,13 +298,35 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Parse a binary operator, including `,` if `with_comma` is true.
-    fn op(&mut self, with_comma: bool) -> Option<&'s str> {
+    fn op(&mut self, with_comma: bool) -> Option<BinaryOp> {
         self.maybe(|p| match p.i.next() {
-            // handle pipe directly in `term()`
-            Some(Token("|", _)) => None,
-            Some(Token(o, Tok::Op) | Token(o @ ("and" | "or"), _)) => Some(*o),
-            Some(Token(o @ ",", _)) if with_comma => Some(*o),
-            _ => None,
+            Some(Token(s, _)) => Some(match *s {
+                "," if with_comma => BinaryOp::Comma,
+                "+" => BinaryOp::Math(MathOp::Add),
+                "-" => BinaryOp::Math(MathOp::Sub),
+                "*" => BinaryOp::Math(MathOp::Mul),
+                "/" => BinaryOp::Math(MathOp::Div),
+                "%" => BinaryOp::Math(MathOp::Rem),
+                "=" => BinaryOp::Assign,
+                "|=" => BinaryOp::Update,
+                "+=" => BinaryOp::UpdateMath(MathOp::Add),
+                "-=" => BinaryOp::UpdateMath(MathOp::Sub),
+                "*=" => BinaryOp::UpdateMath(MathOp::Mul),
+                "/=" => BinaryOp::UpdateMath(MathOp::Div),
+                "%=" => BinaryOp::UpdateMath(MathOp::Rem),
+                "<" => BinaryOp::Ord(OrdOp::Lt),
+                ">" => BinaryOp::Ord(OrdOp::Gt),
+                "<=" => BinaryOp::Ord(OrdOp::Le),
+                ">=" => BinaryOp::Ord(OrdOp::Ge),
+                "==" => BinaryOp::Ord(OrdOp::Eq),
+                "!=" => BinaryOp::Ord(OrdOp::Ne),
+                "//" => BinaryOp::Alt,
+                "//=" => BinaryOp::UpdateAlt,
+                "or" => BinaryOp::Or,
+                "and" => BinaryOp::And,
+                _ => return None,
+            }),
+            None => None,
         })
     }
 
@@ -326,12 +377,7 @@ impl<'s, 't> Parser<'s, 't> {
         let head = self.atom()?;
         let tail = core::iter::from_fn(|| self.op(with_comma).map(|op| Ok((op, self.atom()?))))
             .collect::<Result<Vec<_>>>()?;
-
-        let tm = if tail.is_empty() {
-            head
-        } else {
-            Term::BinOp(Box::new(head), tail)
-        };
+        let tm = prec_climb::climb(head, tail);
 
         let pipe = self.try_maybe(|p| match p.i.next() {
             Some(Token("|", _)) => Ok(Some(None)),
@@ -418,7 +464,7 @@ impl<'s, 't> Parser<'s, 't> {
             }
             Some(Token(id, Tok::Word | Tok::Fmt)) => Term::Call(*id, self.args(Self::term)),
             Some(Token("..", _)) => Term::Recurse,
-            Some(Token(c, Tok::Char)) if c.starts_with('.') => {
+            Some(Token(c, Tok::Sym)) if c.starts_with('.') => {
                 let key = if c.len() > 1 {
                     Some(Term::str(&c[1..]))
                 } else {
@@ -685,3 +731,36 @@ pub struct Def<S, F> {
 }
 
 pub type Defs<S> = Vec<Def<S, Term<S>>>;
+
+impl prec_climb::Op for BinaryOp {
+    fn precedence(&self) -> usize {
+        match self {
+            Self::Comma => 1,
+            Self::Assign | Self::Update | Self::UpdateMath(_) => 2,
+            Self::Alt => 3,
+            Self::Or => Self::Alt.precedence() + 1,
+            Self::And => Self::Or.precedence() + 1,
+            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::And.precedence() + 1,
+            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => Self::And.precedence() + 2,
+            Self::Math(MathOp::Add | MathOp::Sub) => Self::And.precedence() + 3,
+            Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).precedence() + 1,
+            Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).precedence() + 1,
+            Self::UpdateAlt => todo!(),
+        }
+    }
+
+    fn associativity(&self) -> prec_climb::Associativity {
+        use prec_climb::Associativity;
+        match self {
+            Self::Assign | Self::Update | Self::UpdateMath(_) => Associativity::Right,
+            Self::UpdateAlt => todo!(),
+            _ => Associativity::Left,
+        }
+    }
+}
+
+impl<S> prec_climb::Expr<BinaryOp> for Term<S> {
+    fn from_op(lhs: Self, op: BinaryOp, rhs: Self) -> Self {
+        Self::BinOp(Box::new(lhs), op, Box::new(rhs))
+    }
+}

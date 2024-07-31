@@ -32,12 +32,8 @@ pub(crate) enum Tok<S> {
     Num,
     /// (interpolated) string, surrounded by opening and closing '"'
     Str(Vec<StrPart<S, Token<S>>>),
-    /// binary operator, such as `|` or `+=`
-    ///
-    /// Note that this includes `-` (negation) also when it is used as unary operator.
-    Op,
-    /// punctuation, such as `.` or `;`
-    Char,
+    /// symbol such as `.`, `;`, `-`, `|`, or `+=`
+    Sym,
     /// delimited tokens, e.g. `(...)` or `[...]`
     Block(Vec<Token<S>>),
 }
@@ -272,13 +268,13 @@ impl<'a> Lexer<&'a str> {
             '$' => (self.consumed(1, Self::ident1), Tok::Var),
             '@' => (self.consumed(1, Self::ident1), Tok::Fmt),
             '0'..='9' => (self.consumed(1, Self::num), Tok::Num),
-            c if is_op(c) => (self.consumed(1, |lex| lex.trim(is_op)), Tok::Op),
+            c if is_op(c) => (self.consumed(1, |lex| lex.trim(is_op)), Tok::Sym),
             '.' => match chars.next() {
-                Some('.') => (self.take(2), Tok::Char),
-                Some('a'..='z' | 'A'..='Z' | '_') => (self.consumed(2, Self::ident0), Tok::Char),
-                _ => (self.take(1), Tok::Char),
+                Some('.') => (self.take(2), Tok::Sym),
+                Some('a'..='z' | 'A'..='Z' | '_') => (self.consumed(2, Self::ident0), Tok::Sym),
+                _ => (self.take(1), Tok::Sym),
             },
-            ':' | ';' | ',' | '?' => (self.take(1), Tok::Char),
+            ':' | ';' | ',' | '?' => (self.take(1), Tok::Sym),
             '"' => self.with_consumed(Self::str),
             '(' | '[' | '{' => self.with_consumed(Self::block),
             _ => return None,
@@ -305,7 +301,7 @@ impl<'a> Lexer<&'a str> {
 
         self.space();
         if let Some(rest) = self.i.strip_prefix(close) {
-            tokens.push(Token(&self.i[..1], Tok::Char));
+            tokens.push(Token(&self.i[..1], Tok::Sym));
             self.i = rest;
         } else {
             self.e.push((Expect::Delim(open), self.i));

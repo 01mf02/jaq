@@ -1,9 +1,8 @@
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use jaq_syn::parse;
+use jaq_syn::{MathOp, OrdOp};
 
 type NativeId = usize;
-// TODO: change to TermId
-type DefId = usize;
 type TermId = usize;
 type ModId = usize;
 type VarId = usize;
@@ -13,22 +12,31 @@ enum Tailrec {
     Catch,
 }
 
-enum Term {
+enum Term<T = TermId> {
     Id,
     Int(isize),
     Num(String),
     ObjEmpty,
-    ObjSingle(TermId, TermId),
-    TryCatch(TermId, TermId),
+    ObjSingle(T, T),
+    TryCatch(T, T),
     Var(VarId),
-    Neg(TermId),
-    Pipe(TermId, bool, TermId),
-    Comma(TermId, TermId),
-    CallDef(DefId, Vec<TermId>, usize, Option<Tailrec>),
+    Neg(T),
+    CallDef(TermId, Vec<T>, usize, Option<Tailrec>),
     CallArg(VarId, usize),
-    Label(TermId),
-    Fold(FoldType, TermId, TermId, TermId),
+    Label(T),
+    Fold(FoldType, T, T, T),
     Break(usize),
+
+    Pipe(T, bool, T),
+    Comma(T, T),
+    Assign(T, T),
+    Update(T, T),
+    UpdateMath(T, MathOp, T),
+    Logic(T, bool, T),
+    Math(T, MathOp, T),
+    Ord(T, OrdOp, T),
+    Alt(T, T),
+    UpdateAlt(T, T),
 }
 
 enum FoldType {
@@ -57,7 +65,7 @@ struct Sig<S, A> {
     // TODO: we could analyse for each argument whether it is TR, and
     // use this when converting args at callsite
     args: A,
-    id: DefId,
+    id: TermId,
     /// true if there is at least one tail-recursive call to this filter from within itself
     tailrec: bool,
 }
@@ -179,6 +187,23 @@ impl<'s> Ctx<&'s str> {
                 let update = self.with(Local::Var(x), |c| c.iterm(update));
 
                 Term::Fold(fold, xs, init, update)
+            }
+            BinOp(l, op, r) => {
+                use jaq_syn::parse::BinaryOp::*;
+                let l = self.iterm(*l);
+                let r = self.iterm(*r);
+                match op {
+                    Comma => Term::Comma(l, r),
+                    Math(op) => Term::Math(l, op, r),
+                    Assign => Term::Assign(l, r),
+                    Update => Term::Update(l, r),
+                    UpdateMath(op) => Term::UpdateMath(l, op, r),
+                    Ord(op) => Term::Ord(l, op, r),
+                    Or => Term::Logic(l, true, r),
+                    And => Term::Logic(l, false, r),
+                    Alt => Term::Alt(l, r),
+                    UpdateAlt => Term::UpdateAlt(l, r),
+                }
             }
             _ => todo!(),
         }

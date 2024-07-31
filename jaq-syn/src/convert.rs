@@ -46,31 +46,6 @@ impl parse::Term<&str> {
             };
             KeyVal::Filter(k, v)
         };
-        let from_op = |op| match op {
-            "," => BinaryOp::Comma,
-            "//" => BinaryOp::Alt,
-            "or" => BinaryOp::Or,
-            "and" => BinaryOp::And,
-            "+" => BinaryOp::Math(MathOp::Add),
-            "-" => BinaryOp::Math(MathOp::Sub),
-            "*" => BinaryOp::Math(MathOp::Mul),
-            "/" => BinaryOp::Math(MathOp::Div),
-            "%" => BinaryOp::Math(MathOp::Rem),
-            "=" => BinaryOp::Assign(AssignOp::Assign),
-            "|=" => BinaryOp::Assign(AssignOp::Update),
-            "+=" => BinaryOp::Assign(AssignOp::UpdateWith(MathOp::Add)),
-            "-=" => BinaryOp::Assign(AssignOp::UpdateWith(MathOp::Sub)),
-            "*=" => BinaryOp::Assign(AssignOp::UpdateWith(MathOp::Mul)),
-            "/=" => BinaryOp::Assign(AssignOp::UpdateWith(MathOp::Div)),
-            "%=" => BinaryOp::Assign(AssignOp::UpdateWith(MathOp::Rem)),
-            "<" => BinaryOp::Ord(OrdOp::Lt),
-            ">" => BinaryOp::Ord(OrdOp::Gt),
-            "<=" => BinaryOp::Ord(OrdOp::Le),
-            ">=" => BinaryOp::Ord(OrdOp::Ge),
-            "==" => BinaryOp::Ord(OrdOp::Eq),
-            "!=" => BinaryOp::Ord(OrdOp::Ne),
-            op => panic!("unknown operator: {op}"),
-        };
         match self {
             Self::Id => Id,
             Self::Recurse => Recurse,
@@ -87,11 +62,7 @@ impl parse::Term<&str> {
                 BinaryOp::Pipe(v.map(|v| v[1..].to_string())),
                 span(r),
             ),
-            Self::BinOp(head, tail) => {
-                let head = *span(head);
-                let tail = tail.iter().map(|(op, tm)| (from_op(op), *span(tm)));
-                prec_climb::climb(head, tail).0
-            }
+            Self::BinOp(l, op, r) => Binary(span(l), op.into(), span(r)),
 
             Self::Label(_v, ..) | Self::Break(_v) => {
                 unimplemented!("label-break is not supported yet")
@@ -155,34 +126,21 @@ impl From<&parse::Term<&str>> for Filter {
     }
 }
 
-impl prec_climb::Op for BinaryOp {
-    fn precedence(&self) -> usize {
-        match self {
-            Self::Pipe(_) => 0,
-            Self::Comma => 1,
-            Self::Assign(_) => 2,
-            Self::Alt => 3,
-            Self::Or => Self::Alt.precedence() + 1,
-            Self::And => Self::Or.precedence() + 1,
-            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::And.precedence() + 1,
-            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => Self::And.precedence() + 2,
-            Self::Math(MathOp::Add | MathOp::Sub) => Self::And.precedence() + 3,
-            Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).precedence() + 1,
-            Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).precedence() + 1,
+impl From<&parse::BinaryOp> for BinaryOp {
+    fn from(op: &parse::BinaryOp) -> BinaryOp {
+        use parse::BinaryOp::*;
+        match op {
+            Comma => Self::Comma,
+            Alt => Self::Alt,
+            Or => Self::Or,
+            And => Self::And,
+            Math(op) => Self::Math(*op),
+            Ord(op) => Self::Ord(*op),
+            Assign => Self::Assign(AssignOp::Assign),
+            Update => Self::Assign(AssignOp::Update),
+            UpdateMath(op) => Self::Assign(AssignOp::UpdateWith(*op)),
+            UpdateAlt => unimplemented!("//= is not supported yet"),
         }
-    }
-
-    fn associativity(&self) -> Associativity {
-        match self {
-            Self::Pipe(_) | Self::Assign(_) => Associativity::Right,
-            _ => Associativity::Left,
-        }
-    }
-}
-
-impl prec_climb::Expr<BinaryOp> for Spanned<Filter> {
-    fn from_op(lhs: Self, op: BinaryOp, rhs: Self) -> Self {
-        Filter::binary(lhs, op, rhs)
     }
 }
 
