@@ -7,6 +7,7 @@ pub use jaq_syn::path::Opt;
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(Part<F>, Opt)>);
 
+// TODO for v2.0: use jaq_syn::path::Part for this
 #[derive(Clone, Debug)]
 pub enum Part<I> {
     Index(I),

@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use jaq_syn::parse;
 use jaq_syn::{MathOp, OrdOp};
 
@@ -18,6 +18,7 @@ enum Term<T = TermId> {
     Id,
     Int(isize),
     Num(String),
+    Str(String),
     Arr(T),
     ObjEmpty,
     ObjSingle(T, T),
@@ -41,7 +42,7 @@ enum Term<T = TermId> {
     Ord(T, OrdOp, T),
     Alt(T, T),
     UpdateAlt(T, T),
-    Path(T, jaq_syn::parse::Path<T>),
+    Path(T, crate::path::Path<T>),
 }
 
 enum FoldType {
@@ -173,11 +174,7 @@ impl<'s> Ctx<&'s str> {
                     .for_each(|_| assert!(matches!(self.local.pop(), Some(Local::Sibling(_)))));
                 t
             }
-            Num(n) => n
-                .parse()
-                .map_or_else(|_| Term::Num(n.to_owned()), Term::Int),
-            Obj(o) if o.is_empty() => Term::ObjEmpty,
-            Obj(o) => todo!(),
+            Num(n) => n.parse().map_or_else(|_| Term::Num(n.into()), Term::Int),
             TryCatch(t, c) => Term::TryCatch(
                 self.iterm(*t),
                 self.iterm_tr(c.map_or_else(|| Call("!empty", Vec::new()), |c| *c)),
@@ -218,19 +215,34 @@ impl<'s> Ctx<&'s str> {
                 }
             }
             Path(t, path) => {
-                use jaq_syn::path::Part;
+                use crate::path::{Part, Path};
+                use jaq_syn::path::Part::*;
                 let t = self.iterm(*t);
                 let path = path.into_iter().map(|(p, opt)| match p {
-                    Part::Index(i) => (Part::Index(self.iterm(i)), opt),
-                    Part::Range(lower, upper) => {
+                    Index(i) => (Part::Index(self.iterm(i)), opt),
+                    Range(lower, upper) => {
                         let lower = lower.map(|f| self.iterm(f));
                         let upper = upper.map(|f| self.iterm(f));
                         (Part::Range(lower, upper), opt)
                     }
                 });
-                Term::Path(t, path.collect())
+                Term::Path(t, crate::path::Path(path.collect()))
             }
-            Str(fmt, parts) => todo!(),
+            Str(fmt, parts) => {
+                use jaq_syn::lex::StrPart;
+                let fmt = self.iterm(Call(fmt.unwrap_or_else(|| "!tostring"), Vec::new()));
+                let parts = parts.into_iter().map(|part| match part {
+                    StrPart::Str(s) => Term::Str(s.into()),
+                    StrPart::Char(c) => Term::Str(c.into()),
+                    StrPart::Term(f) => Term::Pipe(self.iterm(f), false, fmt),
+                });
+                let parts = parts.collect();
+                self.sum_or(|| Term::Str("".into()), parts)
+            }
+            Obj(o) => {
+                let kvs = o.into_iter().map(|(k, v)| self.obj_entry(k, v)).collect();
+                self.sum_or(|| Term::ObjEmpty, kvs)
+            }
         }
     }
 
@@ -347,5 +359,30 @@ impl<'s> Ctx<&'s str> {
             }
         }
         panic!("undefined label")
+    }
+
+    fn obj_entry(&mut self, k: parse::Term<&'s str>, v: Option<parse::Term<&'s str>>) -> Term {
+        let (k, v) = match (k, v) {
+            (k @ parse::Term::Var(x), None) => {
+                (self.insert_term(Term::Str(x[1..].into())), self.iterm(k))
+            }
+            (k, None) => {
+                use crate::path::{Part, Path};
+                let k = self.iterm(k);
+                let path = Path::from(Part::Index(k));
+                let path = Term::Path(self.insert_term(Term::Id), path);
+                (k, self.insert_term(path))
+            }
+            (k, Some(v)) => (self.iterm(k), self.iterm(v)),
+        };
+        Term::ObjSingle(k, v)
+    }
+
+    fn sum_or(&mut self, f: impl FnOnce() -> Term, terms: Vec<Term>) -> Term {
+        let mut iter = terms.into_iter().rev();
+        let last = iter.next().unwrap_or_else(f);
+        iter.fold(last, |acc, x| {
+            Term::Math(self.insert_term(x), MathOp::Add, self.insert_term(acc))
+        })
     }
 }
