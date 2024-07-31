@@ -255,7 +255,7 @@ impl<'s> Ctx<&'s str> {
             }
             Str(fmt, parts) => {
                 use jaq_syn::lex::StrPart;
-                let fmt = self.iterm(Call(fmt.unwrap_or_else(|| "!tostring"), Vec::new()));
+                let fmt = self.iterm(Call(fmt.unwrap_or("!tostring"), Vec::new()));
                 let parts = parts.into_iter().map(|part| match part {
                     StrPart::Str(s) => Term::Str(s.into()),
                     StrPart::Char(c) => Term::Str(c.into()),
@@ -272,7 +272,7 @@ impl<'s> Ctx<&'s str> {
     }
 
     fn iterm(&mut self, t: parse::Term<&'s str>) -> TermId {
-        self.with(Local::TailrecObstacle, |c| c.iterm(t))
+        self.with(Local::TailrecObstacle, |c| c.iterm_tr(t))
     }
 
     fn iterm_tr(&mut self, t: parse::Term<&'s str>) -> TermId {
