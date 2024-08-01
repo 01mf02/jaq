@@ -1,19 +1,20 @@
 use crate::lex::{self, Token};
-use crate::parse::{self, Defs, Term};
+use crate::parse::{self, Def, Defs, Term};
 use alloc::string::String;
 use alloc::vec::Vec;
 
 struct Arena(typed_arena::Arena<String>);
 // list of paths (`String`) and the result of loading the module there
 struct Loader<S, R> {
+    // save S after String to locate errors
     mods: Vec<(String, Result<Module<S, Defs<S>>, Error<S>>)>,
     read: R,
 }
 
 enum Error<S> {
     Io(String),
-    Lex(Vec<lex::Error<S>>),
-    Parse(Vec<parse::Error<S>>),
+    Lex(S, Vec<lex::Error<S>>),
+    Parse(S, Vec<parse::Error<S>>),
 }
 
 #[derive(Default)]
@@ -23,6 +24,8 @@ pub struct Module<S, B> {
     pub vars: Vec<(S, S)>,
     pub body: B,
 }
+
+type Modules<S> = Vec<Module<S, Defs<S>>>;
 
 impl<'s, B> Module<&'s str, B> {
     fn map_mods(m: parse::Module<&'s str, B>, mut f: impl FnMut(&str) -> usize) -> Self {
@@ -39,6 +42,17 @@ impl<'s, B> Module<&'s str, B> {
             mods,
             vars,
             body: m.body,
+        }
+    }
+}
+
+impl<S, B> Module<S, B> {
+    fn map_body<B2>(self, f: impl FnOnce(B) -> B2) -> Module<S, B2> {
+        Module {
+            meta: self.meta,
+            mods: self.mods,
+            vars: self.vars,
+            body: f(self.body),
         }
     }
 }
@@ -61,26 +75,39 @@ impl<S, R> Loader<S, R> {
 }
 
 impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
-    fn main2(
-        &mut self,
+    // TODO: save code with each module to locate compile errors
+    fn load(
+        mut self,
         arena: &'s Arena,
         path: &str,
         code: Option<String>,
-    ) -> Module<&'s str, Term<&'s str>> {
+    ) -> Result<Modules<&'s str>, Vec<(String, Error<&'s str>)>> {
         let code = match code {
             Some(code) => Ok(code),
             None => (self.read)(path).map_err(Error::Io),
         };
         let result = code
             .and_then(|code| parse_main(arena.0.alloc(code)))
-            .map(|m| Module::map_mods(m, |path| self.find(arena, path)));
+            .map(|m| Module::map_mods(m, |path| self.find(arena, path)))
+            .map(|m| m.map_body(|body| Defs::from([Def {
+                name: "main",
+                args: Vec::new(),
+                body,
+            }])));
+        self.mods.push((path.into(), result));
 
-        match result {
-            Ok(main) => main,
-            Err(e) => {
-                self.mods.push((path.into(), Err(e)));
-                Module::default()
+        let mut mods = Vec::new();
+        let mut errs = Vec::new();
+        for (path, result) in self.mods {
+            match result {
+                Ok(m) => mods.push(m),
+                Err(e) => errs.push((path, e)),
             }
+        }
+        if errs.is_empty() {
+            Ok(mods)
+        } else {
+            Err(errs)
         }
     }
 
@@ -101,17 +128,17 @@ impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
 }
 
 fn parse_main(code: &str) -> Result<parse::Module<&str, Term<&str>>, Error<&str>> {
-    let tokens = lex::Lexer::new(code).lex().map_err(Error::Lex)?;
+    let tokens = lex::Lexer::new(code).lex().map_err(|e| Error::Lex(code, e))?;
     let conv_err = |(expected, found)| (expected, Token::opt_as_str(found, code));
     parse::Parser::new(&tokens)
         .parse(|p| p.module(|p| p.term()))
-        .map_err(|e| Error::Parse(e.into_iter().map(conv_err).collect()))
+        .map_err(|e| Error::Parse(code, e.into_iter().map(conv_err).collect()))
 }
 
 fn parse_defs(code: &str) -> Result<parse::Module<&str, Defs<&str>>, Error<&str>> {
-    let tokens = lex::Lexer::new(code).lex().map_err(Error::Lex)?;
+    let tokens = lex::Lexer::new(code).lex().map_err(|e| Error::Lex(code, e))?;
     let conv_err = |(expected, found)| (expected, Token::opt_as_str(found, code));
     parse::Parser::new(&tokens)
         .parse(|p| p.module(|p| p.defs()))
-        .map_err(|e| Error::Parse(e.into_iter().map(conv_err).collect()))
+        .map_err(|e| Error::Parse(code, e.into_iter().map(conv_err).collect()))
 }
