@@ -4,7 +4,11 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 struct Arena(typed_arena::Arena<String>);
-struct DefsMods<S>(Vec<(String, Result<Module<S, Defs<S>>, Error<S>>)>);
+// list of paths (`String`) and the result of loading the module there
+struct Loader<S, R> {
+    mods: Vec<(String, Result<Module<S, Defs<S>>, Error<S>>)>,
+    read: R,
+}
 
 enum Error<S> {
     Io(String),
@@ -39,53 +43,59 @@ impl<'s, B> Module<&'s str, B> {
     }
 }
 
-impl<'s> DefsMods<&'s str> {
+impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
     fn new() -> Self {
-        Self(Vec::new())
+        Self {
+            mods: Vec::from([("/prelude".into(), Ok(Module::default()))]),
+            read: |path| Err("module loading not supported".into()),
+        }
     }
+}
 
-    fn main2<F>(
+// TODO: std_read, with_std_read
+impl<S, R> Loader<S, R> {
+    fn with_read<R2>(self, read: R2) -> Loader<S, R2> {
+        let mods = self.mods;
+        Loader { mods, read }
+    }
+}
+
+impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
+    fn main2(
         &mut self,
         arena: &'s Arena,
         path: &str,
         code: Option<String>,
-        f: &F,
-    ) -> Module<&'s str, Term<&'s str>>
-    where
-        F: Fn(&str) -> Result<String, String>,
-    {
+    ) -> Module<&'s str, Term<&'s str>> {
         let code = match code {
             Some(code) => Ok(code),
-            None => f(path).map_err(Error::Io),
+            None => (self.read)(path).map_err(Error::Io),
         };
         let result = code
             .and_then(|code| parse_main(arena.0.alloc(code)))
-            .map(|m| Module::map_mods(m, |path| self.find(arena, path, f)));
+            .map(|m| Module::map_mods(m, |path| self.find(arena, path)));
 
         match result {
             Ok(main) => main,
             Err(e) => {
-                self.0.push((path.into(), Err(e)));
+                self.mods.push((path.into(), Err(e)));
                 Module::default()
             }
         }
     }
 
-    fn find<F>(&mut self, arena: &'s Arena, path: &str, f: &F) -> usize
-    where
-        F: Fn(&str) -> Result<String, String>,
-    {
-        if let Some(id) = self.0.iter().position(|(p, _mod)| path == p) {
+    fn find(&mut self, arena: &'s Arena, path: &str) -> usize {
+        if let Some(id) = self.mods.iter().position(|(p, _mod)| path == p) {
             return id;
         };
 
-        let result = f(path)
+        let result = (self.read)(path)
             .map_err(Error::Io)
             .and_then(|file| parse_defs(arena.0.alloc(file)))
-            .map(|m| Module::map_mods(m, |path| self.find(arena, path, f)));
+            .map(|m| Module::map_mods(m, |path| self.find(arena, path)));
 
-        let id = self.0.len();
-        self.0.push((path.into(), result));
+        let id = self.mods.len();
+        self.mods.push((path.into(), result));
         id
     }
 }
