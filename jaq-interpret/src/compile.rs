@@ -62,7 +62,7 @@ enum Undefined {
     Filter(usize),
 }
 
-struct Ctx<S> {
+struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
@@ -120,7 +120,7 @@ enum Local<S> {
     TailrecObstacle,
 }
 
-impl<'s> Ctx<&'s str> {
+impl<'s> Compiler<&'s str> {
     fn with<T>(&mut self, local: Local<&'s str>, f: impl FnOnce(&mut Self) -> T) -> T {
         self.local.push(local.clone());
         let y = f(self);
@@ -128,7 +128,7 @@ impl<'s> Ctx<&'s str> {
         y
     }
 
-    fn module(&mut self, m: jaq_syn::graph::Module<&'s str, parse::Defs<&'s str>>) {
+    fn module(&mut self, m: jaq_syn::load::Module<&'s str, parse::Defs<&'s str>>) {
         m.body.into_iter().for_each(|def| self.def(def));
         let defs = self.local.drain(..).map(|l| match l {
             Local::Sibling(sig) => sig,
