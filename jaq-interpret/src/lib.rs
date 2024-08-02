@@ -46,10 +46,10 @@ extern crate alloc;
 extern crate std;
 
 mod box_iter;
+mod compile;
 pub mod error;
 mod filter;
 mod hir;
-mod compile;
 mod into_iter;
 mod lir;
 mod mir;
