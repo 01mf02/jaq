@@ -13,7 +13,7 @@ struct Loader<S, R> {
 }
 
 #[derive(Default)]
-struct File<S> {
+pub struct File<S> {
     path: S,
     code: S,
 }
@@ -32,7 +32,8 @@ pub struct Module<S, B> {
     pub body: B,
 }
 
-type Modules<S> = Vec<(File<S>, Module<S, Defs<S>>)>;
+// TODO: Modules::imported_vars() -> Iter<&S>
+pub type Modules<S> = Vec<(File<S>, Module<S, Defs<S>>)>;
 type Errors<S> = Vec<(File<S>, Error<S>)>;
 
 impl<'s, B> Module<&'s str, B> {
@@ -40,7 +41,8 @@ impl<'s, B> Module<&'s str, B> {
         m: parse::Module<&'s str, B>,
         mut f: impl FnMut(&'s str) -> Result<usize, String>,
     ) -> Result<Self, Error<&'s str>> {
-        let mut mods = Vec::new();
+        // the prelude module is included implicitly in every module (except itself)
+        let mut mods = Vec::from([(0, None)]);
         let mut vars = Vec::new();
         let mut errs = Vec::new();
         for (path, as_) in m.deps {
@@ -78,9 +80,10 @@ impl<S, B> Module<S, B> {
 
 impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
     fn new() -> Self {
+        let prelude = Module::default();
         Self {
             // the first module is reserved for the prelude
-            mods: Vec::from([(File::default(), Ok(Module::default()))]),
+            mods: Vec::from([(File::default(), Ok(prelude))]),
             read: |path| Err("module loading not supported".into()),
         }
     }
