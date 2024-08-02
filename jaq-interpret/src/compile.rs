@@ -1,6 +1,5 @@
-use alloc::{string::String, vec::Vec};
-use jaq_syn::parse;
-use jaq_syn::{MathOp, OrdOp};
+use alloc::{boxed::Box, string::String, vec::Vec};
+use jaq_syn::{load, parse, MathOp, OrdOp};
 
 type NativeId = usize;
 type TermId = usize;
@@ -9,12 +8,26 @@ type VarId = usize;
 type VarSkip = usize;
 type LabelSkip = usize;
 
+/// Function from a value to a stream of value results.
+#[derive(Debug, Clone)]
+pub struct Owned<V>(TermId, Lut<V>);
+
+/// Look-up table for indices stored in ASTs.
+#[derive(Clone, Debug)]
+struct Lut<V> {
+    terms: Box<[Term]>,
+    // TODO:
+    //natives: Box<[Native<V>]>,
+    natives: Box<[V]>,
+}
+
+#[derive(Clone, Debug)]
 enum Tailrec {
     Throw,
     Catch,
 }
 
-#[derive(Default)]
+#[derive(Clone, Debug, Default)]
 enum Term<T = TermId> {
     #[default]
     Id,
@@ -47,6 +60,7 @@ enum Term<T = TermId> {
     Path(T, crate::path::Path<T>),
 }
 
+#[derive(Clone, Debug)]
 enum FoldType {
     Reduce,
     Foreach,
@@ -54,6 +68,8 @@ enum FoldType {
 }
 
 struct Error<S>(S, Undefined);
+
+type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
 
 enum Undefined {
     Mod,
@@ -121,6 +137,37 @@ enum Local<S> {
 }
 
 impl<'s> Compiler<&'s str> {
+    pub fn compile<V>(mut self, mods: load::Modules<&'s str>) -> Result<Owned<V>, Errors<&'s str>> {
+        self.imported_vars = mods
+            .iter()
+            .enumerate()
+            .flat_map(|(mid, (_file, m))| m.vars.iter().map(move |(_path, x)| (*x, mid)))
+            .collect();
+
+        let mut errs = Vec::new();
+        for (file, m) in mods {
+            self.module(m);
+            if !self.errs.is_empty() {
+                errs.push((file, core::mem::take(&mut self.errs)));
+            }
+        }
+
+        if errs.is_empty() {
+            // the main filter corresponds to the last definition of the last module
+            let main = self.mod_map.last().unwrap().last().unwrap();
+            assert_eq!(main.name, "main");
+            assert!(main.args == 0);
+            assert!(!main.tailrec);
+            let lut = Lut {
+                terms: self.term_map.into(),
+                natives: Vec::new().into(),
+            };
+            Ok(Owned(main.id, lut))
+        } else {
+            Err(errs)
+        }
+    }
+
     fn with<T>(&mut self, local: Local<&'s str>, f: impl FnOnce(&mut Self) -> T) -> T {
         self.local.push(local.clone());
         let y = f(self);
@@ -129,6 +176,15 @@ impl<'s> Compiler<&'s str> {
     }
 
     fn module(&mut self, m: jaq_syn::load::Module<&'s str, parse::Defs<&'s str>>) {
+        self.imported_mods.clear();
+        self.included_mods.clear();
+        for (mid, as_) in m.mods {
+            match as_ {
+                None => self.included_mods.push(mid),
+                Some(as_) => self.imported_mods.push((mid, as_)),
+            }
+        }
+
         m.body.into_iter().for_each(|def| self.def(def));
         let defs = self.local.drain(..).map(|l| match l {
             Local::Sibling(sig) => sig,
