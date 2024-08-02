@@ -292,8 +292,7 @@ impl<'s> Ctx<&'s str> {
     }
 
     fn call_mod(&mut self, module: &'s str, name: &'s str, args: Vec<TermId>) -> Term {
-        let local = self.local.iter();
-        let vars = local.map(|l| match l {
+        let vars = self.local.iter().map(|l| match l {
             Local::Var(x) => 1,
             Local::Label(_) | Local::Sibling(..) | Local::TailrecObstacle => 0,
             Local::Parent(sig) => sig.args.len(),
