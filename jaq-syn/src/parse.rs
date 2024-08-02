@@ -458,11 +458,11 @@ impl<'s, 't> Parser<'s, 't> {
                     _ => None,
                 });
                 match s {
-                    None => Term::Call(*id, Vec::new()),
+                    None => Term::Call(*id, self.args(Self::term)),
                     Some(parts) => Term::Str(Some(*id), parts),
                 }
             }
-            Some(Token(id, Tok::Word | Tok::Fmt)) => Term::Call(*id, self.args(Self::term)),
+            Some(Token(id, Tok::Word)) => Term::Call(*id, self.args(Self::term)),
             Some(Token("..", _)) => Term::Recurse,
             Some(Token(c, Tok::Sym)) if c.starts_with('.') => {
                 let key = if c.len() > 1 {
