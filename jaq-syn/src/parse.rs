@@ -730,6 +730,12 @@ pub struct Def<S, F> {
     pub body: F,
 }
 
+impl<S, F> Def<S, F> {
+    pub(crate) fn new(name: S, args: Vec<S>, body: F) -> Self {
+        Self { name, args, body }
+    }
+}
+
 pub type Defs<S> = Vec<Def<S, Term<S>>>;
 
 impl prec_climb::Op for BinaryOp {

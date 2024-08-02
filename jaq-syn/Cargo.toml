@@ -11,7 +11,8 @@ keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
 
 [features]
-default = ["serde"]
+default = ["serde", "std"]
+std = []
 
 [dependencies]
 serde = { version = "1.0.137", features = ["derive"], optional = true }

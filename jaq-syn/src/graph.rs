@@ -3,18 +3,25 @@ use crate::parse::{self, Def, Defs, Term};
 use alloc::string::String;
 use alloc::vec::Vec;
 
+#[cfg(feature = "std")]
+extern crate std;
+
 struct Arena(typed_arena::Arena<String>);
-// list of paths (`String`) and the result of loading the module there
 struct Loader<S, R> {
-    // save S after String to locate errors
-    mods: Vec<(String, Result<Module<S, Defs<S>>, Error<S>>)>,
+    mods: Vec<(File<S>, Result<Module<S, Defs<S>>, Error<S>>)>,
     read: R,
 }
 
+#[derive(Default)]
+struct File<S> {
+    path: S,
+    code: S,
+}
+
 enum Error<S> {
-    Io(String),
-    Lex(S, Vec<lex::Error<S>>),
-    Parse(S, Vec<parse::Error<S>>),
+    Io(Vec<(S, String)>),
+    Lex(Vec<lex::Error<S>>),
+    Parse(Vec<parse::Error<S>>),
 }
 
 #[derive(Default)]
@@ -25,23 +32,35 @@ pub struct Module<S, B> {
     pub body: B,
 }
 
-type Modules<S> = Vec<Module<S, Defs<S>>>;
+type Modules<S> = Vec<(File<S>, Module<S, Defs<S>>)>;
+type Errors<S> = Vec<(File<S>, Error<S>)>;
 
 impl<'s, B> Module<&'s str, B> {
-    fn map_mods(m: parse::Module<&'s str, B>, mut f: impl FnMut(&str) -> usize) -> Self {
+    fn map_mods(
+        m: parse::Module<&'s str, B>,
+        mut f: impl FnMut(&'s str) -> Result<usize, String>,
+    ) -> Result<Self, Error<&'s str>> {
         let mut mods = Vec::new();
         let mut vars = Vec::new();
+        let mut errs = Vec::new();
         for (path, as_) in m.deps {
             match as_ {
                 Some(x) if x.starts_with('$') => vars.push((path, x)),
-                as_ => mods.push((f(path), as_)),
+                as_ => match f(path) {
+                    Ok(mid) => mods.push((mid, as_)),
+                    Err(e) => errs.push((path, e)),
+                },
             }
         }
-        Module {
-            meta: m.meta,
-            mods,
-            vars,
-            body: m.body,
+        if errs.is_empty() {
+            Ok(Module {
+                meta: m.meta,
+                mods,
+                vars,
+                body: m.body,
+            })
+        } else {
+            Err(Error::Io(errs))
         }
     }
 }
@@ -60,48 +79,48 @@ impl<S, B> Module<S, B> {
 impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
     fn new() -> Self {
         Self {
-            mods: Vec::from([("/prelude".into(), Ok(Module::default()))]),
+            // the first module is reserved for the prelude
+            mods: Vec::from([(File::default(), Ok(Module::default()))]),
             read: |path| Err("module loading not supported".into()),
         }
     }
 }
 
-// TODO: std_read, with_std_read
+#[cfg(feature = "std")]
+fn std_read(path: &str) -> Result<String, String> {
+    use alloc::string::ToString;
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
 impl<S, R> Loader<S, R> {
     fn with_read<R2>(self, read: R2) -> Loader<S, R2> {
         let mods = self.mods;
         Loader { mods, read }
     }
+
+    #[cfg(feature = "std")]
+    fn with_std_read(self) -> Loader<S, fn(&str) -> Result<String, String>> {
+        self.with_read(std_read)
+    }
 }
 
 impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
-    // TODO: save code with each module to locate compile errors
     fn load(
         mut self,
         arena: &'s Arena,
-        path: &str,
-        code: Option<String>,
-    ) -> Result<Modules<&'s str>, Vec<(String, Error<&'s str>)>> {
-        let code = match code {
-            Some(code) => Ok(code),
-            None => (self.read)(path).map_err(Error::Io),
-        };
-        let result = code
-            .and_then(|code| parse_main(arena.0.alloc(code)))
-            .map(|m| Module::map_mods(m, |path| self.find(arena, path)))
-            .map(|m| m.map_body(|body| Defs::from([Def {
-                name: "main",
-                args: Vec::new(),
-                body,
-            }])));
-        self.mods.push((path.into(), result));
+        file: File<&'s str>,
+    ) -> Result<Modules<&'s str>, Errors<&'s str>> {
+        let result = parse_main(file.code)
+            .and_then(|m| Module::map_mods(m, |path| self.find(arena, path)))
+            .map(|m| m.map_body(|body| Defs::from([Def::new("main", Vec::new(), body)])));
+        self.mods.push((file, result));
 
         let mut mods = Vec::new();
         let mut errs = Vec::new();
-        for (path, result) in self.mods {
+        for (file, result) in self.mods {
             match result {
-                Ok(m) => mods.push(m),
-                Err(e) => errs.push((path, e)),
+                Ok(m) => mods.push((file, m)),
+                Err(e) => errs.push((file, e)),
             }
         }
         if errs.is_empty() {
@@ -111,34 +130,33 @@ impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
         }
     }
 
-    fn find(&mut self, arena: &'s Arena, path: &str) -> usize {
-        if let Some(id) = self.mods.iter().position(|(p, _mod)| path == p) {
-            return id;
+    fn find(&mut self, arena: &'s Arena, path: &'s str) -> Result<usize, String> {
+        if let Some(id) = self.mods.iter().position(|(file, _)| path == file.path) {
+            return Ok(id);
         };
 
-        let result = (self.read)(path)
-            .map_err(Error::Io)
-            .and_then(|file| parse_defs(arena.0.alloc(file)))
-            .map(|m| Module::map_mods(m, |path| self.find(arena, path)));
+        let code = &**arena.0.alloc((self.read)(path)?);
+        let defs =
+            parse_defs(code).and_then(|m| Module::map_mods(m, |path| self.find(arena, path)));
 
         let id = self.mods.len();
-        self.mods.push((path.into(), result));
-        id
+        self.mods.push((File { path, code }, defs));
+        Ok(id)
     }
 }
 
 fn parse_main(code: &str) -> Result<parse::Module<&str, Term<&str>>, Error<&str>> {
-    let tokens = lex::Lexer::new(code).lex().map_err(|e| Error::Lex(code, e))?;
+    let tokens = lex::Lexer::new(code).lex().map_err(Error::Lex)?;
     let conv_err = |(expected, found)| (expected, Token::opt_as_str(found, code));
     parse::Parser::new(&tokens)
         .parse(|p| p.module(|p| p.term()))
-        .map_err(|e| Error::Parse(code, e.into_iter().map(conv_err).collect()))
+        .map_err(|e| Error::Parse(e.into_iter().map(conv_err).collect()))
 }
 
 fn parse_defs(code: &str) -> Result<parse::Module<&str, Defs<&str>>, Error<&str>> {
-    let tokens = lex::Lexer::new(code).lex().map_err(|e| Error::Lex(code, e))?;
+    let tokens = lex::Lexer::new(code).lex().map_err(Error::Lex)?;
     let conv_err = |(expected, found)| (expected, Token::opt_as_str(found, code));
     parse::Parser::new(&tokens)
         .parse(|p| p.module(|p| p.defs()))
-        .map_err(|e| Error::Parse(code, e.into_iter().map(conv_err).collect()))
+        .map_err(|e| Error::Parse(e.into_iter().map(conv_err).collect()))
 }
