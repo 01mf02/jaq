@@ -27,6 +27,22 @@ enum Tailrec {
     Catch,
 }
 
+#[derive(Copy, Clone, Debug)]
+enum Bind {
+    Var,
+    Filter,
+}
+
+impl From<&str> for Bind {
+    fn from(s: &str) -> Self {
+        if s.starts_with('$') {
+            Self::Var
+        } else {
+            Self::Filter
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 enum Term<T = TermId> {
     #[default]
@@ -40,7 +56,7 @@ enum Term<T = TermId> {
     TryCatch(T, T),
     Var(VarId),
     Neg(T),
-    CallDef(TermId, Vec<T>, VarSkip, Option<Tailrec>),
+    CallDef(TermId, Vec<(Bind, T)>, VarSkip, Option<Tailrec>),
     CallArg(VarId, LabelSkip),
     Label(T),
     Ite(T, T, T),
@@ -82,7 +98,7 @@ struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
-    mod_map: Vec<Vec<Sig<S, usize>>>,
+    mod_map: Vec<Vec<Sig<S, Bind>>>,
 
     imported_mods: Vec<(ModId, S)>,
     included_mods: Vec<ModId>,
@@ -94,45 +110,59 @@ struct Compiler<S> {
     errs: Vec<Error<S>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 struct Sig<S, A> {
     name: S,
     // TODO: we could analyse for each argument whether it is TR, and
     // use this when converting args at callsite
-    args: A,
+    args: Vec<A>,
     id: TermId,
     /// true if there is at least one tail-recursive call to this filter from within itself
     tailrec: bool,
 }
 
 impl<S, A> Sig<S, A> {
-    fn map_args<A2>(self, f: impl FnOnce(A) -> A2) -> Sig<S, A2> {
+    fn map_args<A2>(self, f: impl FnMut(A) -> A2) -> Sig<S, A2> {
         Sig {
             name: self.name,
-            args: f(self.args),
+            args: self.args.into_iter().map(f).collect(),
             id: self.id,
             tailrec: self.tailrec,
         }
     }
 }
 
-impl<S: Eq> Sig<S, usize> {
-    fn call(&self, name: S, args: &[TermId], vars: usize) -> Option<Term> {
-        if name == self.name && args.len() == self.args {
-            let call = self.tailrec.then_some(Tailrec::Catch);
-            Some(Term::CallDef(self.id, args.into(), vars, call))
-        } else {
-            None
-        }
+impl<S: Eq, A> Sig<S, A> {
+    fn matches(&self, name: S, args: &[TermId]) -> bool {
+        name == self.name && args.len() == self.args.len()
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+impl<S> Sig<S, Bind> {
+    fn call(&self, args: &[TermId], vars: usize) -> Term {
+        let call = self.tailrec.then_some(Tailrec::Catch);
+        let args = args.iter().copied();
+        let args = self.args.iter().copied().zip(args);
+        Term::CallDef(self.id, args.collect(), vars, call)
+    }
+}
+
+impl<'s> Sig<&'s str, &'s str> {
+    fn call_parent(&mut self, args: &[TermId], vars: usize, tailrec: bool) -> Term {
+        self.tailrec = self.tailrec || tailrec;
+        let call = tailrec.then_some(Tailrec::Throw);
+        let args = args.iter().copied();
+        let args = self.args.iter().copied().map(Bind::from).zip(args);
+        Term::CallDef(self.id, args.collect(), vars, call)
+    }
+}
+
+#[derive(Clone, Debug)]
 enum Local<S> {
     Var(S),
     Label(S),
-    Parent(Sig<S, Vec<S>>),
-    Sibling(Sig<S, usize>),
+    Parent(Sig<S, S>),
+    Sibling(Sig<S, Bind>),
     TailrecObstacle,
 }
 
@@ -156,7 +186,7 @@ impl<'s> Compiler<&'s str> {
             // the main filter corresponds to the last definition of the last module
             let main = self.mod_map.last().unwrap().last().unwrap();
             assert_eq!(main.name, "main");
-            assert!(main.args == 0);
+            assert!(main.args.is_empty());
             assert!(!main.tailrec);
             let lut = Lut {
                 terms: self.term_map.into(),
@@ -171,7 +201,7 @@ impl<'s> Compiler<&'s str> {
     fn with<T>(&mut self, local: Local<&'s str>, f: impl FnOnce(&mut Self) -> T) -> T {
         self.local.push(local.clone());
         let y = f(self);
-        assert_eq!(self.local.pop(), Some(local));
+        self.local.pop();
         y
     }
 
@@ -210,7 +240,7 @@ impl<'s> Compiler<&'s str> {
         // turn the parent into a sibling
         match self.local.pop() {
             Some(Local::Parent(sig)) => {
-                self.local.push(Local::Sibling(sig.map_args(|a| a.len())));
+                self.local.push(Local::Sibling(sig.map_args(Bind::from)));
             }
             _ => panic!(),
         }
@@ -360,7 +390,7 @@ impl<'s> Compiler<&'s str> {
             None => return self.fail(module, Undefined::Mod),
         };
         let mut defs = self.mod_map[*mid].iter().rev();
-        let call = defs.find_map(|sig| sig.call(name, &args, vars));
+        let call = defs.find_map(|sig| sig.matches(name, &args).then(|| sig.call(&args, vars)));
         call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
     }
 
@@ -373,8 +403,8 @@ impl<'s> Compiler<&'s str> {
                 Local::Var(_) => i += 1,
                 Local::Label(_) => labels += 1,
                 Local::Sibling(sig) => {
-                    if let Some(call) = sig.call(name, &args, i) {
-                        return call;
+                    if sig.matches(name, &args) {
+                        return sig.call(&args, i);
                     }
                 }
                 Local::Parent(sig) => {
@@ -385,10 +415,8 @@ impl<'s> Compiler<&'s str> {
                             i += 1
                         }
                     }
-                    if name == sig.name && args.len() == sig.args.len() {
-                        sig.tailrec = sig.tailrec || tailrec;
-                        let call = tailrec.then_some(Tailrec::Throw);
-                        return Term::CallDef(sig.id, args, i, call);
+                    if sig.matches(name, &args) {
+                        return sig.call_parent(&args, i, tailrec);
                     }
                 }
                 Local::TailrecObstacle => tailrec = false,
@@ -396,7 +424,7 @@ impl<'s> Compiler<&'s str> {
         }
         let call = self.included_mods.iter().rev().find_map(|mid| {
             let mut defs = self.mod_map[*mid].iter().rev();
-            defs.find_map(|sig| sig.call(name, &args, i))
+            defs.find_map(|sig| sig.matches(name, &args).then(|| sig.call(&args, i)))
         });
         call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
     }
