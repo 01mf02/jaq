@@ -155,6 +155,32 @@ impl<S> Term<S> {
     pub(crate) fn str(s: S) -> Self {
         Self::Str(None, [StrPart::Str(s)].into())
     }
+
+    /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`.
+    pub(crate) fn recurse(recurse: S) -> Self {
+        use Term::*;
+        // `[]?`
+        let path = (path::Part::Range(None, None), path::Opt::Optional);
+        // `.[]?` (returns array/object elements or nothing instead)
+        let path = Term::Path(Id.into(), Vec::from([path]));
+
+        // `..`
+        let f = Term::Call(recurse, Vec::new());
+        // .[]? | ..
+        let pipe = Term::Pipe(path.into(), None, f.into());
+        // ., (.[]? | ..)
+        Term::BinOp(Id.into(), BinaryOp::Comma, pipe.into())
+    }
+
+    /// `{}[]` returns zero values.
+    pub(crate) fn empty() -> Self {
+        // `[]`
+        let path = (path::Part::Range(None, None), path::Opt::Essential);
+        // `{}`
+        let obj = Term::Obj(Vec::new());
+        // `{}[]`
+        Term::Path(obj.into(), Vec::from([path]))
+    }
 }
 
 impl<'s, 't> Parser<'s, 't> {

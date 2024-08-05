@@ -79,8 +79,17 @@ impl<S, B> Module<S, B> {
 }
 
 impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
-    fn new() -> Self {
-        let prelude = Module::default();
+    pub fn new(prelude: impl IntoIterator<Item = Def<&'s str, Term<&'s str>>>) -> Self {
+        let defs = [
+            Def::new("!recurse", Vec::new(), Term::recurse("!recurse")),
+            Def::new("!empty", Vec::new(), Term::empty()),
+        ];
+
+        let prelude: Module<&'s str, Defs<&'s str>> = Module {
+            body: defs.into_iter().chain(prelude).collect(),
+            ..Module::default()
+        };
+
         Self {
             // the first module is reserved for the prelude
             mods: Vec::from([(File::default(), Ok(prelude))]),
