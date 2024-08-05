@@ -49,7 +49,7 @@ enum Term<T = TermId> {
 
     Var(VarId),
     CallArg(VarId, LabelSkip),
-    CallDef(TermId, Vec<(Bind, T)>, VarSkip, Option<Tailrec>),
+    CallDef(TermId, Box<[(Bind, T)]>, VarSkip, Option<Tailrec>),
     Native(usize, Box<[T]>),
 
     TryCatch(T, T),
@@ -279,7 +279,7 @@ impl<'s> Compiler<&'s str> {
             }
             Var(x) => self.var(x),
             Call(name, args) => {
-                let args: Vec<_> = args.into_iter().map(|t| self.iterm(t)).collect();
+                let args: Box<[_]> = args.into_iter().map(|t| self.iterm(t)).collect();
                 if let Some((module, name)) = name.split_once("::") {
                     self.call_mod(module, name, args)
                 } else {
@@ -391,7 +391,7 @@ impl<'s> Compiler<&'s str> {
     }
 
     /// Resolve call to `mod::filter(a1, ..., an)`.
-    fn call_mod(&mut self, module: &'s str, name: &'s str, args: Vec<TermId>) -> Term {
+    fn call_mod(&mut self, module: &'s str, name: &'s str, args: Box<[TermId]>) -> Term {
         let vars = self.local.iter().map(|l| match l {
             Local::Var(x) => 1,
             Local::Label(_) | Local::Sibling(..) | Local::TailrecObstacle => 0,
@@ -409,7 +409,7 @@ impl<'s> Compiler<&'s str> {
     }
 
     /// Resolve call to `filter(a1, ..., an)`.
-    fn call(&mut self, name: &'s str, args: Vec<TermId>) -> Term {
+    fn call(&mut self, name: &'s str, args: Box<[TermId]>) -> Term {
         let mut tailrec = true;
         let mut i = 0;
         let mut labels = 0;
