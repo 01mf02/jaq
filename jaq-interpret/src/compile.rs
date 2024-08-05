@@ -47,12 +47,15 @@ impl From<&str> for Bind {
 enum Term<T = TermId> {
     #[default]
     Id,
+    ToString,
+
     Int(isize),
     Num(String),
     Str(String),
     Arr(T),
     ObjEmpty,
     ObjSingle(T, T),
+
     TryCatch(T, T),
     Var(VarId),
     Neg(T),
@@ -341,7 +344,10 @@ impl<'s> Compiler<&'s str> {
             }
             Str(fmt, parts) => {
                 use jaq_syn::lex::StrPart;
-                let fmt = self.iterm(Call(fmt.unwrap_or("!tostring"), Vec::new()));
+                let fmt = match fmt {
+                    Some(fmt) => self.iterm(Call(fmt, Vec::new())),
+                    None => self.insert_term(Term::ToString),
+                };
                 let parts = parts.into_iter().map(|part| match part {
                     StrPart::Str(s) => Term::Str(s.into()),
                     StrPart::Char(c) => Term::Str(c.into()),
