@@ -428,11 +428,14 @@ impl<'s> Compiler<&'s str> {
                 Local::TailrecObstacle => tailrec = false,
             }
         }
-        let call = self.included_mods.iter().rev().find_map(|mid| {
-            let mut defs = self.mod_map[*mid].iter().rev();
-            defs.find_map(|sig| sig.matches(name, &args).then(|| sig.call(&args, i)))
-        });
-        call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
+        for mid in self.included_mods.iter().rev() {
+            for sig in self.mod_map[*mid].iter().rev() {
+                if sig.matches(name, &args) {
+                    return sig.call(&args, i);
+                }
+            }
+        }
+        self.fail(name, Undefined::Filter(args.len()))
     }
 
     fn var(&mut self, x: &'s str) -> Term {
