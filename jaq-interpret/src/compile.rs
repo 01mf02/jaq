@@ -7,6 +7,7 @@ type ModId = usize;
 type VarId = usize;
 type VarSkip = usize;
 type LabelSkip = usize;
+type Arity = usize;
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
@@ -50,15 +51,12 @@ enum Term<T = TermId> {
     Var(VarId),
     CallArg(VarId, LabelSkip),
     CallDef(TermId, Box<[(Bind, T)]>, VarSkip, Option<Tailrec>),
-    Native(usize, Box<[T]>),
+    Native(NativeId, Box<[T]>),
 
-    TryCatch(T, T),
-    Neg(T),
     Label(T),
-    Ite(T, T, T),
-    Fold(FoldType, T, T, T),
     Break(usize),
 
+    Neg(T),
     Pipe(T, bool, T),
     Comma(T, T),
     Assign(T, T),
@@ -69,6 +67,10 @@ enum Term<T = TermId> {
     Ord(T, OrdOp, T),
     Alt(T, T),
     UpdateAlt(T, T),
+    TryCatch(T, T),
+    Ite(T, T, T),
+    Fold(FoldType, T, T, T),
+
     Path(T, crate::path::Path<T>),
 }
 
@@ -87,7 +89,7 @@ enum Undefined {
     Mod,
     Var,
     Label,
-    Filter(usize),
+    Filter(Arity),
 }
 
 #[derive(Default)]
@@ -95,7 +97,7 @@ struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
 
-    natives_map: Vec<(S, usize)>,
+    natives_map: Vec<(S, Arity)>,
 
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
     mod_map: Vec<Vec<Sig<S, Bind>>>,
@@ -167,7 +169,7 @@ enum Local<S> {
 }
 
 impl<'s> Compiler<&'s str> {
-    pub fn with_natives(self, natives: impl IntoIterator<Item = (&'s str, usize)>) -> Self {
+    pub fn with_natives(self, natives: impl IntoIterator<Item = (&'s str, Arity)>) -> Self {
         Self {
             natives_map: natives.into_iter().collect(),
             ..self
