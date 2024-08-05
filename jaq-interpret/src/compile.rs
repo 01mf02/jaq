@@ -10,16 +10,7 @@ type LabelSkip = usize;
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
-pub struct Owned<V>(TermId, Lut<V>);
-
-/// Look-up table for indices stored in ASTs.
-#[derive(Clone, Debug)]
-struct Lut<V> {
-    terms: Box<[Term]>,
-    // TODO:
-    //natives: Box<[Native<V>]>,
-    natives: Box<[V]>,
-}
+pub struct Filter(TermId, Box<[Term]>);
 
 #[derive(Clone, Debug)]
 enum Tailrec {
@@ -56,11 +47,13 @@ enum Term<T = TermId> {
     ObjEmpty,
     ObjSingle(T, T),
 
-    TryCatch(T, T),
     Var(VarId),
-    Neg(T),
-    CallDef(TermId, Vec<(Bind, T)>, VarSkip, Option<Tailrec>),
     CallArg(VarId, LabelSkip),
+    CallDef(TermId, Vec<(Bind, T)>, VarSkip, Option<Tailrec>),
+    Native(usize, Box<[T]>),
+
+    TryCatch(T, T),
+    Neg(T),
     Label(T),
     Ite(T, T, T),
     Fold(FoldType, T, T, T),
@@ -97,9 +90,13 @@ enum Undefined {
     Filter(usize),
 }
 
+#[derive(Default)]
 struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
+
+    natives_map: Vec<(S, usize)>,
+
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
     mod_map: Vec<Vec<Sig<S, Bind>>>,
 
@@ -170,7 +167,21 @@ enum Local<S> {
 }
 
 impl<'s> Compiler<&'s str> {
-    pub fn compile<V>(mut self, mods: load::Modules<&'s str>) -> Result<Owned<V>, Errors<&'s str>> {
+    pub fn with_natives(self, natives: impl IntoIterator<Item = (&'s str, usize)>) -> Self {
+        Self {
+            natives_map: natives.into_iter().collect(),
+            ..self
+        }
+    }
+
+    pub fn with_global_vars(self, global_vars: impl IntoIterator<Item = &'s str>) -> Self {
+        Self {
+            global_vars: global_vars.into_iter().collect(),
+            ..self
+        }
+    }
+
+    pub fn compile<V>(mut self, mods: load::Modules<&'s str>) -> Result<Filter, Errors<&'s str>> {
         self.imported_vars = mods
             .iter()
             .enumerate()
@@ -191,11 +202,7 @@ impl<'s> Compiler<&'s str> {
             assert_eq!(main.name, "main");
             assert!(main.args.is_empty());
             assert!(!main.tailrec);
-            let lut = Lut {
-                terms: self.term_map.into(),
-                natives: Vec::new().into(),
-            };
-            Ok(Owned(main.id, lut))
+            Ok(Filter(main.id, self.term_map.into()))
         } else {
             Err(errs)
         }
@@ -383,6 +390,7 @@ impl<'s> Compiler<&'s str> {
         Term::default()
     }
 
+    /// Resolve call to `mod::filter(a1, ..., an)`.
     fn call_mod(&mut self, module: &'s str, name: &'s str, args: Vec<TermId>) -> Term {
         let vars = self.local.iter().map(|l| match l {
             Local::Var(x) => 1,
@@ -400,6 +408,7 @@ impl<'s> Compiler<&'s str> {
         call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
     }
 
+    /// Resolve call to `filter(a1, ..., an)`.
     fn call(&mut self, name: &'s str, args: Vec<TermId>) -> Term {
         let mut tailrec = true;
         let mut i = 0;
@@ -435,6 +444,13 @@ impl<'s> Compiler<&'s str> {
                 }
             }
         }
+
+        let mut natives = self.natives_map.iter();
+        if let Some(nid) = natives.position(|(name_, arity)| name == *name_ && args.len() == *arity)
+        {
+            return Term::Native(nid, args.into());
+        }
+
         self.fail(name, Undefined::Filter(args.len()))
     }
 
