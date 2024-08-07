@@ -17,3 +17,8 @@ pub fn std() -> Vec<jaq_syn::Def> {
         .unwrap()
         .conv(std)
 }
+
+/// Return the standard library.
+pub fn std2() -> jaq_syn::parse::Defs<&'static str> {
+    jaq_syn::parse(include_str!("std.jq"), |p| p.defs()).unwrap()
+}

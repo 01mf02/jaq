@@ -735,7 +735,7 @@ pub struct Module<S, B> {
     #[allow(dead_code)]
     pub(crate) meta: Option<Term<S>>,
     pub(crate) deps: Vec<(S, Option<S>)>,
-    pub(crate) body: B,
+    pub body: B,
 }
 
 /// jq definition, consisting of a name, optional arguments, and a body.

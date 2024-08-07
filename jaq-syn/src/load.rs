@@ -6,19 +6,31 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 extern crate std;
 
-struct Arena(typed_arena::Arena<String>);
-struct Loader<S, R> {
+#[derive(Default)]
+pub struct Arena(typed_arena::Arena<String>);
+
+pub struct Loader<S, R> {
     mods: Vec<(File<S>, Result<Module<S, Defs<S>>, Error<S>>)>,
     read: R,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct File<S> {
-    path: S,
-    code: S,
+    pub path: S,
+    pub code: S,
 }
 
-enum Error<S> {
+impl<S> File<S> {
+    pub fn map<S2>(self, f: impl Fn(S) -> S2) -> File<S2> {
+        File {
+            path: f(self.path),
+            code: f(self.code),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Error<S> {
     Io(Vec<(S, String)>),
     Lex(Vec<lex::Error<S>>),
     Parse(Vec<parse::Error<S>>),
@@ -34,7 +46,7 @@ pub struct Module<S, B> {
 
 // TODO: Modules::imported_vars() -> Iter<&S>
 pub type Modules<S> = Vec<(File<S>, Module<S, Defs<S>>)>;
-type Errors<S> = Vec<(File<S>, Error<S>)>;
+pub type Errors<S> = Vec<(File<S>, Error<S>)>;
 
 impl<'s, B> Module<&'s str, B> {
     fn map_mods(
@@ -117,7 +129,7 @@ impl<S, R> Loader<S, R> {
 }
 
 impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
-    fn load(
+    pub fn load(
         mut self,
         arena: &'s Arena,
         file: File<&'s str>,

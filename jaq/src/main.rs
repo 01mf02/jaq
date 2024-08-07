@@ -157,17 +157,24 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     }
 
     let (vars, ctx) = binds(cli)?.into_iter().unzip();
+    let vars: Vec<String> = vars;
 
     let mut args = cli.args.iter();
-    let filter = match &cli.from_file {
-        Some(file) => Some(std::fs::read_to_string(file)?),
-        None => args.next().cloned(),
+    let file = match &cli.from_file {
+        Some(path) => Some((
+            path.as_path().display().to_string(),
+            std::fs::read_to_string(path)?,
+        )),
+        None => args.next().cloned().map(|code| ("<inline>".into(), code)),
     };
     let files: Vec<_> = args.collect();
 
-    let filter = match filter {
+    let filter = match file {
         None => Filter::default(),
-        Some(filter_str) => parse(&filter_str, vars).map_err(|e| Error::Report(filter_str, e))?,
+        Some((path, code)) => {
+            let blu = parse2(&path, &code, &vars).map_err(Error::Report2)?;
+            parse(&code, vars).map_err(|e| Error::Report(code, e))?
+        }
     };
     //println!("Filter: {:?}", filter);
 
@@ -276,6 +283,48 @@ fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
     Ok(main.conv(filter_str))
 }
 
+use jaq_interpret::Native;
+fn parse2(
+    path: &str,
+    code: &str,
+    vars: &[String],
+) -> Result<jaq_interpret::compile::Owned<Native<Val>>, Vec<FileReports>> {
+    use jaq_interpret::compile::Compiler;
+    use jaq_syn::load::{Arena, File, Loader};
+
+    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
+    let arena = Arena::default();
+    let loader = Loader::new(jaq_std::std2());
+    let modules = loader
+        .load(&arena, File { path, code })
+        .map_err(load_errors)?;
+    let core: Vec<_> = jaq_core::core().collect();
+    let compiler = Compiler::default()
+        .with_natives(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_global_vars(vars.iter().map(|v| &**v));
+    let filter = compiler.compile(modules).map_err(compile_errors)?;
+    Ok(filter.with_funs(core.into_iter().map(|(.., f)| f)))
+}
+
+fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
+    use jaq_syn::load::Error;
+
+    let errs = errs.into_iter().map(|(file, err)| {
+        let code = file.code;
+        let err = match err {
+            Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
+            Error::Parse(errs) => errs.into_iter().map(|e| report_parse2(code, e)).collect(),
+            _ => todo!(),
+        };
+        (file.map(|s| s.into()), err)
+    });
+    errs.collect()
+}
+
+fn compile_errors(errs: jaq_interpret::compile::Errors<&str>) -> Vec<FileReports> {
+    todo!()
+}
+
 fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
     let mut ctx = ParseCtx::new(vars);
     ctx.insert_natives(jaq_core::core());
@@ -371,10 +420,13 @@ fn collect_if<'a, T: 'a, E: 'a>(
     }
 }
 
+type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
+
 #[derive(Debug)]
 enum Error {
     Io(Option<String>, io::Error),
     Report(String, Vec<Report>),
+    Report2(Vec<FileReports>),
     Parse(String),
     Jaq(jaq_interpret::Error),
     Persist(tempfile::PersistError),
@@ -401,9 +453,22 @@ impl Termination for Error {
             Self::Report(code, reports) => {
                 let idx = codesnake::LineIndex::new(&code);
                 for e in reports {
+                    // TODO: report filename
                     eprintln!("Error: {}", e.message);
                     let block = e.into_block(&idx);
                     eprintln!("{}\n{}{}", block.prologue(), block, block.epilogue())
+                }
+                3
+            }
+            Self::Report2(bla) => {
+                for (file, reports) in bla {
+                    let idx = codesnake::LineIndex::new(&file.code);
+                    for e in reports {
+                        eprintln!("Error: {}", e.message);
+                        let block = e.into_block(&idx);
+                        eprintln!("{} [{}]", block.prologue(), file.path);
+                        eprintln!("{}{}", block, block.epilogue())
+                    }
                 }
                 3
             }
@@ -632,6 +697,22 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::TError<&str>) -> 
     use jaq_syn::lex::Token;
     let found_range = jaq_syn::lex::span(code, Token::opt_as_str(found, code));
     let found = found.map_or("unexpected end of input", |_| "unexpected token");
+    let found = [(found.to_string(), None)].into();
+
+    Report {
+        message: format!("expected {}", expected.as_str()),
+        labels: Vec::from([(found_range, found, Color::Red)]),
+    }
+}
+
+fn report_parse2(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
+    let found_range = jaq_syn::lex::span(code, found);
+
+    let found = if found.is_empty() {
+        "unexpected end of input"
+    } else {
+        "unexpected token"
+    };
     let found = [(found.to_string(), None)].into();
 
     Report {

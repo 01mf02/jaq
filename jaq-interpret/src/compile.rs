@@ -13,6 +13,25 @@ type Arity = usize;
 #[derive(Debug, Clone)]
 pub struct Filter(TermId, Box<[Term]>);
 
+/// Function from a value to a stream of value results.
+#[derive(Debug, Clone)]
+pub struct Owned<F>(TermId, Lut<F>);
+
+/// Look-up table for indices stored in ASTs.
+#[derive(Clone, Debug)]
+struct Lut<F> {
+    terms: Box<[Term]>,
+    funs: Box<[F]>,
+}
+
+impl Filter {
+    pub fn with_funs<F>(self, funs: impl IntoIterator<Item = F>) -> Owned<F> {
+        let Self(id, terms) = self;
+        let funs = funs.into_iter().collect();
+        Owned(id, Lut { terms, funs })
+    }
+}
+
 #[derive(Clone, Debug)]
 enum Tailrec {
     Throw,
@@ -81,11 +100,12 @@ enum FoldType {
     For,
 }
 
-struct Error<S>(S, Undefined);
+pub type Error<S> = (S, Undefined);
 
-type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
+pub type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
 
-enum Undefined {
+#[derive(Debug)]
+pub enum Undefined {
     Mod,
     Var,
     Label,
@@ -93,7 +113,7 @@ enum Undefined {
 }
 
 #[derive(Default)]
-struct Compiler<S> {
+pub struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
 
@@ -183,7 +203,7 @@ impl<'s> Compiler<&'s str> {
         }
     }
 
-    pub fn compile<V>(mut self, mods: load::Modules<&'s str>) -> Result<Filter, Errors<&'s str>> {
+    pub fn compile(mut self, mods: load::Modules<&'s str>) -> Result<Filter, Errors<&'s str>> {
         self.imported_vars = mods
             .iter()
             .enumerate()
@@ -388,7 +408,7 @@ impl<'s> Compiler<&'s str> {
     }
 
     fn fail(&mut self, name: &'s str, undef: Undefined) -> Term {
-        self.errs.push(Error(name, undef));
+        self.errs.push((name, undef));
         Term::default()
     }
 
