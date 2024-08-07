@@ -4,7 +4,7 @@ use core::fmt::{self, Display};
 enum Exn<V> {
     Err(Error<V>),
     TailCall(crate::filter::TailCall<V>),
-    Break,
+    Break(usize),
     UpdateIndexError,
 }
 
