@@ -254,7 +254,16 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
 
             Ast::Var(v, label_skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)),
+                Bind::Fun(f) => {
+                    let ys = w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1));
+                    if *label_skip == 0 {
+                        return ys;
+                    }
+                    Box::new(ys.map(move |y| match y {
+                        Err(Error::Break(n)) => Err(Error::Break(n + label_skip)),
+                        y => y,
+                    }))
+                }
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 let def = w(&id);
@@ -279,8 +288,11 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             }
 
             Ast::Native(id, args) => (self.1.funs[*id].run)(Args(args, self.1), cv),
-            Ast::Label(id) => todo!(),
-            Ast::Break(skip) => todo!(),
+            Ast::Label(id) => Box::new(w(id).run(cv).map_while(|y| match y {
+                Err(Error::Break(n)) => n.checked_sub(1).map(|m| Err(Error::Break(m))),
+                y => Some(y),
+            })),
+            Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
             Ast::UpdateAlt(l, r) => todo!(),
         }
     }
