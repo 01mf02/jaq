@@ -21,26 +21,8 @@ impl<'a, V> Clone for Ref<'a, V> {
 
 impl<'a, V> Copy for Ref<'a, V> {}
 
-#[derive(Clone, Debug)]
-pub enum CallTyp {
-    /// everything that is not tail-recursive
-    Normal,
-    /// set up a tail-recursion handler
-    Catch,
-    /// throw a tail-recursion exception to be caught by the handler
-    Throw,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TailCall<V>(Id, crate::Vars<V>, V);
-
-#[derive(Clone, Debug)]
-pub(crate) struct Call {
-    pub id: Id,
-    pub typ: CallTyp,
-    pub skip: usize,
-    pub args: Box<[Bind<Id, Id>]>,
-}
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
