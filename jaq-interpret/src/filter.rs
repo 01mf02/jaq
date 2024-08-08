@@ -248,7 +248,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 }
             },
             Ast::CallDef(id, args, skip, tailrec) => {
-                let def = w(&id);
+                let def = w(id);
                 let ctx = cv.0.clone().skip_vars(*skip);
                 let inputs = cv.0.inputs;
                 let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
@@ -328,7 +328,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
             },
             Ast::CallDef(id, args, skip, _tailrec) => {
-                let def = w(&id);
+                let def = w(id);
                 let init = cv.1.clone();
                 let ctx = cv.0.clone().skip_vars(*skip);
                 let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
