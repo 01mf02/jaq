@@ -269,7 +269,7 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileRepo
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::std2());
+    let loader = Loader::new(jaq_std::std2()).with_std_read();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
@@ -287,9 +287,9 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
     let errs = errs.into_iter().map(|(file, err)| {
         let code = file.code;
         let err = match err {
+            Error::Io(errs) => errs.into_iter().map(|e| report_io(code, e)).collect(),
             Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
             Error::Parse(errs) => errs.into_iter().map(|e| report_parse(code, e)).collect(),
-            _ => todo!(),
         };
         (file.map(|s| s.into()), err)
     });
@@ -297,6 +297,7 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
 }
 
 fn compile_errors(errs: jaq_interpret::compile::Errors<&str>) -> Vec<FileReports> {
+    std::dbg!(errs);
     todo!()
 }
 
@@ -413,7 +414,7 @@ impl Termination for Error {
                     for e in reports {
                         eprintln!("Error: {}", e.message);
                         let block = e.into_block(&idx);
-                        eprintln!("{} [{}]", block.prologue(), file.path);
+                        eprintln!("{}[{}]", block.prologue(), file.path);
                         eprintln!("{}{}", block, block.epilogue())
                     }
                 }
@@ -608,6 +609,14 @@ impl Color {
             Self::Red => Color::Red,
         };
         d.fg(color).to_string()
+    }
+}
+
+fn report_io(code: &str, (path, error): (&str, String)) -> Report {
+    let path_range = jaq_syn::lex::span(code, path);
+    Report {
+        message: format!("could not load file {}: {}", path, error),
+        labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
     }
 }
 
