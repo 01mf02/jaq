@@ -117,13 +117,13 @@ fn std_read(path: &str) -> Result<String, String> {
 }
 
 impl<S, R> Loader<S, R> {
-    fn with_read<R2>(self, read: R2) -> Loader<S, R2> {
+    pub fn with_read<R2>(self, read: R2) -> Loader<S, R2> {
         let mods = self.mods;
         Loader { mods, read }
     }
 
     #[cfg(feature = "std")]
-    fn with_std_read(self) -> Loader<S, fn(&str) -> Result<String, String>> {
+    pub fn with_std_read(self) -> Loader<S, fn(&str) -> Result<String, String>> {
         self.with_read(std_read)
     }
 }
