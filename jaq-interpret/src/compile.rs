@@ -9,15 +9,15 @@ type LabelSkip = usize;
 type Arity = usize;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
-pub struct TermId(pub usize);
+pub struct TermId(pub(crate) usize);
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
-pub struct Filter<F = ()>(pub TermId, pub Lut<F>);
+pub struct Filter<F = ()>(pub(crate) TermId, pub(crate) Lut<F>);
 
 /// Look-up table for indices stored in ASTs.
 #[derive(Clone, Debug)]
-pub struct Lut<F> {
+pub(crate) struct Lut<F> {
     pub(crate) terms: Box<[Term]>,
     pub(crate) funs: Box<[F]>,
 }
@@ -30,20 +30,21 @@ impl<F> Default for Filter<F> {
 
 impl<F> Lut<F> {
     fn new(terms: Box<[Term]>) -> Self {
-        Self { terms, funs: Box::new([]) }
+        let funs = Box::new([]);
+        Self { terms, funs }
     }
 }
 
 impl<F> Filter<F> {
     pub fn with_funs<F2>(self, funs: impl IntoIterator<Item = F2>) -> Filter<F2> {
-        let Self(id, Lut {terms, ..} ) = self;
+        let Self(id, Lut { terms, .. }) = self;
         let funs = funs.into_iter().collect();
         Filter(id, Lut { terms, funs })
     }
 }
 
 #[derive(Clone, Debug)]
-pub enum Tailrec {
+pub(crate) enum Tailrec {
     Throw,
     Catch,
 }
@@ -57,7 +58,7 @@ fn bind<T>(s: &str, x: T) -> Bind<T> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum Term<T = TermId> {
+pub(crate) enum Term<T = TermId> {
     #[default]
     Id,
     ToString,
@@ -118,7 +119,7 @@ pub enum Term<T = TermId> {
 }
 
 #[derive(Clone, Debug)]
-pub enum FoldType {
+pub(crate) enum FoldType {
     Reduce,
     Foreach,
     For,
@@ -492,7 +493,7 @@ impl<'s> Compiler<&'s str> {
         let mut natives = self.natives_map.iter();
         if let Some(nid) = natives.position(|(name_, arity)| name == *name_ && args.len() == *arity)
         {
-            return Term::Native(nid, args.into());
+            return Term::Native(nid, args);
         }
 
         self.fail(name, Undefined::Filter(args.len()))
