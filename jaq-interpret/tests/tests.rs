@@ -212,6 +212,8 @@ fn if_then_else() {
     gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
+yields!(label_break, "[label $x | 0, (label $y | 1, break $x, 2), 3]", [0, 1]);
+
 // This behaviour diverges from jq. In jaq, a `try` will propagate all
 // errors in the stream to the `catch` filter.
 yields!(
