@@ -113,6 +113,8 @@ impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
 #[cfg(feature = "std")]
 fn std_read(path: &str) -> Result<String, String> {
     use alloc::string::ToString;
+    let mut path = std::path::Path::new(path).to_path_buf();
+    path.set_extension("jq");
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
