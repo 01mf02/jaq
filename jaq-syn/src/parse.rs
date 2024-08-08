@@ -685,7 +685,7 @@ impl<'s, 't> Parser<'s, 't> {
         let path = self.bare_str()?;
         self.just("as")?;
         let name = match self.i.next() {
-            Some(Token(v, Tok::Word)) => *v,
+            Some(Token(v, Tok::Word | Tok::Var)) => *v,
             next => return Err((Expect::Ident, next)),
         };
         Ok((path, Some(name)))
