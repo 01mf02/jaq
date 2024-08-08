@@ -1,9 +1,11 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
+use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
+
+type Filter = jaq_interpret::compile::Filter<Native<Val>>;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -171,10 +173,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let filter = match file {
         None => Filter::default(),
-        Some((path, code)) => {
-            let blu = parse2(&path, &code, &vars).map_err(Error::Report2)?;
-            parse(&code, vars).map_err(|e| Error::Report(code, e))?
-        }
+        Some((path, code)) => parse(&path, &code, &vars).map_err(Error::Report)?,
     };
     //println!("Filter: {:?}", filter);
 
@@ -264,31 +263,7 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
-fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
-    let tokens = jaq_syn::Lexer::new(filter_str).lex().map_err(|errs| {
-        errs.into_iter()
-            .map(|e| report_lex(filter_str, e))
-            .collect::<Vec<_>>()
-    })?;
-
-    let main = jaq_syn::Parser::new(&tokens).parse(|p| p.module(|p| p.term()));
-    let main = main.map_err(|errs| {
-        //std::println!("{:?}", errs);
-        errs.into_iter()
-            .map(|e| report_parse(filter_str, e))
-            .collect::<Vec<_>>()
-    })?;
-
-    //std::println!("{:?}", main);
-    Ok(main.conv(filter_str))
-}
-
-use jaq_interpret::Native;
-fn parse2(
-    path: &str,
-    code: &str,
-    vars: &[String],
-) -> Result<jaq_interpret::compile::Owned<Native<Val>>, Vec<FileReports>> {
+fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileReports>> {
     use jaq_interpret::compile::Compiler;
     use jaq_syn::load::{Arena, File, Loader};
 
@@ -313,7 +288,7 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
         let code = file.code;
         let err = match err {
             Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
-            Error::Parse(errs) => errs.into_iter().map(|e| report_parse2(code, e)).collect(),
+            Error::Parse(errs) => errs.into_iter().map(|e| report_parse(code, e)).collect(),
             _ => todo!(),
         };
         (file.map(|s| s.into()), err)
@@ -323,23 +298,6 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
 
 fn compile_errors(errs: jaq_interpret::compile::Errors<&str>) -> Vec<FileReports> {
     todo!()
-}
-
-fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
-    let mut ctx = ParseCtx::new(vars);
-    ctx.insert_natives(jaq_core::core());
-    ctx.insert_defs(jaq_std::std());
-    let filter = parse_term(filter_str)?;
-    let filter = ctx.compile(filter);
-    if ctx.errs.is_empty() {
-        Ok(filter)
-    } else {
-        let reports = ctx.errs.into_iter().map(|error| Report {
-            message: error.0.to_string(),
-            labels: Vec::from([(error.1, [(error.0.to_string(), None)].into(), Color::Red)]),
-        });
-        Err(reports.collect())
-    }
 }
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
@@ -425,8 +383,7 @@ type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
 #[derive(Debug)]
 enum Error {
     Io(Option<String>, io::Error),
-    Report(String, Vec<Report>),
-    Report2(Vec<FileReports>),
+    Report(Vec<FileReports>),
     Parse(String),
     Jaq(jaq_interpret::Error),
     Persist(tempfile::PersistError),
@@ -450,17 +407,7 @@ impl Termination for Error {
                 eprintln!("Error: {e}");
                 2
             }
-            Self::Report(code, reports) => {
-                let idx = codesnake::LineIndex::new(&code);
-                for e in reports {
-                    // TODO: report filename
-                    eprintln!("Error: {}", e.message);
-                    let block = e.into_block(&idx);
-                    eprintln!("{}\n{}{}", block.prologue(), block, block.epilogue())
-                }
-                3
-            }
-            Self::Report2(bla) => {
+            Self::Report(bla) => {
                 for (file, reports) in bla {
                     let idx = codesnake::LineIndex::new(&file.code);
                     for e in reports {
@@ -693,19 +640,7 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     }
 }
 
-fn report_parse(code: &str, (expected, found): jaq_syn::parse::TError<&str>) -> Report {
-    use jaq_syn::lex::Token;
-    let found_range = jaq_syn::lex::span(code, Token::opt_as_str(found, code));
-    let found = found.map_or("unexpected end of input", |_| "unexpected token");
-    let found = [(found.to_string(), None)].into();
-
-    Report {
-        message: format!("expected {}", expected.as_str()),
-        labels: Vec::from([(found_range, found, Color::Red)]),
-    }
-}
-
-fn report_parse2(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
+fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
     let found_range = jaq_syn::lex::span(code, found);
 
     let found = if found.is_empty() {
@@ -745,6 +680,8 @@ impl Report {
 }
 
 fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
+    todo!()
+    /*
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(Vec::new(), &inputs);
 
@@ -760,6 +697,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
     let obtain: Result<Vec<_>, _> = filter.run((ctx, input)).collect();
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
+    */
 }
 
 fn run_tests(file: std::fs::File) -> ExitCode {

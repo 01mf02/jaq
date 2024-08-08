@@ -1,61 +1,63 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_syn::{load, parse, MathOp, OrdOp};
+use jaq_syn::{load, parse, Arg as Bind, MathOp, OrdOp};
 
 type NativeId = usize;
-type TermId = usize;
 type ModId = usize;
 type VarId = usize;
 type VarSkip = usize;
 type LabelSkip = usize;
 type Arity = usize;
 
-/// Function from a value to a stream of value results.
-#[derive(Debug, Clone)]
-pub struct Filter(TermId, Box<[Term]>);
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+pub struct TermId(pub usize);
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
-pub struct Owned<F>(TermId, Lut<F>);
+pub struct Filter<F = ()>(pub TermId, pub Lut<F>);
 
 /// Look-up table for indices stored in ASTs.
 #[derive(Clone, Debug)]
-struct Lut<F> {
-    terms: Box<[Term]>,
-    funs: Box<[F]>,
+pub struct Lut<F> {
+    pub(crate) terms: Box<[Term]>,
+    pub(crate) funs: Box<[F]>,
 }
 
-impl Filter {
-    pub fn with_funs<F>(self, funs: impl IntoIterator<Item = F>) -> Owned<F> {
-        let Self(id, terms) = self;
+impl<F> Default for Filter<F> {
+    fn default() -> Self {
+        Self(TermId(0), Lut::new([Term::Id].into()))
+    }
+}
+
+impl<F> Lut<F> {
+    fn new(terms: Box<[Term]>) -> Self {
+        Self { terms, funs: Box::new([]) }
+    }
+}
+
+impl<F> Filter<F> {
+    pub fn with_funs<F2>(self, funs: impl IntoIterator<Item = F2>) -> Filter<F2> {
+        let Self(id, Lut {terms, ..} ) = self;
         let funs = funs.into_iter().collect();
-        Owned(id, Lut { terms, funs })
+        Filter(id, Lut { terms, funs })
     }
 }
 
 #[derive(Clone, Debug)]
-enum Tailrec {
+pub enum Tailrec {
     Throw,
     Catch,
 }
 
-#[derive(Copy, Clone, Debug)]
-enum Bind {
-    Var,
-    Filter,
-}
-
-impl From<&str> for Bind {
-    fn from(s: &str) -> Self {
-        if s.starts_with('$') {
-            Self::Var
-        } else {
-            Self::Filter
-        }
+fn bind<T>(s: &str, x: T) -> Bind<T> {
+    if s.starts_with('$') {
+        Bind::Var(x)
+    } else {
+        Bind::Fun(x)
     }
 }
 
 #[derive(Clone, Debug, Default)]
-enum Term<T = TermId> {
+pub enum Term<T = TermId> {
     #[default]
     Id,
     ToString,
@@ -67,9 +69,8 @@ enum Term<T = TermId> {
     ObjEmpty,
     ObjSingle(T, T),
 
-    Var(VarId),
-    CallArg(VarId, LabelSkip),
-    CallDef(TermId, Box<[(Bind, T)]>, VarSkip, Option<Tailrec>),
+    Var(VarId, LabelSkip),
+    CallDef(TermId, Box<[Bind<T>]>, VarSkip, Option<Tailrec>),
     Native(NativeId, Box<[T]>),
 
     Label(T),
@@ -88,13 +89,36 @@ enum Term<T = TermId> {
     UpdateAlt(T, T),
     TryCatch(T, T),
     Ite(T, T, T),
+    /// `reduce`, `for`, and `foreach`
+    ///
+    /// The first field indicates whether to yield intermediate results
+    /// (`false` for `reduce` and `true` for `foreach`).
+    ///
+    ///  Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
+    /// `reduce xs as $x (init; f)` evaluates to
+    ///
+    /// ~~~ text
+    /// init
+    /// | x0 as $x | f
+    /// | ...
+    /// | xn as $x | f
+    /// ~~~
+    ///
+    /// and `for xs as $x (init; f)` evaluates to
+    ///
+    /// ~~~ text
+    /// init
+    /// | ., (x0 as $x | f
+    /// | ...
+    /// | ., (xn as $x | f)...)
+    /// ~~~
     Fold(FoldType, T, T, T),
 
     Path(T, crate::path::Path<T>),
 }
 
 #[derive(Clone, Debug)]
-enum FoldType {
+pub enum FoldType {
     Reduce,
     Foreach,
     For,
@@ -120,7 +144,7 @@ pub struct Compiler<S> {
     natives_map: Vec<(S, Arity)>,
 
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
-    mod_map: Vec<Vec<Sig<S, Bind>>>,
+    mod_map: Vec<Vec<Sig<S, Bind<()>>>>,
 
     imported_mods: Vec<(ModId, S)>,
     included_mods: Vec<ModId>,
@@ -160,11 +184,11 @@ impl<S: Eq, A> Sig<S, A> {
     }
 }
 
-impl<S> Sig<S, Bind> {
+impl<S> Sig<S, Bind<()>> {
     fn call(&self, args: &[TermId], vars: usize) -> Term {
         let call = self.tailrec.then_some(Tailrec::Catch);
-        let args = args.iter().copied();
-        let args = self.args.iter().copied().zip(args);
+        let args = self.args.iter().zip(args);
+        let args = args.map(|(bind, id)| bind.as_ref().map(|_| *id));
         Term::CallDef(self.id, args.collect(), vars, call)
     }
 }
@@ -173,8 +197,7 @@ impl<'s> Sig<&'s str, &'s str> {
     fn call_parent(&mut self, args: &[TermId], vars: usize, tailrec: bool) -> Term {
         self.tailrec = self.tailrec || tailrec;
         let call = tailrec.then_some(Tailrec::Throw);
-        let args = args.iter().copied();
-        let args = self.args.iter().copied().map(Bind::from).zip(args);
+        let args = self.args.iter().zip(args).map(|(x, id)| bind(x, *id));
         Term::CallDef(self.id, args.collect(), vars, call)
     }
 }
@@ -184,7 +207,7 @@ enum Local<S> {
     Var(S),
     Label(S),
     Parent(Sig<S, S>),
-    Sibling(Sig<S, Bind>),
+    Sibling(Sig<S, Bind<()>>),
     TailrecObstacle,
 }
 
@@ -224,7 +247,7 @@ impl<'s> Compiler<&'s str> {
             assert_eq!(main.name, "main");
             assert!(main.args.is_empty());
             assert!(!main.tailrec);
-            Ok(Filter(main.id, self.term_map.into()))
+            Ok(Filter(main.id, Lut::new(self.term_map.into())))
         } else {
             Err(errs)
         }
@@ -267,15 +290,14 @@ impl<'s> Compiler<&'s str> {
         };
         self.local.push(Local::Parent(sig));
 
-        self.term_map[tid] = self.term(d.body);
+        self.term_map[tid.0] = self.term(d.body);
 
         // turn the parent into a sibling
-        match self.local.pop() {
-            Some(Local::Parent(sig)) => {
-                self.local.push(Local::Sibling(sig.map_args(Bind::from)));
-            }
+        let sibling = match self.local.pop() {
+            Some(Local::Parent(sig)) => Local::Sibling(sig.map_args(|a| bind(a, ()))),
             _ => panic!(),
-        }
+        };
+        self.local.push(sibling);
     }
 
     fn term(&mut self, t: parse::Term<&'s str>) -> Term {
@@ -404,7 +426,7 @@ impl<'s> Compiler<&'s str> {
     fn insert_term(&mut self, t: Term) -> TermId {
         let tid = self.term_map.len();
         self.term_map.push(t);
-        tid
+        TermId(tid)
     }
 
     fn fail(&mut self, name: &'s str, undef: Undefined) -> Term {
@@ -447,7 +469,7 @@ impl<'s> Compiler<&'s str> {
                 Local::Parent(sig) => {
                     for arg in sig.args.iter().rev() {
                         if *arg == name && args.is_empty() {
-                            return Term::CallArg(i, labels);
+                            return Term::Var(i, labels);
                         } else {
                             i += 1
                         }
@@ -481,12 +503,12 @@ impl<'s> Compiler<&'s str> {
         for l in self.local.iter().rev() {
             match l {
                 Local::Sibling(..) | Local::Label(_) | Local::TailrecObstacle => (),
-                Local::Var(x_) if x == *x_ => return Term::Var(i),
+                Local::Var(x_) if x == *x_ => return Term::Var(i, 0),
                 Local::Var(_) => i += 1,
                 Local::Parent(sig) => {
                     for arg in sig.args.iter().rev() {
                         if *arg == x {
-                            return Term::Var(i);
+                            return Term::Var(i, 0);
                         } else {
                             i += 1;
                         }
@@ -496,14 +518,14 @@ impl<'s> Compiler<&'s str> {
         }
         for (x_, mid) in self.imported_vars.iter().rev() {
             if x == *x_ && *mid == self.mod_map.len() {
-                return Term::Var(i);
+                return Term::Var(i, 0);
             } else {
                 i += 1
             }
         }
         for x_ in self.global_vars.iter().rev() {
             if x == *x_ {
-                return Term::Var(i);
+                return Term::Var(i, 0);
             } else {
                 i += 1
             }

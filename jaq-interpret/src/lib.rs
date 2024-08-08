@@ -49,10 +49,7 @@ mod box_iter;
 pub mod compile;
 pub mod error;
 mod filter;
-mod hir;
 mod into_iter;
-mod lir;
-mod mir;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -65,7 +62,7 @@ mod val;
 mod exn;
 
 pub use error::Error;
-pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
+pub use filter::{Args, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs, ValT};
 
@@ -130,6 +127,7 @@ impl<'a, V> Ctx<'a, V> {
     }
 }
 
+/*
 /// Compile parsed to executable filters.
 ///
 /// This allows to go from a parsed filter to a filter executable by this crate.
@@ -237,3 +235,4 @@ impl ParseCtx {
         assert!(out.eq(ys));
     }
 }
+*/
