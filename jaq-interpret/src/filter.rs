@@ -379,30 +379,4 @@ pub trait FilterT<'a, V: ValT = Val>: Clone + 'a {
             })
         })
     }
-
-    /// Return the output of `recurse(f)` if `inner` and `outer` are true.
-    ///
-    /// This function implements a generalisation of `recurse(f)`:
-    /// if `inner` is true, it returns values for which `f` yields at least one output, and
-    /// if `outer` is true, it returns values for which `f` yields no output.
-    /// This is useful to implement `while` and `until`.
-    #[deprecated(since = "1.2.0")]
-    fn recurse(self, inner: bool, outer: bool, cv: Cv<'a, V>) -> ValR2s<V> {
-        let f = move |v| self.clone().run((cv.0.clone(), v));
-        Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
-    }
-
-    /// Return the output of `recurse(l) |= f`.
-    #[deprecated(since = "1.2.0")]
-    fn recurse_update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V> {
-        // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
-        Box::new(f(cv.1).flat_map(move |v| {
-            then(v, |v| {
-                let (c, f) = (cv.0.clone(), f.clone());
-                let slf = self.clone();
-                let rec = move |v| slf.clone().recurse_update((c.clone(), v), f.clone());
-                (self.clone()).update((cv.0.clone(), v), Box::new(rec))
-            })
-        }))
-    }
 }
