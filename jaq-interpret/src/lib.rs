@@ -10,28 +10,31 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{Ctx, Error, FilterT, ParseCtx, RcIter, Val};
+//! use jaq_interpret::{Ctx, Error, FilterT, Compiler, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
-//! let filter = ".[]";
+//! let code = ".[]";
+//!
+//! use jaq_syn::load::{Arena, File, Loader};
 //!
 //! // start out only from core filters,
 //! // which do not include filters in the standard library
 //! // such as `map`, `select` etc.
-//! let mut defs = ParseCtx::new(Vec::new());
+//! let loader = Loader::new([]);
+//! let arena = Arena::default();
 //!
 //! // parse the filter
-//! let f = jaq_syn::parse(filter, |p| p.module(|p| p.term())).unwrap().conv(filter);
+//! let modules = loader.load(&arena, File { path: "", code }).unwrap();
 //!
-//! // compile the filter in the context of the given definitions
-//! let f = defs.compile(f);
-//! assert!(defs.errs.is_empty());
+//! // compile the filter
+//! let filter = jaq_interpret::Compiler::default().compile(modules).unwrap();
+//! let filter = filter.with_funs([]);
 //!
 //! let inputs = RcIter::new(core::iter::empty());
 //!
 //! // iterator over the output values
-//! let mut out = f.run((Ctx::new([], &inputs), Val::from(input)));
+//! let mut out = filter.run((Ctx::new([], &inputs), Val::from(input)));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
