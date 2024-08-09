@@ -275,7 +275,7 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileRepo
         .map_err(load_errors)?;
     let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()
-        .with_natives(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok(filter.with_funs(core.into_iter().map(|(.., f)| f)))

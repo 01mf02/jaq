@@ -142,7 +142,7 @@ pub struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
     term_map: Vec<Term>,
 
-    natives_map: Vec<(S, Arity)>,
+    funs_map: Vec<(S, Arity)>,
 
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
     mod_map: Vec<Vec<Sig<S, Bind<()>>>>,
@@ -213,9 +213,9 @@ enum Local<S> {
 }
 
 impl<'s> Compiler<&'s str> {
-    pub fn with_natives(self, natives: impl IntoIterator<Item = (&'s str, Arity)>) -> Self {
+    pub fn with_funs(self, funs: impl IntoIterator<Item = (&'s str, Arity)>) -> Self {
         Self {
-            natives_map: natives.into_iter().collect(),
+            funs_map: funs.into_iter().collect(),
             ..self
         }
     }
@@ -512,8 +512,8 @@ impl<'s> Compiler<&'s str> {
             }
         }
 
-        let mut natives = self.natives_map.iter();
-        if let Some(nid) = natives.position(|(name_, arity)| name == *name_ && args.len() == *arity)
+        let mut funs = self.funs_map.iter();
+        if let Some(nid) = funs.position(|(name_, arity)| name == *name_ && args.len() == *arity)
         {
             return Term::Native(nid, args);
         }
