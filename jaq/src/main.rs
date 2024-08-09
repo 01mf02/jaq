@@ -689,12 +689,10 @@ impl Report {
 }
 
 fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
-    todo!()
-    /*
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(Vec::new(), &inputs);
 
-    let filter = parse(&test.filter, Vec::new()).map_err(|e| Error::Report(test.filter, e))?;
+    let filter = parse("", &test.filter, &[]).map_err(Error::Report)?;
 
     let json = |s: String| {
         use hifijson::token::Lex;
@@ -706,7 +704,6 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
     let obtain: Result<Vec<_>, _> = filter.run((ctx, input)).collect();
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
-    */
 }
 
 fn run_tests(file: std::fs::File) -> ExitCode {
