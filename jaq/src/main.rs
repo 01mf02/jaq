@@ -5,7 +5,7 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{ExitCode, Termination};
 
-type Filter = jaq_interpret::compile::Filter<Native<Val>>;
+type Filter = compile::Filter<Native<Val>>;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -264,7 +264,7 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 }
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileReports>> {
-    use jaq_interpret::compile::Compiler;
+    use compile::Compiler;
     use jaq_syn::load::{Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
@@ -296,7 +296,7 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
     errs.collect()
 }
 
-fn compile_errors(errs: jaq_interpret::compile::Errors<&str>) -> Vec<FileReports> {
+fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
     std::dbg!(errs);
     todo!()
 }
@@ -408,8 +408,8 @@ impl Termination for Error {
                 eprintln!("Error: {e}");
                 2
             }
-            Self::Report(bla) => {
-                for (file, reports) in bla {
+            Self::Report(file_reports) => {
+                for (file, reports) in file_reports {
                     let idx = codesnake::LineIndex::new(&file.code);
                     for e in reports {
                         eprintln!("Error: {}", e.message);
