@@ -293,12 +293,31 @@ impl<'s> Compiler<&'s str> {
 
         self.term_map[tid.0] = self.term(d.body);
 
-        // turn the parent into a sibling
-        let sibling = match self.local.pop() {
-            Some(Local::Parent(sig)) => Local::Sibling(sig.map_args(|a| bind(a, ()))),
+        let sig = match self.local.pop() {
+            Some(Local::Parent(sig)) => sig,
             _ => panic!(),
         };
-        self.local.push(sibling);
+
+        // By default, we assume that a definition `f` is not tail-recursive.
+        // However, once we find that `f` is tail-recursive after all,
+        // we have to adapt all calls to `f` that are recursive, but not tail-recursive.
+        // For example, in `def f: 1 + f, f`, when going from left to right,
+        // when handling `1 + f`, we still assume that `f` is not tail-recursive,
+        // but once we treat the second call to `f` (which is tail-recursive),
+        // we know that `f` is tail-recursive.
+        // So we have to adapt the call to `f` in `1 + f` *afterwards*.
+        // That's what we do here.
+        if sig.tailrec {
+            for term in &mut self.term_map[tid.0..] {
+                if let Term::CallDef(id, .., tailrec @ None) = term {
+                    *tailrec = (*id == tid).then_some(Tailrec::Catch);
+                }
+            }
+        }
+
+        // turn the parent into a sibling
+        self.local
+            .push(Local::Sibling(sig.map_args(|a| bind(a, ()))));
     }
 
     fn term(&mut self, t: parse::Term<&'s str>) -> Term {
