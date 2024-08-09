@@ -1,13 +1,19 @@
 use serde_json::Value;
 
-fn yields(x: jaq_interpret::Val, f: &str, ys: impl Iterator<Item = jaq_interpret::ValR>) {
-    let mut ctx = jaq_interpret::ParseCtx::new(Vec::new());
-    ctx.insert_natives(jaq_core::core());
+fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interpret::ValR>) {
+    use jaq_syn::load::{Arena, File, Loader};
 
-    let f = jaq_syn::parse(f, |p| p.module(|p| p.term()))
-        .unwrap()
-        .conv(f);
-    ctx.yields(x, f, ys)
+    let arena = Arena::default();
+    let loader = Loader::new([]);
+    let modules = loader.load(&arena, File { path: "", code }).unwrap();
+    let core: Vec<_> = jaq_core::core().collect();
+    let filter = jaq_interpret::Compiler::default()
+        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .compile(modules)
+        .unwrap();
+    filter
+        .with_funs(core.into_iter().map(|(.., f)| f))
+        .yields(x, ys)
 }
 
 pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {
