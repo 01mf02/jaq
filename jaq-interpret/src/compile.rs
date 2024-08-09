@@ -513,8 +513,7 @@ impl<'s> Compiler<&'s str> {
         }
 
         let mut funs = self.funs_map.iter();
-        if let Some(nid) = funs.position(|(name_, arity)| name == *name_ && args.len() == *arity)
-        {
+        if let Some(nid) = funs.position(|(name_, arity)| name == *name_ && args.len() == *arity) {
             return Term::Native(nid, args);
         }
 
