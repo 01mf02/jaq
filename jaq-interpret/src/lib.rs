@@ -61,6 +61,7 @@ mod val;
 #[allow(dead_code)]
 mod exn;
 
+pub use compile::{Compiler, Filter};
 pub use error::Error;
 pub use filter::{Args, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
@@ -186,53 +187,16 @@ impl ParseCtx {
     pub fn insert_defs(&mut self, defs: impl IntoIterator<Item = jaq_syn::Def>) {
         self.def.rhs.defs.extend(defs);
     }
+}
+*/
 
-    /// Insert a root definition.
-    #[deprecated(since = "1.1.0", note = "use `insert_defs` instead")]
-    pub fn root_def(&mut self, def: jaq_syn::Def) {
-        self.def.rhs.defs.push(def);
-    }
-
-    /// Insert a root filter.
-    #[deprecated(since = "1.1.0", note = "this call has no effect")]
-    pub fn root_filter(&mut self, filter: jaq_syn::Spanned<jaq_syn::filter::Filter>) {
-        self.def.rhs.body = filter;
-    }
-
-    /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
-        let mut hctx = hir::Ctx::default();
-        let native = self.native.iter().map(|(sig, _)| sig.clone());
-        hctx.native = native.collect();
-        self.def.rhs.defs.extend(main.defs);
-        self.def.rhs.body = main.body;
-        let def = hctx.def(self.def.clone());
-        self.errs = hctx.errs;
-
-        if !self.errs.is_empty() {
-            return Default::default();
-        }
-        let mut mctx = mir::Ctx::default();
-        //std::dbg!(&def);
-        let def = mctx.def(def, Default::default());
-
-        let mut lctx = lir::Ctx::default();
-        let id = lctx.def(def);
-        let native = self.native.iter().map(|(_sig, native)| native.clone());
-        filter::Owned::new(id, lctx.defs.into(), native.collect())
-    }
-
-    /// Compile and run a filter on given input, panic if it does not compile or yield the given output.
+impl<V: ValT> Filter<Native<V>> {
+    /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields(&mut self, x: Val, f: jaq_syn::Main, ys: impl Iterator<Item = ValR>) {
-        let f = self.compile(f);
-        assert!(self.errs.is_empty());
-
+    pub fn yields(&self, x: V, ys: impl Iterator<Item = val::ValR2<V>>) {
         let inputs = RcIter::new(core::iter::empty());
-        let out = f.run((Ctx::new([], &inputs), x));
-
+        let out = self.run((Ctx::new([], &inputs), x));
         assert!(out.eq(ys));
     }
 }
-*/
