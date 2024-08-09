@@ -365,8 +365,11 @@ impl<'s> Compiler<&'s str> {
             }
             BinOp(l, op, r) => {
                 use jaq_syn::parse::BinaryOp::*;
-                let l = self.iterm(*l);
-                let r = self.iterm(*r);
+                let (l, r) = match op {
+                    Comma => (self.iterm_tr(*l), self.iterm_tr(*r)),
+                    Alt => (self.iterm(*l), self.iterm_tr(*r)),
+                    _ => (self.iterm(*l), self.iterm(*r)),
+                };
                 match op {
                     Comma => Term::Comma(l, r),
                     Math(op) => Term::Math(l, op, r),
