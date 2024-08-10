@@ -1,5 +1,5 @@
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_interpret::{compile, Ctx, FilterT, RcIter, Val, Native};
+use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
 type Filter = compile::Filter<Native<Val>>;
