@@ -218,6 +218,8 @@ yields!(
     [0, 1]
 );
 
+yields!(label_break_rec, "def f(a): (label $x | a | ., f(a)), {}; [0 | label $y | f(if . > 1 then break $y else . + 1 end)]", [1, 2]);
+
 // This behaviour diverges from jq. In jaq, a `try` will propagate all
 // errors in the stream to the `catch` filter.
 yields!(
