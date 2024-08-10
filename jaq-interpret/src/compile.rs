@@ -333,7 +333,7 @@ impl<'s> Compiler<&'s str> {
                 self.with(Local::Var(x), |c| c.iterm_tr(*r)),
             ),
             Pipe(l, None, r) => Term::Pipe(self.iterm(*l), false, self.iterm_tr(*r)),
-            Label(x, t) => Term::Label(self.with(Local::Label(x), |c| c.iterm_tr(*t))),
+            Label(x, t) => Term::Label(self.with(Local::Label(x), |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
                 let else_ = else_.map_or(Term::Id, |else_| self.term(*else_));
