@@ -202,6 +202,12 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
+            Ast::UpdateAlt(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(
+                    cv,
+                    Box::new(move |x| box_once(Ok(if x.as_bool() { x } else { y.clone() }))),
+                )
+            }),
             Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
@@ -275,7 +281,6 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 y => Some(y),
             })),
             Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
-            Ast::UpdateAlt(l, r) => todo!(),
         }
     }
 
