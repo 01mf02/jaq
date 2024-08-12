@@ -59,6 +59,7 @@ fn bind<T>(s: &str, x: T) -> Bind<T> {
 
 #[derive(Clone, Debug, Default)]
 pub(crate) enum Term<T = TermId> {
+    /// Identity (`.`)
     #[default]
     Id,
     ToString,
@@ -66,29 +67,48 @@ pub(crate) enum Term<T = TermId> {
     Int(isize),
     Num(String),
     Str(String),
+    /// Array construction (`[f]`)
     Arr(T),
+    /// Empty object (`{}`)
     ObjEmpty,
+    /// Singleton object (`{f: g}`)
     ObjSingle(T, T),
 
+    /// Bound variable (`$x`) or filter argument (`a`)
     Var(VarId, LabelSkip),
+    /// Call to a filter (`filter`, `filter(…)`)
     CallDef(TermId, Box<[Bind<T>]>, VarSkip, Option<Tailrec>),
     Native(NativeId, Box<[T]>),
 
     Label(T),
     Break(usize),
 
+    /// Negation operation (`-f`)
     Neg(T),
+    /// Variable binding (`f as $x | g`) if identifier (`x`) is given, otherwise
+    /// application (`f | g`)
     Pipe(T, bool, T),
+    /// Concatenation (`f, g`)
     Comma(T, T),
+    /// Assignment (`f = g`)
     Assign(T, T),
+    /// Update-assignment (`f |= g`)
     Update(T, T),
+    /// Arithmetical update-assignment (`f += g`, `f -= g`, `f *= g`, `f /= g`, `f %= g`)
     UpdateMath(T, MathOp, T),
-    Logic(T, bool, T),
-    Math(T, MathOp, T),
-    Ord(T, OrdOp, T),
-    Alt(T, T),
+    /// Alternation update-assignment (`f //= g`)
     UpdateAlt(T, T),
+    /// Logical operation (`f and g`, `f or g`)
+    Logic(T, bool, T),
+    /// Arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`, `f % g`)
+    Math(T, MathOp, T),
+    /// Comparison operation (`f < g`, `f <= g`, `f > g`, `f >= g`, `f == g`, `f != g`)
+    Ord(T, OrdOp, T),
+    /// Alternation (`f // g`)
+    Alt(T, T),
+    /// Try-catch (`try f catch g`)
     TryCatch(T, T),
+    /// If-then-else (`if f then g else h end`)
     Ite(T, T, T),
     /// `reduce`, `for`, and `foreach`
     ///
