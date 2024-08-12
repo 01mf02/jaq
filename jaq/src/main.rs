@@ -297,8 +297,12 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
 }
 
 fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
-    std::dbg!(errs);
-    todo!()
+    let errs = errs.into_iter().map(|(file, errs)| {
+        let code = file.code;
+        let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
+        (file.map(|s| s.into()), errs)
+    });
+    errs.collect()
 }
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
@@ -661,6 +665,24 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> R
 
     Report {
         message: format!("expected {}", expected.as_str()),
+        labels: Vec::from([(found_range, found, Color::Red)]),
+    }
+}
+
+fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
+    use compile::Undefined;
+    let found_range = jaq_syn::lex::span(code, found);
+    let undefined = match undefined {
+        Undefined::Var => "variable".into(),
+        Undefined::Mod => "module".into(),
+        Undefined::Label => "label".into(),
+        Undefined::Filter(arity) => format!("filter {found}/{arity}"),
+    };
+    let message = format!("undefined {undefined}");
+    let found = [(message.clone(), None)].into();
+
+    Report {
+        message,
         labels: Vec::from([(found_range, found, Color::Red)]),
     }
 }
