@@ -9,6 +9,7 @@ description = "Parser for the jq language"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
+rust-version = "1.63"
 
 [features]
 default = ["serde", "std"]
