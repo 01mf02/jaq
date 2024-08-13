@@ -267,7 +267,7 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::std2()).with_std_read();
+    let loader = Loader::new(jaq_std::std()).with_std_read();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
