@@ -4,7 +4,7 @@ fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interp
     use jaq_syn::load::{Arena, File, Loader};
 
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::std2());
+    let loader = Loader::new(jaq_std::std());
     let modules = loader.load(&arena, File { path: "", code }).unwrap();
     let core: Vec<_> = jaq_core::core().collect();
     let filter = jaq_interpret::Compiler::default()
