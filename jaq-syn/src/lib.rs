@@ -5,31 +5,18 @@
 
 extern crate alloc;
 
-mod def;
-pub mod filter;
-mod ops;
-pub mod path;
-pub mod string;
-pub mod test;
-
-mod convert;
 pub mod lex;
 pub mod load;
+mod ops;
 pub mod parse;
+pub mod path;
 mod prec_climb;
+pub mod test;
 
-pub use def::{Arg, Call, Def, Main};
 pub use lex::Lexer;
+pub use load::Loader;
 pub use ops::{MathOp, OrdOp};
 pub use parse::Parser;
-use path::Path;
-pub use string::Str;
-
-/// Position information.
-pub type Span = core::ops::Range<usize>;
-
-/// An object with position information.
-pub type Spanned<T> = (T, Span);
 
 /// Lex a string and parse resulting tokens, returning [`None`] if any error occurred.
 ///

@@ -71,7 +71,6 @@ pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs, ValT};
 
 use alloc::string::String;
-use jaq_syn::Arg as Bind;
 use rc_list::List as RcList;
 use stack::Stack;
 
@@ -79,6 +78,44 @@ use stack::Stack;
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Vars<V>(RcList<Bind<V, (filter::Id, Self)>>);
 type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
+
+/// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
+///
+/// In jq, we can bind filters in three different ways:
+///
+/// 1. `f as $x | ...`
+/// 2. `def g($x): ...; g(f)`
+/// 3. `def g(fx): ...; g(f)`
+///
+/// In the first two cases, we bind the outputs of `f` to a variable `$x`.
+/// In the third case, we bind `f` to a filter `fx`
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Bind<V, F = V> {
+    /// binding to a variable
+    Var(V),
+    /// binding to a filter
+    Fun(F),
+}
+
+impl<V, F> Bind<V, F> {
+    /// Move references inward.
+    pub fn as_ref(&self) -> Bind<&V, &F> {
+        match self {
+            Self::Var(x) => Bind::Var(x),
+            Self::Fun(x) => Bind::Fun(x),
+        }
+    }
+}
+
+impl<T> Bind<T, T> {
+    /// Apply a function to both binding types.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Bind<U, U> {
+        match self {
+            Self::Var(x) => Bind::Var(f(x)),
+            Self::Fun(x) => Bind::Fun(f(x)),
+        }
+    }
+}
 
 impl<V> Vars<V> {
     fn get(&self, i: usize) -> Option<&Bind<V, (filter::Id, Self)>> {

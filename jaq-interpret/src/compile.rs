@@ -1,7 +1,8 @@
 //! Program compilation.
 
+use crate::Bind;
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_syn::{load, parse, Arg as Bind, MathOp, OrdOp};
+use jaq_syn::{load, parse, MathOp, OrdOp};
 
 type NativeId = usize;
 type ModId = usize;

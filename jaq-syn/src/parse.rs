@@ -1,7 +1,7 @@
 //! Parsing.
 
 use crate::lex::{StrPart, Tok, Token};
-use crate::path;
+use crate::path::{self, Path};
 use crate::prec_climb::{self, Associativity};
 use crate::{MathOp, OrdOp};
 use alloc::{boxed::Box, vec::Vec};
@@ -10,8 +10,6 @@ use alloc::{boxed::Box, vec::Vec};
 pub type Error<S, T = S> = (Expect<S>, T);
 /// Parse error that stores what token it found.
 pub type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
-
-pub type Path<T> = Vec<(path::Part<T>, path::Opt)>;
 
 /// Type of token that we expected.
 ///

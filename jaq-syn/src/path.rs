@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 /// A path such as `.[].a?[1:]`.
-pub type Path<T> = Vec<(Part<crate::Spanned<T>>, Opt)>;
+pub type Path<T> = Vec<(Part<T>, Opt)>;
 
 /// A part of a path, such as `[]`, `a`, and `[1:]` in `.[].a?[1:]`.
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
