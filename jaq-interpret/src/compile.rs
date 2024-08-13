@@ -11,7 +11,7 @@ type LabelSkip = usize;
 type Arity = usize;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
-pub struct TermId(pub(crate) usize);
+pub(crate) struct TermId(pub(crate) usize);
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
@@ -319,7 +319,6 @@ impl<'s> Compiler<&'s str> {
     fn def(&mut self, d: parse::Def<&'s str, parse::Term<&'s str>>) {
         let tid = self.insert_term(Term::Id);
 
-        let arity = d.args.len();
         let sig = Sig {
             name: d.name,
             args: d.args,
@@ -440,7 +439,7 @@ impl<'s> Compiler<&'s str> {
                 }
             }
             Path(t, path) => {
-                use crate::path::{Part, Path};
+                use crate::path::Part;
                 use jaq_syn::path::Part::*;
                 let t = self.iterm(*t);
                 let path = path.into_iter().map(|(p, opt)| match p {
@@ -497,13 +496,13 @@ impl<'s> Compiler<&'s str> {
     /// Resolve call to `mod::filter(a1, ..., an)`.
     fn call_mod(&mut self, module: &'s str, name: &'s str, args: Box<[TermId]>) -> Term {
         let vars = self.local.iter().map(|l| match l {
-            Local::Var(x) => 1,
+            Local::Var(_) => 1,
             Local::Label(_) | Local::Sibling(..) | Local::TailrecObstacle => 0,
             Local::Parent(sig) => sig.args.len(),
         });
         let vars = vars.sum();
         let mut imported_mods = self.imported_mods.iter().rev();
-        let mid = match imported_mods.find(|(mid, module_)| module == *module_) {
+        let mid = match imported_mods.find(|(_mid, module_)| module == *module_) {
             Some((mid, _module)) => mid,
             None => return self.fail(module, Undefined::Mod),
         };
