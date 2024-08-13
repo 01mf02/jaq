@@ -66,6 +66,17 @@ where
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
+fn label_skip<'a, V: 'a>(ys: ValR2s<'a, V>, skip: usize) -> ValR2s<'a, V> {
+    if skip == 0 {
+        ys
+    } else {
+        Box::new(ys.map(move |y| match y {
+            Err(Error::Break(n)) => Err(Error::Break(n + skip)),
+            y => y,
+        }))
+    }
+}
+
 type Cv<'c, V = Val> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
@@ -240,18 +251,9 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 }
             }
 
-            Ast::Var(v, label_skip) => match cv.0.vars.get(*v).unwrap() {
+            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => {
-                    let ys = w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1));
-                    if *label_skip == 0 {
-                        return ys;
-                    }
-                    Box::new(ys.map(move |y| match y {
-                        Err(Error::Break(n)) => Err(Error::Break(n + label_skip)),
-                        y => y,
-                    }))
-                }
+                Bind::Fun(f) => label_skip(w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)), *skip),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 let def = w(id);
@@ -328,9 +330,12 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 w(if x.as_bool() { then_ } else { else_ }).update((cv.0.clone(), v), f.clone())
             }),
 
-            Ast::Var(v, label_skip) => match cv.0.vars.get(*v).unwrap() {
+            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
-                Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
+                Bind::Fun(l) => label_skip(
+                    w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
+                    *skip,
+                ),
             },
             Ast::CallDef(id, args, skip, _tailrec) => {
                 let def = w(id);
