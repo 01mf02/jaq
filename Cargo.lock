@@ -313,7 +313,6 @@ dependencies = [
 name = "jaq-syn"
 version = "1.6.0"
 dependencies = [
- "serde",
  "typed-arena",
 ]
 

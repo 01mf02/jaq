@@ -1,10 +1,7 @@
 use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 /// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MathOp {
     /// Addition
@@ -48,7 +45,6 @@ impl fmt::Display for MathOp {
 }
 
 /// An operation that orders two values, such as `<`, `<=`, `>`, `>=`, `==`, `!=`.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum OrdOp {
     /// Less-than (<).

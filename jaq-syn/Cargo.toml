@@ -12,9 +12,8 @@ categories = ["parser-implementations"]
 rust-version = "1.63"
 
 [features]
-default = ["serde", "std"]
+default = ["std"]
 std = []
 
 [dependencies]
-serde = { version = "1.0.137", features = ["derive"], optional = true }
 typed-arena = "2.0.2"
