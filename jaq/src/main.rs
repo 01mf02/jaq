@@ -158,8 +158,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         return Ok(run_tests(std::fs::File::open(test_file)?));
     }
 
-    let (vars, ctx) = binds(cli)?.into_iter().unzip();
-    let vars: Vec<String> = vars;
+    let (vars, mut ctx): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
 
     let mut args = cli.args.iter();
     let file = match &cli.from_file {
@@ -171,10 +170,11 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     };
     let files: Vec<_> = args.collect();
 
-    let filter = match file {
-        None => Filter::default(),
+    let (vals, filter) = match file {
+        None => (Vec::new(), Filter::default()),
         Some((path, code)) => parse(&path, &code, &vars).map_err(Error::Report)?,
     };
+    ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
     let last = if files.is_empty() {
@@ -263,9 +263,9 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
-fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileReports>> {
+fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_syn::load::{Arena, File, Loader};
+    use jaq_syn::load::{map_imports, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
@@ -273,12 +273,22 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileRepo
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
+
+    let vals = map_imports(&modules, |file| {
+        let path = std::path::Path::new(file);
+        load_file(path)
+            .and_then(|file| json_slice(&file).collect::<Result<Vec<_>, _>>())
+            .map(Val::arr)
+            .map_err(|e| e.to_string())
+    })
+    .map_err(load_errors)?;
+
     let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()
         .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok(filter.with_funs(core.into_iter().map(|(.., f)| f)))
+    Ok((vals, filter.with_funs(core.into_iter().map(|(.., f)| f))))
 }
 
 fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
@@ -711,10 +721,10 @@ impl Report {
 }
 
 fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
-    let inputs = RcIter::new(Box::new(core::iter::empty()));
-    let ctx = Ctx::new(Vec::new(), &inputs);
+    let (ctx, filter) = parse("", &test.filter, &[]).map_err(Error::Report)?;
 
-    let filter = parse("", &test.filter, &[]).map_err(Error::Report)?;
+    let inputs = RcIter::new(Box::new(core::iter::empty()));
+    let ctx = Ctx::new(ctx, &inputs);
 
     let json = |s: String| {
         use hifijson::token::Lex;

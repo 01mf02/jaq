@@ -14,7 +14,7 @@ pub struct Loader<S, R> {
     read: R,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct File<S> {
     pub path: S,
     pub code: S,
@@ -116,6 +116,31 @@ fn std_read(path: &str) -> Result<String, String> {
     let mut path = std::path::Path::new(path).to_path_buf();
     path.set_extension("jq");
     std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+pub fn map_imports<S: Copy, V, F>(modules: &Modules<S>, f: F) -> Result<Vec<V>, Errors<S>>
+where
+    F: Fn(S) -> Result<V, String>,
+{
+    let mut errs = Vec::new();
+    let mut vals = Vec::new();
+    for (file, module) in modules {
+        let mut mod_errs = Vec::new();
+        for (file, _name) in &module.vars {
+            match f(*file) {
+                Ok(v) => vals.push(v),
+                Err(e) => mod_errs.push((*file, e)),
+            }
+        }
+        if !mod_errs.is_empty() {
+            errs.push((file.clone(), Error::Io(mod_errs)));
+        }
+    }
+    if errs.is_empty() {
+        Ok(vals)
+    } else {
+        Err(errs)
+    }
 }
 
 impl<S, R> Loader<S, R> {
