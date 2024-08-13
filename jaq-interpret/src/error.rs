@@ -29,6 +29,7 @@ pub enum Error<V = Val> {
     /// This is used internally to execute tail-recursive filters.
     /// If this can be observed by users, then this is a bug.
     TailCall(crate::filter::TailCall<V>),
+    /// Value returned by break expression.
     Break(usize),
 }
 

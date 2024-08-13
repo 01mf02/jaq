@@ -1,3 +1,5 @@
+//! jq program compilation.
+
 use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_syn::{load, parse, Arg as Bind, MathOp, OrdOp};
 
@@ -36,6 +38,7 @@ impl<F> Lut<F> {
 }
 
 impl<F> Filter<F> {
+    /// Provide functions for a compiled filter.
     pub fn with_funs<F2>(self, funs: impl IntoIterator<Item = F2>) -> Filter<F2> {
         let Self(id, Lut { terms, .. }) = self;
         let funs = funs.into_iter().collect();
@@ -145,18 +148,23 @@ pub(crate) enum FoldType {
     For,
 }
 
+/// Compilation error.
 pub type Error<S> = (S, Undefined);
 
+/// Compilation errors.
 pub type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
 
 #[derive(Debug)]
 pub enum Undefined {
+    /// module
     Mod,
+    /// variable
     Var,
     Label,
     Filter(Arity),
 }
 
+/// jq program compiler.
 #[derive(Default)]
 pub struct Compiler<S> {
     /// `term_map[tid]` yields the term corresponding to the term ID `tid`
@@ -233,6 +241,10 @@ enum Local<S> {
 }
 
 impl<'s> Compiler<&'s str> {
+    /// Assume the existence of functions with given signatures.
+    ///
+    /// For execution, the corresponding functions have to be provided to the filter
+    /// via [`Filter::with_funs`].
     pub fn with_funs(self, funs: impl IntoIterator<Item = (&'s str, Arity)>) -> Self {
         Self {
             funs_map: funs.into_iter().collect(),
@@ -240,6 +252,10 @@ impl<'s> Compiler<&'s str> {
         }
     }
 
+    /// Assume the existence of global variables with given names.
+    ///
+    /// The names all have to start with `$`.
+    /// For execution, the corresponding values have to be provided via [`crate::Ctx::new`].
     pub fn with_global_vars(self, global_vars: impl IntoIterator<Item = &'s str>) -> Self {
         Self {
             global_vars: global_vars.into_iter().collect(),
@@ -247,6 +263,7 @@ impl<'s> Compiler<&'s str> {
         }
     }
 
+    /// Compile the given modules.
     pub fn compile(mut self, mods: load::Modules<&'s str>) -> Result<Filter, Errors<&'s str>> {
         self.imported_vars = mods
             .iter()
