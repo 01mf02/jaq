@@ -1,4 +1,4 @@
-//! jq program compilation.
+//! Program compilation.
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use jaq_syn::{load, parse, Arg as Bind, MathOp, OrdOp};
