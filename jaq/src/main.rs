@@ -2,7 +2,7 @@ use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
 use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
 
 type Filter = compile::Filter<Native<Val>>;
@@ -183,7 +183,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     } else {
         let mut last = None;
         for file in files {
-            let path = std::path::Path::new(file);
+            let path = Path::new(file);
             let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let inputs = read_slice(cli, &file);
             if cli.in_place {
@@ -238,14 +238,12 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     bind(&mut var_val, &cli.arg, |v| {
         Ok(Val::Str(v.to_string().into()))
     })?;
-    bind(&mut var_val, &cli.rawfile, |f| {
-        let s = std::fs::read_to_string(f).map_err(|e| Error::Io(Some(f.to_string()), e));
+    bind(&mut var_val, &cli.rawfile, |path| {
+        let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(path.to_string()), e));
         Ok(Val::Str(s?.into()))
     })?;
-    bind(&mut var_val, &cli.slurpfile, |f| {
-        let path = std::path::Path::new(f);
-        let file = load_file(path).map_err(|e| Error::Io(Some(f.to_string()), e))?;
-        Ok(Val::arr(json_slice(&file).collect::<Result<Vec<_>, _>>()?))
+    bind(&mut var_val, &cli.slurpfile, |path| {
+        json_array(path).map_err(|e| Error::Io(Some(path.to_string()), e))
     })?;
 
     var_val.push(("ARGS".to_string(), args_named(&var_val)));
@@ -274,14 +272,8 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
 
-    let vals = map_imports(&modules, |file| {
-        let path = std::path::Path::new(file);
-        load_file(path)
-            .and_then(|file| json_slice(&file).collect::<Result<Vec<_>, _>>())
-            .map(Val::arr)
-            .map_err(|e| e.to_string())
-    })
-    .map_err(load_errors)?;
+    let vals = map_imports(&modules, |path| json_array(path).map_err(|e| e.to_string()))
+        .map_err(load_errors)?;
 
     let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()
@@ -316,8 +308,8 @@ fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
 }
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
-fn load_file(path: &std::path::Path) -> io::Result<Box<dyn core::ops::Deref<Target = [u8]>>> {
-    let file = std::fs::File::open(path)?;
+fn load_file(path: impl AsRef<Path>) -> io::Result<Box<dyn core::ops::Deref<Target = [u8]>>> {
+    let file = std::fs::File::open(path.as_ref())?;
     match unsafe { memmap2::Mmap::map(&file) } {
         Ok(mmap) => Ok(Box::new(mmap)),
         Err(_) => Ok(Box::new(std::fs::read(path)?)),
@@ -343,6 +335,11 @@ fn json_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val
         let v = Val::parse(lexer.ws_token()?, &mut lexer);
         Some(v.map_err(|e| core::mem::take(&mut lexer.error).unwrap_or_else(|| invalid_data(e))))
     })
+}
+
+fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
+    let file = load_file(path.as_ref())?;
+    Ok(json_slice(&file).collect::<Result<Val, _>>()?)
 }
 
 fn read_buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a>
