@@ -2,12 +2,15 @@ use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
 use crate::val::{ValR2, ValT};
 use alloc::{boxed::Box, vec::Vec};
-pub use jaq_syn::path::Opt;
+use jaq_syn::path::Opt;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(Part<F>, Opt)>);
 
-// TODO for v2.0: use jaq_syn::path::Part for this
+/// Part of a path.
+///
+/// This is identical to [`jaq_syn::path::Part`], but we cannot use that here directly
+/// because that way, we could not implement new methods for that type.
 #[derive(Clone, Debug)]
 pub enum Part<I> {
     Index(I),
