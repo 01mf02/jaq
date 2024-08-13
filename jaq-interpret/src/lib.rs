@@ -70,7 +70,7 @@ pub use filter::{Args, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs, ValT};
 
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use jaq_syn::Arg as Bind;
 use rc_list::List as RcList;
 use stack::Stack;
@@ -130,68 +130,6 @@ impl<'a, V> Ctx<'a, V> {
         self.inputs
     }
 }
-
-/*
-/// Compile parsed to executable filters.
-///
-/// This allows to go from a parsed filter to a filter executable by this crate.
-pub struct ParseCtx {
-    /// errors occurred during transformation
-    // TODO for v2.0: remove this and make it a function
-    pub errs: Vec<jaq_syn::Spanned<hir::Error>>,
-    native: Vec<((String, usize), filter::Native)>,
-    def: jaq_syn::Def,
-}
-
-impl ParseCtx {
-    /// Initialise new context with list of global variables.
-    ///
-    /// When running a filter produced by this context,
-    /// values corresponding to the variables have to be supplied in the execution context.
-    pub fn new(vars: Vec<String>) -> Self {
-        use alloc::string::ToString;
-        let def = jaq_syn::Def {
-            lhs: jaq_syn::Call {
-                name: "$".to_string(),
-                args: vars.into_iter().map(Bind::Var).collect(),
-            },
-            rhs: jaq_syn::Main {
-                defs: Vec::new(),
-                body: (jaq_syn::filter::Filter::Id, 0..0),
-            },
-        };
-
-        Self {
-            errs: Vec::new(),
-            native: Vec::new(),
-            def,
-        }
-    }
-
-    /// Add a native filter with given name and arity.
-    pub fn insert_native(&mut self, name: String, arity: usize, f: filter::Native) {
-        self.native.push(((name, arity), f));
-    }
-
-    /// Add native filters with given names and arities.
-    pub fn insert_natives<I>(&mut self, natives: I)
-    where
-        I: IntoIterator<Item = (String, usize, filter::Native)>,
-    {
-        let natives = natives
-            .into_iter()
-            .map(|(name, arity, f)| ((name, arity), f));
-        self.native.extend(natives);
-    }
-
-    /// Import parsed definitions, such as obtained from the standard library.
-    ///
-    /// Errors that might occur include undefined variables, for example.
-    pub fn insert_defs(&mut self, defs: impl IntoIterator<Item = jaq_syn::Def>) {
-        self.def.rhs.defs.extend(defs);
-    }
-}
-*/
 
 impl<V: ValT> Filter<Native<V>> {
     /// Run a filter on given input, panic if it does not yield the given output.
