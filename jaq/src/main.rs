@@ -299,12 +299,12 @@ fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
 }
 
 fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
-    errs.into_iter().map(|(file, errs)| {
+    let errs = errs.into_iter().map(|(file, errs)| {
         let code = file.code;
         let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
         (file.map(|s| s.into()), errs)
-    })
-    .collect()
+    });
+    errs.collect()
 }
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
