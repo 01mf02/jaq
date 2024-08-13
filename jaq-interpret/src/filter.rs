@@ -1,14 +1,12 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::compile::{self, Filter as Owned, FoldType, Lut, Tailrec, Term as Ast};
-use crate::results::{fold, recurse, then, Fold, Results};
+use crate::compile::{Filter as Owned, FoldType, Lut, Tailrec, Term as Ast};
+use crate::results::{fold, then, Fold, Results};
 use crate::val::{Val, ValR2, ValR2s, ValT};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
-use alloc::{boxed::Box, string::String, vec::Vec};
-use core::ops::ControlFlow;
+use alloc::{boxed::Box, vec::Vec};
 use dyn_clone::DynClone;
-use jaq_syn::{MathOp, OrdOp};
 
-pub use crate::compile::TermId as Id;
+pub(crate) use crate::compile::TermId as Id;
 
 #[derive(Debug)]
 pub struct Ref<'a, V = Val>(Id, &'a Lut<Native<V>>);
@@ -256,6 +254,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 Bind::Fun(f) => label_skip(w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)), *skip),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
+                use core::ops::ControlFlow;
                 let def = w(id);
                 let ctx = cv.0.clone().skip_vars(*skip);
                 let inputs = cv.0.inputs;
