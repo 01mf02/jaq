@@ -236,7 +236,7 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let filter = parse("", filter, &[]).map_err(Error::Report)?;
+    let (_vals, filter) = parse("", filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);
 
@@ -255,9 +255,9 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     Ok(())
 }
 
-fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileReports>> {
+fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_syn::load::{Arena, File, Loader};
+    use jaq_syn::load::{map_imports, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
@@ -265,12 +265,16 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<Filter, Vec<FileRepo
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
+
+    let vals = map_imports(&modules, |_path| Err("file loading not supported".into()))
+        .map_err(load_errors)?;
+
     let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()
         .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok(filter.with_funs(core.into_iter().map(|(.., f)| f)))
+    Ok((vals, filter.with_funs(core.into_iter().map(|(.., f)| f))))
 }
 
 fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
