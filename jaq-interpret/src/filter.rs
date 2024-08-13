@@ -292,7 +292,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
             Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
+            Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
             Ast::TryCatch(..) | Ast::Alt(..) | Ast::Fold(..) => {
@@ -340,7 +340,8 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 reduce(cvs, init, move |cv, v| def.update((cv.0, v), f.clone()))
             }
             Ast::Native(id, args) => (self.1.funs[*id].update)(Args(args, self.1), cv, f),
-            Ast::Label(_) | Ast::Break(_) | Ast::UpdateAlt(..) => todo!(),
+            Ast::Label(_) => todo!(),
+            Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
         }
     }
 }
