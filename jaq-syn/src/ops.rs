@@ -1,3 +1,5 @@
+//! Binary operations.
+
 use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
 

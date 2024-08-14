@@ -354,6 +354,7 @@ impl<'s, 't> Parser<'s, 't> {
         })
     }
 
+    /// If the next token corresponds to `c`, return its string and advance input.
     fn char0(&mut self, c: char) -> Option<&'s str> {
         self.maybe(|p| match p.i.next() {
             Some(Token(s, _)) if s.chars().eq([c]) => Some(*s),
@@ -361,6 +362,11 @@ impl<'s, 't> Parser<'s, 't> {
         })
     }
 
+    /// If the next token starts with `.`, but is not `..`,
+    /// return the string after the initial `.` and advance input.
+    ///
+    /// This matches `.` and `.key`, where `key` is any valid identifier that matches
+    /// `[a-zA-Z_][a-zA-Z0-9_]*`.
     fn dot(&mut self) -> Option<&'s str> {
         self.maybe(|p| match p.i.next() {
             Some(Token(c, _)) if *c != ".." => c.strip_prefix('.'),
@@ -748,9 +754,11 @@ pub struct Module<S, B> {
 /// ~~~
 #[derive(Debug)]
 pub struct Def<S, F> {
+    /// name, e.g. `"double"` or `"map"`
     pub name: S,
+    /// arguments, e.g. `["$x"]`, `["f"]`, or `["f", "cond"]`
     pub args: Vec<S>,
-    /// Body of the filter, e.g. `[.[] | f]`.
+    /// right-hand side, e.g. a term corresponding to `[.[] | f]`
     pub body: F,
 }
 

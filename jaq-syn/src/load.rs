@@ -1,3 +1,5 @@
+//! Combined file loading, lexing, and parsing for multiple modules.
+
 use crate::lex::{self, Token};
 use crate::parse::{self, Def, Defs, Term};
 use alloc::string::String;
@@ -6,11 +8,18 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 extern crate std;
 
+/// Storage for loaded modules.
+///
+/// Once Rust has [internal references](https://smallcultfollowing.com/babysteps/blog/2024/06/02/the-borrow-checker-within/#step-4-internal-references),
+/// this should become unnecessary.
+/// I can't wait for it to happen!
 #[derive(Default)]
 pub struct Arena(typed_arena::Arena<String>);
 
+/// Combined file loader, lexer, and parser for multiple modules.
 pub struct Loader<S, R> {
     mods: Vec<(File<S>, Result<Module<S, Defs<S>>, Error<S>>)>,
+    /// function to read module file contents from a path
     read: R,
     /// currently processed modules
     ///
@@ -18,13 +27,22 @@ pub struct Loader<S, R> {
     open: Vec<S>,
 }
 
+/// Path and contents of a (module) file, both represented by `S`.
+///
+/// This is useful for creating precise error messages.
 #[derive(Clone, Debug, Default)]
 pub struct File<S> {
+    /// path of the file
     pub path: S,
+    /// contents of the file
     pub code: S,
 }
 
 impl<S> File<S> {
+    /// Apply a function to both path and contents of file.
+    ///
+    /// This is useful to go from a reference `&str` to an owned `String`,
+    /// in order to save the `File` without its corresponding [`Arena`].
     pub fn map<S2>(self, f: impl Fn(S) -> S2) -> File<S2> {
         File {
             path: f(self.path),
@@ -33,23 +51,45 @@ impl<S> File<S> {
     }
 }
 
+/// Error occurring during loading of a single module.
 #[derive(Debug)]
 pub enum Error<S> {
+    /// input/output errors, for example when trying to load a module that does not exist
     Io(Vec<(S, String)>),
+    /// lex   errors, for example when loading a module `($) (`
     Lex(Vec<lex::Error<S>>),
+    /// parse errors, for example when loading a module `(+) *`
     Parse(Vec<parse::Error<S>>),
 }
 
+/// Module containing strings `S` and a body `B`.
 #[derive(Default)]
 pub struct Module<S, B> {
+    /// metadata (optional)
     pub meta: Option<Term<S>>,
+    /// included and imported modules
+    ///
+    /// Suppose that we have [`Modules`] `mods` and the current [`Module`] is `mods[id]`.
+    /// Then for every `(id_, name)` in `mods[id].1.mods`, we have that
+    /// the included/imported module is stored in `mods[id_]` (`id_ < id`), and
+    /// the module is included if `name` is `None` and imported if `name` is `Some(name)`.
     pub mods: Vec<(usize, Option<S>)>,
+    /// imported variables, storing path and name (always starts with `$`)
     pub vars: Vec<(S, S)>,
+    /// everything that comes after metadata and includes/imports
     pub body: B,
 }
 
 // TODO: Modules::imported_vars() -> Iter<&S>
 pub type Modules<S> = Vec<(File<S>, Module<S, Defs<S>>)>;
+/// Errors occurring during loading of multiple modules.
+///
+/// For example, suppose that we have
+/// a file `l.jq` that yields a lex error,
+/// a file `p.jq` that yields a parse error, and
+/// a file `i.jq` that includes a non-existing module.
+/// If we then include all these files in our main program,
+/// [`Errors`] will contain each file with a different [`Error`].
 pub type Errors<S> = Vec<(File<S>, Error<S>)>;
 
 impl<'s, B> Module<&'s str, B> {
@@ -95,6 +135,13 @@ impl<S, B> Module<S, B> {
 }
 
 impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
+    /// Initialise the loader with prelude definitions.
+    ///
+    /// The prelude is a special module that is implicitly included by all other modules
+    /// (including the main module).
+    /// That means that all filters defined in the prelude can be called from any module.
+    ///
+    /// The prelude is normally initialised with filters like `map` or `true`.
     pub fn new(prelude: impl IntoIterator<Item = Def<&'s str, Term<&'s str>>>) -> Self {
         let defs = [
             Def::new("!recurse", Vec::new(), Term::recurse("!recurse")),
@@ -149,11 +196,17 @@ where
 }
 
 impl<S, R> Loader<S, R> {
+    /// Provide a function to return the contents of included/imported module files.
+    ///
+    /// For every included/imported module, the loader will call this function to
+    /// obtain the contents of the module.
+    /// For example, if we have `include "foo"`, the loader calls `read("foo")`.
     pub fn with_read<R2>(self, read: R2) -> Loader<S, R2> {
         let Self { mods, open, .. } = self;
         Loader { mods, read, open }
     }
 
+    /// Read the contents of included/imported module files by performing file I/O.
     #[cfg(feature = "std")]
     pub fn with_std_read(self) -> Loader<S, fn(&str) -> Result<String, String>> {
         self.with_read(std_read)
@@ -161,6 +214,7 @@ impl<S, R> Loader<S, R> {
 }
 
 impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
+    /// Load a set of modules, starting from a given file.
     pub fn load(
         mut self,
         arena: &'s Arena,
