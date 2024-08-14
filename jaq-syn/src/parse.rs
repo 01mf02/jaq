@@ -771,7 +771,7 @@ impl prec_climb::Op for BinaryOp {
     fn precedence(&self) -> usize {
         match self {
             Self::Comma => 1,
-            Self::Assign | Self::Update | Self::UpdateMath(_) => 2,
+            Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 2,
             Self::Alt => 3,
             Self::Or => Self::Alt.precedence() + 1,
             Self::And => Self::Or.precedence() + 1,
@@ -780,15 +780,15 @@ impl prec_climb::Op for BinaryOp {
             Self::Math(MathOp::Add | MathOp::Sub) => Self::And.precedence() + 3,
             Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).precedence() + 1,
             Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).precedence() + 1,
-            Self::UpdateAlt => todo!(),
         }
     }
 
     fn associativity(&self) -> prec_climb::Associativity {
         use prec_climb::Associativity;
         match self {
-            Self::Assign | Self::Update | Self::UpdateMath(_) => Associativity::Right,
-            Self::UpdateAlt => todo!(),
+            Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => {
+                Associativity::Right
+            }
             _ => Associativity::Left,
         }
     }
