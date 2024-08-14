@@ -257,7 +257,7 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_syn::load::{map_imports, Arena, File, Loader};
+    use jaq_syn::load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
@@ -266,8 +266,8 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
 
-    let vals = map_imports(&modules, |_path| Err("file loading not supported".into()))
-        .map_err(load_errors)?;
+    let vals = Vec::new();
+    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
     let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()

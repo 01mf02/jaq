@@ -263,7 +263,7 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_syn::load::{map_imports, Arena, File, Loader};
+    use jaq_syn::load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
@@ -272,8 +272,11 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
 
-    let vals = map_imports(&modules, |path| json_array(path).map_err(|e| e.to_string()))
-        .map_err(load_errors)?;
+    let mut vals = Vec::new();
+    import(&modules, |path| {
+        Ok(vals.push(json_array(path).map_err(|e| e.to_string())?))
+    })
+    .map_err(load_errors)?;
 
     let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()

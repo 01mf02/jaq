@@ -170,13 +170,14 @@ fn std_read(path: &str) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
-pub fn map_imports<S: Copy, V, F>(modules: &Modules<S>, f: F) -> Result<Vec<V>, Errors<S>>
-where
-    F: Fn(S) -> Result<V, String>,
-{
+/// Apply function to path of every imported data file, accumulating errors.
+pub fn import<S: Copy>(
+    mods: &Modules<S>,
+    mut f: impl FnMut(S) -> Result<(), String>,
+) -> Result<(), Errors<S>> {
     let mut errs = Vec::new();
     let mut vals = Vec::new();
-    for (file, module) in modules {
+    for (file, module) in mods {
         let mut mod_errs = Vec::new();
         for (file, _name) in &module.vars {
             match f(*file) {
@@ -189,7 +190,7 @@ where
         }
     }
     if errs.is_empty() {
-        Ok(vals)
+        Ok(())
     } else {
         Err(errs)
     }
