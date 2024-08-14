@@ -158,7 +158,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::Int(n) => box_once(Ok(V::from(*n))),
             Ast::Num(x) => box_once(V::from_num(x)),
             Ast::Str(s) => Box::new(once_with(move || Ok(V::from(s.clone())))),
-            Ast::Arr(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
+            Ast::Arr(f) => Box::new(once_with(move || w(f).run(cv).collect())),
             Ast::ObjEmpty => box_once(V::from_map([])),
             Ast::ObjSingle(k, v) => {
                 Box::new(Self::cartesian(w(k), w(v), cv).map(|(k, v)| V::from_map([(k?, v?)])))
