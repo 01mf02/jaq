@@ -156,7 +156,7 @@ impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
         Self {
             // the first module is reserved for the prelude
             mods: Vec::from([(File::default(), Ok(prelude))]),
-            read: |path| Err("module loading not supported".into()),
+            read: |_path| Err("module loading not supported".into()),
             open: Vec::new(),
         }
     }
