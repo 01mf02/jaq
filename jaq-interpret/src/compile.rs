@@ -165,6 +165,18 @@ pub enum Undefined {
     Filter(Arity),
 }
 
+impl Undefined {
+    /// String representation of an unexpected symbol type.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Var => "variable",
+            Self::Mod => "module",
+            Self::Label => "label",
+            Self::Filter(_arity) => "filter",
+        }
+    }
+}
+
 /// jq program compiler.
 #[derive(Default)]
 pub struct Compiler<S> {

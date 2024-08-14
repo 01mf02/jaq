@@ -323,11 +323,3 @@ impl<'a> Token<&'a str> {
         self.0
     }
 }
-
-/// Return the span of a string slice `part` relative to a string slice `whole`.
-///
-/// The caller must ensure that `part` is fully contained inside `whole`.
-pub fn span(whole: &str, part: &str) -> core::ops::Range<usize> {
-    let start = part.as_ptr() as usize - whole.as_ptr() as usize;
-    start..start + part.len()
-}

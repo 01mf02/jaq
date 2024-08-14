@@ -324,7 +324,7 @@ impl Color {
 }
 
 fn report_io(code: &str, (path, error): (&str, String)) -> Report {
-    let path_range = jaq_syn::lex::span(code, path);
+    let path_range = jaq_syn::span(code, path);
     Report {
         message: format!("could not load file {}: {}", path, error),
         labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
@@ -332,7 +332,7 @@ fn report_io(code: &str, (path, error): (&str, String)) -> Report {
 }
 
 fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
-    use jaq_syn::lex::{span, Expect};
+    use jaq_syn::span;
     // truncate found string to its first character
     let found = &found[..found.char_indices().nth(1).map_or(found.len(), |(i, _)| i)];
 
@@ -346,7 +346,7 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     let label = (found_range, found, Color::Red);
 
     let labels = match expected {
-        Expect::Delim(open) => {
+        jaq_syn::lex::Expect::Delim(open) => {
             let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
                 .map(|(s, c)| (s.into(), c));
             Vec::from([(span(code, open), text.into(), Color::Yellow), label])
@@ -361,7 +361,7 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
 }
 
 fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
-    let found_range = jaq_syn::lex::span(code, found);
+    let found_range = jaq_syn::span(code, found);
 
     let found = if found.is_empty() {
         "unexpected end of input"
@@ -377,15 +377,8 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> R
 }
 
 fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
-    use compile::Undefined;
-    let found_range = jaq_syn::lex::span(code, found);
-    let undefined = match undefined {
-        Undefined::Var => "variable".into(),
-        Undefined::Mod => "module".into(),
-        Undefined::Label => "label".into(),
-        Undefined::Filter(arity) => format!("filter {found}/{arity}"),
-    };
-    let message = format!("undefined {undefined}");
+    let found_range = jaq_syn::span(code, found);
+    let message = format!("undefined {}", undefined.as_str());
     let found = [(message.clone(), None)].into();
 
     Report {
