@@ -1,4 +1,4 @@
-//! JSON query language syntax.
+//! JSON query language parser.
 #![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
