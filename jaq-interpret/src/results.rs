@@ -11,7 +11,7 @@ pub fn then<'a, T, U: 'a, E: 'a>(
     x: Result<T, E>,
     f: impl FnOnce(T) -> Results<'a, U, E>,
 ) -> Results<'a, U, E> {
-    x.map(f).unwrap_or_else(|e| box_once(Err(e)))
+    x.map_or_else(|e| box_once(Err(e)), f)
 }
 
 /// Apply the function to the value if there is no error,

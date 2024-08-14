@@ -32,7 +32,7 @@ impl<T> List<T> {
 
     /// Repeatedly add elements to the list.
     pub fn extend(self, iter: impl IntoIterator<Item = T>) -> Self {
-        iter.into_iter().fold(self, |acc, x| acc.cons(x))
+        iter.into_iter().fold(self, Self::cons)
     }
 
     /// Return the element most recently added to the list.

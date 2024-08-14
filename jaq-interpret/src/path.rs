@@ -22,7 +22,7 @@ impl<'a, U: Clone + 'a, E: Clone + 'a, T: Clone + IntoIterator<Item = Result<U, 
     pub fn explode(self) -> impl Iterator<Item = Result<Path<U>, E>> + 'a {
         Path(Vec::new())
             .combinations(self.0.into_iter())
-            .map(|path| path.transpose())
+            .map(Path::transpose)
     }
 }
 

@@ -398,7 +398,7 @@ impl<'s> Compiler<&'s str> {
             Call(name, args) => {
                 let args: Box<[_]> = args.into_iter().map(|t| self.iterm(t)).collect();
                 if let Some((module, name)) = name.split_once("::") {
-                    self.call_mod(module, name, args)
+                    self.call_mod(module, name, &args)
                 } else {
                     self.call(name, args)
                 }
@@ -457,7 +457,7 @@ impl<'s> Compiler<&'s str> {
             }
             Path(t, path) => {
                 use crate::path::Part;
-                use jaq_syn::path::Part::*;
+                use jaq_syn::path::Part::{Index, Range};
                 let t = self.iterm(*t);
                 let path = path.into_iter().map(|(p, opt)| match p {
                     Index(i) => (Part::Index(self.iterm(i)), opt),
@@ -481,7 +481,7 @@ impl<'s> Compiler<&'s str> {
                     StrPart::Term(f) => Term::Pipe(self.iterm(f), false, fmt),
                 });
                 let parts = parts.collect();
-                self.sum_or(|| Term::Str("".into()), parts)
+                self.sum_or(|| Term::Str(String::new()), parts)
             }
             Obj(o) => {
                 let kvs = o.into_iter().map(|(k, v)| self.obj_entry(k, v)).collect();
@@ -511,7 +511,7 @@ impl<'s> Compiler<&'s str> {
     }
 
     /// Resolve call to `mod::filter(a1, ..., an)`.
-    fn call_mod(&mut self, module: &'s str, name: &'s str, args: Box<[TermId]>) -> Term {
+    fn call_mod(&mut self, module: &'s str, name: &'s str, args: &[TermId]) -> Term {
         let vars = self.local.iter().map(|l| match l {
             Local::Var(_) => 1,
             Local::Label(_) | Local::Sibling(..) | Local::TailrecObstacle => 0,
@@ -524,7 +524,7 @@ impl<'s> Compiler<&'s str> {
             None => return self.fail(module, Undefined::Mod),
         };
         let mut defs = self.mod_map[*mid].iter().rev();
-        let call = defs.find_map(|sig| sig.matches(name, &args).then(|| sig.call(&args, vars)));
+        let call = defs.find_map(|sig| sig.matches(name, args).then(|| sig.call(args, vars)));
         call.unwrap_or_else(|| self.fail(name, Undefined::Filter(args.len())))
     }
 
@@ -547,7 +547,7 @@ impl<'s> Compiler<&'s str> {
                         if *arg == name && args.is_empty() {
                             return Term::Var(i, labels);
                         } else {
-                            i += 1
+                            i += 1;
                         }
                     }
                     if sig.matches(name, &args) {
@@ -595,14 +595,14 @@ impl<'s> Compiler<&'s str> {
             if x == *x_ && *mid == self.mod_map.len() {
                 return Term::Var(i, 0);
             } else {
-                i += 1
+                i += 1;
             }
         }
         for x_ in self.global_vars.iter().rev() {
             if x == *x_ {
                 return Term::Var(i, 0);
             } else {
-                i += 1
+                i += 1;
             }
         }
         self.fail(x, Undefined::Var)

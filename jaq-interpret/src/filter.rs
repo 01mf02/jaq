@@ -183,7 +183,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::Alt(l, r) => {
                 let mut l = w(l)
                     .run(cv.clone())
-                    .filter(|v| v.as_ref().map_or(true, |v| v.as_bool()));
+                    .filter(|v| v.as_ref().map_or(true, ValT::as_bool));
                 match l.next() {
                     Some(head) => Box::new(once(head).chain(l)),
                     None => w(r).run(cv),
@@ -236,10 +236,10 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             ),
 
             Ast::Fold(typ, xs, init, f) => {
+                use Fold::{Input, Output};
                 let xs = rc_lazy_list::List::from_iter(w(xs).run(cv.clone()));
                 let init = w(init).run(cv.clone());
                 let f = move |x, v| w(f).run((cv.0.clone().cons_var(x), v));
-                use Fold::{Input, Output};
                 match typ {
                     FoldType::Reduce => Box::new(fold(false, xs, Output(init), f)),
                     FoldType::For => Box::new(fold(true, xs, Output(init), f)),
@@ -265,7 +265,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                         Vec::from([run_cvs(def, cvs)]),
                         move |r| match r {
                             Err(Error::TailCall(TailCall(id_, vars, v))) if *id == id_ => {
-                                ControlFlow::Continue(def.run((Ctx { inputs, vars }, v)))
+                                ControlFlow::Continue(def.run((Ctx { vars, inputs }, v)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
