@@ -5,7 +5,6 @@ fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interp
 
     let arena = Arena::default();
     let loader = Loader::new([]);
-    //let loader = Loader::new(jaq_std::std2());
     let modules = loader.load(&arena, File { path: "", code }).unwrap();
     let filter = jaq_interpret::Compiler::default().compile(modules).unwrap();
     filter.with_funs([]).yields(x, ys)
