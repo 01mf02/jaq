@@ -296,7 +296,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::TryCatch(..) | Ast::Alt(..) | Ast::Fold(..) => {
+            Ast::TryCatch(..) | Ast::Label(_) | Ast::Alt(..) | Ast::Fold(..) => {
                 unimplemented!("updating with this operator is not supported yet")
             }
 
@@ -344,7 +344,6 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 reduce(cvs, init, move |cv, v| def.update((cv.0, v), f.clone()))
             }
             Ast::Native(id, args) => (self.1.funs[*id].update)(Args(args, self.1), cv, f),
-            Ast::Label(_) => todo!(),
             Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
         }
     }
