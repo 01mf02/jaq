@@ -353,6 +353,7 @@ yields!(id_arg, "def f( a):  a; f(0)", 0);
 yields!(args_mixed, "def f(a; $b): a + $b; 1 as $a | f($a; 2)", 3);
 
 yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
+yields!(nested_general, "1 + (2 as $x | def f(a): a*$x; f(3))", 7);
 
 const ACKERMANN: &str = "def ack($m; $n):
   if $m == 0 then $n + 1
