@@ -12,6 +12,10 @@ pub struct Arena(typed_arena::Arena<String>);
 pub struct Loader<S, R> {
     mods: Vec<(File<S>, Result<Module<S, Defs<S>>, Error<S>>)>,
     read: R,
+    /// currently processed modules
+    ///
+    /// This is used to detect circular dependencies between modules.
+    open: Vec<S>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -106,6 +110,7 @@ impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
             // the first module is reserved for the prelude
             mods: Vec::from([(File::default(), Ok(prelude))]),
             read: |path| Err("module loading not supported".into()),
+            open: Vec::new(),
         }
     }
 }
@@ -145,8 +150,8 @@ where
 
 impl<S, R> Loader<S, R> {
     pub fn with_read<R2>(self, read: R2) -> Loader<S, R2> {
-        let mods = self.mods;
-        Loader { mods, read }
+        let Self { mods, open, .. } = self;
+        Loader { mods, read, open }
     }
 
     #[cfg(feature = "std")]
@@ -185,10 +190,15 @@ impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
         if let Some(id) = self.mods.iter().position(|(file, _)| path == file.path) {
             return Ok(id);
         };
+        if self.open.contains(&path) {
+            return Err("circular include/import detected".into());
+        }
 
         let code = &**arena.0.alloc((self.read)(path)?);
+        self.open.push(path);
         let defs =
             parse_defs(code).and_then(|m| Module::map_mods(m, |path| self.find(arena, path)));
+        assert_eq!(self.open.pop(), Some(path));
 
         let id = self.mods.len();
         self.mods.push((File { path, code }, defs));
