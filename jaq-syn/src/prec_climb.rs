@@ -53,7 +53,7 @@ where
             let next_prec = next.0.precedence();
 
             if next_prec > this_prec || (right_assoc && next_prec == this_prec) {
-                rhs = climb1(rhs, iter, next_prec)
+                rhs = climb1(rhs, iter, next_prec);
             } else {
                 break;
             }

@@ -9,9 +9,11 @@ description = "Parser for the jq language"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["parser-implementations"]
+rust-version = "1.63"
 
 [features]
-default = ["serde"]
+default = ["std"]
+std = []
 
 [dependencies]
-serde = { version = "1.0.137", features = ["derive"], optional = true }
+typed-arena = "2.0.2"

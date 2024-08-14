@@ -1,32 +1,15 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::results::{fold, recurse, then, Fold, Results};
+use crate::compile::{Filter as Owned, FoldType, Lut, Tailrec, Term as Ast};
+use crate::results::{fold, then, Fold, Results};
 use crate::val::{Val, ValR2, ValR2s, ValT};
 use crate::{rc_lazy_list, Bind, Ctx, Error};
-use alloc::{boxed::Box, string::String, vec::Vec};
-use core::ops::ControlFlow;
+use alloc::{boxed::Box, vec::Vec};
 use dyn_clone::DynClone;
-use jaq_syn::filter::FoldType;
-use jaq_syn::{MathOp, OrdOp};
 
-/// Function from a value to a stream of value results.
-#[derive(Debug, Clone)]
-pub struct Owned<V = Val>(Id, Lut<V>);
-
-/// Look-up table for indices stored in ASTs.
-#[derive(Clone, Debug)]
-struct Lut<V = Val> {
-    defs: Box<[Ast]>,
-    natives: Box<[Native<V>]>,
-}
-
-impl<V> Default for Owned<V> {
-    fn default() -> Self {
-        Self::new(Id(0), [Ast::Id].into(), [].into())
-    }
-}
+pub(crate) use crate::compile::TermId as Id;
 
 #[derive(Debug)]
-pub struct Ref<'a, V = Val>(Id, &'a Lut<V>);
+pub struct Ref<'a, V = Val>(Id, &'a Lut<Native<V>>);
 
 impl<'a, V> Clone for Ref<'a, V> {
     fn clone(&self) -> Self {
@@ -36,95 +19,8 @@ impl<'a, V> Clone for Ref<'a, V> {
 
 impl<'a, V> Copy for Ref<'a, V> {}
 
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Id(pub usize);
-
-#[derive(Clone, Debug)]
-pub enum CallTyp {
-    /// everything that is not tail-recursive
-    Normal,
-    /// set up a tail-recursion handler
-    Catch,
-    /// throw a tail-recursion exception to be caught by the handler
-    Throw,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TailCall<V>(Id, crate::Vars<V>, V);
-
-#[derive(Clone, Debug)]
-pub(crate) struct Call {
-    pub id: Id,
-    pub typ: CallTyp,
-    pub skip: usize,
-    pub args: Box<[Bind<Id, Id>]>,
-}
-
-impl<V> Owned<V> {
-    pub(crate) fn new(main: Id, defs: Box<[Ast]>, natives: Box<[Native<V>]>) -> Self {
-        Self(main, Lut { defs, natives })
-    }
-}
-
-/// Abstract syntax tree for filters.
-#[derive(Clone, Debug)]
-pub(crate) enum Ast {
-    Id,
-    ToString,
-
-    Int(isize),
-    Num(String),
-    Str(String),
-    Array(Id),
-    ObjEmpty,
-    ObjSingle(Id, Id),
-
-    Try(Id, Id),
-    Neg(Id),
-    Pipe(Id, bool, Id),
-    Comma(Id, Id),
-    Alt(Id, Id),
-    Ite(Id, Id, Id),
-    /// `reduce`, `for`, and `foreach`
-    ///
-    /// The first field indicates whether to yield intermediate results
-    /// (`false` for `reduce` and `true` for `foreach`).
-    ///
-    ///  Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
-    /// `reduce xs as $x (init; f)` evaluates to
-    ///
-    /// ~~~ text
-    /// init
-    /// | x0 as $x | f
-    /// | ...
-    /// | xn as $x | f
-    /// ~~~
-    ///
-    /// and `for xs as $x (init; f)` evaluates to
-    ///
-    /// ~~~ text
-    /// init
-    /// | ., (x0 as $x | f
-    /// | ...
-    /// | ., (xn as $x | f)...)
-    /// ~~~
-    Fold(FoldType, Id, Id, Id),
-
-    Path(Id, crate::path::Path<Id>),
-
-    Update(Id, Id),
-    UpdateMath(Id, MathOp, Id),
-    Assign(Id, Id),
-
-    Logic(Id, bool, Id),
-    Math(Id, MathOp, Id),
-    Ord(Id, OrdOp, Id),
-
-    Var(usize),
-    Call(Call),
-
-    Native(usize, Box<[Id]>),
-}
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
@@ -168,6 +64,17 @@ where
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
+fn label_skip<'a, V: 'a>(ys: ValR2s<'a, V>, skip: usize) -> ValR2s<'a, V> {
+    if skip == 0 {
+        ys
+    } else {
+        Box::new(ys.map(move |y| match y {
+            Err(Error::Break(n)) => Err(Error::Break(n + skip)),
+            y => y,
+        }))
+    }
+}
+
 type Cv<'c, V = Val> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
@@ -204,7 +111,7 @@ impl<V> core::fmt::Debug for Native<V> {
 }
 
 /// Arguments passed to a native filter.
-pub struct Args<'a, V = Val>(&'a [Id], &'a Lut<V>);
+pub struct Args<'a, V = Val>(&'a [Id], &'a Lut<Native<V>>);
 
 impl<'a, V> Clone for Args<'a, V> {
     fn clone(&self) -> Self {
@@ -226,7 +133,7 @@ impl<'a, V: ValT> Args<'a, V> {
     }
 }
 
-impl<'a, V: ValT> FilterT<'a, V> for &'a Owned<V> {
+impl<'a, V: ValT> FilterT<'a, V> for &'a Owned<Native<V>> {
     fn run(self, cv: Cv<'a, V>) -> ValR2s<'a, V> {
         Ref(self.0, &self.1).run(cv)
     }
@@ -242,7 +149,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
         use core::iter::{once, once_with};
         // wrap a filter AST with the filter definitions
         let w = move |id: &Id| Ref(*id, self.1);
-        match &self.1.defs[self.0 .0] {
+        match &self.1.terms[self.0 .0] {
             Ast::Id => box_once(Ok(cv.1)),
             Ast::ToString => Box::new(once_with(move || match cv.1.as_str() {
                 Some(_) => Ok(cv.1),
@@ -251,12 +158,12 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::Int(n) => box_once(Ok(V::from(*n))),
             Ast::Num(x) => box_once(V::from_num(x)),
             Ast::Str(s) => Box::new(once_with(move || Ok(V::from(s.clone())))),
-            Ast::Array(f) => Box::new(once_with(move || w(f).run(cv).collect::<Result<_, _>>())),
+            Ast::Arr(f) => Box::new(once_with(move || w(f).run(cv).collect())),
             Ast::ObjEmpty => box_once(V::from_map([])),
             Ast::ObjSingle(k, v) => {
                 Box::new(Self::cartesian(w(k), w(v), cv).map(|(k, v)| V::from_map([(k?, v?)])))
             }
-            Ast::Try(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
+            Ast::TryCatch(f, c) => Box::new(w(f).run((cv.0.clone(), cv.1)).flat_map(move |y| {
                 y.map_or_else(
                     |e| w(c).run((cv.0.clone(), e.as_val())),
                     |v| box_once(Ok(v)),
@@ -276,7 +183,7 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::Alt(l, r) => {
                 let mut l = w(l)
                     .run(cv.clone())
-                    .filter(|v| v.as_ref().map_or(true, |v| v.as_bool()));
+                    .filter(|v| v.as_ref().map_or(true, ValT::as_bool));
                 match l.next() {
                     Some(head) => Box::new(once(head).chain(l)),
                     None => w(r).run(cv),
@@ -304,6 +211,12 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             Ast::UpdateMath(path, op, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
             }),
+            Ast::UpdateAlt(path, f) => w(f).pipe(cv, move |cv, y| {
+                w(path).update(
+                    cv,
+                    Box::new(move |x| box_once(Ok(if x.as_bool() { x } else { y.clone() }))),
+                )
+            }),
             Ast::Assign(path, f) => w(f).pipe(cv, move |cv, y| {
                 w(path).update(cv, Box::new(move |_| box_once(Ok(y.clone()))))
             }),
@@ -323,10 +236,10 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
             ),
 
             Ast::Fold(typ, xs, init, f) => {
+                use Fold::{Input, Output};
                 let xs = rc_lazy_list::List::from_iter(w(xs).run(cv.clone()));
                 let init = w(init).run(cv.clone());
                 let f = move |x, v| w(f).run((cv.0.clone().cons_var(x), v));
-                use Fold::{Input, Output};
                 match typ {
                     FoldType::Reduce => Box::new(fold(false, xs, Output(init), f)),
                     FoldType::For => Box::new(fold(true, xs, Output(init), f)),
@@ -336,48 +249,54 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 }
             }
 
-            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
+            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)),
+                Bind::Fun(f) => label_skip(w(&f.0).run((cv.0.with_vars(f.1.clone()), cv.1)), *skip),
             },
-            Ast::Call(call) => {
-                let def = w(&call.id);
-                let ctx = cv.0.clone().skip_vars(call.skip);
+            Ast::CallDef(id, args, skip, tailrec) => {
+                use core::ops::ControlFlow;
+                let def = w(id);
+                let ctx = cv.0.clone().skip_vars(*skip);
                 let inputs = cv.0.inputs;
-                let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
-                match call.typ {
-                    CallTyp::Normal => run_cvs(def, cvs),
-                    CallTyp::Catch => Box::new(crate::Stack::new(
+                let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
+                match tailrec {
+                    None => run_cvs(def, cvs),
+                    Some(Tailrec::Catch) => Box::new(crate::Stack::new(
                         Vec::from([run_cvs(def, cvs)]),
                         move |r| match r {
-                            Err(Error::TailCall(TailCall(id, vars, v))) if id == call.id => {
-                                ControlFlow::Continue(def.run((Ctx { inputs, vars }, v)))
+                            Err(Error::TailCall(TailCall(id_, vars, v))) if *id == id_ => {
+                                ControlFlow::Continue(def.run((Ctx { vars, inputs }, v)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
                     )),
-                    CallTyp::Throw => Box::new(cvs.map(move |cv| {
-                        cv.and_then(|cv| Err(Error::TailCall(TailCall(call.id, cv.0.vars, cv.1))))
+                    Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
+                        cv.and_then(|cv| Err(Error::TailCall(TailCall(*id, cv.0.vars, cv.1))))
                     })),
                 }
             }
 
-            Ast::Native(id, args) => (self.1.natives[*id].run)(Args(args, self.1), cv),
+            Ast::Native(id, args) => (self.1.funs[*id].run)(Args(args, self.1), cv),
+            Ast::Label(id) => Box::new(w(id).run(cv).map_while(|y| match y {
+                Err(Error::Break(n)) => n.checked_sub(1).map(|m| Err(Error::Break(m))),
+                y => Some(y),
+            })),
+            Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
         }
     }
 
     fn update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V> {
         let err = box_once(Err(Error::PathExp));
         let w = move |id: &Id| Ref(*id, self.1);
-        match &self.1.defs[self.0 .0] {
+        match &self.1.terms[self.0 .0] {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
-            Ast::Array(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
+            Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::Assign(..) => err,
+            Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::Try(..) | Ast::Alt(..) | Ast::Fold(..) => {
+            Ast::TryCatch(..) | Ast::Label(_) | Ast::Alt(..) | Ast::Fold(..) => {
                 unimplemented!("updating with this operator is not supported yet")
             }
 
@@ -410,19 +329,22 @@ impl<'a, V: ValT> FilterT<'a, V> for Ref<'a, V> {
                 w(if x.as_bool() { then_ } else { else_ }).update((cv.0.clone(), v), f.clone())
             }),
 
-            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
+            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
-                Bind::Fun(l) => w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
+                Bind::Fun(l) => label_skip(
+                    w(&l.0).update((cv.0.with_vars(l.1.clone()), cv.1), f),
+                    *skip,
+                ),
             },
-            Ast::Call(call) => {
-                let def = w(&call.id);
+            Ast::CallDef(id, args, skip, _tailrec) => {
+                let def = w(id);
                 let init = cv.1.clone();
-                let ctx = cv.0.clone().skip_vars(call.skip);
-                let cvs = bind_vars(call.args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
+                let ctx = cv.0.clone().skip_vars(*skip);
+                let cvs = bind_vars(args.iter().map(move |a| a.as_ref().map(w)), ctx, cv);
                 reduce(cvs, init, move |cv, v| def.update((cv.0, v), f.clone()))
             }
-
-            Ast::Native(id, args) => (self.1.natives[*id].update)(Args(args, self.1), cv, f),
+            Ast::Native(id, args) => (self.1.funs[*id].update)(Args(args, self.1), cv, f),
+            Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
         }
     }
 }
@@ -465,31 +387,5 @@ pub trait FilterT<'a, V: ValT = Val>: Clone + 'a {
                 map_with(r.clone().run(cv), (l, m), |r, (l, m)| (l, m, r))
             })
         })
-    }
-
-    /// Return the output of `recurse(f)` if `inner` and `outer` are true.
-    ///
-    /// This function implements a generalisation of `recurse(f)`:
-    /// if `inner` is true, it returns values for which `f` yields at least one output, and
-    /// if `outer` is true, it returns values for which `f` yields no output.
-    /// This is useful to implement `while` and `until`.
-    #[deprecated(since = "1.2.0")]
-    fn recurse(self, inner: bool, outer: bool, cv: Cv<'a, V>) -> ValR2s<V> {
-        let f = move |v| self.clone().run((cv.0.clone(), v));
-        Box::new(recurse(inner, outer, box_once(Ok(cv.1)), f))
-    }
-
-    /// Return the output of `recurse(l) |= f`.
-    #[deprecated(since = "1.2.0")]
-    fn recurse_update(self, cv: Cv<'a, V>, f: Box<dyn Update<'a, V> + 'a>) -> ValR2s<'a, V> {
-        // implemented by the expansion of `def recurse(l): ., (l | recurse(l))`
-        Box::new(f(cv.1).flat_map(move |v| {
-            then(v, |v| {
-                let (c, f) = (cv.0.clone(), f.clone());
-                let slf = self.clone();
-                let rec = move |v| slf.clone().recurse_update((c.clone(), v), f.clone());
-                (self.clone()).update((cv.0.clone(), v), Box::new(rec))
-            })
-        }))
     }
 }

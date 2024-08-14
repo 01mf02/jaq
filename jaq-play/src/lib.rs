@@ -1,6 +1,8 @@
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_interpret::{Ctx, Filter, FilterT, ParseCtx, RcIter, Val};
+use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
 use wasm_bindgen::prelude::*;
+
+type Filter = compile::Filter<Native<Val>>;
 
 struct FormatterFn<F>(F);
 
@@ -129,8 +131,10 @@ impl Settings {
 
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
+type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
+
 enum Error {
-    Report(String, Vec<Report>),
+    Report(Vec<FileReports>),
     Hifijson(String),
     Jaq(jaq_interpret::Error),
 }
@@ -163,14 +167,17 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     };
     match process(filter, input, &settings, post_value) {
         Ok(()) => (),
-        Err(Error::Report(code, reports)) => {
-            let idx = codesnake::LineIndex::new(&code);
-            for e in reports {
-                let error = format!("⚠️ Parse error: {}", e.message);
-                scope.post_message(&error.into()).unwrap();
-                let block = e.into_block(&idx);
-                let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
-                scope.post_message(&block.into()).unwrap();
+        Err(Error::Report(file_reports)) => {
+            for (file, reports) in file_reports {
+                let idx = codesnake::LineIndex::new(&file.code);
+                for e in reports {
+                    let error = format!("⚠️ Error: {}", e.message);
+                    scope.post_message(&error.into()).unwrap();
+
+                    let block = e.into_block(&idx);
+                    let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
+                    scope.post_message(&block.into()).unwrap();
+                }
             }
         }
         Err(Error::Hifijson(e)) => {
@@ -229,7 +236,7 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let filter = parse(filter, Vec::new()).map_err(|e| Error::Report(filter.to_owned(), e))?;
+    let (_vals, filter) = parse("", filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);
 
@@ -248,38 +255,50 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     Ok(())
 }
 
-fn parse_term(filter_str: &str) -> Result<jaq_syn::Main, Vec<Report>> {
-    let tokens = jaq_syn::Lexer::new(filter_str).lex().map_err(|errs| {
-        errs.into_iter()
-            .map(|e| report_lex(filter_str, e))
-            .collect::<Vec<_>>()
-    })?;
+fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
+    use compile::Compiler;
+    use jaq_syn::load::{import, Arena, File, Loader};
 
-    let main = jaq_syn::Parser::new(&tokens).parse(|p| p.module(|p| p.term()));
-    let main = main.map_err(|errs| {
-        errs.into_iter()
-            .map(|e| report_parse(filter_str, e))
-            .collect::<Vec<_>>()
-    })?;
+    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
+    let arena = Arena::default();
+    let loader = Loader::new(jaq_std::std()).with_std_read();
+    let modules = loader
+        .load(&arena, File { path, code })
+        .map_err(load_errors)?;
 
-    Ok(main.conv(filter_str))
+    let vals = Vec::new();
+    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
+
+    let core: Vec<_> = jaq_core::core().collect();
+    let compiler = Compiler::default()
+        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_global_vars(vars.iter().map(|v| &**v));
+    let filter = compiler.compile(modules).map_err(compile_errors)?;
+    Ok((vals, filter.with_funs(core.into_iter().map(|(.., f)| f))))
 }
 
-fn parse(filter_str: &str, vars: Vec<String>) -> Result<Filter, Vec<Report>> {
-    let mut ctx = ParseCtx::new(vars);
-    ctx.insert_natives(jaq_core::core());
-    ctx.insert_defs(jaq_std::std());
-    let filter = parse_term(filter_str)?;
-    let filter = ctx.compile(filter);
-    if ctx.errs.is_empty() {
-        Ok(filter)
-    } else {
-        let reports = ctx.errs.into_iter().map(|error| Report {
-            message: error.0.to_string(),
-            labels: Vec::from([(error.1, [(error.0.to_string(), None)].into(), Color::Red)]),
-        });
-        Err(reports.collect())
-    }
+fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
+    use jaq_syn::load::Error;
+
+    let errs = errs.into_iter().map(|(file, err)| {
+        let code = file.code;
+        let err = match err {
+            Error::Io(errs) => errs.into_iter().map(|e| report_io(code, e)).collect(),
+            Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
+            Error::Parse(errs) => errs.into_iter().map(|e| report_parse(code, e)).collect(),
+        };
+        (file.map(|s| s.into()), err)
+    });
+    errs.collect()
+}
+
+fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
+    let errs = errs.into_iter().map(|(file, errs)| {
+        let code = file.code;
+        let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
+        (file.map(|s| s.into()), errs)
+    });
+    errs.collect()
 }
 
 type StringColors = Vec<(String, Option<Color>)>;
@@ -304,8 +323,16 @@ impl Color {
     }
 }
 
+fn report_io(code: &str, (path, error): (&str, String)) -> Report {
+    let path_range = jaq_syn::span(code, path);
+    Report {
+        message: format!("could not load file {}: {}", path, error),
+        labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
+    }
+}
+
 fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
-    use jaq_syn::lex::{span, Expect};
+    use jaq_syn::span;
     // truncate found string to its first character
     let found = &found[..found.char_indices().nth(1).map_or(found.len(), |(i, _)| i)];
 
@@ -319,7 +346,7 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     let label = (found_range, found, Color::Red);
 
     let labels = match expected {
-        Expect::Delim(open) => {
+        jaq_syn::lex::Expect::Delim(open) => {
             let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
                 .map(|(s, c)| (s.into(), c));
             Vec::from([(span(code, open), text.into(), Color::Yellow), label])
@@ -333,14 +360,29 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     }
 }
 
-fn report_parse(code: &str, (expected, found): jaq_syn::parse::TError<&str>) -> Report {
-    use jaq_syn::lex::Token;
-    let found_range = jaq_syn::lex::span(code, Token::opt_as_str(found, code));
-    let found = found.map_or("unexpected end of input", |_| "unexpected token");
+fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
+    let found_range = jaq_syn::span(code, found);
+
+    let found = if found.is_empty() {
+        "unexpected end of input"
+    } else {
+        "unexpected token"
+    };
     let found = [(found.to_string(), None)].into();
 
     Report {
         message: format!("expected {}", expected.as_str()),
+        labels: Vec::from([(found_range, found, Color::Red)]),
+    }
+}
+
+fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
+    let found_range = jaq_syn::span(code, found);
+    let message = format!("undefined {}", undefined.as_str());
+    let found = [(message.clone(), None)].into();
+
+    Report {
+        message,
         labels: Vec::from([(found_range, found, Color::Red)]),
     }
 }

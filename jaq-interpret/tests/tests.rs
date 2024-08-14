@@ -212,6 +212,29 @@ fn if_then_else() {
     gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
+yields!(
+    label_break,
+    "[label $x | 0, (label $y | 1, break $x, 2), 3]",
+    [0, 1]
+);
+
+yields!(label_break_rec, "def f(a): (label $x | a | ., f(a)), {}; [0 | label $y | f(if . > 1 then break $y else . + 1 end)]", [1, 2]);
+
+// This is some nasty stuff.
+// Whenever a `break $x` is executed here, `$x` refers to
+// the `label` that was defined in the *parent call*.
+yields!(
+    label_break_rec2,
+    "def f(a): (label $x | a | ., f(if . > 1 then break $x else .+1 end)), .; [0 | f(1)]",
+    [1, 2, 1, 0]
+);
+
+yields!(
+    label_break_rec3,
+    "[label $x | def f: .+1 | if . > 2 then break $x end, f; 0 | f]",
+    [1, 2]
+);
+
 // This behaviour diverges from jq. In jaq, a `try` will propagate all
 // errors in the stream to the `catch` filter.
 yields!(
@@ -330,6 +353,7 @@ yields!(id_arg, "def f( a):  a; f(0)", 0);
 yields!(args_mixed, "def f(a; $b): a + $b; 1 as $a | f($a; 2)", 3);
 
 yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
+yields!(nested_general, "1 + (2 as $x | def f(a): a*$x; f(3))", 7);
 
 const ACKERMANN: &str = "def ack($m; $n):
   if $m == 0 then $n + 1
@@ -374,3 +398,5 @@ yields!(
     "[for (3,4) as $x (1; .+$x, .*$x)]",
     [1, 4, 8, 16, 3, 7, 12]
 );
+
+yields!(update_alt, "[[0!=0, 3] | .[] //= (1, 2)]", [[1, 3], [2, 3]]);

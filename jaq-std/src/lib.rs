@@ -8,12 +8,8 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
-use alloc::vec::Vec;
 
 /// Return the standard library.
-pub fn std() -> Vec<jaq_syn::Def> {
-    let std = include_str!("std.jq");
-    jaq_syn::parse(std, |p| p.module(|p| p.defs()))
-        .unwrap()
-        .conv(std)
+pub fn std() -> alloc::vec::Vec<jaq_syn::parse::Def<&'static str>> {
+    jaq_syn::parse(include_str!("std.jq"), |p| p.defs()).unwrap()
 }

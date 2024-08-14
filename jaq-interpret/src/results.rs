@@ -1,8 +1,6 @@
 //! Functions on iterators over results.
 
-// TODO for v2.0: remove this from `results`
-pub use crate::box_iter::box_once;
-use crate::box_iter::BoxIter;
+use crate::box_iter::{box_once, BoxIter};
 use alloc::vec::Vec;
 
 /// A boxed iterator over `Result`s.
@@ -13,7 +11,7 @@ pub fn then<'a, T, U: 'a, E: 'a>(
     x: Result<T, E>,
     f: impl FnOnce(T) -> Results<'a, U, E>,
 ) -> Results<'a, U, E> {
-    x.map(f).unwrap_or_else(|e| box_once(Err(e)))
+    x.map_or_else(|e| box_once(Err(e)), f)
 }
 
 /// Apply the function to the value if there is no error,
@@ -32,55 +30,6 @@ pub fn run_if_ok<'a, T, E>(x: T, e: &mut Option<E>, f: &impl Fn(T) -> Results<'a
             Vec::new()
         }
     }
-}
-
-// TODO for v2.0: remove this
-// if `inner` is true, output values that yield non-empty output;
-// if `outer` is true, output values that yield     empty output
-pub(crate) fn recurse<'a, T: Clone + 'a, E: Clone + 'a>(
-    inner: bool,
-    outer: bool,
-    init: Results<'a, T, E>,
-    f: impl Fn(T) -> Results<'a, T, E> + 'a,
-) -> impl Iterator<Item = Result<T, E>> + 'a {
-    let mut stack = Vec::from([init.peekable()]);
-    core::iter::from_fn(move || loop {
-        let v = loop {
-            let mut iter = stack.pop()?;
-            match iter.next() {
-                None => continue,
-                Some(Ok(v)) => {
-                    if iter.peek().is_some() {
-                        stack.push(iter);
-                    }
-                    break v;
-                }
-                e => return e,
-            }
-        };
-        let mut iter = f(v.clone()).peekable();
-        match (inner, outer) {
-            (true, true) => {
-                stack.push(iter);
-                return Some(Ok(v));
-            }
-            (true, false) => {
-                if iter.peek().is_some() {
-                    stack.push(iter);
-                    return Some(Ok(v));
-                }
-            }
-            (false, true) => {
-                if iter.peek().is_some() {
-                    stack.push(iter);
-                } else {
-                    return Some(Ok(v));
-                }
-            }
-            // pathological case, included only for completeness
-            (false, false) => stack.push(iter),
-        }
-    })
 }
 
 pub(crate) enum Fold<'a, U, E> {

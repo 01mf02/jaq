@@ -313,7 +313,7 @@ dependencies = [
 name = "jaq-syn"
 version = "1.6.0"
 dependencies = [
- "serde",
+ "typed-arena",
 ]
 
 [[package]]
@@ -574,6 +574,12 @@ checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "typed-arena"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6af6ae20167a9ece4bcb41af5b80f8a1f1df981f6391189ce00fd257af04126a"
 
 [[package]]
 name = "unicode-ident"

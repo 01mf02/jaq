@@ -10,28 +10,31 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{Ctx, Error, FilterT, ParseCtx, RcIter, Val};
+//! use jaq_interpret::{Ctx, Error, FilterT, Compiler, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
-//! let filter = ".[]";
+//! let code = ".[]";
+//!
+//! use jaq_syn::load::{Arena, File, Loader};
 //!
 //! // start out only from core filters,
 //! // which do not include filters in the standard library
 //! // such as `map`, `select` etc.
-//! let mut defs = ParseCtx::new(Vec::new());
+//! let loader = Loader::new([]);
+//! let arena = Arena::default();
 //!
 //! // parse the filter
-//! let f = jaq_syn::parse(filter, |p| p.module(|p| p.term())).unwrap().conv(filter);
+//! let modules = loader.load(&arena, File { path: "", code }).unwrap();
 //!
-//! // compile the filter in the context of the given definitions
-//! let f = defs.compile(f);
-//! assert!(defs.errs.is_empty());
+//! // compile the filter
+//! let filter = jaq_interpret::Compiler::default().compile(modules).unwrap();
+//! let filter = filter.with_funs([]);
 //!
 //! let inputs = RcIter::new(core::iter::empty());
 //!
 //! // iterator over the output values
-//! let mut out = f.run((Ctx::new([], &inputs), Val::from(input)));
+//! let mut out = filter.run((Ctx::new([], &inputs), Val::from(input)));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -46,12 +49,10 @@ extern crate alloc;
 extern crate std;
 
 mod box_iter;
+pub mod compile;
 pub mod error;
 mod filter;
-mod hir;
 mod into_iter;
-mod lir;
-mod mir;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -63,13 +64,13 @@ mod val;
 #[allow(dead_code)]
 mod exn;
 
+pub use compile::{Compiler, Filter};
 pub use error::Error;
-pub use filter::{Args, FilterT, Native, Owned as Filter, RunPtr, UpdatePtr};
+pub use filter::{Args, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs, ValT};
 
-use alloc::{string::String, vec::Vec};
-use jaq_syn::Arg as Bind;
+use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
 
@@ -77,6 +78,44 @@ use stack::Stack;
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Vars<V>(RcList<Bind<V, (filter::Id, Self)>>);
 type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
+
+/// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
+///
+/// In jq, we can bind filters in three different ways:
+///
+/// 1. `f as $x | ...`
+/// 2. `def g($x): ...; g(f)`
+/// 3. `def g(fx): ...; g(f)`
+///
+/// In the first two cases, we bind the outputs of `f` to a variable `$x`.
+/// In the third case, we bind `f` to a filter `fx`
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Bind<V, F = V> {
+    /// binding to a variable
+    Var(V),
+    /// binding to a filter
+    Fun(F),
+}
+
+impl<V, F> Bind<V, F> {
+    /// Move references inward.
+    pub fn as_ref(&self) -> Bind<&V, &F> {
+        match self {
+            Self::Var(x) => Bind::Var(x),
+            Self::Fun(x) => Bind::Fun(x),
+        }
+    }
+}
+
+impl<T> Bind<T, T> {
+    /// Apply a function to both binding types.
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Bind<U, U> {
+        match self {
+            Self::Var(x) => Bind::Var(f(x)),
+            Self::Fun(x) => Bind::Fun(f(x)),
+        }
+    }
+}
 
 impl<V> Vars<V> {
     fn get(&self, i: usize) -> Option<&Bind<V, (filter::Id, Self)>> {
@@ -129,110 +168,13 @@ impl<'a, V> Ctx<'a, V> {
     }
 }
 
-/// Compile parsed to executable filters.
-///
-/// This allows to go from a parsed filter to a filter executable by this crate.
-pub struct ParseCtx {
-    /// errors occurred during transformation
-    // TODO for v2.0: remove this and make it a function
-    pub errs: Vec<jaq_syn::Spanned<hir::Error>>,
-    native: Vec<((String, usize), filter::Native)>,
-    def: jaq_syn::Def,
-}
-
-impl ParseCtx {
-    /// Initialise new context with list of global variables.
-    ///
-    /// When running a filter produced by this context,
-    /// values corresponding to the variables have to be supplied in the execution context.
-    pub fn new(vars: Vec<String>) -> Self {
-        use alloc::string::ToString;
-        let def = jaq_syn::Def {
-            lhs: jaq_syn::Call {
-                name: "$".to_string(),
-                args: vars.into_iter().map(Bind::Var).collect(),
-            },
-            rhs: jaq_syn::Main {
-                defs: Vec::new(),
-                body: (jaq_syn::filter::Filter::Id, 0..0),
-            },
-        };
-
-        Self {
-            errs: Vec::new(),
-            native: Vec::new(),
-            def,
-        }
-    }
-
-    /// Add a native filter with given name and arity.
-    pub fn insert_native(&mut self, name: String, arity: usize, f: filter::Native) {
-        self.native.push(((name, arity), f));
-    }
-
-    /// Add native filters with given names and arities.
-    pub fn insert_natives<I>(&mut self, natives: I)
-    where
-        I: IntoIterator<Item = (String, usize, filter::Native)>,
-    {
-        let natives = natives
-            .into_iter()
-            .map(|(name, arity, f)| ((name, arity), f));
-        self.native.extend(natives);
-    }
-
-    /// Import parsed definitions, such as obtained from the standard library.
-    ///
-    /// Errors that might occur include undefined variables, for example.
-    pub fn insert_defs(&mut self, defs: impl IntoIterator<Item = jaq_syn::Def>) {
-        self.def.rhs.defs.extend(defs);
-    }
-
-    /// Insert a root definition.
-    #[deprecated(since = "1.1.0", note = "use `insert_defs` instead")]
-    pub fn root_def(&mut self, def: jaq_syn::Def) {
-        self.def.rhs.defs.push(def);
-    }
-
-    /// Insert a root filter.
-    #[deprecated(since = "1.1.0", note = "this call has no effect")]
-    pub fn root_filter(&mut self, filter: jaq_syn::Spanned<jaq_syn::filter::Filter>) {
-        self.def.rhs.body = filter;
-    }
-
-    /// Given a main filter (consisting of definitions and a body), return a finished filter.
-    pub fn compile(&mut self, main: jaq_syn::Main) -> Filter {
-        let mut hctx = hir::Ctx::default();
-        let native = self.native.iter().map(|(sig, _)| sig.clone());
-        hctx.native = native.collect();
-        self.def.rhs.defs.extend(main.defs);
-        self.def.rhs.body = main.body;
-        let def = hctx.def(self.def.clone());
-        self.errs = hctx.errs;
-
-        if !self.errs.is_empty() {
-            return Default::default();
-        }
-        let mut mctx = mir::Ctx::default();
-        //std::dbg!(&def);
-        let def = mctx.def(def, Default::default());
-
-        let mut lctx = lir::Ctx::default();
-        let id = lctx.def(def);
-        let native = self.native.iter().map(|(_sig, native)| native.clone());
-        filter::Owned::new(id, lctx.defs.into(), native.collect())
-    }
-
-    /// Compile and run a filter on given input, panic if it does not compile or yield the given output.
+impl<V: ValT> Filter<Native<V>> {
+    /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields(&mut self, x: Val, f: jaq_syn::Main, ys: impl Iterator<Item = ValR>) {
-        let f = self.compile(f);
-        assert!(self.errs.is_empty());
-
+    pub fn yields(&self, x: V, ys: impl Iterator<Item = val::ValR2<V>>) {
         let inputs = RcIter::new(core::iter::empty());
-        let out = f.run((Ctx::new([], &inputs), x));
-
+        let out = self.run((Ctx::new([], &inputs), x));
         assert!(out.eq(ys));
     }
 }

@@ -1,13 +1,10 @@
 //! Value access and iteration.
 use alloc::vec::Vec;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 /// A path such as `.[].a?[1:]`.
-pub type Path<T> = Vec<(Part<crate::Spanned<T>>, Opt)>;
+pub type Path<T> = Vec<(Part<T>, Opt)>;
 
 /// A part of a path, such as `[]`, `a`, and `[1:]` in `.[].a?[1:]`.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub enum Part<I> {
     /// Access arrays with integer and objects with string indices
@@ -27,7 +24,6 @@ impl<I> Default for Part<I> {
 /// For example, `[] | .a` fails with an error, while `[] | .a?` returns nothing.
 /// By default, path parts are *essential*, meaning that they fail.
 /// Annotating them with `?` makes them *optional*.
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
 pub enum Opt {
     /// Return nothing if the input cannot be accessed with the path
@@ -59,7 +55,7 @@ impl Opt {
     /// else return all items of the iterator and fail if any is `Err`.
     pub fn collect<T, E>(self, iter: impl Iterator<Item = Result<T, E>>) -> Result<Vec<T>, E> {
         match self {
-            Self::Optional => Ok(iter.filter_map(|x| x.ok()).collect()),
+            Self::Optional => Ok(iter.filter_map(Result::ok).collect()),
             Self::Essential => iter.collect(),
         }
     }

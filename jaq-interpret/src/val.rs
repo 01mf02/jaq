@@ -184,9 +184,9 @@ impl ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
-            (Val::Arr(a), Val::Int(i)) => Ok(abs_index(*i, a.len())
-                .map(|i| a[i].clone())
-                .unwrap_or(Val::Null)),
+            (Val::Arr(a), Val::Int(i)) => {
+                Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
+            }
             (Val::Obj(o), Val::Str(s)) => Ok(o.get(s).cloned().unwrap_or(Val::Null)),
             (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::Index(s, index.clone())),
             (s, _) => Err(Error::Type(s, Type::Iter)),
@@ -245,8 +245,8 @@ impl ValT for Val {
     ) -> ValR {
         match self {
             Val::Obj(ref mut o) => {
-                let o = Rc::make_mut(o);
                 use indexmap::map::Entry::{Occupied, Vacant};
+                let o = Rc::make_mut(o);
                 let i = match index {
                     Val::Str(s) => s,
                     i => return opt.fail(self, |v| Error::Index(v, i.clone())),
@@ -335,8 +335,7 @@ fn skip_take(from: usize, until: usize) -> (usize, usize) {
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
 /// else return `default`.
 fn abs_bound(i: Option<isize>, len: usize, default: usize) -> usize {
-    let abs = |i| core::cmp::min(wrap(i, len).unwrap_or(0), len);
-    i.map(abs).unwrap_or(default)
+    i.map_or(default, |i| core::cmp::min(wrap(i, len).unwrap_or(0), len))
 }
 
 /// Absolutise an index and return result if it is inside [0, len).
@@ -509,7 +508,7 @@ impl Val {
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
-                .all(|(k, r)| l.get(k).map(|l| l.contains(r)).unwrap_or(false)),
+                .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
             _ => self == other,
         }
     }
@@ -568,7 +567,7 @@ impl Val {
                 arr
             })),
             Token::LCurly => Ok(Self::obj({
-                let mut obj: Map<_, _> = Default::default();
+                let mut obj = Map::default();
                 lexer.seq(Token::RCurly, |token, lexer| {
                     let key =
                         lexer.str_colon(token, |lexer| lexer.str_string().map_err(Error::Str))?;
@@ -597,7 +596,7 @@ impl From<serde_json::Value> for Val {
                 .parse()
                 .map_or_else(|_| Self::Num(Rc::new(n.to_string())), Self::Int),
             String(s) => Self::str(s),
-            Array(a) => Self::arr(a.into_iter().map(|x| x.into()).collect()),
+            Array(a) => Self::arr(a.into_iter().map(Into::into).collect()),
             Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
         }
     }
@@ -697,7 +696,7 @@ impl core::ops::Sub for Val {
             (Num(n), r) => Self::from_dec_str(&n) - r,
             (l, Num(n)) => l - Self::from_dec_str(&n),
             (Arr(mut l), Arr(r)) => {
-                let r = alloc::collections::BTreeSet::from_iter(r.iter());
+                let r = r.iter().collect::<alloc::collections::BTreeSet<_>>();
                 Rc::make_mut(&mut l).retain(|x| !r.contains(x));
                 Ok(Arr(l))
             }
@@ -715,7 +714,7 @@ fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
         (None, r) => {
             l.insert(k, r);
         }
-    })
+    });
 }
 
 impl core::ops::Mul for Val {
@@ -758,7 +757,7 @@ fn split<'a>(s: &'a str, sep: &'a str) -> BoxIter<'a, String> {
 impl core::ops::Div for Val {
     type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
-        use Val::*;
+        use Val::{Float, Int, Num, Str};
         match (self, rhs) {
             (Int(x), Int(y)) => Ok(Float(x as f64 / y as f64)),
             (Float(f), Int(i)) => Ok(Float(f / i as f64)),
@@ -775,7 +774,7 @@ impl core::ops::Div for Val {
 impl core::ops::Rem for Val {
     type Output = ValR;
     fn rem(self, rhs: Self) -> Self::Output {
-        use Val::*;
+        use Val::Int;
         match (self, rhs) {
             (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
             (l, r) => Err(Error::MathOp(l, MathOp::Rem, r)),
@@ -827,7 +826,7 @@ impl PartialOrd for Val {
 
 impl Ord for Val {
     fn cmp(&self, other: &Self) -> Ordering {
-        use Ordering::*;
+        use Ordering::{Equal, Greater, Less};
         match (self, other) {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),

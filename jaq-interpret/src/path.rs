@@ -2,11 +2,15 @@ use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
 use crate::val::{ValR2, ValT};
 use alloc::{boxed::Box, vec::Vec};
-pub use jaq_syn::path::Opt;
+use jaq_syn::path::Opt;
 
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(Part<F>, Opt)>);
 
+/// Part of a path.
+///
+/// This is identical to [`jaq_syn::path::Part`], but we cannot use that here directly
+/// because that way, we could not implement new methods for that type.
 #[derive(Clone, Debug)]
 pub enum Part<I> {
     Index(I),
@@ -18,7 +22,7 @@ impl<'a, U: Clone + 'a, E: Clone + 'a, T: Clone + IntoIterator<Item = Result<U, 
     pub fn explode(self) -> impl Iterator<Item = Result<Path<U>, E>> + 'a {
         Path(Vec::new())
             .combinations(self.0.into_iter())
-            .map(|path| path.transpose())
+            .map(Path::transpose)
     }
 }
 
