@@ -315,7 +315,7 @@ impl<'s> Compiler<&'s str> {
         y
     }
 
-    fn module(&mut self, m: jaq_syn::load::Module<&'s str, parse::Defs<&'s str>>) {
+    fn module(&mut self, m: jaq_syn::load::Module<&'s str>) {
         self.imported_mods.clear();
         self.included_mods.clear();
         for (mid, as_) in m.mods {

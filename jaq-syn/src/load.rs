@@ -1,7 +1,7 @@
 //! Combined file loading, lexing, and parsing for multiple modules.
 
 use crate::lex::{self, Token};
-use crate::parse::{self, Def, Defs, Term};
+use crate::parse::{self, Def, Term};
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -18,7 +18,7 @@ pub struct Arena(typed_arena::Arena<String>);
 
 /// Combined file loader, lexer, and parser for multiple modules.
 pub struct Loader<S, R> {
-    mods: Vec<(File<S>, Result<Module<S, Defs<S>>, Error<S>>)>,
+    mods: Vec<(File<S>, Result<Module<S>, Error<S>>)>,
     /// function to read module file contents from a path
     read: R,
     /// currently processed modules
@@ -64,7 +64,7 @@ pub enum Error<S> {
 
 /// Module containing strings `S` and a body `B`.
 #[derive(Default)]
-pub struct Module<S, B> {
+pub struct Module<S, B = Vec<Def<S>>> {
     /// metadata (optional)
     pub meta: Option<Term<S>>,
     /// included and imported modules
@@ -80,8 +80,11 @@ pub struct Module<S, B> {
     pub body: B,
 }
 
-// TODO: Modules::imported_vars() -> Iter<&S>
-pub type Modules<S> = Vec<(File<S>, Module<S, Defs<S>>)>;
+/// Tree of modules containing definitions.
+///
+/// By convention, the last module contains a single definition that is the `main` filter.
+pub type Modules<S> = Vec<(File<S>, Module<S>)>;
+
 /// Errors occurring during loading of multiple modules.
 ///
 /// For example, suppose that we have
@@ -142,13 +145,13 @@ impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
     /// That means that all filters defined in the prelude can be called from any module.
     ///
     /// The prelude is normally initialised with filters like `map` or `true`.
-    pub fn new(prelude: impl IntoIterator<Item = Def<&'s str, Term<&'s str>>>) -> Self {
+    pub fn new(prelude: impl IntoIterator<Item = Def<&'s str>>) -> Self {
         let defs = [
             Def::new("!recurse", Vec::new(), Term::recurse("!recurse")),
             Def::new("!empty", Vec::new(), Term::empty()),
         ];
 
-        let prelude: Module<&'s str, Defs<&'s str>> = Module {
+        let prelude = Module {
             body: defs.into_iter().chain(prelude).collect(),
             ..Module::default()
         };
@@ -223,7 +226,7 @@ impl<'s, R: FnMut(&str) -> Result<String, String>> Loader<&'s str, R> {
     ) -> Result<Modules<&'s str>, Errors<&'s str>> {
         let result = parse_main(file.code)
             .and_then(|m| Module::map_mods(m, |path| self.find(arena, path)))
-            .map(|m| m.map_body(|body| Defs::from([Def::new("main", Vec::new(), body)])));
+            .map(|m| m.map_body(|body| Vec::from([Def::new("main", Vec::new(), body)])));
         self.mods.push((file, result));
 
         let mut mods = Vec::new();
@@ -269,7 +272,7 @@ fn parse_main(code: &str) -> Result<parse::Module<&str, Term<&str>>, Error<&str>
         .map_err(|e| Error::Parse(e.into_iter().map(conv_err).collect()))
 }
 
-fn parse_defs(code: &str) -> Result<parse::Module<&str, Defs<&str>>, Error<&str>> {
+fn parse_defs(code: &str) -> Result<parse::Module<&str, Vec<Def<&str>>>, Error<&str>> {
     let tokens = lex::Lexer::new(code).lex().map_err(Error::Lex)?;
     let conv_err = |(expected, found)| (expected, Token::opt_as_str(found, code));
     parse::Parser::new(&tokens)

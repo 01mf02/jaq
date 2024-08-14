@@ -7,7 +7,9 @@
 #![no_std]
 #![warn(missing_docs)]
 
+extern crate alloc;
+
 /// Return the standard library.
-pub fn std() -> jaq_syn::parse::Defs<&'static str> {
+pub fn std() -> alloc::vec::Vec<jaq_syn::parse::Def<&'static str>> {
     jaq_syn::parse(include_str!("std.jq"), |p| p.defs()).unwrap()
 }

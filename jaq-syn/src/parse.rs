@@ -648,7 +648,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Parse a sequence of definitions, such as `def x: 1; def y: 2;`.
-    pub fn defs(&mut self) -> Result<'s, 't, Defs<&'s str>> {
+    pub fn defs(&mut self) -> Result<'s, 't, Vec<Def<&'s str>>> {
         let head = |p: &mut Self| p.just("def").ok();
         core::iter::from_fn(|| self.maybe(head).map(|_| self.def_tail())).collect()
     }
@@ -752,7 +752,7 @@ pub(crate) struct Module<S, B> {
 /// def recurse(f; cond): recurse(f | select(cond));
 /// ~~~
 #[derive(Debug)]
-pub struct Def<S, F> {
+pub struct Def<S, F = Term<S>> {
     /// name, e.g. `"double"` or `"map"`
     pub name: S,
     /// arguments, e.g. `["$x"]`, `["f"]`, or `["f", "cond"]`
@@ -766,8 +766,6 @@ impl<S, F> Def<S, F> {
         Self { name, args, body }
     }
 }
-
-pub type Defs<S> = Vec<Def<S, Term<S>>>;
 
 impl prec_climb::Op for BinaryOp {
     fn precedence(&self) -> usize {
