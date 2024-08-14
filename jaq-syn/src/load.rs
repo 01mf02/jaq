@@ -214,7 +214,7 @@ impl<S, R> Loader<S, R> {
     }
 }
 
-impl<'s, R: Fn(&str) -> Result<String, String>> Loader<&'s str, R> {
+impl<'s, R: FnMut(&str) -> Result<String, String>> Loader<&'s str, R> {
     /// Load a set of modules, starting from a given file.
     pub fn load(
         mut self,
