@@ -622,9 +622,10 @@ impl<'s> Compiler<&'s str> {
 
     fn obj_entry(&mut self, k: parse::Term<&'s str>, v: Option<parse::Term<&'s str>>) -> Term {
         let (k, v) = match (k, v) {
-            (k @ parse::Term::Var(x), None) => {
-                (self.insert_term(Term::Str(x[1..].into())), self.iterm(k))
-            }
+            (parse::Term::Var(x), None) => (
+                self.insert_term(Term::Str(x[1..].into())),
+                self.iterm(parse::Term::Var(x)),
+            ),
             (k, None) => {
                 use crate::path::{Part, Path};
                 let k = self.iterm(k);
