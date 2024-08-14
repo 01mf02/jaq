@@ -155,6 +155,7 @@ pub type Error<S> = (S, Undefined);
 /// Compilation errors.
 pub type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
 
+/// Type of an undefined symbol.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Undefined {
@@ -162,7 +163,9 @@ pub enum Undefined {
     Mod,
     /// variable
     Var,
+    /// label variable
     Label,
+    /// filter
     Filter(Arity),
 }
 
