@@ -98,19 +98,16 @@ pub type Modules<S> = Vec<(File<S>, Module<S>)>;
 /// [`Errors`] will contain each file with a different [`Error`].
 pub type Errors<S> = Vec<(File<S>, Error<S>)>;
 
-impl<'s, B> Module<&'s str, B> {
-    fn map_mods(
-        m: parse::Module<&'s str, B>,
-        mut f: impl FnMut(&'s str) -> Result<usize, String>,
-    ) -> Result<Self, Error<&'s str>> {
+impl<S: core::ops::Deref<Target = str>, B> parse::Module<S, B> {
+    fn map(self, mut f: impl FnMut(&S) -> Result<usize, String>) -> Result<Module<S, B>, Error<S>> {
         // the prelude module is included implicitly in every module (except itself)
         let mut mods = Vec::from([(0, None)]);
         let mut vars = Vec::new();
         let mut errs = Vec::new();
-        for (path, as_) in m.deps {
+        for (path, as_) in self.deps {
             match as_ {
                 Some(x) if x.starts_with('$') => vars.push((path, x)),
-                as_ => match f(path) {
+                as_ => match f(&path) {
                     Ok(mid) => mods.push((mid, as_)),
                     Err(e) => errs.push((path, e)),
                 },
@@ -118,10 +115,10 @@ impl<'s, B> Module<&'s str, B> {
         }
         if errs.is_empty() {
             Ok(Module {
-                meta: m.meta,
+                meta: self.meta,
                 mods,
                 vars,
-                body: m.body,
+                body: self.body,
             })
         } else {
             Err(Error::Io(errs))
@@ -228,7 +225,7 @@ impl<'s, R: FnMut(&str) -> Result<String, String>> Loader<&'s str, R> {
         file: File<&'s str>,
     ) -> Result<Modules<&'s str>, Errors<&'s str>> {
         let result = parse_main(file.code)
-            .and_then(|m| Module::map_mods(m, |path| self.find(arena, path)))
+            .and_then(|m| m.map(|path| self.find(arena, path)))
             .map(|m| m.map_body(|body| Vec::from([Def::new("main", Vec::new(), body)])));
         self.mods.push((file, result));
 
@@ -252,13 +249,12 @@ impl<'s, R: FnMut(&str) -> Result<String, String>> Loader<&'s str, R> {
             return Ok(id);
         };
         if self.open.contains(&path) {
-            return Err("circular include/import detected".into());
+            return Err("circular include/import".into());
         }
 
         let code = &**arena.0.alloc((self.read)(path)?);
         self.open.push(path);
-        let defs =
-            parse_defs(code).and_then(|m| Module::map_mods(m, |path| self.find(arena, path)));
+        let defs = parse_defs(code).and_then(|m| m.map(|path| self.find(arena, path)));
         assert_eq!(self.open.pop(), Some(path));
 
         let id = self.mods.len();
