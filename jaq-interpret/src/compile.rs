@@ -156,6 +156,7 @@ pub type Error<S> = (S, Undefined);
 pub type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Undefined {
     /// module
     Mod,

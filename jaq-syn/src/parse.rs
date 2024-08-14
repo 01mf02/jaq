@@ -15,6 +15,7 @@ pub type TError<'t, S> = Error<S, Option<&'t Token<S>>>;
 ///
 /// Each variant is annoted with jq programs that trigger it.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Expect<S> {
     /// `if 0` (expected "then"), `reduce .` (expected "as"),
     /// `0 as $x` (expected "|"), `{(.)}` (expected ":")

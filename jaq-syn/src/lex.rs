@@ -42,6 +42,7 @@ pub(crate) enum Tok<S> {
 ///
 /// Each variant is annoted with jq programs that trigger it.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub enum Expect<S> {
     /// `0e`, `0.`
     Digit,
