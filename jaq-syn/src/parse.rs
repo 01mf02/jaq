@@ -2,8 +2,7 @@
 
 use crate::lex::{StrPart, Tok, Token};
 use crate::path::{self, Path};
-use crate::prec_climb::{self, Associativity};
-use crate::{MathOp, OrdOp};
+use crate::{prec_climb, MathOp, OrdOp};
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
@@ -697,7 +696,7 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Parse a module with a body returned by the given function.
-    pub fn module<B, F>(&mut self, f: F) -> Result<'s, 't, Module<&'s str, B>>
+    pub(crate) fn module<B, F>(&mut self, f: F) -> Result<'s, 't, Module<&'s str, B>>
     where
         F: FnOnce(&mut Self) -> Result<'s, 't, B>,
     {
@@ -736,10 +735,9 @@ impl<'s, 't> Parser<'s, 't> {
 /// def iter: .[];
 /// ~~~
 #[derive(Debug, Default)]
-pub struct Module<S, B> {
-    #[allow(dead_code)]
-    pub(crate) meta: Option<Term<S>>,
-    pub(crate) deps: Vec<(S, Option<S>)>,
+pub(crate) struct Module<S, B> {
+    pub meta: Option<Term<S>>,
+    pub deps: Vec<(S, Option<S>)>,
     pub body: B,
 }
 
