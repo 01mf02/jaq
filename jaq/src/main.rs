@@ -273,8 +273,9 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
         .map_err(load_errors)?;
 
     let mut vals = Vec::new();
-    import(&modules, |path| {
-        Ok(vals.push(json_array(path).map_err(|e| e.to_string())?))
+    import(&modules, |p| {
+        vals.push(json_array(p).map_err(|e| e.to_string())?);
+        Ok(())
     })
     .map_err(load_errors)?;
 
@@ -341,8 +342,7 @@ fn json_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val
 }
 
 fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
-    let file = load_file(path.as_ref())?;
-    Ok(json_slice(&file).collect::<Result<Val, _>>()?)
+    json_slice(&load_file(path.as_ref())?).collect()
 }
 
 fn read_buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a>

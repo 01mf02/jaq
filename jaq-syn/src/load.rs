@@ -18,6 +18,7 @@ pub struct Arena(typed_arena::Arena<String>);
 
 /// Combined file loader, lexer, and parser for multiple modules.
 pub struct Loader<S, R> {
+    #[allow(clippy::type_complexity)]
     mods: Vec<(File<S>, Result<Module<S>, Error<S>>)>,
     /// function to read module file contents from a path
     read: R,
@@ -26,6 +27,8 @@ pub struct Loader<S, R> {
     /// This is used to detect circular dependencies between modules.
     open: Vec<S>,
 }
+
+type ReadFn = fn(&str) -> Result<String, String>;
 
 /// Path and contents of a (module) file, both represented by `S`.
 ///
@@ -137,7 +140,7 @@ impl<S, B> Module<S, B> {
     }
 }
 
-impl<'s> Loader<&'s str, fn(&str) -> Result<String, String>> {
+impl<'s> Loader<&'s str, ReadFn> {
     /// Initialise the loader with prelude definitions.
     ///
     /// The prelude is a special module that is implicitly included by all other modules
@@ -212,7 +215,7 @@ impl<S, R> Loader<S, R> {
 
     /// Read the contents of included/imported module files by performing file I/O.
     #[cfg(feature = "std")]
-    pub fn with_std_read(self) -> Loader<S, fn(&str) -> Result<String, String>> {
+    pub fn with_std_read(self) -> Loader<S, ReadFn> {
         self.with_read(std_read)
     }
 }
