@@ -220,6 +220,13 @@ yields!(
 
 yields!(label_break_rec, "def f(a): (label $x | a | ., f(a)), {}; [0 | label $y | f(if . > 1 then break $y else . + 1 end)]", [1, 2]);
 
+// This is some nasty stuff.
+// Whenever a `break $x` is executed here, `$x` refers to
+// the `label` that was defined in the *parent call*.
+yields!(label_break_rec2, "def f(a): (label $x | a | ., f(if . > 1 then break $x else .+1 end)), .; [0 | f(1)]", [1, 2, 1, 0]);
+
+yields!(label_break_rec3, "[label $x | def f: .+1 | if . > 2 then break $x end, f; 0 | f]", [1, 2]);
+
 // This behaviour diverges from jq. In jaq, a `try` will propagate all
 // errors in the stream to the `catch` filter.
 yields!(
