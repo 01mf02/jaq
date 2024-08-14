@@ -55,7 +55,7 @@ impl Opt {
     /// else return all items of the iterator and fail if any is `Err`.
     pub fn collect<T, E>(self, iter: impl Iterator<Item = Result<T, E>>) -> Result<Vec<T>, E> {
         match self {
-            Self::Optional => Ok(iter.filter_map(|x| x.ok()).collect()),
+            Self::Optional => Ok(iter.filter_map(Result::ok).collect()),
             Self::Essential => iter.collect(),
         }
     }

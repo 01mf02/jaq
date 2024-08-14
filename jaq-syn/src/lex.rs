@@ -128,7 +128,7 @@ impl<'a> Lexer<&'a str> {
     fn consumed(&mut self, skip: usize, f: impl FnOnce(&mut Self)) -> &'a str {
         self.with_consumed(|l| {
             l.i = &l.i[skip..];
-            f(l)
+            f(l);
         })
         .0
     }
@@ -206,13 +206,12 @@ impl<'a> Lexer<&'a str> {
                 let mut hex = 0;
                 for _ in 0..4 {
                     let i = chars.as_str();
-                    match chars.next().and_then(|c| c.to_digit(16)) {
-                        Some(digit) => hex = (hex << 4) + digit,
-                        None => {
-                            self.i = i;
-                            self.e.push((Expect::Unicode, self.i));
-                            return None;
-                        }
+                    if let Some(digit) = chars.next().and_then(|c| c.to_digit(16)) {
+                        hex = (hex << 4) + digit;
+                    } else {
+                        self.i = i;
+                        self.e.push((Expect::Unicode, self.i));
+                        return None;
                     }
                 }
                 StrPart::Char(char::from_u32(hex).unwrap())
