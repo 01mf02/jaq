@@ -19,10 +19,11 @@ pub(crate) struct TermId(pub(crate) usize);
 pub struct Filter<F = ()>(pub(crate) TermId, pub(crate) Lut<F>);
 
 /// Look-up table for indices stored in ASTs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct Lut<F> {
-    pub(crate) terms: Box<[Term]>,
-    pub(crate) funs: Box<[F]>,
+    /// `terms[tid]` yields the term corresponding to the term ID `tid`
+    pub(crate) terms: Vec<Term>,
+    pub(crate) funs: Vec<F>,
 }
 
 impl<F> Default for Filter<F> {
@@ -32,9 +33,22 @@ impl<F> Default for Filter<F> {
 }
 
 impl<F> Lut<F> {
-    fn new(terms: Box<[Term]>) -> Self {
-        let funs = Box::new([]);
+    fn new(terms: Vec<Term>) -> Self {
+        let funs = Vec::new();
         Self { terms, funs }
+    }
+
+    pub fn with_funs<F2>(self, funs: impl IntoIterator<Item = F2>) -> Lut<F2> {
+        Lut {
+            funs: funs.into_iter().collect(),
+            terms: self.terms,
+        }
+    }
+
+    fn insert_term(&mut self, t: Term) -> TermId {
+        let tid = self.terms.len();
+        self.terms.push(t);
+        TermId(tid)
     }
 }
 
@@ -184,10 +198,7 @@ impl Undefined {
 /// jq program compiler.
 #[derive(Default)]
 pub struct Compiler<S> {
-    /// `term_map[tid]` yields the term corresponding to the term ID `tid`
-    term_map: Vec<Term>,
-
-    funs_map: Vec<(S, Arity)>,
+    lut: Lut<FunSig<S>>,
 
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
     mod_map: Vec<Vec<Sig<S, Bind<()>>>>,
@@ -201,6 +212,8 @@ pub struct Compiler<S> {
 
     errs: Vec<Error<S>>,
 }
+
+type FunSig<S, A = Arity> = (S, A);
 
 #[derive(Clone, Debug)]
 struct Sig<S, A> {
@@ -262,11 +275,9 @@ impl<'s> Compiler<&'s str> {
     ///
     /// For execution, the corresponding functions have to be provided to the filter
     /// via [`Filter::with_funs`].
-    pub fn with_funs(self, funs: impl IntoIterator<Item = (&'s str, Arity)>) -> Self {
-        Self {
-            funs_map: funs.into_iter().collect(),
-            ..self
-        }
+    pub fn with_funs(self, funs: impl IntoIterator<Item = FunSig<&'s str>>) -> Self {
+        let lut = self.lut.with_funs(funs);
+        Self { lut, ..self }
     }
 
     /// Assume the existence of global variables with given names.
@@ -302,7 +313,7 @@ impl<'s> Compiler<&'s str> {
             assert_eq!(main.name, "main");
             assert!(main.args.is_empty());
             assert!(!main.tailrec);
-            Ok(Filter(main.id, Lut::new(self.term_map.into())))
+            Ok(Filter(main.id, self.lut.with_funs([])))
         } else {
             Err(errs)
         }
@@ -334,7 +345,7 @@ impl<'s> Compiler<&'s str> {
     }
 
     fn def(&mut self, d: parse::Def<&'s str, parse::Term<&'s str>>) {
-        let tid = self.insert_term(Term::Id);
+        let tid = self.lut.insert_term(Term::Id);
 
         let sig = Sig {
             name: d.name,
@@ -344,7 +355,7 @@ impl<'s> Compiler<&'s str> {
         };
         self.local.push(Local::Parent(sig));
 
-        self.term_map[tid.0] = self.term(d.body);
+        self.lut.terms[tid.0] = self.term(d.body);
 
         let sig = match self.local.pop() {
             Some(Local::Parent(sig)) => sig,
@@ -361,7 +372,7 @@ impl<'s> Compiler<&'s str> {
         // So we have to adapt the call to `f` in `1 + f` *afterwards*.
         // That's what we do here.
         if sig.tailrec {
-            for term in &mut self.term_map[tid.0..] {
+            for term in &mut self.lut.terms[tid.0..] {
                 if let Term::CallDef(id, .., tailrec @ None) = term {
                     *tailrec = (*id == tid).then_some(Tailrec::Catch);
                 }
@@ -391,7 +402,11 @@ impl<'s> Compiler<&'s str> {
             IfThenElse(if_thens, else_) => {
                 let else_ = else_.map_or(Term::Id, |else_| self.term(*else_));
                 if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
-                    Term::Ite(self.iterm(if_), self.iterm_tr(then_), self.insert_term(acc))
+                    Term::Ite(
+                        self.iterm(if_),
+                        self.iterm_tr(then_),
+                        self.lut.insert_term(acc),
+                    )
                 })
             }
             Var(x) => self.var(x),
@@ -473,7 +488,7 @@ impl<'s> Compiler<&'s str> {
                 use jaq_syn::lex::StrPart;
                 let fmt = match fmt {
                     Some(fmt) => self.iterm(Call(fmt, Vec::new())),
-                    None => self.insert_term(Term::ToString),
+                    None => self.lut.insert_term(Term::ToString),
                 };
                 let parts = parts.into_iter().map(|part| match part {
                     StrPart::Str(s) => Term::Str(s.into()),
@@ -496,13 +511,7 @@ impl<'s> Compiler<&'s str> {
 
     fn iterm_tr(&mut self, t: parse::Term<&'s str>) -> TermId {
         let t = self.term(t);
-        self.insert_term(t)
-    }
-
-    fn insert_term(&mut self, t: Term) -> TermId {
-        let tid = self.term_map.len();
-        self.term_map.push(t);
-        TermId(tid)
+        self.lut.insert_term(t)
     }
 
     fn fail(&mut self, name: &'s str, undef: Undefined) -> Term {
@@ -565,7 +574,7 @@ impl<'s> Compiler<&'s str> {
             }
         }
 
-        let mut funs = self.funs_map.iter();
+        let mut funs = self.lut.funs.iter();
         if let Some(nid) = funs.position(|(name_, arity)| name == *name_ && args.len() == *arity) {
             return Term::Native(nid, args);
         }
@@ -623,15 +632,15 @@ impl<'s> Compiler<&'s str> {
     fn obj_entry(&mut self, k: parse::Term<&'s str>, v: Option<parse::Term<&'s str>>) -> Term {
         let (k, v) = match (k, v) {
             (parse::Term::Var(x), None) => (
-                self.insert_term(Term::Str(x[1..].into())),
+                self.lut.insert_term(Term::Str(x[1..].into())),
                 self.iterm(parse::Term::Var(x)),
             ),
             (k, None) => {
                 use crate::path::{Part, Path};
                 let k = self.iterm(k);
                 let path = Path::from(Part::Index(k));
-                let path = Term::Path(self.insert_term(Term::Id), path);
-                (k, self.insert_term(path))
+                let path = Term::Path(self.lut.insert_term(Term::Id), path);
+                (k, self.lut.insert_term(path))
             }
             (k, Some(v)) => (self.iterm(k), self.iterm(v)),
         };
@@ -639,10 +648,11 @@ impl<'s> Compiler<&'s str> {
     }
 
     fn sum_or(&mut self, f: impl FnOnce() -> Term, terms: Vec<Term>) -> Term {
+        use MathOp::Add;
         let mut iter = terms.into_iter().rev();
         let last = iter.next().unwrap_or_else(f);
         iter.fold(last, |acc, x| {
-            Term::Math(self.insert_term(x), MathOp::Add, self.insert_term(acc))
+            Term::Math(self.lut.insert_term(x), Add, self.lut.insert_term(acc))
         })
     }
 }
