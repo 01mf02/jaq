@@ -55,9 +55,7 @@ impl<F> Lut<F> {
 impl<F> Filter<F> {
     /// Provide functions for a compiled filter.
     pub fn with_funs<F2>(self, funs: impl IntoIterator<Item = F2>) -> Filter<F2> {
-        let Self(id, Lut { terms, .. }) = self;
-        let funs = funs.into_iter().collect();
-        Filter(id, Lut { terms, funs })
+        Filter(self.0, self.1.with_funs(funs))
     }
 }
 
