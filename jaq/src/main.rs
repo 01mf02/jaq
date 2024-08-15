@@ -1,11 +1,11 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
+use jaq_interpret::{compile, Ctx, Native, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
 
-type Filter = compile::Filter<Native<Val>>;
+type Filter = jaq_interpret::Filter<Native<Val>>;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -263,11 +263,13 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
+    use jaq_interpret::Bind;
     use jaq_syn::load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::std()).with_std_read();
+    //let loader = Loader::new(jaq_std::std()).with_std_read();
+    let loader = Loader::new([]).with_std_read();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
@@ -279,12 +281,16 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     })
     .map_err(load_errors)?;
 
-    let core: Vec<_> = jaq_core::core().collect();
+    //let core: Vec<_> = jaq_core::core().collect();
+    let core: Vec<(String, usize, Native<Val>)> = Vec::new();
+    let core = core
+        .iter()
+        .map(|(name, arity, f)| (&**name, vec![Bind::Fun(()); *arity], f.clone()));
     let compiler = Compiler::default()
-        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_funs(core)
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok((vals, filter.with_funs(core.into_iter().map(|(.., f)| f))))
+    Ok((vals, filter))
 }
 
 fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {

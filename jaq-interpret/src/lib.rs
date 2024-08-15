@@ -64,9 +64,9 @@ mod val;
 #[allow(dead_code)]
 mod exn;
 
-pub use compile::{Compiler, Filter};
+pub use compile::Compiler;
 pub use error::Error;
-pub use filter::{Args, FilterT, Native, RunPtr, UpdatePtr};
+pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{Val, ValR, ValRs, ValT};
 
@@ -74,9 +74,9 @@ use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
 
-/// variable bindings
+/// Variable bindings.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Vars<V>(RcList<Bind<V, (filter::Id, Self)>>);
+struct Vars<'a, V>(RcList<Bind<V, (&'a filter::Id, Self)>>);
 type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
@@ -90,7 +90,7 @@ type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 /// In the first two cases, we bind the outputs of `f` to a variable `$x`.
 /// In the third case, we bind `f` to a filter `fx`
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Bind<V, F = V> {
+pub enum Bind<V = (), F = V> {
     /// binding to a variable
     Var(V),
     /// binding to a filter
@@ -117,16 +117,18 @@ impl<T> Bind<T, T> {
     }
 }
 
-impl<V> Vars<V> {
-    fn get(&self, i: usize) -> Option<&Bind<V, (filter::Id, Self)>> {
+
+
+impl<'a, V> Vars<'a, V> {
+    fn get(&self, i: usize) -> Option<&Bind<V, (&'a filter::Id, Self)>> {
         self.0.get(i)
     }
 }
 
 /// Filter execution context.
 #[derive(Clone)]
-pub struct Ctx<'a, V = Val> {
-    vars: Vars<V>,
+pub struct Ctx<'a, V> {
+    vars: Vars<'a, V>,
     inputs: &'a Inputs<'a, V>,
 }
 
@@ -144,7 +146,7 @@ impl<'a, V> Ctx<'a, V> {
     }
 
     /// Add a new filter binding.
-    pub(crate) fn cons_fun(mut self, (f, ctx): (filter::Id, Self)) -> Self {
+    pub(crate) fn cons_fun(mut self, (f, ctx): (&'a filter::Id, Self)) -> Self {
         self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
         self
     }
@@ -157,7 +159,7 @@ impl<'a, V> Ctx<'a, V> {
         self
     }
 
-    fn with_vars(&self, vars: Vars<V>) -> Self {
+    fn with_vars(&self, vars: Vars<'a, V>) -> Self {
         let inputs = self.inputs;
         Self { vars, inputs }
     }
@@ -165,6 +167,17 @@ impl<'a, V> Ctx<'a, V> {
     /// Return remaining input values.
     pub fn inputs(&self) -> &'a Inputs<'a, V> {
         self.inputs
+    }
+}
+
+
+/// Function from a value to a stream of value results.
+#[derive(Debug, Clone)]
+pub struct Filter<F>(compile::TermId, compile::Lut<F>);
+
+impl<V: ValT> Filter<Native<V>> {
+    pub fn run<'a>(&'a self, cv: Cv<'a, V>) -> impl Iterator<Item = val::ValR2<V>> + 'a {
+        self.0.run(&self.1, cv)
     }
 }
 
