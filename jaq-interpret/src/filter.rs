@@ -35,7 +35,7 @@ dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 ///
 /// This is used when we call filters with variable arguments.
 fn bind_vars<'a, V: ValT>(
-    mut args: impl Iterator<Item = Bind<Ref<'a, V>, Ref<'a, V>>> + Clone + 'a,
+    mut args: impl Iterator<Item = Bind<Ref<'a, V>>> + Clone + 'a,
     ctx: Ctx<'a, V>,
     cv: Cv<'a, V>,
 ) -> Results<'a, Cv<'a, V>, Error<V>> {
