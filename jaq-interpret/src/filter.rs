@@ -2,7 +2,7 @@ use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::compile::{FoldType, Lut, Tailrec, Term as Ast};
 use crate::results::{fold, then, Fold, Results};
 use crate::val::{ValR2, ValR2s, ValT};
-use crate::{rc_lazy_list, Ctx, Bind, Error, Inputs, RcList};
+use crate::{rc_lazy_list, Bind, Ctx, Error, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
