@@ -13,4 +13,8 @@ impl<I> RcIter<I> {
     pub fn new(iter: I) -> Self {
         Self(iter.into())
     }
+
+    pub fn replace(&self, iter: I) -> I {
+        self.0.replace(iter)
+    }
 }
