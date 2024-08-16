@@ -117,8 +117,6 @@ impl<T> Bind<T, T> {
     }
 }
 
-
-
 impl<'a, V> Vars<'a, V> {
     fn get(&self, i: usize) -> Option<&Bind<V, (&'a filter::Id, Self)>> {
         self.0.get(i)
@@ -170,6 +168,26 @@ impl<'a, V> Ctx<'a, V> {
     }
 }
 
+impl<'a, V: Clone> Ctx<'a, V> {
+    pub fn pop_var(&mut self) -> V {
+        let (head, tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Var(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        self.vars.0 = tail;
+        head
+    }
+
+    pub fn pop_fun(&mut self) -> (&'a filter::Id, Self) {
+        let ((id, vars), tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Fun(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        let inputs = self.inputs;
+        self.vars.0 = tail;
+        (id, Self { vars, inputs })
+    }
+}
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
