@@ -6,14 +6,11 @@ fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interp
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::std());
     let modules = loader.load(&arena, File { path: "", code }).unwrap();
-    let core: Vec<_> = jaq_core::core().collect();
     let filter = jaq_interpret::Compiler::default()
-        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_funs(jaq_core::core())
         .compile(modules)
         .unwrap();
-    filter
-        .with_funs(core.into_iter().map(|(.., f)| f))
-        .yields(x, ys)
+    jaq_interpret::yields(&filter, x, ys)
 }
 
 pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {

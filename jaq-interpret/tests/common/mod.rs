@@ -1,13 +1,16 @@
 use serde_json::Value;
 
 fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interpret::ValR>) {
+    use jaq_interpret::{Compiler, Native};
     use jaq_syn::load::{Arena, File, Loader};
 
     let arena = Arena::default();
     let loader = Loader::new([]);
     let modules = loader.load(&arena, File { path: "", code }).unwrap();
-    let filter = jaq_interpret::Compiler::default().compile(modules).unwrap();
-    filter.with_funs([]).yields(x, ys)
+    let filter = Compiler::<_, Native<_>>::default()
+        .compile(modules)
+        .unwrap();
+    jaq_interpret::yields(&filter, x, ys)
 }
 
 pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {

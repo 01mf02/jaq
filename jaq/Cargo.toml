@@ -18,7 +18,7 @@ default = ["mimalloc"]
 jaq-syn       = { version = "1.6.0", path = "../jaq-syn" }
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 jaq-core      = { version = "1.2.0", path = "../jaq-core" }
-#jaq-std       = { version = "1.5.0", path = "../jaq-std" }
+jaq-std       = { version = "1.5.0", path = "../jaq-std" }
 atty = "0.2"
 codesnake = { version = "0.2" }
 clap = { version = "4.0.0", features = ["derive"] }

@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{Ctx, Error, FilterT, Compiler, RcIter, Val};
+//! use jaq_interpret::{Compiler, Ctx, Error, FilterT, Native, RcIter, Val, run};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
@@ -28,13 +28,14 @@
 //! let modules = loader.load(&arena, File { path: "", code }).unwrap();
 //!
 //! // compile the filter
-//! let filter = jaq_interpret::Compiler::default().compile(modules).unwrap();
-//! let filter = filter.with_funs([]);
+//! let filter = jaq_interpret::Compiler::<_, Native<_>>::default()
+//!     .compile(modules)
+//!     .unwrap();
 //!
 //! let inputs = RcIter::new(core::iter::empty());
 //!
 //! // iterator over the output values
-//! let mut out = filter.run((Ctx::new([], &inputs), Val::from(input)));
+//! let mut out = run(&filter, (Ctx::new([], &inputs), Val::from(input)));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
