@@ -22,7 +22,7 @@ type BoxUpdate<'a, V> = Box<dyn Update<'a, V> + 'a>;
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
-fn bind_vars<'a, V: ValT, F: FilterT<'a, V, F>>(
+fn bind_vars<'a, V: ValT, F: FilterT<V, F>>(
     args: &'a [Bind<Id>],
     lut: &'a Lut<F>,
     ctx: Ctx<'a, V>,
@@ -39,8 +39,8 @@ fn bind_vars<'a, V: ValT, F: FilterT<'a, V, F>>(
     }
 }
 
-fn run_cvs<'a, V: ValT, F: FilterT<'a, V, F>>(
-    f: &'a impl FilterT<'a, V, F>,
+fn run_cvs<'a, V: ValT, F: FilterT<V, F>>(
+    f: &'a impl FilterT<V, F>,
     lut: &'a Lut<F>,
     cvs: Results<'a, Cv<'a, V>, Error<V>>,
 ) -> ValR2s<'a, V> {
@@ -71,20 +71,23 @@ pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
 #[derive(Clone)]
-pub struct Native<V> {
-    run: RunPtr<V>,
-    update: UpdatePtr<V>,
+pub struct Native<V, F> {
+    run: RunPtr<V, F>,
+    update: UpdatePtr<V, F>,
 }
 
 /// Run function pointer.
-pub type RunPtr<V> = for<'a> fn(&'a Lut<Native<V>>, Cv<'a, V>) -> ValR2s<'a, V>;
+///
+/// Implementation-wise, this would be a perfect spot for `for<'a, F: FilterT<V>>`;
+/// unfortunately, this is [not stable yet](https://github.com/rust-lang/rust/issues/108185).
+/// That would also allow to eliminate `F` from `FilterT`.
+pub type RunPtr<V, F> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValR2s<'a, V>;
 /// Update function pointer.
-pub type UpdatePtr<V> =
-    for<'a> fn(&'a Lut<Native<V>>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR2s<'a, V>;
+pub type UpdatePtr<V, F> = for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR2s<'a, V>;
 
-impl<V> Native<V> {
+impl<V, F> Native<V, F> {
     /// Create a native filter from a run function, without support for updates.
-    pub const fn new(run: RunPtr<V>) -> Self {
+    pub const fn new(run: RunPtr<V, F>) -> Self {
         Self {
             run,
             update: |_, _, _| box_once(Err(Error::PathExp)),
@@ -92,23 +95,23 @@ impl<V> Native<V> {
     }
 
     /// Specify an update function (used for `filter |= ...`).
-    pub const fn with_update(self, update: UpdatePtr<V>) -> Self {
+    pub const fn with_update(self, update: UpdatePtr<V, F>) -> Self {
         Self { update, ..self }
     }
 }
 
-impl<'a, V: ValT> FilterT<'a, V> for Native<V> {
-    fn run(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
+impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Native<V, F> {
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
         (self.run)(lut, cv)
     }
 
-    fn update(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V> {
+    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V> {
         (self.update)(lut, cv, f)
     }
 }
 
-impl<'a, V: ValT, F: FilterT<'a, V, F>> FilterT<'a, V, F> for Id {
-    fn run(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
+impl<V: ValT, F: FilterT<V, F>> FilterT<V, F> for Id {
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
         use alloc::string::ToString;
         use core::iter::{once, once_with};
         match &lut.terms[self.0] {
@@ -259,7 +262,7 @@ impl<'a, V: ValT, F: FilterT<'a, V, F>> FilterT<'a, V, F> for Id {
         }
     }
 
-    fn update(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V> {
+    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V> {
         let err = box_once(Err(Error::PathExp));
         match &lut.terms[self.0] {
             Ast::ToString => err,
@@ -329,20 +332,19 @@ impl<'a, V: ValT, F: FilterT<'a, V, F>> FilterT<'a, V, F> for Id {
     }
 }
 
-
 /// Function from a value to a stream of value results.
-pub trait FilterT<'a, V: ValT, F: FilterT<'a, V, F> = Self> {
+pub trait FilterT<V: Clone, F: FilterT<V, F> = Self> {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
-    fn run(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V>;
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V>;
 
     /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
-    fn update(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V>;
+    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V>;
 
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
     /// In that case, we can consume `cv` instead of cloning it.
-    fn pipe<T: 'a>(
+    fn pipe<'a, T: 'a>(
         &'a self,
         lut: &'a Lut<F>,
         cv: Cv<'a, V>,
@@ -354,7 +356,7 @@ pub trait FilterT<'a, V: ValT, F: FilterT<'a, V, F> = Self> {
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.
-    fn cartesian(
+    fn cartesian<'a>(
         &'a self,
         r: &'a Self,
         lut: &'a Lut<F>,
