@@ -116,7 +116,7 @@ impl<V: ValT> FilterT<V> for Native<V> {
     }
 }
 
-impl<V: ValT, F: FilterT<V, F>> FilterT<V, F> for Id {
+impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
     fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
         use alloc::string::ToString;
         use core::iter::{once, once_with};
@@ -232,9 +232,8 @@ impl<V: ValT, F: FilterT<V, F>> FilterT<V, F> for Id {
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 use core::ops::ControlFlow;
-                let ctx = cv.0.clone().skip_vars(*skip);
                 //let inputs = cv.0.inputs;
-                let cvs = bind_vars(args, lut, ctx, cv);
+                let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv);
                 run_cvs(id, lut, cvs)
                 /*
                 match tailrec {
@@ -255,9 +254,7 @@ impl<V: ValT, F: FilterT<V, F>> FilterT<V, F> for Id {
                 */
             }
             Ast::Native(id, args) => {
-                let inputs = cv.0.inputs;
-                let ctx = cv.0.clone();
-                let cvs = bind_vars(args, lut, ctx, cv);
+                let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
                 run_cvs(&lut.funs[*id], lut, cvs)
             }
             Ast::Label(id) => Box::new(id.run(lut, cv).map_while(|y| match y {
@@ -321,14 +318,12 @@ impl<V: ValT, F: FilterT<V, F>> FilterT<V, F> for Id {
             },
             Ast::CallDef(id, args, skip, _tailrec) => {
                 let init = cv.1.clone();
-                let ctx = cv.0.clone().skip_vars(*skip);
-                let cvs = bind_vars(args, lut, ctx, cv);
+                let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv);
                 reduce(cvs, init, move |cv, v| id.update(lut, (cv.0, v), f.clone()))
             }
             Ast::Native(id, args) => {
                 let init = cv.1.clone();
-                let ctx = cv.0.clone();
-                let cvs = bind_vars(args, lut, ctx, cv);
+                let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
                 reduce(cvs, init, move |cv, v| {
                     lut.funs[*id].update(lut, (cv.0, v), f.clone())
                 })
