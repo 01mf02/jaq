@@ -334,13 +334,15 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
 }
 
 /// Function from a value to a stream of value results.
-pub trait FilterT<V: Clone, F: FilterT<V, F> = Self> {
+pub trait FilterT<V, F: FilterT<V, F> = Self> {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
     fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V>;
 
     /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
     fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V>;
+}
 
+trait Comb<V: Clone, F: FilterT<V, F>>: FilterT<V, F> {
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
     /// This has a special optimisation for the case where only a single `v` is returned.
@@ -368,3 +370,4 @@ pub trait FilterT<V: Clone, F: FilterT<V, F> = Self> {
         })
     }
 }
+impl<V: Clone, F: FilterT<V, F>, T: FilterT<V, F>> Comb<V, F> for T {}
