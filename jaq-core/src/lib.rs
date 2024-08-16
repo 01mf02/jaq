@@ -346,21 +346,23 @@ fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR2<V> + 'a) ->
     ow!(f(&cv.1, cv.0.pop_var()))
 }
 
+fn v(n: usize) -> Box<[Bind]> {
+    core::iter::repeat(Bind::Var(())).take(n).collect()
+}
+
 fn json_minimal() -> Box<[Filter<RunPtr<Val>>]> {
-    let n = || [].into();
-    let v = || [Bind::Var(())].into();
     Box::new([
-        ("length", n(), |_, cv| ow!(length(&cv.1))),
-        ("keys_unsorted", n(), |_, cv| {
+        ("length", v(0), |_, cv| ow!(length(&cv.1))),
+        ("keys_unsorted", v(0), |_, cv| {
             ow!(cv.1.keys_unsorted().map(Val::arr))
         }),
-        ("contains", v(), |_, cv| {
+        ("contains", v(1), |_, cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
         }),
-        ("has", v(), |_, cv| {
+        ("has", v(1), |_, cv| {
             unary(cv, |v, k| v.has(&k).map(Val::from))
         }),
-        ("indices", v(), |_, cv| {
+        ("indices", v(1), |_, cv| {
             let to_int = |i: usize| Val::Int(i.try_into().unwrap());
             unary(cv, move |x, v| {
                 indices(x, &v).map(|idxs| idxs.map(to_int).collect())
@@ -371,38 +373,35 @@ fn json_minimal() -> Box<[Filter<RunPtr<Val>>]> {
 
 #[allow(clippy::unit_arg)]
 fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
-    let n = || [].into();
-    let v = || [Bind::Var(())].into();
     let f = || [Bind::Fun(())].into();
     let vf = [Bind::Var(()), Bind::Fun(())].into();
-    let vvv = [Bind::Var(()), Bind::Var(()), Bind::Var(())].into();
     Box::new([
-        ("inputs", n(), |_, cv| {
+        ("inputs", v(0), |_, cv| {
             Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
         }),
-        ("tojson", n(), |_, cv| ow!(Ok(cv.1.to_string().into()))),
-        ("floor", n(), |_, cv| ow!(cv.1.round(f64::floor))),
-        ("round", n(), |_, cv| ow!(cv.1.round(f64::round))),
-        ("ceil", n(), |_, cv| ow!(cv.1.round(f64::ceil))),
-        ("utf8bytelength", n(), |_, cv| {
+        ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
+        ("floor", v(0), |_, cv| ow!(cv.1.round(f64::floor))),
+        ("round", v(0), |_, cv| ow!(cv.1.round(f64::round))),
+        ("ceil", v(0), |_, cv| ow!(cv.1.round(f64::ceil))),
+        ("utf8bytelength", v(0), |_, cv| {
             ow!(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
         }),
-        ("explode", n(), |_, cv| {
+        ("explode", v(0), |_, cv| {
             ow!(cv.1.try_as_str().and_then(|s| explode(s).collect()))
         }),
-        ("implode", n(), |_, cv| {
+        ("implode", v(0), |_, cv| {
             ow!(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
         }),
-        ("ascii_downcase", n(), |_, cv| {
+        ("ascii_downcase", v(0), |_, cv| {
             ow!(cv.1.mutate_str(str::make_ascii_lowercase))
         }),
-        ("ascii_upcase", n(), |_, cv| {
+        ("ascii_upcase", v(0), |_, cv| {
             ow!(cv.1.mutate_str(str::make_ascii_uppercase))
         }),
-        ("reverse", n(), |_, cv| {
+        ("reverse", v(0), |_, cv| {
             ow!(cv.1.mutate_arr(|a| Ok(a.reverse())))
         }),
-        ("sort", n(), |_, cv| ow!(cv.1.mutate_arr(|a| Ok(a.sort())))),
+        ("sort", v(0), |_, cv| ow!(cv.1.mutate_arr(|a| Ok(a.sort())))),
         ("sort_by", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |v| f.run(lut, (fc.clone(), v));
@@ -413,16 +412,16 @@ fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             let f = move |v| f.run(lut, (fc.clone(), v));
             ow!(cv.1.into_vec().and_then(|a| group_by(a, f)))
         }),
-        /*
-        ("min_by_or_empty", 1, |args, cv| {
-            let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my);
+        ("min_by_or_empty", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y < my);
             once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
         }),
-        ("max_by_or_empty", 1, |args, cv| {
-            let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my);
+        ("max_by_or_empty", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y >= my);
             once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
         }),
-        */
         ("first", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             Box::new(f.run(lut, (fc, cv.1)).take(1))
@@ -435,40 +434,40 @@ fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                 Box::new(f.run(lut, (fc, cv.1)).take(pos(n)))
             })
         }),
-        ("range", vvv, |lut, mut cv| {
+        ("range", v(3), |_, mut cv| {
             let by = cv.0.pop_var();
             let to = cv.0.pop_var();
             let from = cv.0.pop_var();
             Box::new(range(Ok(from), to, by))
         }),
-        ("startswith", v(), |args, cv| {
+        ("startswith", v(1), |_, cv| {
             unary(cv, |v, s| {
                 Ok(v.try_as_str()?.starts_with(s.try_as_str()?).into())
             })
         }),
-        ("endswith", v(), |args, cv| {
+        ("endswith", v(1), |_, cv| {
             unary(cv, |v, s| {
                 Ok(v.try_as_str()?.ends_with(s.try_as_str()?).into())
             })
         }),
-        ("ltrimstr", v(), |args, cv| {
+        ("ltrimstr", v(1), |_, cv| {
             unary(cv, |v, pre| {
                 Ok(v.try_as_str()?
                     .strip_prefix(pre.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("rtrimstr", v(), |args, cv| {
+        ("rtrimstr", v(1), |_, cv| {
             unary(cv, |v, suf| {
                 Ok(v.try_as_str()?
                     .strip_suffix(suf.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("escape_csv", n(), |_, cv| {
+        ("escape_csv", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
         }),
-        ("escape_sh", n(), |_, cv| {
+        ("escape_sh", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('\'', r"'\''").into()))
         }),
     ])
@@ -487,10 +486,10 @@ fn now<V: From<String>>() -> Result<f64, Error<V>> {
 fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     use std::env::vars;
     Box::new([
-        ("env", [].into(), |_, _| {
+        ("env", v(0), |_, _| {
             ow!(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
         }),
-        ("now", [].into(), |_, _| ow!(now().map(V::from))),
+        ("now", v(0), |_, _| ow!(now().map(V::from))),
     ])
 }
 
@@ -506,7 +505,7 @@ fn from_json(s: &str) -> ValR {
 
 #[cfg(feature = "parse_json")]
 fn parse_json() -> Filter<RunPtr<Val>> {
-    ("fromjson", [].into(), |_, cv| {
+    ("fromjson", v(0), |_, cv| {
         ow!(cv.1.as_str().and_then(|s| from_json(s)))
     })
 }
@@ -519,27 +518,26 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 
 #[cfg(feature = "format")]
 fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
-    let n = || [].into();
     Box::new([
-        ("escape_html", n(), |_, cv| {
+        ("escape_html", v(0), |_, cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
             ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
         }),
-        ("escape_tsv", n(), |_, cv| {
+        ("escape_tsv", v(0), |_, cv| {
             let pats = ["\n", "\r", "\t", "\\"];
             let reps = ["\\n", "\\r", "\\t", "\\\\"];
             ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
         }),
-        ("encode_uri", n(), |_, cv| {
+        ("encode_uri", v(0), |_, cv| {
             use urlencoding::encode;
             ow!(Ok(encode(cv.1.try_as_str()?).into_owned().into()))
         }),
-        ("encode_base64", n(), |_, cv| {
+        ("encode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             ow!(Ok(STANDARD.encode(cv.1.try_as_str()?).into()))
         }),
-        ("decode_base64", n(), |_, cv| {
+        ("decode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             use core::str::from_utf8;
             ow!({
@@ -552,9 +550,8 @@ fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 
 #[cfg(feature = "math")]
 fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
-    //let rename = |name, (_name, arity, f): Filter<RunPtr<V>>| (name, arity, f);
+    let rename = |name, (_name, arity, f): Filter<RunPtr<V>>| (name, arity, f);
     Box::new([
-             /*
         math::f_f!(acos),
         math::f_f!(acosh),
         math::f_f!(asin),
@@ -613,7 +610,6 @@ fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         rename("scalbln", math::fi_f!(scalbn)),
         math::if_f!(yn),
         math::fff_f!(fma),
-*/
     ])
 }
 

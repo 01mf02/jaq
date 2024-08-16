@@ -2,33 +2,33 @@ macro_rules! math {
     // Build a 0-ary filter from a 1-ary math function.
     ($f: ident, $domain: expr, $codomain: expr) => {
         #[allow(clippy::redundant_closure_call)]
-        (stringify!($f), 0, |_, cv| {
+        (stringify!($f), v(0), |_, cv| {
             once_with(move || Ok($codomain(libm::$f($domain(&cv.1)?))))
         })
     };
     // Build a 2-ary filter that ignores '.' from a 2-ary math function.
     ($f: ident, $domain1: expr, $domain2: expr, $codomain: expr) => {
-        (stringify!($f), 2, |args, cv| {
-            let xs = args.get(0);
-            let ys = args.get(1);
-            Box::new(xs.cartesian(ys, cv).map(|(x, y)| {
-                let x = $domain1(&x?)?;
-                let y = $domain2(&y?)?;
-                Ok($codomain(libm::$f(x, y)))
-            }))
+        (stringify!($f), v(2), |_, mut cv| {
+            once_with(move || {
+                let y = cv.0.pop_var();
+                let x = cv.0.pop_var();
+                Ok($codomain(libm::$f($domain1(&x)?, $domain2(&y)?)))
+            })
         })
     };
     // Build a 3-ary filter that ignores '.' from a 3-ary math function.
     ($f: ident, $domain1: expr, $domain2: expr, $domain3: expr, $codomain: expr) => {
-        (stringify!($f), 3, |args, cv| {
-            let (xs, ys, zs) = (args.get(0), args.get(1), args.get(2));
-            Box::new(xs.cartesian3(ys, zs, cv).map(|(x, y, z)| {
+        (stringify!($f), v(3), |_, mut cv| {
+            once_with(move || {
+                let z = cv.0.pop_var();
+                let y = cv.0.pop_var();
+                let x = cv.0.pop_var();
                 Ok($codomain(libm::$f(
-                    $domain1(&x?)?,
-                    $domain2(&y?)?,
-                    $domain3(&z?)?,
+                    $domain1(&x)?,
+                    $domain2(&y)?,
+                    $domain3(&z)?,
                 )))
-            }))
+            })
         })
     };
 }
