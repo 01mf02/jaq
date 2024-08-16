@@ -263,7 +263,6 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_interpret::Bind;
     use jaq_syn::load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
@@ -281,13 +280,8 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     })
     .map_err(load_errors)?;
 
-    //let core: Vec<_> = jaq_core::core().collect();
-    let core: Vec<(String, usize, Native<Val>)> = Vec::new();
-    let core = core
-        .iter()
-        .map(|(name, arity, f)| (&**name, vec![Bind::Fun(()); *arity], f.clone()));
     let compiler = Compiler::default()
-        .with_funs(core)
+        .with_funs(jaq_core::core())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))
@@ -485,7 +479,7 @@ fn run(
     for item in if cli.null_input { &null } else { &iter } {
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
-        for output in filter.run((ctx.clone(), input)) {
+        for output in jaq_interpret::run(filter, (ctx.clone(), input)) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
@@ -734,7 +728,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     };
     let input = json(test.input)?;
     let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Vec<_>, _> = filter.run((ctx, input)).collect();
+    let obtain: Result<Vec<_>, _> = jaq_interpret::run(&filter, (ctx, input)).collect();
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
 }
 

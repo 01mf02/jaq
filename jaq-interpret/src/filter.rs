@@ -71,9 +71,9 @@ pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
 #[derive(Clone)]
-pub struct Native<V, F> {
-    run: RunPtr<V, F>,
-    update: UpdatePtr<V, F>,
+pub struct Native<V> {
+    run: RunPtr<V>,
+    update: UpdatePtr<V>,
 }
 
 /// Run function pointer.
@@ -81,13 +81,14 @@ pub struct Native<V, F> {
 /// Implementation-wise, this would be a perfect spot for `for<'a, F: FilterT<V>>`;
 /// unfortunately, this is [not stable yet](https://github.com/rust-lang/rust/issues/108185).
 /// That would also allow to eliminate `F` from `FilterT`.
-pub type RunPtr<V, F> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValR2s<'a, V>;
+pub type RunPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValR2s<'a, V>;
 /// Update function pointer.
-pub type UpdatePtr<V, F> = for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR2s<'a, V>;
+pub type UpdatePtr<V, F = Native<V>> =
+    for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR2s<'a, V>;
 
-impl<V, F> Native<V, F> {
+impl<V> Native<V> {
     /// Create a native filter from a run function, without support for updates.
-    pub const fn new(run: RunPtr<V, F>) -> Self {
+    pub const fn new(run: RunPtr<V, Self>) -> Self {
         Self {
             run,
             update: |_, _, _| box_once(Err(Error::PathExp)),
@@ -95,17 +96,22 @@ impl<V, F> Native<V, F> {
     }
 
     /// Specify an update function (used for `filter |= ...`).
-    pub const fn with_update(self, update: UpdatePtr<V, F>) -> Self {
+    pub const fn with_update(self, update: UpdatePtr<V, Self>) -> Self {
         Self { update, ..self }
     }
 }
 
-impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Native<V, F> {
-    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
+impl<V: ValT> FilterT<V> for Native<V> {
+    fn run<'a>(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
         (self.run)(lut, cv)
     }
 
-    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V> {
+    fn update<'a>(
+        &'a self,
+        lut: &'a Lut<Self>,
+        cv: Cv<'a, V>,
+        f: BoxUpdate<'a, V>,
+    ) -> ValR2s<'a, V> {
         (self.update)(lut, cv, f)
     }
 }

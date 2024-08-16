@@ -228,7 +228,7 @@ struct Sig<S, A = Bind> {
     name: S,
     // TODO: we could analyse for each argument whether it is TR, and
     // use this when converting args at callsite
-    args: Vec<A>,
+    args: Box<[A]>,
 }
 
 #[derive(Clone, Debug)]
@@ -242,7 +242,7 @@ impl<S, A> Sig<S, A> {
     fn map_args<A2>(self, f: impl FnMut(A) -> A2) -> Sig<S, A2> {
         Sig {
             name: self.name,
-            args: self.args.into_iter().map(f).collect(),
+            args: self.args.into_vec().into_iter().map(f).collect(),
         }
     }
 }
@@ -281,7 +281,7 @@ impl<'s, F> Compiler<&'s str, F> {
     ///
     /// For execution, the corresponding functions have to be provided to the filter
     /// via [`Filter::with_funs`].
-    pub fn with_funs(mut self, funs: impl IntoIterator<Item = (&'s str, Vec<Bind>, F)>) -> Self {
+    pub fn with_funs(mut self, funs: impl IntoIterator<Item = (&'s str, Box<[Bind]>, F)>) -> Self {
         self.lut.funs = funs
             .into_iter()
             .map(|(name, args, f)| (Sig { name, args }, f))
@@ -357,7 +357,7 @@ impl<'s, F> Compiler<&'s str, F> {
 
         let sig = Sig {
             name: d.name,
-            args: d.args,
+            args: d.args.into(),
         };
         let def = Def {
             id: tid,
