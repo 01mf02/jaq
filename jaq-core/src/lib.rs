@@ -252,7 +252,7 @@ where
 }
 
 /// Convert a string into an array of its Unicode codepoints.
-fn explode<V: jaq_interpret::ValT>(s: &str) -> impl Iterator<Item = ValR2<V>> + '_ {
+fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR2<V>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
     let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
     s.chars().map(conv)
@@ -342,10 +342,7 @@ macro_rules! ow {
     };
 }
 
-fn unary<'a, V: jaq_interpret::ValT, F>(mut cv: Cv<'a, V>, f: F) -> ValR2s<'a, V>
-where
-    F: Fn(&V, V) -> ValR2<V> + 'a,
-{
+fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR2<V> + 'a) -> ValR2s<'a, V> {
     ow!(f(&cv.1, cv.0.pop_var()))
 }
 
