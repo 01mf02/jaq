@@ -10,7 +10,7 @@ impl<T, I: Iterator<Item = T> + ?Sized> Iterator for &RcIter<I> {
 
 impl<I> RcIter<I> {
     /// Construct a new mutable iterator.
-    pub fn new(iter: I) -> Self {
-        Self(iter.into())
+    pub const fn new(iter: I) -> Self {
+        Self(core::cell::RefCell::new(iter))
     }
 }
