@@ -2,7 +2,7 @@ use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::compile::{FoldType, Lut, Tailrec, Term as Ast};
 use crate::results::{fold, then, Fold, Results};
 use crate::val::{ValR3, ValR3s, ValT};
-use crate::{rc_lazy_list, Bind, Ctx, Error, Exn, Inputs, RcList};
+use crate::{rc_lazy_list, Bind, Ctx, Error, Exn};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
@@ -355,7 +355,12 @@ impl<F: FilterT<F>> FilterT<F> for Id {
 }
 
 /// Function from a value to a stream of value results.
+///
+/// `F` is the type of (natively implemented) filter functions.
 pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
+    /// Type of values that the filter takes and yields.
+    ///
+    /// This is an associated type because it is strictly determined by `F`.
     type V: ValT;
 
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.

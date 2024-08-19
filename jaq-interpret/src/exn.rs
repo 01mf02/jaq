@@ -13,6 +13,7 @@ pub enum Exn<'a, V> {
 }
 
 impl<V> Exn<'_, V> {
+    /// If the exception is an error, yield it, else yield the exception.
     pub fn get_err(self) -> Result<Error<V>, Self> {
         match self {
             Self::Err(e) => Ok(e),
