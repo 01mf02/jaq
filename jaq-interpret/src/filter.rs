@@ -140,15 +140,12 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Self::cartesian(k, v, lut, cv).map(|(k, v)| Ok(Self::V::from_map([(k?, v?)])?)),
             ),
             // TODO: write test for `try (break $x)`
-            Ast::TryCatch(f, c) => Box::new(f.run(lut, (cv.0.clone(), cv.1)).flat_map(move |y| {
-                y.map_or_else(
-                    |e| match e.get_err() {
-                        Ok(err) => c.run(lut, (cv.0.clone(), err.as_val())),
-                        Err(exn) => box_once(Err(exn)),
-                    },
-                    |v| box_once(Ok(v)),
-                )
-            })),
+            Ast::TryCatch(f, c) => {
+                Box::new(f.run(lut, (cv.0.clone(), cv.1)).flat_map(move |y| match y {
+                    Err(Exn(exn::Inner::Err(e))) => c.run(lut, (cv.0.clone(), e.as_val())),
+                    y => box_once(y),
+                }))
+            }
             Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| Ok((-v?)?))),
 
             // `l | r`

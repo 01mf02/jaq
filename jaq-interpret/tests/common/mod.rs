@@ -1,5 +1,5 @@
+use jaq_interpret::json::{Error, Val, ValR};
 use serde_json::Value;
-use jaq_interpret::json::{Val, ValR, Error};
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     use jaq_interpret::{Compiler, Native};

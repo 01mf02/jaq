@@ -71,9 +71,7 @@ impl ValT for Val {
 
     fn values(self) -> impl Iterator<Item = ValR> {
         match self {
-            Self::Arr(a) => {
-                Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as Box<dyn Iterator<Item = _>>
-            }
+            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as BoxIter<_>,
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => box_once(Err(Error::Type(self, Type::Iter))),
         }
@@ -207,11 +205,9 @@ impl ValT for Val {
             let upto = abs_bound(upto, len, len);
             let (skip, take) = skip_take(from, upto);
             let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
-            let y = f(arr)
-                .map(|y| y?.into_arr().map_err(Exn::from))
-                .next()
-                .transpose()?;
-            a.splice(skip..skip + take, (*y.unwrap_or_default()).clone());
+            let y = f(arr).map(|y| y?.into_arr().map_err(Exn::from)).next();
+            let y = y.transpose()?.unwrap_or_default();
+            a.splice(skip..skip + take, (*y).clone());
             Ok(self)
         } else {
             opt.fail(self, |v| Exn::from(Error::Type(v, Type::Arr)))
