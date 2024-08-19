@@ -1,5 +1,5 @@
 //! Runtime errors.
-use crate::val::{Val, ValT};
+use crate::val::ValT;
 use alloc::string::{String, ToString};
 use core::fmt;
 
@@ -8,7 +8,7 @@ use core::fmt;
 /// Each variant shows an example of how it can be produced.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Error<V = Val> {
+pub enum Error<V> {
     /// `0 | error`
     Val(V),
 
@@ -23,14 +23,6 @@ pub enum Error<V = Val> {
     IndexOutOfBounds(isize),
     /// `0 |= .+1`
     PathExp,
-
-    /// Tail-recursive call.
-    ///
-    /// This is used internally to execute tail-recursive filters.
-    /// If this can be observed by users, then this is a bug.
-    TailCall(crate::filter::TailCall<V>),
-    /// Value returned by break expression.
-    Break(usize),
 }
 
 /// Types and sets of types.
@@ -85,13 +77,12 @@ impl<V: ValT> fmt::Display for Error<V> {
             Self::Index(v, i) => write!(f, "cannot index {v} with {i}"),
             Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),
             Self::PathExp => write!(f, "invalid path expression"),
-            Self::TailCall(_) | Self::Break(_) => panic!(),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl<V: ValT + core::fmt::Debug> std::error::Error for Error<V> {}
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

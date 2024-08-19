@@ -1,7 +1,7 @@
 #[derive(Debug, PartialEq, Eq)]
 pub struct List<T>(alloc::rc::Rc<Node<T>>);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Node<T> {
     Nil,
     Cons(T, List<T>),
@@ -16,6 +16,15 @@ impl<T> Clone for List<T> {
 impl<T> Default for List<T> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<T: Clone> List<T> {
+    pub fn pop(self) -> Option<(T, Self)> {
+        match alloc::rc::Rc::try_unwrap(self.0).unwrap_or_else(|rc| (*rc).clone()) {
+            Node::Nil => None,
+            Node::Cons(head, tail) => Some((head, tail)),
+        }
     }
 }
 

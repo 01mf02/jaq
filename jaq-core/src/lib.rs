@@ -18,25 +18,22 @@ use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{run_if_ok, then};
-use jaq_interpret::{Args, FilterT, Native, RunPtr, UpdatePtr, Val, ValR};
+use jaq_interpret::{Bind, FilterT, Native, RunPtr, UpdatePtr, Val};
+use jaq_interpret::{Exn, ValR, ValX, ValXs};
 
-type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
-type ValR2<V> = Result<V, Error<V>>;
-type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
-
-type Filter<V = Val> = (String, usize, Native<V>);
+type Filter<F> = (&'static str, Box<[Bind]>, F);
 
 /// Return the minimal set of named filters available in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn minimal() -> impl Iterator<Item = Filter> {
-    run_many(JSON_MINIMAL.into()).chain(generic_base())
+pub fn minimal() -> impl Iterator<Item = Filter<Native<Val>>> {
+    run_many(json_minimal()).chain(generic_base())
 }
 
 /// Minimal set of filters that are generic over the value type.
-pub fn generic_base<V: ValT>() -> impl Iterator<Item = Filter<V>> {
+pub fn generic_base<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     run_many(core_run()).chain([upd(error())])
 }
 
@@ -49,7 +46,7 @@ pub fn generic_base<V: ValT>() -> impl Iterator<Item = Filter<V>> {
     feature = "regex",
     feature = "time",
 ))]
-pub fn generic_extra<V: ValT>() -> impl Iterator<Item = Filter<V>> {
+pub fn generic_extra<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     let filters = [std(), format(), math(), regex(), time()];
     filters.into_iter().flat_map(run_many).chain([upd(debug())])
 }
@@ -95,22 +92,29 @@ trait ValTx: ValT + Sized {
     }
 
     /// Apply a function to an array.
-    fn mutate_arr<F>(self, f: F) -> ValR2<Self>
+    fn mutate_arr(self, f: impl FnOnce(&mut Vec<Self>)) -> ValR<Self> {
+        let mut a = self.into_vec()?;
+        f(&mut a);
+        Ok(Self::from_iter(a))
+    }
+
+    /// Apply a function to an array.
+    fn try_mutate_arr<'a, F>(self, f: F) -> ValX<'a, Self>
     where
-        F: FnOnce(&mut Vec<Self>) -> Result<(), Error<Self>>,
+        F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<'a, Self>>,
     {
         let mut a = self.into_vec()?;
         f(&mut a)?;
         Ok(Self::from_iter(a))
     }
 
-    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR2<Self> {
+    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR<Self> {
         let mut s = self.try_as_str()?.to_owned();
         f(&mut s);
         Ok(Self::from(s))
     }
 
-    fn round(self, f: impl FnOnce(f64) -> f64) -> ValR2<Self> {
+    fn round(self, f: impl FnOnce(f64) -> f64) -> ValR<Self> {
         if self.as_isize().is_some() {
             Ok(self)
         } else {
@@ -138,7 +142,7 @@ impl ValT for Val {
         }
     }
 
-    fn as_f64(&self) -> Result<f64, Error> {
+    fn as_f64(&self) -> Result<f64, Error<Self>> {
         Self::as_float(self)
     }
 }
@@ -157,27 +161,27 @@ impl ValT for Val {
     feature = "regex",
     feature = "time",
 ))]
-pub fn core() -> impl Iterator<Item = Filter> {
-    minimal().chain(generic_extra()).chain([run(PARSE_JSON)])
+pub fn core() -> impl Iterator<Item = Filter<Native<Val>>> {
+    minimal().chain(generic_extra()).chain([run(parse_json())])
 }
 
-fn run_many<V>(fs: Box<[(&'static str, usize, RunPtr<V>)]>) -> impl Iterator<Item = Filter<V>> {
+fn run_many<V>(fs: Box<[Filter<RunPtr<V>>]>) -> impl Iterator<Item = Filter<Native<V>>> {
     fs.into_vec().into_iter().map(run)
 }
 
-fn run<V>((name, arity, run): (&str, usize, RunPtr<V>)) -> Filter<V> {
-    (name.to_string(), arity, Native::new(run))
+fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
+    (name, arity, Native::new(run))
 }
 
-fn upd<V>((name, arity, run, update): (&str, usize, RunPtr<V>, UpdatePtr<V>)) -> Filter<V> {
-    (name.to_string(), arity, Native::with_update(run, update))
+fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
+    (name, arity, Native::new(run).with_update(update))
 }
 
 /// Return 0 for null, the absolute value for numbers, and
 /// the length for strings, arrays, and objects.
 ///
 /// Fail on booleans.
-fn length(v: &Val) -> ValR {
+fn length(v: &Val) -> Result<Val, Error<Val>> {
     match v {
         Val::Null => Ok(Val::Int(0)),
         Val::Bool(_) => Err(Error::str(format_args!("{v} has no length"))),
@@ -191,10 +195,7 @@ fn length(v: &Val) -> ValR {
 }
 
 /// Sort array by the given function.
-fn sort_by<'a, V: ValT, F>(xs: &mut [V], f: F) -> Result<(), Error<V>>
-where
-    F: Fn(V) -> ValR2s<'a, V>,
-{
+fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<'a, V>> {
     // Some(e) iff an error has previously occurred
     let mut err = None;
     xs.sort_by_cached_key(|x| run_if_ok(x.clone(), &mut err, &f));
@@ -202,11 +203,11 @@ where
 }
 
 /// Group an array by the given function.
-fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR2s<'a, V>) -> ValR2<V> {
+fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<'a, V> {
     let mut yx: Vec<(Vec<V>, V)> = xs
         .into_iter()
         .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<_, Exn<_>>>()?;
 
     yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
 
@@ -230,9 +231,9 @@ fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR2s<'a, V>) -> ValR2<V>
 }
 
 /// Get the minimum or maximum element from an array according to the given function.
-fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Error<V>>
+fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<'a, V>>
 where
-    F: Fn(V) -> ValR2s<'a, V>,
+    F: Fn(V) -> ValXs<'a, V>,
     R: Fn(&[V], &[V]) -> bool,
 {
     let iter = xs.into_iter();
@@ -252,7 +253,7 @@ where
 }
 
 /// Convert a string into an array of its Unicode codepoints.
-fn explode<V: jaq_interpret::ValT>(s: &str) -> impl Iterator<Item = ValR2<V>> + '_ {
+fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR<V>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
     let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
     s.chars().map(conv)
@@ -280,7 +281,7 @@ fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
 ///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
-fn range<V: ValT>(mut from: ValR2<V>, to: V, by: V) -> impl Iterator<Item = ValR2<V>> {
+fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
     let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
@@ -289,7 +290,7 @@ fn range<V: ValT>(mut from: ValR2<V>, to: V, by: V) -> impl Iterator<Item = ValR
             Less => x > to,
             Equal => x != to,
         }
-        .then(|| core::mem::replace(&mut from, x + by.clone())),
+        .then(|| core::mem::replace(&mut from, (x + by.clone()).map_err(Exn::from))),
         e @ Err(_) => {
             // return None after the error
             from = Ok(to.clone());
@@ -308,7 +309,7 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 }
 
 /// Return the indices of `y` in `x`.
-fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
+fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error<Val>> {
     match (x, y) {
         (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
         (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
@@ -336,126 +337,141 @@ fn once_or_empty<'a, T>(f: impl FnOnce() -> Option<T> + 'a) -> Box<dyn Iterator<
     Box::new(core::iter::once_with(f).flatten())
 }
 
-fn unary<'a, V: jaq_interpret::ValT, F>(args: Args<'a, V>, cv: Cv<'a, V>, f: F) -> ValR2s<'a, V>
-where
-    F: Fn(&V, V) -> ValR2<V> + 'a,
-{
-    let vals = args.get(0).run(cv.clone());
-    Box::new(vals.map(move |y| f(&cv.1, y?)))
-}
-
 macro_rules! ow {
     ( $f:expr ) => {
-        once_with(move || $f)
+        once_with(move || $f.map_err(|e: Error<_>| Exn::from(e)))
     };
 }
 
-const JSON_MINIMAL: &[(&str, usize, RunPtr)] = &[
-    ("length", 0, |_, cv| ow!(length(&cv.1))),
-    ("keys_unsorted", 0, |_, cv| {
-        ow!(cv.1.keys_unsorted().map(Val::arr))
-    }),
-    ("contains", 1, |args, cv| {
-        unary(args, cv, |x, y| Ok(Val::from(x.contains(&y))))
-    }),
-    ("has", 1, |args, cv| {
-        unary(args, cv, |v, k| v.has(&k).map(Val::from))
-    }),
-    ("indices", 1, |args, cv| {
-        let to_int = |i: usize| Val::Int(i.try_into().unwrap());
-        unary(args, cv, move |x, v| {
-            indices(x, &v).map(|idxs| idxs.map(to_int).collect())
-        })
-    }),
-];
+fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR<V> + 'a) -> ValXs<'a, V> {
+    ow!(f(&cv.1, cv.0.pop_var()))
+}
+
+fn v(n: usize) -> Box<[Bind]> {
+    core::iter::repeat(Bind::Var(())).take(n).collect()
+}
+
+fn json_minimal() -> Box<[Filter<RunPtr<Val>>]> {
+    Box::new([
+        ("length", v(0), |_, cv| ow!(length(&cv.1))),
+        ("keys_unsorted", v(0), |_, cv| {
+            ow!(cv.1.keys_unsorted().map(Val::arr))
+        }),
+        ("contains", v(1), |_, cv| {
+            unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
+        }),
+        ("has", v(1), |_, cv| {
+            unary(cv, |v, k| v.has(&k).map(Val::from))
+        }),
+        ("indices", v(1), |_, cv| {
+            let to_int = |i: usize| Val::Int(i.try_into().unwrap());
+            unary(cv, move |x, v| {
+                indices(x, &v).map(|idxs| idxs.map(to_int).collect())
+            })
+        }),
+    ])
+}
 
 #[allow(clippy::unit_arg)]
-fn core_run<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+fn core_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
+    let f = || [Bind::Fun(())].into();
+    let vf = [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
-        ("inputs", 0, |_, cv| {
-            Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
+        ("inputs", v(0), |_, cv| {
+            Box::new(
+                cv.0.inputs()
+                    .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
+            )
         }),
-        ("tojson", 0, |_, cv| ow!(Ok(cv.1.to_string().into()))),
-        ("floor", 0, |_, cv| ow!(cv.1.round(f64::floor))),
-        ("round", 0, |_, cv| ow!(cv.1.round(f64::round))),
-        ("ceil", 0, |_, cv| ow!(cv.1.round(f64::ceil))),
-        ("utf8bytelength", 0, |_, cv| {
+        ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
+        ("floor", v(0), |_, cv| ow!(cv.1.round(f64::floor))),
+        ("round", v(0), |_, cv| ow!(cv.1.round(f64::round))),
+        ("ceil", v(0), |_, cv| ow!(cv.1.round(f64::ceil))),
+        ("utf8bytelength", v(0), |_, cv| {
             ow!(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
         }),
-        ("explode", 0, |_, cv| {
+        ("explode", v(0), |_, cv| {
             ow!(cv.1.try_as_str().and_then(|s| explode(s).collect()))
         }),
-        ("implode", 0, |_, cv| {
+        ("implode", v(0), |_, cv| {
             ow!(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
         }),
-        ("ascii_downcase", 0, |_, cv| {
+        ("ascii_downcase", v(0), |_, cv| {
             ow!(cv.1.mutate_str(str::make_ascii_lowercase))
         }),
-        ("ascii_upcase", 0, |_, cv| {
+        ("ascii_upcase", v(0), |_, cv| {
             ow!(cv.1.mutate_str(str::make_ascii_uppercase))
         }),
-        ("reverse", 0, |_, cv| {
-            ow!(cv.1.mutate_arr(|a| Ok(a.reverse())))
+        ("reverse", v(0), |_, cv| {
+            ow!(cv.1.mutate_arr(|a| a.reverse()))
         }),
-        ("sort", 0, |_, cv| ow!(cv.1.mutate_arr(|a| Ok(a.sort())))),
-        ("sort_by", 1, |args, cv| {
-            let f = move |v| args.get(0).run((cv.0.clone(), v));
-            ow!(cv.1.mutate_arr(|a| sort_by(a, f)))
+        ("sort", v(0), |_, cv| ow!(cv.1.mutate_arr(|a| a.sort()))),
+        ("sort_by", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let f = move |v| f.run(lut, (fc.clone(), v));
+            once_with(|| cv.1.try_mutate_arr(|a| sort_by(a, f)))
         }),
-        ("group_by", 1, |args, cv| {
-            let f = move |v| args.get(0).run((cv.0.clone(), v));
-            ow!(cv.1.into_vec().and_then(|a| group_by(a, f)))
+        ("group_by", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let f = move |v| f.run(lut, (fc.clone(), v));
+            once_with(|| group_by(cv.1.into_vec()?, f))
         }),
-        ("min_by_or_empty", 1, |args, cv| {
-            let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y < my);
-            once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
+        ("min_by_or_empty", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y < my);
+            once_or_empty(|| cv.1.into_vec().map_err(Exn::from).and_then(f).transpose())
         }),
-        ("max_by_or_empty", 1, |args, cv| {
-            let f = move |a| cmp_by(a, |v| args.get(0).run((cv.0.clone(), v)), |my, y| y >= my);
-            once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
+        ("max_by_or_empty", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y >= my);
+            once_or_empty(|| cv.1.into_vec().map_err(Exn::from).and_then(f).transpose())
         }),
-        ("first", 1, |args, cv| Box::new(args.get(0).run(cv).take(1))),
-        ("limit", 2, |args, cv| {
-            let n = args.get(0).run(cv.clone()).map(|n| n?.try_as_isize());
-            let f = move |n| args.get(1).run(cv.clone()).take(n);
+        ("first", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            Box::new(f.run(lut, (fc, cv.1)).take(1))
+        }),
+        ("limit", vf, |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let n = cv.0.pop_var();
             let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            Box::new(n.flat_map(move |n| then(n, |n| Box::new(f(pos(n))))))
+            then(n.try_as_isize().map_err(Exn::from), |n| {
+                Box::new(f.run(lut, (fc, cv.1)).take(pos(n)))
+            })
         }),
-        ("range", 3, |args, cv| {
-            let (from, to, by) = (args.get(0), args.get(1), args.get(2));
-            Box::new(from.cartesian3(to, by, cv).flat_map(|(from, to, by)| {
-                let to_by = to.and_then(|to| Ok((to, by?)));
-                then(to_by, |(to, by)| Box::new(range(from, to, by)))
-            }))
+        ("range", v(3), |_, mut cv| {
+            let by = cv.0.pop_var();
+            let to = cv.0.pop_var();
+            let from = cv.0.pop_var();
+            Box::new(range(Ok(from), to, by))
         }),
-        ("startswith", 1, |args, cv| {
-            unary(args, cv, |v, s| {
+        ("startswith", v(1), |_, cv| {
+            unary(cv, |v, s| {
                 Ok(v.try_as_str()?.starts_with(s.try_as_str()?).into())
             })
         }),
-        ("endswith", 1, |args, cv| {
-            unary(args, cv, |v, s| {
+        ("endswith", v(1), |_, cv| {
+            unary(cv, |v, s| {
                 Ok(v.try_as_str()?.ends_with(s.try_as_str()?).into())
             })
         }),
-        ("ltrimstr", 1, |args, cv| {
-            unary(args, cv, |v, pre| {
+        ("ltrimstr", v(1), |_, cv| {
+            unary(cv, |v, pre| {
                 Ok(v.try_as_str()?
                     .strip_prefix(pre.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("rtrimstr", 1, |args, cv| {
-            unary(args, cv, |v, suf| {
+        ("rtrimstr", v(1), |_, cv| {
+            unary(cv, |v, suf| {
                 Ok(v.try_as_str()?
                     .strip_suffix(suf.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("escape_csv", 0, |_, cv| {
+        ("escape_csv", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
         }),
-        ("escape_sh", 0, |_, cv| {
+        ("escape_sh", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('\'', r"'\''").into()))
         }),
     ])
@@ -471,19 +487,19 @@ fn now<V: From<String>>() -> Result<f64, Error<V>> {
 }
 
 #[cfg(feature = "std")]
-fn std<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     use std::env::vars;
     Box::new([
-        ("env", 0, |_, _| {
+        ("env", v(0), |_, _| {
             ow!(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
         }),
-        ("now", 0, |_, _| ow!(now().map(V::from))),
+        ("now", v(0), |_, _| ow!(now().map(V::from))),
     ])
 }
 
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
-fn from_json(s: &str) -> ValR {
+fn from_json(s: &str) -> Result<Val, Error<Val>> {
     use hifijson::token::Lex;
     let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
     lexer
@@ -492,9 +508,11 @@ fn from_json(s: &str) -> ValR {
 }
 
 #[cfg(feature = "parse_json")]
-const PARSE_JSON: (&str, usize, RunPtr) = ("fromjson", 0, |_, cv| {
-    ow!(cv.1.as_str().and_then(|s| from_json(s)))
-});
+fn parse_json() -> Filter<RunPtr<Val>> {
+    ("fromjson", v(0), |_, cv| {
+        ow!(cv.1.as_str().and_then(|s| from_json(s)))
+    })
+}
 
 #[cfg(feature = "format")]
 fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
@@ -503,27 +521,27 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 }
 
 #[cfg(feature = "format")]
-fn format<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     Box::new([
-        ("escape_html", 0, |_, cv| {
+        ("escape_html", v(0), |_, cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
             ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
         }),
-        ("escape_tsv", 0, |_, cv| {
+        ("escape_tsv", v(0), |_, cv| {
             let pats = ["\n", "\r", "\t", "\\"];
             let reps = ["\\n", "\\r", "\\t", "\\\\"];
             ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
         }),
-        ("encode_uri", 0, |_, cv| {
+        ("encode_uri", v(0), |_, cv| {
             use urlencoding::encode;
             ow!(Ok(encode(cv.1.try_as_str()?).into_owned().into()))
         }),
-        ("encode_base64", 0, |_, cv| {
+        ("encode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             ow!(Ok(STANDARD.encode(cv.1.try_as_str()?).into()))
         }),
-        ("decode_base64", 0, |_, cv| {
+        ("decode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             use core::str::from_utf8;
             ow!({
@@ -535,8 +553,8 @@ fn format<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
 }
 
 #[cfg(feature = "math")]
-fn math<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
-    let rename = |name, (_name, arity, f): (&'static str, usize, RunPtr<V>)| (name, arity, f);
+fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+    let rename = |name, (_name, arity, f): Filter<RunPtr<V>>| (name, arity, f);
     Box::new([
         math::f_f!(acos),
         math::f_f!(acosh),
@@ -602,61 +620,54 @@ fn math<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
 type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
-fn re<'a, V: ValT, F>(re: F, flags: F, s: bool, m: bool, cv: Cv<'a, V>) -> ValR2s<'a, V>
-where
-    F: FilterT<'a, V>,
-{
-    let re_flags = re.cartesian(flags, (cv.0, cv.1.clone()));
+fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {
+    let flags = cv.0.pop_var();
+    let re = cv.0.pop_var();
 
-    Box::new(re_flags.map(move |(re, flags)| {
-        use crate::regex::Part::{Matches, Mismatch};
-        let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
-        let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
+    use crate::regex::Part::{Matches, Mismatch};
+    let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
+    let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
 
-        let flags = regex::Flags::new(flags?.try_as_str()?).map_err(fail_flag)?;
-        let re = flags.regex(re?.try_as_str()?).map_err(fail_re)?;
-        let out = regex::regex(cv.1.try_as_str()?, &re, flags, (s, m));
-        let out = out.into_iter().map(|out| match out {
-            Matches(ms) => ms.into_iter().map(|m| V::from_map(m.fields())).collect(),
-            Mismatch(s) => Ok(V::from(s.to_string())),
-        });
-        out.collect()
-    }))
+    let flags = regex::Flags::new(flags.try_as_str()?).map_err(fail_flag)?;
+    let re = flags.regex(re.try_as_str()?).map_err(fail_re)?;
+    let out = regex::regex(cv.1.try_as_str()?, &re, flags, (s, m));
+    let out = out.into_iter().map(|out| match out {
+        Matches(ms) => ms.into_iter().map(|m| V::from_map(m.fields())).collect(),
+        Mismatch(s) => Ok(V::from(s.to_string())),
+    });
+    out.collect()
 }
 
 #[cfg(feature = "regex")]
-fn regex<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+    let vv = || [Bind::Var(()), Bind::Var(())].into();
     Box::new([
-        ("matches", 2, |args, cv| {
-            re(args.get(0), args.get(1), false, true, cv)
-        }),
-        ("split_matches", 2, |args, cv| {
-            re(args.get(0), args.get(1), true, true, cv)
-        }),
-        ("split_", 2, |args, cv| {
-            re(args.get(0), args.get(1), true, false, cv)
-        }),
+        ("matches", vv(), |_, cv| ow!(re(false, true, cv))),
+        ("split_matches", vv(), |_, cv| ow!(re(true, true, cv))),
+        ("split_", vv(), |_, cv| ow!(re(true, false, cv))),
     ])
 }
 
 #[cfg(feature = "time")]
-fn time<V: ValT>() -> Box<[(&'static str, usize, RunPtr<V>)]> {
+fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     Box::new([
-        ("fromdateiso8601", 0, |_, cv| {
+        ("fromdateiso8601", v(0), |_, cv| {
             ow!(time::from_iso8601(cv.1.try_as_str()?))
         }),
-        ("todateiso8601", 0, |_, cv| {
+        ("todateiso8601", v(0), |_, cv| {
             ow!(Ok(time::to_iso8601(&cv.1)?.into()))
         }),
     ])
 }
 
-fn error<V>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
+fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
     (
         "error",
-        0,
-        |_, cv| ow!(Err(Error::Val(cv.1))),
-        |_, cv, _| ow!(Err(Error::Val(cv.1))),
+        v(0),
+        (
+            |_, cv| ow!(Err(Error::Val(cv.1))),
+            |_, cv, _| ow!(Err(Error::Val(cv.1))),
+        ),
     )
 }
 
@@ -667,11 +678,13 @@ fn with_debug<T: core::fmt::Display>(x: T) -> T {
 }
 
 #[cfg(feature = "log")]
-fn debug<V: core::fmt::Display>() -> (&'static str, usize, RunPtr<V>, UpdatePtr<V>) {
+fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
     (
         "debug",
-        0,
-        |_, cv| ow!(Ok(with_debug(cv.1))),
-        |_, cv, f| f(with_debug(cv.1)),
+        v(0),
+        (
+            |_, cv| ow!(Ok(with_debug(cv.1))),
+            |_, cv, f| f(with_debug(cv.1)),
+        ),
     )
 }

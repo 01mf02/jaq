@@ -1,34 +1,51 @@
+/*
 use alloc::{string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
+*/
 
-enum Exn<V> {
+/// Exception.
+///
+/// This is either an error or control flow data internal to jaq.
+/// Users should only be able to observe errors.
+#[derive(Clone, Debug)]
+pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
+
+#[derive(Clone, Debug)]
+pub enum Inner<'a, V> {
     Err(Error<V>),
-    TailCall(crate::filter::TailCall<V>),
+    /// Tail-recursive call.
+    ///
+    /// This is used internally to execute tail-recursive filters.
+    /// If this can be observed by users, then this is a bug.
+    TailCall(&'a crate::compile::TermId, crate::Vars<'a, V>, V),
     Break(usize),
-    UpdateIndexError,
 }
 
-impl<V> Exn<V> {
+impl<V> Exn<'_, V> {
+    /// If the exception is an error, yield it, else yield the exception.
     pub fn get_err(self) -> Result<Error<V>, Self> {
-        match self {
-            Self::Err(e) => Ok(e),
+        match self.0 {
+            Inner::Err(e) => Ok(e),
             _ => Err(self),
         }
     }
 }
 
-impl<V> From<Error<V>> for Exn<V> {
+impl<V> From<Error<V>> for Exn<'_, V> {
     fn from(e: Error<V>) -> Self {
-        Exn::Err(e)
+        Exn(Inner::Err(e))
     }
 }
 
-pub struct Error<V>(Part<V, Vec<Part<V>>>);
+use crate::Error;
 
+/*
 pub enum Part<V, S = &'static str> {
     Val(V),
     Str(S),
 }
+
+pub struct Error<V>(Part<V, Vec<Part<V>>>);
 
 impl<V> Error<V> {
     pub fn new(v: V) -> Self {
@@ -64,3 +81,4 @@ impl<V: Display> Display for Error<V> {
         }
     }
 }
+*/

@@ -1,8 +1,8 @@
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
+use jaq_interpret::{compile, Ctx, Native, RcIter, Val};
 use wasm_bindgen::prelude::*;
 
-type Filter = compile::Filter<Native<Val>>;
+type Filter = jaq_interpret::Filter<Native<Val>>;
 
 struct FormatterFn<F>(F);
 
@@ -136,7 +136,7 @@ type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
 enum Error {
     Report(Vec<FileReports>),
     Hifijson(String),
-    Jaq(jaq_interpret::Error),
+    Jaq(jaq_interpret::Error<Val>),
 }
 
 #[wasm_bindgen]
@@ -269,12 +269,11 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     let vals = Vec::new();
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
-    let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()
-        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_funs(jaq_core::core())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok((vals, filter.with_funs(core.into_iter().map(|(.., f)| f))))
+    Ok((vals, filter))
 }
 
 fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {

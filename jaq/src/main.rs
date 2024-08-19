@@ -1,11 +1,11 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_interpret::{compile, Ctx, FilterT, Native, RcIter, Val};
+use jaq_interpret::{compile, Ctx, Native, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
 
-type Filter = compile::Filter<Native<Val>>;
+type Filter = jaq_interpret::Filter<Native<Val>>;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -279,12 +279,11 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     })
     .map_err(load_errors)?;
 
-    let core: Vec<_> = jaq_core::core().collect();
     let compiler = Compiler::default()
-        .with_funs(core.iter().map(|(name, arity, _f)| (&**name, *arity)))
+        .with_funs(jaq_core::core())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok((vals, filter.with_funs(core.into_iter().map(|(.., f)| f))))
+    Ok((vals, filter))
 }
 
 fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
@@ -400,7 +399,7 @@ enum Error {
     Io(Option<String>, io::Error),
     Report(Vec<FileReports>),
     Parse(String),
-    Jaq(jaq_interpret::Error),
+    Jaq(jaq_interpret::Error<Val>),
     Persist(tempfile::PersistError),
     FalseOrNull,
     NoOutput,

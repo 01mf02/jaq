@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{Ctx, Error, FilterT, Compiler, RcIter, Val};
+//! use jaq_interpret::{Compiler, Ctx, Error, FilterT, Native, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
@@ -28,8 +28,9 @@
 //! let modules = loader.load(&arena, File { path: "", code }).unwrap();
 //!
 //! // compile the filter
-//! let filter = jaq_interpret::Compiler::default().compile(modules).unwrap();
-//! let filter = filter.with_funs([]);
+//! let filter = jaq_interpret::Compiler::<_, Native<_>>::default()
+//!     .compile(modules)
+//!     .unwrap();
 //!
 //! let inputs = RcIter::new(core::iter::empty());
 //!
@@ -51,8 +52,10 @@ extern crate std;
 mod box_iter;
 pub mod compile;
 pub mod error;
+pub(crate) mod exn;
 mod filter;
 mod into_iter;
+pub mod json;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -61,22 +64,21 @@ pub mod results;
 mod stack;
 mod val;
 
-#[allow(dead_code)]
-mod exn;
-
-pub use compile::{Compiler, Filter};
+pub use compile::Compiler;
 pub use error::Error;
-pub use filter::{Args, FilterT, Native, RunPtr, UpdatePtr};
+pub use exn::Exn;
+pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
+pub use json::Val;
 pub use rc_iter::RcIter;
-pub use val::{Val, ValR, ValRs, ValT};
+pub use val::{ValR, ValT, ValX, ValXs};
 
 use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
 
-/// variable bindings
+/// Variable bindings.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Vars<V>(RcList<Bind<V, (filter::Id, Self)>>);
+struct Vars<'a, V>(RcList<Bind<V, (&'a filter::Id, Self)>>);
 type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
@@ -90,7 +92,7 @@ type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 /// In the first two cases, we bind the outputs of `f` to a variable `$x`.
 /// In the third case, we bind `f` to a filter `fx`
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Bind<V, F = V> {
+pub enum Bind<V = (), F = V> {
     /// binding to a variable
     Var(V),
     /// binding to a filter
@@ -117,16 +119,16 @@ impl<T> Bind<T, T> {
     }
 }
 
-impl<V> Vars<V> {
-    fn get(&self, i: usize) -> Option<&Bind<V, (filter::Id, Self)>> {
+impl<'a, V> Vars<'a, V> {
+    fn get(&self, i: usize) -> Option<&Bind<V, (&'a filter::Id, Self)>> {
         self.0.get(i)
     }
 }
 
 /// Filter execution context.
 #[derive(Clone)]
-pub struct Ctx<'a, V = Val> {
-    vars: Vars<V>,
+pub struct Ctx<'a, V> {
+    vars: Vars<'a, V>,
     inputs: &'a Inputs<'a, V>,
 }
 
@@ -144,7 +146,7 @@ impl<'a, V> Ctx<'a, V> {
     }
 
     /// Add a new filter binding.
-    pub(crate) fn cons_fun(mut self, (f, ctx): (filter::Id, Self)) -> Self {
+    pub(crate) fn cons_fun(mut self, (f, ctx): (&'a filter::Id, Self)) -> Self {
         self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
         self
     }
@@ -157,7 +159,8 @@ impl<'a, V> Ctx<'a, V> {
         self
     }
 
-    fn with_vars(&self, vars: Vars<V>) -> Self {
+    /// Replace variables in context with given ones.
+    fn with_vars(&self, vars: Vars<'a, V>) -> Self {
         let inputs = self.inputs;
         Self { vars, inputs }
     }
@@ -168,11 +171,49 @@ impl<'a, V> Ctx<'a, V> {
     }
 }
 
-impl<V: ValT> Filter<Native<V>> {
+impl<'a, V: Clone> Ctx<'a, V> {
+    /// Remove the latest bound variable from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
+    pub fn pop_var(&mut self) -> V {
+        let (head, tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Var(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        self.vars.0 = tail;
+        head
+    }
+
+    /// Remove the latest bound function from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
+    pub fn pop_fun(&mut self) -> (&'a filter::Id, Self) {
+        let ((id, vars), tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Fun(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        let inputs = self.inputs;
+        self.vars.0 = tail;
+        (id, Self { vars, inputs })
+    }
+}
+
+/// Function from a value to a stream of value results.
+#[derive(Debug, Clone)]
+pub struct Filter<F>(compile::TermId, compile::Lut<F>);
+
+impl<F: FilterT> Filter<F> {
+    /// Run a filter on given input, yielding output values.
+    pub fn run<'a>(&'a self, cv: Cv<'a, F::V>) -> impl Iterator<Item = ValR<F::V>> + 'a {
+        self.0
+            .run(&self.1, cv)
+            .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
+    }
+
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields(&self, x: V, ys: impl Iterator<Item = val::ValR2<V>>) {
+    pub fn yields(&self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
         let inputs = RcIter::new(core::iter::empty());
         let out = self.run((Ctx::new([], &inputs), x));
         assert!(out.eq(ys));
