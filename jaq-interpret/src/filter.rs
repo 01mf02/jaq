@@ -392,9 +392,11 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
         r: &'a Self,
         lut: &'a Lut<F>,
         cv: Cv<'a, Self::V>,
-    ) -> BoxIter<'a, (ValX<'a, Self::V>, ValX<'a, Self::V>)> {
+    ) -> BoxIter<'a, Pair<ValX<'a, Self::V>>> {
         flat_map_with(self.run(lut, cv.clone()), cv, move |l, cv| {
             map_with(r.run(lut, cv), l, |r, l| (l, r))
         })
     }
 }
+
+type Pair<T> = (T, T);

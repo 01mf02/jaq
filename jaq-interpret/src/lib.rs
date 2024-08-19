@@ -213,7 +213,7 @@ impl<F: FilterT> Filter<F> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields<'a>(&'a self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
+    pub fn yields(&self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
         let inputs = RcIter::new(core::iter::empty());
         let out = self.run((Ctx::new([], &inputs), x));
         assert!(out.eq(ys));

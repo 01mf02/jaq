@@ -264,7 +264,7 @@ impl<S> Sig<S, Bind> {
 impl Def {
     fn call(&self, args: Box<[Bind<TermId>]>, vars: usize) -> Term {
         let call = self.tailrec.then_some(Tailrec::Catch);
-        Term::CallDef(self.id, args.into(), vars, call)
+        Term::CallDef(self.id, args, vars, call)
     }
 }
 
