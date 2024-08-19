@@ -19,10 +19,7 @@ use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{run_if_ok, then};
 use jaq_interpret::{Bind, FilterT, Native, RunPtr, UpdatePtr, Val, ValR};
-
-type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
-type ValR2<V> = Result<V, Error<V>>;
-type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
+use jaq_interpret::{Exn, ValR2, ValR3, ValR3s};
 
 type Filter<F> = (&'static str, Box<[Bind]>, F);
 
@@ -95,9 +92,16 @@ trait ValTx: ValT + Sized {
     }
 
     /// Apply a function to an array.
-    fn mutate_arr<F>(self, f: F) -> ValR2<Self>
+    fn mutate_arr(self, f: impl FnOnce(&mut Vec<Self>)) -> ValR2<Self> {
+        let mut a = self.into_vec()?;
+        f(&mut a);
+        Ok(Self::from_iter(a))
+    }
+
+    /// Apply a function to an array.
+    fn try_mutate_arr<'a, F>(self, f: F) -> ValR3<'a, Self>
     where
-        F: FnOnce(&mut Vec<Self>) -> Result<(), Error<Self>>,
+        F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<'a, Self>>,
     {
         let mut a = self.into_vec()?;
         f(&mut a)?;
@@ -191,9 +195,9 @@ fn length(v: &Val) -> ValR {
 }
 
 /// Sort array by the given function.
-fn sort_by<'a, V: ValT, F>(xs: &mut [V], f: F) -> Result<(), Error<V>>
+fn sort_by<'a, V: ValT, F>(xs: &mut [V], f: F) -> Result<(), Exn<'a, V>>
 where
-    F: Fn(V) -> ValR2s<'a, V>,
+    F: Fn(V) -> ValR3s<'a, V>,
 {
     // Some(e) iff an error has previously occurred
     let mut err = None;
@@ -202,11 +206,11 @@ where
 }
 
 /// Group an array by the given function.
-fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR2s<'a, V>) -> ValR2<V> {
+fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR3s<'a, V>) -> ValR3<'a, V> {
     let mut yx: Vec<(Vec<V>, V)> = xs
         .into_iter()
         .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<_, Exn<_>>>()?;
 
     yx.sort_by(|(y1, _), (y2, _)| y1.cmp(y2));
 
@@ -230,9 +234,9 @@ fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR2s<'a, V>) -> ValR2<V>
 }
 
 /// Get the minimum or maximum element from an array according to the given function.
-fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Error<V>>
+fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<'a, V>>
 where
-    F: Fn(V) -> ValR2s<'a, V>,
+    F: Fn(V) -> ValR3s<'a, V>,
     R: Fn(&[V], &[V]) -> bool,
 {
     let iter = xs.into_iter();
@@ -280,7 +284,7 @@ fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
 ///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
-fn range<V: ValT>(mut from: ValR2<V>, to: V, by: V) -> impl Iterator<Item = ValR2<V>> {
+fn range<'a, V: ValT>(mut from: ValR3<'a, V>, to: V, by: V) -> impl Iterator<Item = ValR3<'a, V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
     let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
@@ -289,7 +293,7 @@ fn range<V: ValT>(mut from: ValR2<V>, to: V, by: V) -> impl Iterator<Item = ValR
             Less => x > to,
             Equal => x != to,
         }
-        .then(|| core::mem::replace(&mut from, x + by.clone())),
+        .then(|| core::mem::replace(&mut from, (x + by.clone()).map_err(Exn::from))),
         e @ Err(_) => {
             // return None after the error
             from = Ok(to.clone());
@@ -338,11 +342,11 @@ fn once_or_empty<'a, T>(f: impl FnOnce() -> Option<T> + 'a) -> Box<dyn Iterator<
 
 macro_rules! ow {
     ( $f:expr ) => {
-        once_with(move || $f)
+        once_with(move || $f.map_err(|e: Error<_>| Exn::from(e)))
     };
 }
 
-fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR2<V> + 'a) -> ValR2s<'a, V> {
+fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR2<V> + 'a) -> ValR3s<'a, V> {
     ow!(f(&cv.1, cv.0.pop_var()))
 }
 
@@ -377,7 +381,10 @@ fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
     let vf = [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
         ("inputs", v(0), |_, cv| {
-            Box::new(cv.0.inputs().map(|r| r.map_err(Error::str)))
+            Box::new(
+                cv.0.inputs()
+                    .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
+            )
         }),
         ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
         ("floor", v(0), |_, cv| ow!(cv.1.round(f64::floor))),
@@ -399,28 +406,28 @@ fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             ow!(cv.1.mutate_str(str::make_ascii_uppercase))
         }),
         ("reverse", v(0), |_, cv| {
-            ow!(cv.1.mutate_arr(|a| Ok(a.reverse())))
+            ow!(cv.1.mutate_arr(|a| a.reverse()))
         }),
-        ("sort", v(0), |_, cv| ow!(cv.1.mutate_arr(|a| Ok(a.sort())))),
+        ("sort", v(0), |_, cv| ow!(cv.1.mutate_arr(|a| a.sort()))),
         ("sort_by", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |v| f.run(lut, (fc.clone(), v));
-            ow!(cv.1.mutate_arr(|a| sort_by(a, f)))
+            once_with(|| cv.1.try_mutate_arr(|a| sort_by(a, f)))
         }),
         ("group_by", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |v| f.run(lut, (fc.clone(), v));
-            ow!(cv.1.into_vec().and_then(|a| group_by(a, f)))
+            once_with(|| Ok(group_by(cv.1.into_vec()?, f)?))
         }),
         ("min_by_or_empty", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y < my);
-            once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
+            once_or_empty(|| cv.1.into_vec().map_err(Exn::from).and_then(f).transpose())
         }),
         ("max_by_or_empty", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y >= my);
-            once_or_empty(move || cv.1.into_vec().and_then(f).transpose())
+            once_or_empty(|| cv.1.into_vec().map_err(Exn::from).and_then(f).transpose())
         }),
         ("first", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
@@ -430,7 +437,7 @@ fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             let (f, fc) = cv.0.pop_fun();
             let n = cv.0.pop_var();
             let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            then(n.try_as_isize(), |n| {
+            then(n.try_as_isize().map_err(Exn::from), |n| {
                 Box::new(f.run(lut, (fc, cv.1)).take(pos(n)))
             })
         }),

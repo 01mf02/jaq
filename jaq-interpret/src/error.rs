@@ -23,16 +23,6 @@ pub enum Error<V = Val> {
     IndexOutOfBounds(isize),
     /// `0 |= .+1`
     PathExp,
-
-    /*
-    /// Tail-recursive call.
-    ///
-    /// This is used internally to execute tail-recursive filters.
-    /// If this can be observed by users, then this is a bug.
-    TailCall(crate::filter::TailCall<V>),
-    */
-    /// Value returned by break expression.
-    Break(usize),
 }
 
 /// Types and sets of types.
@@ -87,7 +77,6 @@ impl<V: ValT> fmt::Display for Error<V> {
             Self::Index(v, i) => write!(f, "cannot index {v} with {i}"),
             Self::IndexOutOfBounds(i) => write!(f, "index {i} is out of bounds"),
             Self::PathExp => write!(f, "invalid path expression"),
-            /*Self::TailCall(_) |*/ Self::Break(_) => panic!(),
         }
     }
 }

@@ -1,14 +1,18 @@
 use alloc::{string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
 
-enum Exn<V> {
+#[derive(Clone, Debug)]
+pub enum Exn<'a, V> {
     Err(Error<V>),
-    //TailCall(crate::filter::TailCall<V>),
+    /// Tail-recursive call.
+    ///
+    /// This is used internally to execute tail-recursive filters.
+    /// If this can be observed by users, then this is a bug.
+    TailCall(&'a crate::compile::TermId, crate::Vars<'a, V>, V),
     Break(usize),
-    UpdateIndexError,
 }
 
-impl<V> Exn<V> {
+impl<V> Exn<'_, V> {
     pub fn get_err(self) -> Result<Error<V>, Self> {
         match self {
             Self::Err(e) => Ok(e),
@@ -17,18 +21,21 @@ impl<V> Exn<V> {
     }
 }
 
-impl<V> From<Error<V>> for Exn<V> {
+impl<V> From<Error<V>> for Exn<'_, V> {
     fn from(e: Error<V>) -> Self {
         Exn::Err(e)
     }
 }
 
-pub struct Error<V>(Part<V, Vec<Part<V>>>);
+use crate::Error;
 
+/*
 pub enum Part<V, S = &'static str> {
     Val(V),
     Str(S),
 }
+
+pub struct Error<V>(Part<V, Vec<Part<V>>>);
 
 impl<V> Error<V> {
     pub fn new(v: V) -> Self {
@@ -64,3 +71,4 @@ impl<V: Display> Display for Error<V> {
         }
     }
 }
+*/

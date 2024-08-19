@@ -1,8 +1,8 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::compile::{FoldType, Lut, Tailrec, Term as Ast};
 use crate::results::{fold, then, Fold, Results};
-use crate::val::{ValR2, ValR2s, ValT};
-use crate::{rc_lazy_list, Bind, Ctx, Error, Inputs, RcList};
+use crate::val::{ValR3, ValR3s, ValT};
+use crate::{rc_lazy_list, Bind, Ctx, Error, Exn, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
@@ -10,9 +10,9 @@ pub(crate) use crate::compile::TermId as Id;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
-pub trait Update<'a, V>: Fn(V) -> ValR2s<'a, V> + DynClone {}
+pub trait Update<'a, V>: Fn(V) -> ValR3s<'a, V> + DynClone {}
 
-impl<'a, V, T: Fn(V) -> ValR2s<'a, V> + Clone> Update<'a, V> for T {}
+impl<'a, V, T: Fn(V) -> ValR3s<'a, V> + Clone> Update<'a, V> for T {}
 
 dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 
@@ -27,7 +27,7 @@ fn bind_vars<'a, V: ValT, F: FilterT<V, F>>(
     lut: &'a Lut<F>,
     ctx: Ctx<'a, V>,
     cv: Cv<'a, V>,
-) -> Results<'a, Cv<'a, V>, Error<V>> {
+) -> Results<'a, Cv<'a, V>, Exn<'a, V>> {
     match args.split_first() {
         Some((Bind::Var(arg), rest)) => {
             flat_map_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
@@ -42,27 +42,27 @@ fn bind_vars<'a, V: ValT, F: FilterT<V, F>>(
 fn run_cvs<'a, V: ValT, F: FilterT<V, F>>(
     f: &'a impl FilterT<V, F>,
     lut: &'a Lut<F>,
-    cvs: Results<'a, Cv<'a, V>, Error<V>>,
-) -> ValR2s<'a, V> {
+    cvs: Results<'a, Cv<'a, V>, Exn<'a, V>>,
+) -> ValR3s<'a, V> {
     Box::new(cvs.flat_map(move |cv| then(cv, |cv| f.run(lut, cv))))
 }
 
-fn reduce<'a, T, V, F>(xs: Results<'a, T, Error<V>>, init: V, f: F) -> ValR2s<V>
+fn reduce<'a, T, V, F>(xs: Results<'a, T, Exn<'a, V>>, init: V, f: F) -> ValR3s<V>
 where
     T: Clone + 'a,
     V: Clone + 'a,
-    F: Fn(T, V) -> ValR2s<'a, V> + 'a,
+    F: Fn(T, V) -> ValR3s<'a, V> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
-fn label_skip<'a, V: 'a>(ys: ValR2s<'a, V>, skip: usize) -> ValR2s<'a, V> {
+fn label_skip<'a, V: 'a>(ys: ValR3s<'a, V>, skip: usize) -> ValR3s<'a, V> {
     if skip == 0 {
         return ys;
     }
     Box::new(ys.map(move |y| match y {
-        Err(Error::Break(n)) => Err(Error::Break(n + skip)),
+        Err(Exn::Break(n)) => Err(Exn::Break(n + skip)),
         y => y,
     }))
 }
@@ -82,17 +82,17 @@ pub struct Native<V> {
 /// Implementation-wise, this would be a perfect spot for `for<'a, F: FilterT<V>>`;
 /// unfortunately, this is [not stable yet](https://github.com/rust-lang/rust/issues/108185).
 /// That would also allow to eliminate `F` from `FilterT`.
-pub type RunPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValR2s<'a, V>;
+pub type RunPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValR3s<'a, V>;
 /// Update function pointer.
 pub type UpdatePtr<V, F = Native<V>> =
-    for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR2s<'a, V>;
+    for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR3s<'a, V>;
 
 impl<V> Native<V> {
     /// Create a native filter from a run function, without support for updates.
     pub const fn new(run: RunPtr<V, Self>) -> Self {
         Self {
             run,
-            update: |_, _, _| box_once(Err(Error::PathExp)),
+            update: |_, _, _| box_once(Err(Exn::from(Error::PathExp))),
         }
     }
 
@@ -103,7 +103,7 @@ impl<V> Native<V> {
 }
 
 impl<V: ValT> FilterT<V> for Native<V> {
-    fn run<'a>(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
+    fn run<'a>(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValR3s<'a, V> {
         (self.run)(lut, cv)
     }
 
@@ -112,13 +112,13 @@ impl<V: ValT> FilterT<V> for Native<V> {
         lut: &'a Lut<Self>,
         cv: Cv<'a, V>,
         f: BoxUpdate<'a, V>,
-    ) -> ValR2s<'a, V> {
+    ) -> ValR3s<'a, V> {
         (self.update)(lut, cv, f)
     }
 }
 
 impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
-    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V> {
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR3s<'a, V> {
         use alloc::string::ToString;
         use core::iter::{once, once_with};
         match &lut.terms[self.0] {
@@ -128,20 +128,24 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
                 None => Ok(V::from(cv.1.to_string())),
             })),
             Ast::Int(n) => box_once(Ok(V::from(*n))),
-            Ast::Num(x) => box_once(V::from_num(x)),
+            Ast::Num(x) => box_once(V::from_num(x).map_err(Exn::from)),
             Ast::Str(s) => Box::new(once_with(move || Ok(V::from(s.clone())))),
             Ast::Arr(f) => Box::new(once_with(move || f.run(lut, cv).collect())),
-            Ast::ObjEmpty => box_once(V::from_map([])),
+            Ast::ObjEmpty => box_once(V::from_map([]).map_err(Exn::from)),
             Ast::ObjSingle(k, v) => {
-                Box::new(Self::cartesian(k, v, lut, cv).map(|(k, v)| V::from_map([(k?, v?)])))
+                Box::new(Self::cartesian(k, v, lut, cv).map(|(k, v)| Ok(V::from_map([(k?, v?)])?)))
             }
+            // TODO: write test for `try (break $x)`
             Ast::TryCatch(f, c) => Box::new(f.run(lut, (cv.0.clone(), cv.1)).flat_map(move |y| {
                 y.map_or_else(
-                    |e| c.run(lut, (cv.0.clone(), e.as_val())),
+                    |e| match e.get_err() {
+                        Ok(err) => c.run(lut, (cv.0.clone(), err.as_val())),
+                        Err(exn) => box_once(Err(exn)),
+                    },
                     |v| box_once(Ok(v)),
                 )
             })),
-            Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| -v?)),
+            Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| Ok((-v?)?))),
 
             // `l | r`
             Ast::Pipe(l, false, r) => {
@@ -173,7 +177,11 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
                 });
                 flat_map_with(f.run(lut, cv), path, |y, path| {
                     then(y, |y| {
-                        flat_map_with(path.explode(), y, |path, y| then(path, |path| path.run(y)))
+                        flat_map_with(path.explode(), y, |path, y| {
+                            then(path, |path| {
+                                Box::new(path.run(y).map(|r| r.map_err(Exn::from)))
+                            })
+                        })
                     })
                 })
             }
@@ -184,7 +192,11 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
                 Box::new(move |v| f.run(lut, (cv.0.clone(), v))),
             ),
             Ast::UpdateMath(path, op, f) => f.pipe(lut, cv, move |cv, y| {
-                path.update(lut, cv, Box::new(move |x| box_once(op.run(x, y.clone()))))
+                path.update(
+                    lut,
+                    cv,
+                    Box::new(move |x| box_once(op.run(x, y.clone()).map_err(Exn::from))),
+                )
             }),
             Ast::UpdateAlt(path, f) => f.pipe(lut, cv, move |cv, y| {
                 path.update(
@@ -205,7 +217,7 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
                 }
             }),
             Ast::Math(l, op, r) => {
-                Box::new(Self::cartesian(l, r, lut, cv).map(|(x, y)| op.run(x?, y?)))
+                Box::new(Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(op.run(x?, y?)?)))
             }
             Ast::Ord(l, op, r) => {
                 Box::new(Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(V::from(op.run(&x?, &y?)))))
@@ -227,47 +239,46 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
 
             Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun(f) => {
-                    label_skip(f.0.run(lut, (cv.0.with_vars(f.1.clone()), cv.1)), *skip)
+                Bind::Fun((id, vars)) => {
+                    label_skip(id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)), *skip)
                 }
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 use core::ops::ControlFlow;
-                //let inputs = cv.0.inputs;
+                let inputs = cv.0.inputs;
                 let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv);
-                run_cvs(id, lut, cvs)
-                /*
                 match tailrec {
                     None => run_cvs(id, lut, cvs),
                     Some(Tailrec::Catch) => Box::new(crate::Stack::new(
-                        Vec::from([run_cvs(id, lut, cvs)]),
+                        [run_cvs(id, lut, cvs)].into(),
                         move |r| match r {
-                            Err(Error::TailCall(TailCall(id_, vars, v))) if *id == id_ => {
+                            Err(Exn::TailCall(id_, vars, v)) if id == id_ => {
                                 ControlFlow::Continue(id.run(lut, (Ctx { vars, inputs }, v)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
                     )),
-                    Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
-                        cv.and_then(|cv| Err(Error::TailCall(TailCall(*id, cv.0.vars, cv.1))))
-                    })),
+                    Some(Tailrec::Throw) => {
+                        Box::new(cvs.map(move |cv| {
+                            cv.and_then(|cv| Err(Exn::TailCall(id, cv.0.vars, cv.1)))
+                        }))
+                    }
                 }
-                */
             }
             Ast::Native(id, args) => {
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
                 run_cvs(&lut.funs[*id], lut, cvs)
             }
             Ast::Label(id) => Box::new(id.run(lut, cv).map_while(|y| match y {
-                Err(Error::Break(n)) => n.checked_sub(1).map(|m| Err(Error::Break(m))),
+                Err(Exn::Break(n)) => n.checked_sub(1).map(|m| Err(Exn::Break(m))),
                 y => Some(y),
             })),
-            Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
+            Ast::Break(skip) => box_once(Err(Exn::Break(*skip))),
         }
     }
 
-    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V> {
-        let err = box_once(Err(Error::PathExp));
+    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR3s<'a, V> {
+        let err = box_once(Err(Exn::from(Error::PathExp)));
         match &lut.terms[self.0] {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
@@ -329,7 +340,7 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
                     lut.funs[*id].update(lut, (cv.0, v), f.clone())
                 })
             }
-            Ast::Break(skip) => box_once(Err(Error::Break(*skip))),
+            Ast::Break(skip) => box_once(Err(Exn::Break(*skip))),
         }
     }
 }
@@ -337,10 +348,10 @@ impl<V: ValT, F: FilterT<V>> FilterT<V, F> for Id {
 /// Function from a value to a stream of value results.
 pub trait FilterT<V, F: FilterT<V, F> = Self> {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
-    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR2s<'a, V>;
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>) -> ValR3s<'a, V>;
 
     /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
-    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR2s<'a, V>;
+    fn update<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValR3s<'a, V>;
 }
 
 trait Comb<V: Clone, F: FilterT<V, F>>: FilterT<V, F> {
@@ -352,8 +363,8 @@ trait Comb<V: Clone, F: FilterT<V, F>>: FilterT<V, F> {
         &'a self,
         lut: &'a Lut<F>,
         cv: Cv<'a, V>,
-        f: impl Fn(Cv<'a, V>, V) -> Results<'a, T, Error<V>> + 'a,
-    ) -> Results<'a, T, Error<V>> {
+        f: impl Fn(Cv<'a, V>, V) -> Results<'a, T, Exn<'a, V>> + 'a,
+    ) -> Results<'a, T, Exn<'a, V>> {
         flat_map_with(self.run(lut, cv.clone()), cv, move |y, cv| {
             then(y, |y| f(cv, y))
         })
@@ -365,7 +376,7 @@ trait Comb<V: Clone, F: FilterT<V, F>>: FilterT<V, F> {
         r: &'a Self,
         lut: &'a Lut<F>,
         cv: Cv<'a, V>,
-    ) -> BoxIter<'a, (ValR2<V>, ValR2<V>)> {
+    ) -> BoxIter<'a, (ValR3<'a, V>, ValR3<'a, V>)> {
         flat_map_with(self.run(lut, cv.clone()), cv, move |l, cv| {
             map_with(r.run(lut, cv), l, |r, l| (l, r))
         })

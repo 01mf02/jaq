@@ -2,6 +2,7 @@
 
 use crate::box_iter::{box_once, BoxIter};
 use crate::error::{Error, Type};
+use crate::Exn;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
@@ -58,6 +59,9 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 
 pub type ValR2<V> = Result<V, Error<V>>;
 pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
+
+pub type ValR3<'a, V> = Result<V, Exn<'a, V>>;
+pub type ValR3s<'a, V> = BoxIter<'a, ValR3<'a, V>>;
 
 // This makes `f64::from_str` accessible as intra-doc link.
 #[cfg(doc)]
@@ -119,35 +123,35 @@ pub trait ValT:
     ///
     /// - If `opt` is [`Opt::Essential`], return an error.
     /// - If `opt` is [`Opt::Optional`] , return the input value.
-    fn map_values<I: Iterator<Item = ValR2<Self>>>(
+    fn map_values<'a, I: Iterator<Item = ValR3<'a, Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR2<Self>;
+    ) -> ValR3<'a, Self>;
 
     /// Map a function over the child of the value at the given index.
     ///
     /// This is used by `.[k] |= f`.
     ///
     /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_index<I: Iterator<Item = ValR2<Self>>>(
+    fn map_index<'a, I: Iterator<Item = ValR3<'a, Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR2<Self>;
+    ) -> ValR3<'a, Self>;
 
     /// Map a function over the slice of the value with the given range.
     ///
     /// This is used by `.[s:e] |= f`, `.[s:] |= f`, and `.[:e] |= f`.
     ///
     /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_range<I: Iterator<Item = ValR2<Self>>>(
+    fn map_range<'a, I: Iterator<Item = ValR3<'a, Self>>>(
         self,
         range: Range<&Self>,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR2<Self>;
+    ) -> ValR3<'a, Self>;
 
     /// Return a boolean representation of the value.
     ///
@@ -222,7 +226,11 @@ impl ValT for Val {
         }
     }
 
-    fn map_values<I: Iterator<Item = ValR>>(self, opt: Opt, f: impl Fn(Self) -> I) -> ValR {
+    fn map_values<'a, I: Iterator<Item = ValR3<'a, Self>>>(
+        self,
+        opt: Opt,
+        f: impl Fn(Self) -> I,
+    ) -> ValR3<'a, Self> {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -231,25 +239,25 @@ impl ValT for Val {
             Self::Obj(o) => {
                 let iter = rc_unwrap_or_clone(o).into_iter();
                 let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
-                Ok(Self::obj(iter.collect::<Result<_, _>>()?))
+                Ok(Self::obj(iter.collect::<Result<_, Exn<_>>>()?))
             }
-            v => opt.fail(v, |v| Error::Type(v, Type::Iter)),
+            v => opt.fail(v, |v| Exn::from(Error::Type(v, Type::Iter))),
         }
     }
 
-    fn map_index<I: Iterator<Item = ValR>>(
+    fn map_index<'a, I: Iterator<Item = ValR3<'a, Self>>>(
         mut self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR {
+    ) -> ValR3<'a, Self> {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
                 let o = Rc::make_mut(o);
                 let i = match index {
                     Val::Str(s) => s,
-                    i => return opt.fail(self, |v| Error::Index(v, i.clone())),
+                    i => return opt.fail(self, |v| Exn::from(Error::Index(v, i.clone()))),
                 };
                 match o.entry(Rc::clone(i)) {
                     Occupied(mut e) => {
@@ -273,7 +281,7 @@ impl ValT for Val {
                 let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
                 let i = match index.as_int().and_then(abs_or) {
                     Ok(i) => i,
-                    Err(e) => return opt.fail(self, |_| e),
+                    Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
 
                 if let Some(y) = f(a[i].clone()).next().transpose()? {
@@ -283,34 +291,37 @@ impl ValT for Val {
                 }
                 Ok(self)
             }
-            _ => opt.fail(self, |v| Error::Type(v, Type::Iter)),
+            _ => opt.fail(self, |v| Exn::from(Error::Type(v, Type::Iter))),
         }
     }
 
-    fn map_range<I: Iterator<Item = ValR>>(
+    fn map_range<'a, I: Iterator<Item = ValR3<'a, Self>>>(
         mut self,
         range: Range<&Self>,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR {
+    ) -> ValR3<'a, Self> {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
             let from = range.start.as_ref().map(|i| i.as_int()).transpose();
             let upto = range.end.as_ref().map(|i| i.as_int()).transpose();
             let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
                 Ok(from_upto) => from_upto,
-                Err(e) => return opt.fail(self, |_| e),
+                Err(e) => return opt.fail(self, |_| Exn::from(e)),
             };
             let len = a.len();
             let from = abs_bound(from, len, 0);
             let upto = abs_bound(upto, len, len);
             let (skip, take) = skip_take(from, upto);
             let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
-            let y = f(arr).map(|y| y?.into_arr()).next().transpose()?;
+            let y = f(arr)
+                .map(|y| y?.into_arr().map_err(Exn::from))
+                .next()
+                .transpose()?;
             a.splice(skip..skip + take, (*y.unwrap_or_default()).clone());
             Ok(self)
         } else {
-            opt.fail(self, |v| Error::Type(v, Type::Arr))
+            opt.fail(self, |v| Exn::from(Error::Type(v, Type::Arr)))
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
-use crate::val::{ValR2, ValT};
+use crate::val::{ValR2, ValR2s, ValR3, ValR3s, ValT};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::path::Opt;
 
@@ -45,13 +45,13 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl<'a, V: ValT + 'a> Path<V> {
-    pub fn run(self, v: V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a> {
+    pub fn run(self, v: V) -> ValR2s<'a, V> {
         run(self.0.into_iter(), v)
     }
 
-    pub fn update<F>(mut self, v: V, f: F) -> ValR2<V>
+    pub fn update<F>(mut self, v: V, f: F) -> ValR3<'a, V>
     where
-        F: Fn(V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a>,
+        F: Fn(V) -> ValR3s<'a, V>,
     {
         if let Some(last) = self.0.pop() {
             update(self.0.into_iter(), last, v, &f)
@@ -62,7 +62,7 @@ impl<'a, V: ValT + 'a> Path<V> {
     }
 }
 
-fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a>
+fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> ValR2s<'a, V>
 where
     I: Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
 {
@@ -75,10 +75,10 @@ where
     }
 }
 
-fn update<'a, V: ValT, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValR2<V>
+fn update<'a, V: ValT + 'a, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValR3<'a, V>
 where
     P: Iterator<Item = (Part<V>, Opt)> + Clone,
-    F: Fn(V) -> Box<dyn Iterator<Item = ValR2<V>> + 'a>,
+    F: Fn(V) -> ValR3s<'a, V>,
 {
     if let Some((part, opt)) = iter.next() {
         use core::iter::once;
@@ -97,10 +97,10 @@ impl<'a, V: ValT + 'a> Part<V> {
         }
     }
 
-    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValR2<V>
+    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValR3<'a, V>
     where
         F: Fn(V) -> I,
-        I: Iterator<Item = ValR2<V>>,
+        I: Iterator<Item = ValR3<'a, V>>,
     {
         match self {
             Self::Index(idx) => v.map_index(idx, opt, f),
