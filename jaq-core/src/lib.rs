@@ -142,7 +142,7 @@ impl ValT for Val {
         }
     }
 
-    fn as_f64(&self) -> Result<f64, Error> {
+    fn as_f64(&self) -> Result<f64, Error<Self>> {
         Self::as_float(self)
     }
 }
@@ -312,7 +312,7 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 }
 
 /// Return the indices of `y` in `x`.
-fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
+fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error<Val>> {
     match (x, y) {
         (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
         (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),

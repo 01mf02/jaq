@@ -52,8 +52,10 @@ extern crate std;
 mod box_iter;
 pub mod compile;
 pub mod error;
+pub(crate) mod exn;
 mod filter;
 mod into_iter;
+mod json;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;
@@ -62,15 +64,13 @@ pub mod results;
 mod stack;
 mod val;
 
-#[allow(dead_code)]
-mod exn;
-
 pub use compile::Compiler;
 pub use error::Error;
 pub use exn::Exn;
 pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
+pub use json::{Val, ValR, ValRs};
 pub use rc_iter::RcIter;
-pub use val::{Val, ValR, ValR2, ValR2s, ValR3, ValR3s, ValRs, ValT};
+pub use val::{ValR2, ValR2s, ValR3, ValR3s, ValT};
 
 use alloc::string::String;
 use rc_list::List as RcList;

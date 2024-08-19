@@ -2,7 +2,7 @@ use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::compile::{FoldType, Lut, Tailrec, Term as Ast};
 use crate::results::{fold, then, Fold, Results};
 use crate::val::{ValR3, ValR3s, ValT};
-use crate::{rc_lazy_list, Bind, Ctx, Error, Exn};
+use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
@@ -62,7 +62,7 @@ fn label_skip<'a, V: 'a>(ys: ValR3s<'a, V>, skip: usize) -> ValR3s<'a, V> {
         return ys;
     }
     Box::new(ys.map(move |y| match y {
-        Err(Exn::Break(n)) => Err(Exn::Break(n + skip)),
+        Err(Exn(exn::Inner::Break(n))) => Err(Exn(exn::Inner::Break(n + skip))),
         y => y,
     }))
 }
@@ -256,17 +256,15 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     Some(Tailrec::Catch) => Box::new(crate::Stack::new(
                         [run_cvs(id, lut, cvs)].into(),
                         move |r| match r {
-                            Err(Exn::TailCall(id_, vars, v)) if id == id_ => {
+                            Err(Exn(exn::Inner::TailCall(id_, vars, v))) if id == id_ => {
                                 ControlFlow::Continue(id.run(lut, (Ctx { vars, inputs }, v)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
                     )),
-                    Some(Tailrec::Throw) => {
-                        Box::new(cvs.map(move |cv| {
-                            cv.and_then(|cv| Err(Exn::TailCall(id, cv.0.vars, cv.1)))
-                        }))
-                    }
+                    Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
+                        cv.and_then(|cv| Err(Exn(exn::Inner::TailCall(id, cv.0.vars, cv.1))))
+                    })),
                 }
             }
             Ast::Native(id, args) => {
@@ -274,10 +272,12 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 run_cvs(&lut.funs[*id], lut, cvs)
             }
             Ast::Label(id) => Box::new(id.run(lut, cv).map_while(|y| match y {
-                Err(Exn::Break(n)) => n.checked_sub(1).map(|m| Err(Exn::Break(m))),
+                Err(Exn(exn::Inner::Break(n))) => {
+                    n.checked_sub(1).map(|m| Err(Exn(exn::Inner::Break(m))))
+                }
                 y => Some(y),
             })),
-            Ast::Break(skip) => box_once(Err(Exn::Break(*skip))),
+            Ast::Break(skip) => box_once(Err(Exn(exn::Inner::Break(*skip)))),
         }
     }
 
@@ -349,7 +349,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     lut.funs[*id].update(lut, (cv.0, v), f.clone())
                 })
             }
-            Ast::Break(skip) => box_once(Err(Exn::Break(*skip))),
+            Ast::Break(skip) => box_once(Err(Exn(exn::Inner::Break(*skip)))),
         }
     }
 }

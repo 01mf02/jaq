@@ -399,7 +399,7 @@ enum Error {
     Io(Option<String>, io::Error),
     Report(Vec<FileReports>),
     Parse(String),
-    Jaq(jaq_interpret::Error),
+    Jaq(jaq_interpret::Error<Val>),
     Persist(tempfile::PersistError),
     FalseOrNull,
     NoOutput,

@@ -1,5 +1,5 @@
 //! Runtime errors.
-use crate::val::{Val, ValT};
+use crate::val::ValT;
 use alloc::string::{String, ToString};
 use core::fmt;
 
@@ -8,7 +8,7 @@ use core::fmt;
 /// Each variant shows an example of how it can be produced.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Error<V = Val> {
+pub enum Error<V> {
     /// `0 | error`
     Val(V),
 
@@ -82,7 +82,7 @@ impl<V: ValT> fmt::Display for Error<V> {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl<V: ValT + core::fmt::Debug> std::error::Error for Error<V> {}
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

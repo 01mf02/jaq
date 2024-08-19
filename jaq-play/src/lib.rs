@@ -136,7 +136,7 @@ type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
 enum Error {
     Report(Vec<FileReports>),
     Hifijson(String),
-    Jaq(jaq_interpret::Error),
+    Jaq(jaq_interpret::Error<Val>),
 }
 
 #[wasm_bindgen]

@@ -1,8 +1,17 @@
+/*
 use alloc::{string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
+*/
+
+/// Exception.
+///
+/// This is either an error or control flow data internal to jaq.
+/// Users should only be able to observe errors.
+#[derive(Clone, Debug)]
+pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
 
 #[derive(Clone, Debug)]
-pub enum Exn<'a, V> {
+pub enum Inner<'a, V> {
     Err(Error<V>),
     /// Tail-recursive call.
     ///
@@ -15,8 +24,8 @@ pub enum Exn<'a, V> {
 impl<V> Exn<'_, V> {
     /// If the exception is an error, yield it, else yield the exception.
     pub fn get_err(self) -> Result<Error<V>, Self> {
-        match self {
-            Self::Err(e) => Ok(e),
+        match self.0 {
+            Inner::Err(e) => Ok(e),
             _ => Err(self),
         }
     }
@@ -24,7 +33,7 @@ impl<V> Exn<'_, V> {
 
 impl<V> From<Error<V>> for Exn<'_, V> {
     fn from(e: Error<V>) -> Self {
-        Exn::Err(e)
+        Exn(Inner::Err(e))
     }
 }
 

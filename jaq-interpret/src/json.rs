@@ -1,16 +1,18 @@
 //! JSON values with reference-counted sharing.
 
 use crate::box_iter::{box_once, BoxIter};
-use crate::error::{Error, Type};
+use crate::error::Type;
+use crate::val::{Range, ValR2, ValR3, ValT};
 use crate::Exn;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
-use core::fmt::{self, Debug, Display};
-use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
+use core::fmt::{self, Debug};
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
 use jaq_syn::{path::Opt, MathOp};
+
+type Error = crate::error::Error<Val>;
 
 /// JSON value with sharing.
 ///
@@ -57,117 +59,6 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
-pub type ValR2<V> = Result<V, Error<V>>;
-pub type ValR2s<'a, V> = BoxIter<'a, ValR2<V>>;
-
-pub type ValR3<'a, V> = Result<V, Exn<'a, V>>;
-pub type ValR3s<'a, V> = BoxIter<'a, ValR3<'a, V>>;
-
-// This makes `f64::from_str` accessible as intra-doc link.
-#[cfg(doc)]
-use core::str::FromStr;
-
-/// Values that can be processed by the interpreter.
-///
-/// Implement this trait if you want jaq to process your own type of values.
-pub trait ValT:
-    Clone
-    + Display
-    + From<bool>
-    + From<isize>
-    + From<String>
-    + FromIterator<Self>
-    + PartialEq
-    + PartialOrd
-    + Add<Output = ValR2<Self>>
-    + Sub<Output = ValR2<Self>>
-    + Mul<Output = ValR2<Self>>
-    + Div<Output = ValR2<Self>>
-    + Rem<Output = ValR2<Self>>
-    + Neg<Output = ValR2<Self>>
-{
-    /// Create a number from a string.
-    ///
-    /// The number should adhere to the format accepted by [`f64::from_str`].
-    fn from_num(n: &str) -> ValR2<Self>;
-
-    /// Create an associative map (or object) from a sequence of key-value pairs.
-    ///
-    /// This is used when creating values with the syntax `{k: v}`.
-    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self>;
-
-    /// Yield the children of a value.
-    ///
-    /// This is used by `.[]`.
-    fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>>;
-
-    /// Yield the child of a value at the given index.
-    ///
-    /// This is used by `.[k]`.
-    ///
-    /// If `v.index(k)` is `Ok(_)`, then it is contained in `v.values()`.
-    fn index(self, index: &Self) -> ValR2<Self>;
-
-    /// Yield a slice of the value with the given range.
-    ///
-    /// This is used by `.[s:e]`, `.[s:]`, and `.[:e]`.
-    fn range(self, range: Range<&Self>) -> ValR2<Self>;
-
-    /// Map a function over the children of the value.
-    ///
-    /// This is used by
-    /// - `.[]  |= f` (`opt` = [`Opt::Essential`]) and
-    /// - `.[]? |= f` (`opt` = [`Opt::Optional`]).
-    ///
-    /// If the children of the value are undefined, then:
-    ///
-    /// - If `opt` is [`Opt::Essential`], return an error.
-    /// - If `opt` is [`Opt::Optional`] , return the input value.
-    fn map_values<'a, I: Iterator<Item = ValR3<'a, Self>>>(
-        self,
-        opt: Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValR3<'a, Self>;
-
-    /// Map a function over the child of the value at the given index.
-    ///
-    /// This is used by `.[k] |= f`.
-    ///
-    /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_index<'a, I: Iterator<Item = ValR3<'a, Self>>>(
-        self,
-        index: &Self,
-        opt: Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValR3<'a, Self>;
-
-    /// Map a function over the slice of the value with the given range.
-    ///
-    /// This is used by `.[s:e] |= f`, `.[s:] |= f`, and `.[:e] |= f`.
-    ///
-    /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_range<'a, I: Iterator<Item = ValR3<'a, Self>>>(
-        self,
-        range: Range<&Self>,
-        opt: Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValR3<'a, Self>;
-
-    /// Return a boolean representation of the value.
-    ///
-    /// This is used by `if v then ...`.
-    fn as_bool(&self) -> bool;
-
-    /// If the value is a string, return it.
-    ///
-    /// If `v.as_str()` yields `Some(s)`, then
-    /// `"\(v)"` yields `s`, otherwise it yields `v.to_string()`
-    /// (provided by [`Display`]).
-    fn as_str(&self) -> Option<&str>;
-}
-
-type Range<V> = core::ops::Range<Option<V>>;
-
 impl ValT for Val {
     fn from_num(n: &str) -> ValR2<Self> {
         Ok(Val::Num(Rc::new(n.to_string())))
@@ -178,9 +69,11 @@ impl ValT for Val {
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
     }
 
-    fn values(self) -> Box<dyn Iterator<Item = ValR2<Self>>> {
+    fn values(self) -> impl Iterator<Item = ValR2<Self>> {
         match self {
-            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
+            Self::Arr(a) => {
+                Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as Box<dyn Iterator<Item = _>>
+            }
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => box_once(Err(Error::Type(self, Type::Iter))),
         }
