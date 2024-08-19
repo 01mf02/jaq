@@ -651,10 +651,10 @@ fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 #[cfg(feature = "time")]
 fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     Box::new([
-        ("fromdateiso8601", [].into(), |_, cv| {
+        ("fromdateiso8601", v(0), |_, cv| {
             ow!(time::from_iso8601(cv.1.try_as_str()?))
         }),
-        ("todateiso8601", [].into(), |_, cv| {
+        ("todateiso8601", v(0), |_, cv| {
             ow!(Ok(time::to_iso8601(&cv.1)?.into()))
         }),
     ])
@@ -663,7 +663,7 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
     (
         "error",
-        [].into(),
+        v(0),
         (
             |_, cv| ow!(Err(Error::Val(cv.1))),
             |_, cv, _| ow!(Err(Error::Val(cv.1))),
@@ -681,7 +681,7 @@ fn with_debug<T: core::fmt::Display>(x: T) -> T {
 fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
     (
         "debug",
-        [].into(),
+        v(0),
         (
             |_, cv| ow!(Ok(with_debug(cv.1))),
             |_, cv, f| f(with_debug(cv.1)),

@@ -278,10 +278,7 @@ enum Local<S> {
 }
 
 impl<'s, F> Compiler<&'s str, F> {
-    /// Assume the existence of functions with given signatures.
-    ///
-    /// For execution, the corresponding functions have to be provided to the filter
-    /// via [`Filter::with_funs`].
+    /// Supply functions with given signatures.
     pub fn with_funs(mut self, funs: impl IntoIterator<Item = (&'s str, Box<[Bind]>, F)>) -> Self {
         self.lut.funs = funs
             .into_iter()
