@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{Compiler, Ctx, Error, FilterT, Native, RcIter, Val, run};
+//! use jaq_interpret::{Compiler, Ctx, Error, FilterT, Native, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
@@ -35,7 +35,7 @@
 //! let inputs = RcIter::new(core::iter::empty());
 //!
 //! // iterator over the output values
-//! let mut out = run(&filter, (Ctx::new([], &inputs), Val::from(input)));
+//! let mut out = filter.run((Ctx::new([], &inputs), Val::from(input)));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -55,7 +55,7 @@ pub mod error;
 pub(crate) mod exn;
 mod filter;
 mod into_iter;
-mod json;
+pub mod json;
 mod path;
 mod rc_iter;
 mod rc_lazy_list;

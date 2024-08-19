@@ -12,8 +12,6 @@ use core::fmt::{self, Debug};
 use hifijson::{LexAlloc, Token};
 use jaq_syn::{path::Opt, MathOp};
 
-type Error = crate::error::Error<Val>;
-
 /// JSON value with sharing.
 ///
 /// The speciality of this type is that numbers are distinguished into
@@ -47,12 +45,16 @@ pub enum Val {
 /// Order-preserving map
 type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
-/// A value result.
-type ValR = crate::ValR<Val>;
-type ValX<'a> = crate::ValX<'a, Val>;
+/// Error that can occur during filter execution.
+pub type Error = crate::Error<Val>;
+/// A value or an eRror.
+pub type ValR = crate::ValR<Val>;
+/// A value or an eXception.
+pub type ValX<'a> = crate::ValX<'a, Val>;
 
-// This might be included in the Rust standard library:
-// <https://github.com/rust-lang/rust/issues/93610>
+// This is part of the Rust standard library since 1.76:
+// <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
+// However, to keep MSRV low, we reimplement it here.
 fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }

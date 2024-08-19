@@ -1,6 +1,7 @@
 use serde_json::Value;
+use jaq_interpret::json::{Val, ValR, Error};
 
-fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interpret::ValR>) {
+fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     use jaq_interpret::{Compiler, Native};
     use jaq_syn::load::{Arena, File, Loader};
 
@@ -13,7 +14,7 @@ fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interp
     filter.yields(x, ys)
 }
 
-pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {
+pub fn fail(x: Value, f: &str, err: Error) {
     yields(x.into(), f, core::iter::once(Err(err)))
 }
 
