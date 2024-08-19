@@ -1,6 +1,6 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
-use crate::val::{ValR2, ValR2s, ValR3, ValR3s, ValT};
+use crate::val::{ValR2, ValR3, ValR3s, ValT};
 use alloc::{boxed::Box, vec::Vec};
 use jaq_syn::path::Opt;
 
@@ -45,7 +45,7 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl<'a, V: ValT + 'a> Path<V> {
-    pub fn run(self, v: V) -> ValR2s<'a, V> {
+    pub fn run(self, v: V) -> BoxIter<'a, ValR2<V>> {
         run(self.0.into_iter(), v)
     }
 
@@ -62,7 +62,7 @@ impl<'a, V: ValT + 'a> Path<V> {
     }
 }
 
-fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> ValR2s<'a, V>
+fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> BoxIter<'a, ValR2<V>>
 where
     I: Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
 {
