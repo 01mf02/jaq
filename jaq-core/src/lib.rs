@@ -19,7 +19,7 @@ use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{run_if_ok, then};
 use jaq_interpret::{Bind, FilterT, Native, RunPtr, UpdatePtr, Val};
-use jaq_interpret::{Exn, ValR2, ValR3, ValR3s};
+use jaq_interpret::{Exn, ValR, ValX, ValXs};
 
 type Filter<F> = (&'static str, Box<[Bind]>, F);
 
@@ -92,14 +92,14 @@ trait ValTx: ValT + Sized {
     }
 
     /// Apply a function to an array.
-    fn mutate_arr(self, f: impl FnOnce(&mut Vec<Self>)) -> ValR2<Self> {
+    fn mutate_arr(self, f: impl FnOnce(&mut Vec<Self>)) -> ValR<Self> {
         let mut a = self.into_vec()?;
         f(&mut a);
         Ok(Self::from_iter(a))
     }
 
     /// Apply a function to an array.
-    fn try_mutate_arr<'a, F>(self, f: F) -> ValR3<'a, Self>
+    fn try_mutate_arr<'a, F>(self, f: F) -> ValX<'a, Self>
     where
         F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<'a, Self>>,
     {
@@ -108,13 +108,13 @@ trait ValTx: ValT + Sized {
         Ok(Self::from_iter(a))
     }
 
-    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR2<Self> {
+    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR<Self> {
         let mut s = self.try_as_str()?.to_owned();
         f(&mut s);
         Ok(Self::from(s))
     }
 
-    fn round(self, f: impl FnOnce(f64) -> f64) -> ValR2<Self> {
+    fn round(self, f: impl FnOnce(f64) -> f64) -> ValR<Self> {
         if self.as_isize().is_some() {
             Ok(self)
         } else {
@@ -195,10 +195,7 @@ fn length(v: &Val) -> Result<Val, Error<Val>> {
 }
 
 /// Sort array by the given function.
-fn sort_by<'a, V: ValT, F>(xs: &mut [V], f: F) -> Result<(), Exn<'a, V>>
-where
-    F: Fn(V) -> ValR3s<'a, V>,
-{
+fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<'a, V>> {
     // Some(e) iff an error has previously occurred
     let mut err = None;
     xs.sort_by_cached_key(|x| run_if_ok(x.clone(), &mut err, &f));
@@ -206,7 +203,7 @@ where
 }
 
 /// Group an array by the given function.
-fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR3s<'a, V>) -> ValR3<'a, V> {
+fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<'a, V> {
     let mut yx: Vec<(Vec<V>, V)> = xs
         .into_iter()
         .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
@@ -236,7 +233,7 @@ fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValR3s<'a, V>) -> ValR3<'a
 /// Get the minimum or maximum element from an array according to the given function.
 fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<'a, V>>
 where
-    F: Fn(V) -> ValR3s<'a, V>,
+    F: Fn(V) -> ValXs<'a, V>,
     R: Fn(&[V], &[V]) -> bool,
 {
     let iter = xs.into_iter();
@@ -256,7 +253,7 @@ where
 }
 
 /// Convert a string into an array of its Unicode codepoints.
-fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR2<V>> + '_ {
+fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR<V>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
     let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
     s.chars().map(conv)
@@ -284,7 +281,7 @@ fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
 ///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
-fn range<'a, V: ValT>(mut from: ValR3<'a, V>, to: V, by: V) -> impl Iterator<Item = ValR3<'a, V>> {
+fn range<'a, V: ValT>(mut from: ValX<'a, V>, to: V, by: V) -> impl Iterator<Item = ValX<'a, V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
     let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
@@ -346,7 +343,7 @@ macro_rules! ow {
     };
 }
 
-fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR2<V> + 'a) -> ValR3s<'a, V> {
+fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR<V> + 'a) -> ValXs<'a, V> {
     ow!(f(&cv.1, cv.0.pop_var()))
 }
 
@@ -623,7 +620,7 @@ fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
-fn re<'a, V: ValT>(s: bool, m: bool, mut cv: Cv<'a, V>) -> ValR2<V> {
+fn re<'a, V: ValT>(s: bool, m: bool, mut cv: Cv<'a, V>) -> ValR<V> {
     let flags = cv.0.pop_var();
     let re = cv.0.pop_var();
 

@@ -48,8 +48,8 @@ pub enum Val {
 type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 /// A value result.
-type ValR = crate::ValR2<Val>;
-type ValX<'a> = crate::ValR3<'a, Val>;
+type ValR = crate::ValR<Val>;
+type ValX<'a> = crate::ValX<'a, Val>;
 
 // This might be included in the Rust standard library:
 // <https://github.com/rust-lang/rust/issues/93610>

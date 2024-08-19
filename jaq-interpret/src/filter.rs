@@ -1,7 +1,7 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::compile::{FoldType, Lut, Tailrec, Term as Ast};
 use crate::results::{fold, then, Fold, Results};
-use crate::val::{ValR3, ValR3s, ValT};
+use crate::val::{ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
@@ -10,9 +10,9 @@ pub(crate) use crate::compile::TermId as Id;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
-pub trait Update<'a, V>: Fn(V) -> ValR3s<'a, V> + DynClone {}
+pub trait Update<'a, V>: Fn(V) -> ValXs<'a, V> + DynClone {}
 
-impl<'a, V, T: Fn(V) -> ValR3s<'a, V> + Clone> Update<'a, V> for T {}
+impl<'a, V, T: Fn(V) -> ValXs<'a, V> + Clone> Update<'a, V> for T {}
 
 dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 
@@ -43,21 +43,21 @@ fn run_cvs<'a, F: FilterT>(
     f: &'a impl FilterT<F, V = F::V>,
     lut: &'a Lut<F>,
     cvs: Results<'a, Cv<'a, F::V>, Exn<'a, F::V>>,
-) -> ValR3s<'a, F::V> {
+) -> ValXs<'a, F::V> {
     Box::new(cvs.flat_map(move |cv| then(cv, |cv| f.run(lut, cv))))
 }
 
-fn reduce<'a, T, V, F>(xs: Results<'a, T, Exn<'a, V>>, init: V, f: F) -> ValR3s<V>
+fn reduce<'a, T, V, F>(xs: Results<'a, T, Exn<'a, V>>, init: V, f: F) -> ValXs<V>
 where
     T: Clone + 'a,
     V: Clone + 'a,
-    F: Fn(T, V) -> ValR3s<'a, V> + 'a,
+    F: Fn(T, V) -> ValXs<'a, V> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
-fn label_skip<'a, V: 'a>(ys: ValR3s<'a, V>, skip: usize) -> ValR3s<'a, V> {
+fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
     if skip == 0 {
         return ys;
     }
@@ -82,10 +82,10 @@ pub struct Native<V> {
 /// Implementation-wise, this would be a perfect spot for `for<'a, F: FilterT<V>>`;
 /// unfortunately, this is [not stable yet](https://github.com/rust-lang/rust/issues/108185).
 /// That would also allow to eliminate `F` from `FilterT`.
-pub type RunPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValR3s<'a, V>;
+pub type RunPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValXs<'a, V>;
 /// Update function pointer.
 pub type UpdatePtr<V, F = Native<V>> =
-    for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValR3s<'a, V>;
+    for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValXs<'a, V>;
 
 impl<V> Native<V> {
     /// Create a native filter from a run function, without support for updates.
@@ -105,7 +105,7 @@ impl<V> Native<V> {
 impl<V: ValT> FilterT for Native<V> {
     type V = V;
 
-    fn run<'a>(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValR3s<'a, V> {
+    fn run<'a>(&'a self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValXs<'a, V> {
         (self.run)(lut, cv)
     }
 
@@ -114,7 +114,7 @@ impl<V: ValT> FilterT for Native<V> {
         lut: &'a Lut<Self>,
         cv: Cv<'a, V>,
         f: BoxUpdate<'a, V>,
-    ) -> ValR3s<'a, V> {
+    ) -> ValXs<'a, V> {
         (self.update)(lut, cv, f)
     }
 }
@@ -122,7 +122,7 @@ impl<V: ValT> FilterT for Native<V> {
 impl<F: FilterT<F>> FilterT<F> for Id {
     type V = F::V;
 
-    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValR3s<'a, Self::V> {
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValXs<'a, Self::V> {
         use alloc::string::ToString;
         use core::iter::{once, once_with};
         match &lut.terms[self.0] {
@@ -286,7 +286,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
         lut: &'a Lut<F>,
         cv: Cv<'a, Self::V>,
         f: BoxUpdate<'a, Self::V>,
-    ) -> ValR3s<'a, Self::V> {
+    ) -> ValXs<'a, Self::V> {
         let err = box_once(Err(Exn::from(Error::PathExp)));
         match &lut.terms[self.0] {
             Ast::ToString => err,
@@ -364,7 +364,7 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
     type V: ValT;
 
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
-    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValR3s<'a, Self::V>;
+    fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValXs<'a, Self::V>;
 
     /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
     fn update<'a>(
@@ -372,7 +372,7 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
         lut: &'a Lut<F>,
         cv: Cv<'a, Self::V>,
         f: BoxUpdate<'a, Self::V>,
-    ) -> ValR3s<'a, Self::V>;
+    ) -> ValXs<'a, Self::V>;
 
     /// For every value `v` returned by `self.run(cv)`, call `f(cv, v)` and return all results.
     ///
@@ -395,7 +395,7 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
         r: &'a Self,
         lut: &'a Lut<F>,
         cv: Cv<'a, Self::V>,
-    ) -> BoxIter<'a, (ValR3<'a, Self::V>, ValR3<'a, Self::V>)> {
+    ) -> BoxIter<'a, (ValX<'a, Self::V>, ValX<'a, Self::V>)> {
         flat_map_with(self.run(lut, cv.clone()), cv, move |l, cv| {
             map_with(r.run(lut, cv), l, |r, l| (l, r))
         })

@@ -70,7 +70,7 @@ pub use exn::Exn;
 pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
 pub use json::Val;
 pub use rc_iter::RcIter;
-pub use val::{ValR2, ValR3, ValR3s, ValT};
+pub use val::{ValR, ValT, ValX, ValXs};
 
 use alloc::string::String;
 use rc_list::List as RcList;
@@ -204,7 +204,7 @@ pub struct Filter<F>(compile::TermId, compile::Lut<F>);
 
 impl<F: FilterT> Filter<F> {
     /// Run a filter on given input, yielding output values.
-    pub fn run<'a>(&'a self, cv: Cv<'a, F::V>) -> impl Iterator<Item = ValR2<F::V>> + 'a {
+    pub fn run<'a>(&'a self, cv: Cv<'a, F::V>) -> impl Iterator<Item = ValR<F::V>> + 'a {
         self.0
             .run(&self.1, cv)
             .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
@@ -213,7 +213,7 @@ impl<F: FilterT> Filter<F> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields<'a>(&'a self, x: F::V, ys: impl Iterator<Item = ValR2<F::V>>) {
+    pub fn yields<'a>(&'a self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
         let inputs = RcIter::new(core::iter::empty());
         let out = self.run((Ctx::new([], &inputs), x));
         assert!(out.eq(ys));

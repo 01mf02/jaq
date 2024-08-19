@@ -1,4 +1,4 @@
-use crate::{ValR2, ValT};
+use crate::{ValR, ValT};
 use alloc::string::{String, ToString};
 use chrono::DateTime;
 use jaq_interpret::Error;
@@ -9,7 +9,7 @@ use jaq_interpret::Error;
 /// Actually, this parses RFC 3339; see
 /// <https://ijmacd.github.io/rfc3339-iso8601/> for differences.
 /// jq also only parses a very restricted subset of ISO 8601.
-pub fn from_iso8601<V: ValT>(s: &str) -> ValR2<V> {
+pub fn from_iso8601<V: ValT>(s: &str) -> ValR<V> {
     let dt = DateTime::parse_from_rfc3339(s)
         .map_err(|e| Error::str(format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
     if s.contains('.') {
