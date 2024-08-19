@@ -281,7 +281,7 @@ fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
 ///    else            while(. != $to; . + $by)
 ///    end;
 /// ~~~
-fn range<'a, V: ValT>(mut from: ValX<'a, V>, to: V, by: V) -> impl Iterator<Item = ValX<'a, V>> {
+fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
     let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
@@ -414,7 +414,7 @@ fn core_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
         ("group_by", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |v| f.run(lut, (fc.clone(), v));
-            once_with(|| Ok(group_by(cv.1.into_vec()?, f)?))
+            once_with(|| group_by(cv.1.into_vec()?, f))
         }),
         ("min_by_or_empty", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
@@ -620,7 +620,7 @@ fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
-fn re<'a, V: ValT>(s: bool, m: bool, mut cv: Cv<'a, V>) -> ValR<V> {
+fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {
     let flags = cv.0.pop_var();
     let re = cv.0.pop_var();
 
