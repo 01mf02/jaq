@@ -158,6 +158,7 @@ impl<'a, V> Ctx<'a, V> {
         self
     }
 
+    /// Replace variables in context with given ones.
     fn with_vars(&self, vars: Vars<'a, V>) -> Self {
         let inputs = self.inputs;
         Self { vars, inputs }
@@ -170,6 +171,9 @@ impl<'a, V> Ctx<'a, V> {
 }
 
 impl<'a, V: Clone> Ctx<'a, V> {
+    /// Remove the latest bound variable from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
     pub fn pop_var(&mut self) -> V {
         let (head, tail) = match core::mem::take(&mut self.vars.0).pop() {
             Some((Bind::Var(head), tail)) => (head, tail),
@@ -179,6 +183,9 @@ impl<'a, V: Clone> Ctx<'a, V> {
         head
     }
 
+    /// Remove the latest bound function from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
     pub fn pop_fun(&mut self) -> (&'a filter::Id, Self) {
         let ((id, vars), tail) = match core::mem::take(&mut self.vars.0).pop() {
             Some((Bind::Fun(head), tail)) => (head, tail),

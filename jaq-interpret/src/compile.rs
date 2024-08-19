@@ -11,10 +11,11 @@ type VarSkip = usize;
 type LabelSkip = usize;
 type Arity = usize;
 
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+/// Index of a term in the look-up table.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct TermId(pub(crate) usize);
 
-/// Look-up table for indices stored in ASTs.
+/// Look-up table for terms and functions.
 #[derive(Clone, Debug)]
 pub struct Lut<F> {
     /// `terms[tid]` yields the term corresponding to the term ID `tid`

@@ -67,6 +67,7 @@ fn label_skip<'a, V: 'a>(ys: ValR2s<'a, V>, skip: usize) -> ValR2s<'a, V> {
     }))
 }
 
+/// Combination of context and input value.
 pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
 /// A filter which is implemented using function pointers.
