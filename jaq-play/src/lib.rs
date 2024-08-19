@@ -248,7 +248,7 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
 
     for x in if settings.null_input { &null } else { &inputs } {
         let x = x.map_err(Error::Hifijson)?;
-        for y in jaq_interpret::run(&filter, (Ctx::new([], &inputs), x)) {
+        for y in filter.run((Ctx::new([], &inputs), x)) {
             f(y.map_err(Error::Jaq)?);
         }
     }

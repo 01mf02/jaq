@@ -376,7 +376,7 @@ fn json_minimal() -> Box<[Filter<RunPtr<Val>>]> {
 }
 
 #[allow(clippy::unit_arg)]
-fn core_run<V: ValT, F: FilterT<V>>() -> Box<[Filter<RunPtr<V, F>>]> {
+fn core_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
     let f = || [Bind::Fun(())].into();
     let vf = [Bind::Var(()), Bind::Fun(())].into();
     Box::new([

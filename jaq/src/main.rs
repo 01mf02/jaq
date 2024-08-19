@@ -478,7 +478,7 @@ fn run(
     for item in if cli.null_input { &null } else { &iter } {
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
-        for output in jaq_interpret::run(filter, (ctx.clone(), input)) {
+        for output in filter.run((ctx.clone(), input)) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
@@ -727,7 +727,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
     };
     let input = json(test.input)?;
     let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Vec<_>, _> = jaq_interpret::run(&filter, (ctx, input)).collect();
+    let obtain: Result<Vec<_>, _> = filter.run((ctx, input)).collect();
     Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
 }
 
