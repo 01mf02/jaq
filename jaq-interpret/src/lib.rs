@@ -194,19 +194,23 @@ impl<'a, V: Clone> Ctx<'a, V> {
 #[derive(Debug, Clone)]
 pub struct Filter<F>(compile::TermId, compile::Lut<F>);
 
+/// Run a filter on given input, yielding output values.
 pub fn run<'a, V: ValT, F: FilterT<V>>(f: &'a Filter<F>, cv: Cv<'a, V>) -> val::ValR2s<'a, V> {
     f.0.run(&f.1, cv)
 }
 
-/// Run a filter on given input, panic if it does not yield the given output.
-///
-/// This is for testing purposes.
-pub fn yields<'a, V: ValT, F: FilterT<V>>(
-    f: &'a Filter<F>,
-    x: V,
-    ys: impl Iterator<Item = val::ValR2<V>>,
-) {
-    let inputs = RcIter::new(core::iter::empty());
-    let out = run(f, (Ctx::new([], &inputs), x));
-    assert!(out.eq(ys));
+impl<V: ValT> Filter<Native<V>> {
+    /// Run a filter on given input, yielding output values.
+    pub fn run<'a>(&'a self, cv: Cv<'a, V>) -> val::ValR2s<'a, V> {
+        self.0.run(&self.1, cv)
+    }
+
+    /// Run a filter on given input, panic if it does not yield the given output.
+    ///
+    /// This is for testing purposes.
+    pub fn yields<'a>(&'a self, x: V, ys: impl Iterator<Item = val::ValR2<V>>) {
+        let inputs = RcIter::new(core::iter::empty());
+        let out = self.run((Ctx::new([], &inputs), x));
+        assert!(out.eq(ys));
+    }
 }

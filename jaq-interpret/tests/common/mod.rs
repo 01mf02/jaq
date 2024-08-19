@@ -10,7 +10,7 @@ fn yields(x: jaq_interpret::Val, code: &str, ys: impl Iterator<Item = jaq_interp
     let filter = Compiler::<_, Native<_>>::default()
         .compile(modules)
         .unwrap();
-    jaq_interpret::yields(&filter, x, ys)
+    filter.yields(x, ys)
 }
 
 pub fn fail(x: Value, f: &str, err: jaq_interpret::Error) {
