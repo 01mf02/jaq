@@ -68,7 +68,7 @@ pub use compile::Compiler;
 pub use error::Error;
 pub use exn::Exn;
 pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
-pub use json::{Val, ValR, ValRs};
+pub use json::Val;
 pub use rc_iter::RcIter;
 pub use val::{ValR2, ValR2s, ValR3, ValR3s, ValT};
 

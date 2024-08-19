@@ -2,7 +2,7 @@
 
 use crate::box_iter::{box_once, BoxIter};
 use crate::error::Type;
-use crate::val::{Range, ValR2, ValR3, ValT};
+use crate::val::{Range, ValT};
 use crate::Exn;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
@@ -48,10 +48,8 @@ pub enum Val {
 type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 /// A value result.
-pub type ValR = Result<Val, Error>;
-
-/// A stream of value results.
-pub type ValRs<'a> = BoxIter<'a, ValR>;
+type ValR = crate::ValR2<Val>;
+type ValX<'a> = crate::ValR3<'a, Val>;
 
 // This might be included in the Rust standard library:
 // <https://github.com/rust-lang/rust/issues/93610>
@@ -60,16 +58,16 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 }
 
 impl ValT for Val {
-    fn from_num(n: &str) -> ValR2<Self> {
+    fn from_num(n: &str) -> ValR {
         Ok(Val::Num(Rc::new(n.to_string())))
     }
 
-    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR2<Self> {
+    fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
         let iter = iter.into_iter().map(|(k, v)| Ok((k.to_str()?, v)));
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
     }
 
-    fn values(self) -> impl Iterator<Item = ValR2<Self>> {
+    fn values(self) -> impl Iterator<Item = ValR> {
         match self {
             Self::Arr(a) => {
                 Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as Box<dyn Iterator<Item = _>>
@@ -119,11 +117,11 @@ impl ValT for Val {
         }
     }
 
-    fn map_values<'a, I: Iterator<Item = ValR3<'a, Self>>>(
+    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR3<'a, Self> {
+    ) -> ValX<'a> {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -138,12 +136,12 @@ impl ValT for Val {
         }
     }
 
-    fn map_index<'a, I: Iterator<Item = ValR3<'a, Self>>>(
+    fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR3<'a, Self> {
+    ) -> ValX<'a> {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
@@ -188,12 +186,12 @@ impl ValT for Val {
         }
     }
 
-    fn map_range<'a, I: Iterator<Item = ValR3<'a, Self>>>(
+    fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
         range: Range<&Self>,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValR3<'a, Self> {
+    ) -> ValX<'a> {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
             let from = range.start.as_ref().map(|i| i.as_int()).transpose();

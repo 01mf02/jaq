@@ -18,7 +18,7 @@ use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{run_if_ok, then};
-use jaq_interpret::{Bind, FilterT, Native, RunPtr, UpdatePtr, Val, ValR};
+use jaq_interpret::{Bind, FilterT, Native, RunPtr, UpdatePtr, Val};
 use jaq_interpret::{Exn, ValR2, ValR3, ValR3s};
 
 type Filter<F> = (&'static str, Box<[Bind]>, F);
@@ -181,7 +181,7 @@ fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Fi
 /// the length for strings, arrays, and objects.
 ///
 /// Fail on booleans.
-fn length(v: &Val) -> ValR {
+fn length(v: &Val) -> Result<Val, Error<Val>> {
     match v {
         Val::Null => Ok(Val::Int(0)),
         Val::Bool(_) => Err(Error::str(format_args!("{v} has no length"))),
@@ -502,7 +502,7 @@ fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 
 #[cfg(feature = "parse_json")]
 /// Convert string to a single JSON value.
-fn from_json(s: &str) -> ValR {
+fn from_json(s: &str) -> Result<Val, Error<Val>> {
     use hifijson::token::Lex;
     let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
     lexer
