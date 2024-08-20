@@ -52,8 +52,7 @@ extern crate std;
 
 mod box_iter;
 pub mod compile;
-pub mod error;
-pub(crate) mod exn;
+mod exn;
 mod filter;
 mod into_iter;
 pub mod load;
@@ -67,8 +66,7 @@ mod stack;
 pub mod val;
 
 pub use compile::Compiler;
-pub use error::Error;
-pub use exn::Exn;
+pub use exn::{Error, Exn};
 pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};

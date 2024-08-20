@@ -6,7 +6,6 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
-use jaq_core::error::Type;
 use jaq_core::val::{Range, ValT};
 use jaq_core::{ops, path, Exn};
 
@@ -43,6 +42,39 @@ pub enum Val {
     Obj(Rc<Map<Rc<String>, Val>>),
 }
 
+/// Types and sets of types.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Type {
+    /// `[] | .["a"]` or `limit("a"; 0)` or `range(0; "a")`
+    Int,
+    /// `"1" | sin` or `pow(2; "3")` or `fma(2; 3; "4")`
+    Float,
+    /// `-"a"`, `"a" | round`
+    Num,
+    /// `{(0): 1}` or `0 | fromjson` or `0 | explode` or `"a b c" | split(0)`
+    Str,
+    /// `0 | sort` or `0 | implode` or `[] | .[0:] = 0`
+    Arr,
+    /// `0 | .[]` or `0 | .[0]` or `0 | keys` (array or object)
+    Iter,
+    /// `{}[0:1]` (string or array)
+    Range,
+}
+
+impl Type {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Int => "integer",
+            Self::Float => "floating-point number",
+            Self::Num => "number",
+            Self::Str => "string",
+            Self::Arr => "array",
+            Self::Iter => "iterable (array or object)",
+            Self::Range => "rangeable (array or string)",
+        }
+    }
+}
+
 /// Order-preserving map
 type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
@@ -75,7 +107,7 @@ impl ValT for Val {
         match self {
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as BoxIter<_>,
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
-            _ => Box::new(core::iter::once(Err(Error::Type(self, Type::Iter)))),
+            _ => Box::new(core::iter::once(Err(Error::typ(self, Type::Iter.as_str())))),
         }
     }
 
@@ -85,8 +117,8 @@ impl ValT for Val {
                 Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
             }
             (Val::Obj(o), Val::Str(s)) => Ok(o.get(s).cloned().unwrap_or(Val::Null)),
-            (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::Index(s, index.clone())),
-            (s, _) => Err(Error::Type(s, Type::Iter)),
+            (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::index(s, index.clone())),
+            (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
         }
     }
 
@@ -115,7 +147,7 @@ impl ValT for Val {
                     Val::from(s.chars().skip(skip).take(take).collect::<String>())
                 })
             }
-            _ => Err(Error::Type(self, Type::Range)),
+            _ => Err(Error::typ(self, Type::Range.as_str())),
         }
     }
 
@@ -134,7 +166,7 @@ impl ValT for Val {
                 let iter = iter.filter_map(|(k, v)| f(v).next().map(|v| Ok((k, v?))));
                 Ok(Self::obj(iter.collect::<Result<_, Exn<_>>>()?))
             }
-            v => opt.fail(v, |v| Exn::from(Error::Type(v, Type::Iter))),
+            v => opt.fail(v, |v| Exn::from(Error::typ(v, Type::Iter.as_str()))),
         }
     }
 
@@ -150,7 +182,7 @@ impl ValT for Val {
                 let o = Rc::make_mut(o);
                 let i = match index {
                     Val::Str(s) => s,
-                    i => return opt.fail(self, |v| Exn::from(Error::Index(v, i.clone()))),
+                    i => return opt.fail(self, |v| Exn::from(Error::index(v, i.clone()))),
                 };
                 match o.entry(Rc::clone(i)) {
                     Occupied(mut e) => {
@@ -171,7 +203,9 @@ impl ValT for Val {
             }
             Val::Arr(ref mut a) => {
                 let a = Rc::make_mut(a);
-                let abs_or = |i| abs_index(i, a.len()).ok_or(Error::IndexOutOfBounds(i));
+                let abs_or = |i| {
+                    abs_index(i, a.len()).ok_or(Error::str(format_args!("index {i} out of bounds")))
+                };
                 let i = match index.as_int().and_then(abs_or) {
                     Ok(i) => i,
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
@@ -184,7 +218,7 @@ impl ValT for Val {
                 }
                 Ok(self)
             }
-            _ => opt.fail(self, |v| Exn::from(Error::Type(v, Type::Iter))),
+            _ => opt.fail(self, |v| Exn::from(Error::typ(v, Type::Iter.as_str()))),
         }
     }
 
@@ -212,7 +246,7 @@ impl ValT for Val {
             a.splice(skip..skip + take, (*y).clone());
             Ok(self)
         } else {
-            opt.fail(self, |v| Exn::from(Error::Type(v, Type::Arr)))
+            opt.fail(self, |v| Exn::from(Error::typ(v, Type::Arr.as_str())))
         }
     }
 
@@ -290,7 +324,7 @@ impl Val {
     pub fn as_int(&self) -> Result<isize, Error> {
         match self {
             Self::Int(i) => Ok(*i),
-            _ => Err(Error::Type(self.clone(), Type::Int)),
+            _ => Err(Error::typ(self.clone(), Type::Int.as_str())),
         }
     }
 
@@ -300,8 +334,10 @@ impl Val {
         match self {
             Self::Int(n) => Ok(*n as f64),
             Self::Float(n) => Ok(*n),
-            Self::Num(n) => n.parse().or(Err(Error::Type(self.clone(), Type::Float))),
-            _ => Err(Error::Type(self.clone(), Type::Float)),
+            Self::Num(n) => n
+                .parse()
+                .or(Err(Error::typ(self.clone(), Type::Float.as_str()))),
+            _ => Err(Error::typ(self.clone(), Type::Float.as_str())),
         }
     }
 
@@ -309,7 +345,7 @@ impl Val {
     pub fn to_str(self) -> Result<Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
-            _ => Err(Error::Type(self, Type::Str)),
+            _ => Err(Error::typ(self, Type::Str.as_str())),
         }
     }
 
@@ -317,7 +353,7 @@ impl Val {
     pub fn as_str(&self) -> Result<&Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
-            _ => Err(Error::Type(self.clone(), Type::Str)),
+            _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
         }
     }
 
@@ -334,7 +370,7 @@ impl Val {
     pub fn into_arr(self) -> Result<Rc<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
-            _ => Err(Error::Type(self, Type::Arr)),
+            _ => Err(Error::typ(self, Type::Arr.as_str())),
         }
     }
 
@@ -342,7 +378,7 @@ impl Val {
     pub fn as_arr(&self) -> Result<&Rc<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
-            _ => Err(Error::Type(self.clone(), Type::Arr)),
+            _ => Err(Error::typ(self.clone(), Type::Arr.as_str())),
         }
     }
 
@@ -360,7 +396,7 @@ impl Val {
             // TODO: this should fail if float does not fit into isize!
             Self::Float(x) => Ok(Self::Int(f(*x) as isize)),
             Self::Num(n) => Self::from_dec_str(n).round(f),
-            _ => Err(Error::Type(self.clone(), Type::Num)),
+            _ => Err(Error::typ(self.clone(), Type::Num.as_str())),
         }
     }
 
@@ -371,7 +407,7 @@ impl Val {
         match (self, key) {
             (Self::Arr(a), Self::Int(i)) if *i >= 0 => Ok((*i as usize) < a.len()),
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
-            _ => Err(Error::Index(self.clone(), key.clone())),
+            _ => Err(Error::index(self.clone(), key.clone())),
         }
     }
 
@@ -382,7 +418,7 @@ impl Val {
         match self {
             Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
             Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),
-            _ => Err(Error::Type(self.clone(), Type::Iter)),
+            _ => Err(Error::typ(self.clone(), Type::Iter.as_str())),
         }
     }
 
@@ -394,7 +430,7 @@ impl Val {
         match self {
             Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
             Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
-            _ => Err(Error::Type(self, Type::Iter)),
+            _ => Err(Error::typ(self, Type::Iter.as_str())),
         }
     }
 
@@ -581,7 +617,7 @@ impl core::ops::Add for Val {
                 Rc::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
                 Ok(Obj(l))
             }
-            (l, r) => Err(Error::MathOp(l, ops::Math::Add, r)),
+            (l, r) => Err(Error::math(l, ops::Math::Add, r)),
         }
     }
 }
@@ -602,7 +638,7 @@ impl core::ops::Sub for Val {
                 Rc::make_mut(&mut l).retain(|x| !r.contains(x));
                 Ok(Arr(l))
             }
-            (l, r) => Err(Error::MathOp(l, ops::Math::Sub, r)),
+            (l, r) => Err(Error::math(l, ops::Math::Sub, r)),
         }
     }
 }
@@ -637,7 +673,7 @@ impl core::ops::Mul for Val {
                 obj_merge(&mut l, r);
                 Ok(Obj(l))
             }
-            (l, r) => Err(Error::MathOp(l, ops::Math::Mul, r)),
+            (l, r) => Err(Error::math(l, ops::Math::Mul, r)),
         }
     }
 }
@@ -668,7 +704,7 @@ impl core::ops::Div for Val {
             (Num(n), r) => Self::from_dec_str(&n) / r,
             (l, Num(n)) => l / Self::from_dec_str(&n),
             (Str(x), Str(y)) => Ok(Val::arr(split(&x, &y).map(Val::str).collect())),
-            (l, r) => Err(Error::MathOp(l, ops::Math::Div, r)),
+            (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
     }
 }
@@ -679,7 +715,7 @@ impl core::ops::Rem for Val {
         use Val::Int;
         match (self, rhs) {
             (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
-            (l, r) => Err(Error::MathOp(l, ops::Math::Rem, r)),
+            (l, r) => Err(Error::math(l, ops::Math::Rem, r)),
         }
     }
 }
@@ -692,7 +728,7 @@ impl core::ops::Neg for Val {
             Int(x) => Ok(Int(-x)),
             Float(x) => Ok(Float(-x)),
             Num(n) => -Self::from_dec_str(&n),
-            x => Err(Error::Type(x, Type::Num)),
+            x => Err(Error::typ(x, Type::Num.as_str())),
         }
     }
 }

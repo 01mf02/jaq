@@ -1,6 +1,5 @@
 //! Binary operations.
 
-use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
 
 /// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
@@ -34,14 +33,15 @@ impl Math {
     }
 }
 
-impl fmt::Display for Math {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Math {
+    /// String representation of an arithmetic operation.
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Add => "+".fmt(f),
-            Self::Sub => "-".fmt(f),
-            Self::Mul => "*".fmt(f),
-            Self::Div => "/".fmt(f),
-            Self::Rem => "%".fmt(f),
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Rem => "%",
         }
     }
 }
@@ -77,15 +77,16 @@ impl Cmp {
     }
 }
 
-impl fmt::Display for Cmp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Cmp {
+    /// String representation of a comparison operation.
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Lt => "<".fmt(f),
-            Self::Gt => ">".fmt(f),
-            Self::Le => "<=".fmt(f),
-            Self::Ge => ">=".fmt(f),
-            Self::Eq => "==".fmt(f),
-            Self::Ne => "!=".fmt(f),
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Le => "<=",
+            Self::Ge => ">=",
+            Self::Eq => "==",
+            Self::Ne => "!=",
         }
     }
 }

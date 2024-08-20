@@ -21,9 +21,8 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
-use jaq_core::error::{self, Error};
 use jaq_core::results::{run_if_ok, then};
-use jaq_core::{load, Bind, Cv, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
+use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
 use jaq_json::Val;
 
 /// Definitions of the standard library.
@@ -82,18 +81,17 @@ pub trait ValT: jaq_core::ValT + Ord + From<f64> {
 /// Convenience trait for implementing the core functions.
 trait ValTx: ValT + Sized {
     fn into_vec(self) -> Result<Vec<Self>, Error<Self>> {
-        self.into_seq()
-            .map_err(|e| Error::Type(e, error::Type::Arr))
+        self.into_seq().map_err(|v| Error::typ(v, "array"))
     }
 
     fn try_as_str(&self) -> Result<&str, Error<Self>> {
         self.as_str()
-            .ok_or_else(|| Error::Type(self.clone(), error::Type::Str))
+            .ok_or_else(|| Error::typ(self.clone(), "string"))
     }
 
     fn try_as_isize(&self) -> Result<isize, Error<Self>> {
         self.as_isize()
-            .ok_or_else(|| Error::Type(self.clone(), error::Type::Int))
+            .ok_or_else(|| Error::typ(self.clone(), "integer"))
     }
 
     /// Use as an i32 to be given as an argument to a libm function.
@@ -335,7 +333,7 @@ fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> 
             let ix = x.iter().enumerate();
             Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
         }
-        (x, y) => Err(Error::Index(x.clone(), y.clone())),
+        (x, y) => Err(Error::index(x.clone(), y.clone())),
     }
 }
 
@@ -673,8 +671,8 @@ fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
         "error",
         v(0),
         (
-            |_, cv| ow!(Err(Error::Val(cv.1))),
-            |_, cv, _| ow!(Err(Error::Val(cv.1))),
+            |_, cv| ow!(Err(Error::new(cv.1))),
+            |_, cv, _| ow!(Err(Error::new(cv.1))),
         ),
     )
 }

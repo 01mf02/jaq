@@ -1,5 +1,5 @@
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{load, compile, Ctx, Native, RcIter};
+use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::Val;
 use wasm_bindgen::prelude::*;
 
