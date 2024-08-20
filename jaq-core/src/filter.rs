@@ -92,7 +92,7 @@ impl<V> Native<V> {
     pub const fn new(run: RunPtr<V, Self>) -> Self {
         Self {
             run,
-            update: |_, _, _| box_once(Err(Exn::from(Error::PathExp))),
+            update: |_, _, _| box_once(Err(Exn::from(Error::path_expr()))),
         }
     }
 
@@ -142,7 +142,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             // TODO: write test for `try (break $x)`
             Ast::TryCatch(f, c) => {
                 Box::new(f.run(lut, (cv.0.clone(), cv.1)).flat_map(move |y| match y {
-                    Err(Exn(exn::Inner::Err(e))) => c.run(lut, (cv.0.clone(), e.as_val())),
+                    Err(Exn(exn::Inner::Err(e))) => c.run(lut, (cv.0.clone(), e.into_val())),
                     y => box_once(y),
                 }))
             }
@@ -220,7 +220,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Math(l, op, r) => {
                 Box::new(Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(op.run(x?, y?)?)))
             }
-            Ast::Ord(l, op, r) => Box::new(
+            Ast::Cmp(l, op, r) => Box::new(
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
@@ -284,12 +284,12 @@ impl<F: FilterT<F>> FilterT<F> for Id {
         cv: Cv<'a, Self::V>,
         f: BoxUpdate<'a, Self::V>,
     ) -> ValXs<'a, Self::V> {
-        let err = box_once(Err(Exn::from(Error::PathExp)));
+        let err = box_once(Err(Exn::from(Error::path_expr())));
         match &lut.terms[self.0] {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
             Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
-            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
+            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err,
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)

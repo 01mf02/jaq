@@ -1,8 +1,8 @@
 //! Program compilation.
 
-use crate::{Bind, Filter};
+use crate::load::{self, lex, parse};
+use crate::{ops, Bind, Filter};
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_syn::{load, parse, MathOp, OrdOp};
 
 type NativeId = usize;
 type ModId = usize;
@@ -72,10 +72,9 @@ fn bind<T>(s: &str, x: T) -> Bind<T> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) enum Term<T = TermId> {
     /// Identity (`.`)
-    #[default]
     Id,
     ToString,
 
@@ -110,15 +109,15 @@ pub(crate) enum Term<T = TermId> {
     /// Update-assignment (`f |= g`)
     Update(T, T),
     /// Arithmetical update-assignment (`f += g`, `f -= g`, `f *= g`, `f /= g`, `f %= g`)
-    UpdateMath(T, MathOp, T),
+    UpdateMath(T, ops::Math, T),
     /// Alternation update-assignment (`f //= g`)
     UpdateAlt(T, T),
     /// Logical operation (`f and g`, `f or g`)
     Logic(T, bool, T),
     /// Arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`, `f % g`)
-    Math(T, MathOp, T),
+    Math(T, ops::Math, T),
     /// Comparison operation (`f < g`, `f <= g`, `f > g`, `f >= g`, `f == g`, `f != g`)
-    Ord(T, OrdOp, T),
+    Cmp(T, ops::Cmp, T),
     /// Alternation (`f // g`)
     Alt(T, T),
     /// Try-catch (`try f catch g`)
@@ -151,6 +150,12 @@ pub(crate) enum Term<T = TermId> {
     Fold(FoldType, T, T, T),
 
     Path(T, crate::path::Path<T>),
+}
+
+impl<T> Default for Term<T> {
+    fn default() -> Self {
+        Self::Id
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -332,7 +337,7 @@ impl<'s, F> Compiler<&'s str, F> {
         y
     }
 
-    fn module(&mut self, m: jaq_syn::load::Module<&'s str>) {
+    fn module(&mut self, m: load::Module<&'s str>) {
         self.imported_mods.clear();
         self.included_mods.clear();
         for (mid, as_) in m.mods {
@@ -458,7 +463,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 Term::Fold(fold, xs, init, update)
             }
             BinOp(l, op, r) => {
-                use jaq_syn::parse::BinaryOp::*;
+                use parse::BinaryOp::*;
                 let (l, r) = match op {
                     Comma => (self.iterm_tr(*l), self.iterm_tr(*r)),
                     Alt => (self.iterm(*l), self.iterm_tr(*r)),
@@ -470,7 +475,7 @@ impl<'s, F> Compiler<&'s str, F> {
                     Assign => Term::Assign(l, r),
                     Update => Term::Update(l, r),
                     UpdateMath(op) => Term::UpdateMath(l, op, r),
-                    Ord(op) => Term::Ord(l, op, r),
+                    Cmp(op) => Term::Cmp(l, op, r),
                     Or => Term::Logic(l, true, r),
                     And => Term::Logic(l, false, r),
                     Alt => Term::Alt(l, r),
@@ -478,21 +483,13 @@ impl<'s, F> Compiler<&'s str, F> {
                 }
             }
             Path(t, path) => {
-                use crate::path::Part;
-                use jaq_syn::path::Part::{Index, Range};
                 let t = self.iterm(*t);
-                let path = path.into_iter().map(|(p, opt)| match p {
-                    Index(i) => (Part::Index(self.iterm(i)), opt),
-                    Range(lower, upper) => {
-                        let lower = lower.map(|f| self.iterm(f));
-                        let upper = upper.map(|f| self.iterm(f));
-                        (Part::Range(lower, upper), opt)
-                    }
-                });
+                let path = path.0.into_iter();
+                let path = path.map(|(p, opt)| (p.map(|f| self.iterm(f)), opt));
                 Term::Path(t, crate::path::Path(path.collect()))
             }
             Str(fmt, parts) => {
-                use jaq_syn::lex::StrPart;
+                use lex::StrPart;
                 let fmt = match fmt {
                     Some(fmt) => self.iterm(Call(fmt, Vec::new())),
                     None => self.lut.insert_term(Term::ToString),
@@ -572,7 +569,8 @@ impl<'s, F> Compiler<&'s str, F> {
                     if sig.matches(name, &args) {
                         def.tailrec = def.tailrec || tailrec;
                         let call = tailrec.then_some(Tailrec::Throw);
-                        let args = sig.args.iter().zip(args).map(|(x, id)| bind(x, id));
+                        let args = sig.args.iter().zip(args.to_vec());
+                        let args = args.map(|(x, id)| bind(x, id));
                         return Term::CallDef(def.id, args.collect(), i, call);
                     }
                 }
@@ -662,7 +660,7 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn sum_or(&mut self, f: impl FnOnce() -> Term, terms: Vec<Term>) -> Term {
-        use MathOp::Add;
+        use ops::Math::Add;
         let mut iter = terms.into_iter().rev();
         let last = iter.next().unwrap_or_else(f);
         iter.fold(last, |acc, x| {

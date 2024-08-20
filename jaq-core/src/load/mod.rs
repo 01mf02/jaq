@@ -1,9 +1,17 @@
 //! Combined file loading, lexing, and parsing for multiple modules.
 
-use crate::lex::{self, Token};
-use crate::parse::{self, Def, Term};
+pub mod lex;
+pub mod parse;
+mod prec_climb;
+pub mod test;
+
+use crate::{ops, path};
 use alloc::string::String;
 use alloc::vec::Vec;
+pub use lex::Lexer;
+use lex::Token;
+pub use parse::Parser;
+use parse::{Def, Term};
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -277,4 +285,27 @@ fn parse_defs(code: &str) -> Result<parse::Module<&str, Vec<Def<&str>>>, Error<&
     parse::Parser::new(&tokens)
         .parse(|p| p.module(|p| p.defs()))
         .map_err(|e| Error::Parse(e.into_iter().map(conv_err).collect()))
+}
+
+/// Lex a string and parse resulting tokens, returning [`None`] if any error occurred.
+///
+/// Example:
+///
+/// ~~~
+/// # use jaq_core::load::parse;
+/// let t = parse("[] | .[]", |p| p.term());
+/// ~~~
+pub fn parse<'s, T: Default, F>(s: &'s str, f: F) -> Option<T>
+where
+    F: for<'t> FnOnce(&mut Parser<'s, 't>) -> parse::Result<'s, 't, T>,
+{
+    Parser::new(&Lexer::new(s).lex().ok()?).parse(f).ok()
+}
+
+/// Return the span of a string slice `part` relative to a string slice `whole`.
+///
+/// The caller must ensure that `part` is fully contained inside `whole`.
+pub fn span(whole: &str, part: &str) -> core::ops::Range<usize> {
+    let start = part.as_ptr() as usize - whole.as_ptr() as usize;
+    start..start + part.len()
 }

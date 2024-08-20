@@ -13,13 +13,13 @@ jobs:
     - uses: actions/checkout@v2
 
     - uses: dtolnay/rust-toolchain@1.63
-    - name: Check jaq-core
-      working-directory: jaq-core
+    - name: Check jaq-std
+      working-directory: jaq-std
       run: cargo check
 
     - uses: dtolnay/rust-toolchain@1.64
-    - name: Check jaq-std
-      working-directory: jaq-std
+    - name: Check jaq
+      working-directory: jaq
       run: cargo check
     - name: Build
       run: cargo build --verbose

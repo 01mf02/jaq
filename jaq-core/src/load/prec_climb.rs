@@ -73,7 +73,7 @@ fn test() {
         Div,
     }
 
-    impl crate::prec_climb::Op for Arith {
+    impl Op for Arith {
         fn precedence(&self) -> usize {
             match self {
                 Arith::Add | Arith::Sub => 0,

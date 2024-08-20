@@ -1,11 +1,10 @@
 //! Binary operations.
 
-use core::fmt;
 use core::ops::{Add, Div, Mul, Rem, Sub};
 
 /// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum MathOp {
+pub enum Math {
     /// Addition
     Add,
     /// Subtraction
@@ -18,7 +17,7 @@ pub enum MathOp {
     Rem,
 }
 
-impl MathOp {
+impl Math {
     /// Perform the arithmetic operation on the given inputs.
     pub fn run<I, O>(&self, l: I, r: I) -> O
     where
@@ -34,21 +33,22 @@ impl MathOp {
     }
 }
 
-impl fmt::Display for MathOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Math {
+    /// String representation of an arithmetic operation.
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Add => "+".fmt(f),
-            Self::Sub => "-".fmt(f),
-            Self::Mul => "*".fmt(f),
-            Self::Div => "/".fmt(f),
-            Self::Rem => "%".fmt(f),
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Rem => "%",
         }
     }
 }
 
 /// An operation that orders two values, such as `<`, `<=`, `>`, `>=`, `==`, `!=`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OrdOp {
+pub enum Cmp {
     /// Less-than (<).
     Lt,
     /// Less-than or equal (<=).
@@ -63,7 +63,7 @@ pub enum OrdOp {
     Ne,
 }
 
-impl OrdOp {
+impl Cmp {
     /// Perform the ordering operation on the given inputs.
     pub fn run<I: PartialOrd + PartialEq>(&self, l: &I, r: &I) -> bool {
         match self {
@@ -77,15 +77,16 @@ impl OrdOp {
     }
 }
 
-impl fmt::Display for OrdOp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Cmp {
+    /// String representation of a comparison operation.
+    pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Lt => "<".fmt(f),
-            Self::Gt => ">".fmt(f),
-            Self::Le => "<=".fmt(f),
-            Self::Ge => ">=".fmt(f),
-            Self::Eq => "==".fmt(f),
-            Self::Ne => "!=".fmt(f),
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Le => "<=",
+            Self::Ge => ">=",
+            Self::Eq => "==",
+            Self::Ne => "!=",
         }
     }
 }

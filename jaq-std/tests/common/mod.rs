@@ -1,14 +1,14 @@
-use jaq_interpret::json::{Error, Val, ValR};
+use jaq_json::{Error, Val, ValR};
 use serde_json::Value;
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
-    use jaq_syn::load::{Arena, File, Loader};
+    use jaq_core::load::{Arena, File, Loader};
 
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::std());
+    let loader = Loader::new(jaq_std::defs());
     let modules = loader.load(&arena, File { path: "", code }).unwrap();
-    let filter = jaq_interpret::Compiler::default()
-        .with_funs(jaq_core::core())
+    let filter = jaq_core::Compiler::default()
+        .with_funs(jaq_std::funs())
         .compile(modules)
         .unwrap();
     filter.yields(x, ys)

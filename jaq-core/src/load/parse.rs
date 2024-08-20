@@ -1,8 +1,8 @@
 //! Parsing.
 
-use crate::lex::{StrPart, Tok, Token};
-use crate::path::{self, Path};
-use crate::{prec_climb, MathOp, OrdOp};
+use super::lex::{StrPart, Tok, Token};
+use super::path::{self, Path};
+use super::{ops, prec_climb};
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
@@ -135,16 +135,16 @@ pub enum BinaryOp {
     /// Logical conjunction, i.e. `l and r`
     And,
     /// Mathematical operation, e.g. `l + r`, `l - r`, ...
-    Math(MathOp),
-    /// Ordering operation, e.g. `l == r`, `l <= r`, ...
-    Ord(OrdOp),
+    Math(ops::Math),
+    /// Comparison operation, e.g. `l == r`, `l <= r`, ...
+    Cmp(ops::Cmp),
     /// Assignment, i.e. `l = r`,
     Assign,
     /// Update, i.e. `l |= r`
     Update,
     /// Mathematical assignment, i.e. `l += r`, `l -= r`, ...
     /// (this is identical to `r as $x | l |= . + $x`, ...)
-    UpdateMath(MathOp),
+    UpdateMath(ops::Math),
     /// `l //= r`
     UpdateAlt,
 }
@@ -156,18 +156,17 @@ impl<S> Term<S> {
 
     /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`.
     pub(crate) fn recurse(recurse: S) -> Self {
-        use Term::*;
         // `[]?`
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?` (returns array/object elements or nothing instead)
-        let path = Term::Path(Id.into(), Vec::from([path]));
+        let path = Term::Path(Term::Id.into(), Path(Vec::from([path])));
 
         // `..`
         let f = Term::Call(recurse, Vec::new());
         // .[]? | ..
         let pipe = Term::Pipe(path.into(), None, f.into());
         // ., (.[]? | ..)
-        Term::BinOp(Id.into(), BinaryOp::Comma, pipe.into())
+        Term::BinOp(Term::Id.into(), BinaryOp::Comma, pipe.into())
     }
 
     /// `{}[]` returns zero values.
@@ -177,7 +176,7 @@ impl<S> Term<S> {
         // `{}`
         let obj = Term::Obj(Vec::new());
         // `{}[]`
-        Term::Path(obj.into(), Vec::from([path]))
+        Term::Path(obj.into(), Path(Vec::from([path])))
     }
 }
 
@@ -323,27 +322,28 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Parse a binary operator, including `,` if `with_comma` is true.
     fn op(&mut self, with_comma: bool) -> Option<BinaryOp> {
+        use ops::{Cmp, Math};
         self.maybe(|p| match p.i.next() {
             Some(Token(s, _)) => Some(match *s {
                 "," if with_comma => BinaryOp::Comma,
-                "+" => BinaryOp::Math(MathOp::Add),
-                "-" => BinaryOp::Math(MathOp::Sub),
-                "*" => BinaryOp::Math(MathOp::Mul),
-                "/" => BinaryOp::Math(MathOp::Div),
-                "%" => BinaryOp::Math(MathOp::Rem),
+                "+" => BinaryOp::Math(Math::Add),
+                "-" => BinaryOp::Math(Math::Sub),
+                "*" => BinaryOp::Math(Math::Mul),
+                "/" => BinaryOp::Math(Math::Div),
+                "%" => BinaryOp::Math(Math::Rem),
                 "=" => BinaryOp::Assign,
                 "|=" => BinaryOp::Update,
-                "+=" => BinaryOp::UpdateMath(MathOp::Add),
-                "-=" => BinaryOp::UpdateMath(MathOp::Sub),
-                "*=" => BinaryOp::UpdateMath(MathOp::Mul),
-                "/=" => BinaryOp::UpdateMath(MathOp::Div),
-                "%=" => BinaryOp::UpdateMath(MathOp::Rem),
-                "<" => BinaryOp::Ord(OrdOp::Lt),
-                ">" => BinaryOp::Ord(OrdOp::Gt),
-                "<=" => BinaryOp::Ord(OrdOp::Le),
-                ">=" => BinaryOp::Ord(OrdOp::Ge),
-                "==" => BinaryOp::Ord(OrdOp::Eq),
-                "!=" => BinaryOp::Ord(OrdOp::Ne),
+                "+=" => BinaryOp::UpdateMath(Math::Add),
+                "-=" => BinaryOp::UpdateMath(Math::Sub),
+                "*=" => BinaryOp::UpdateMath(Math::Mul),
+                "/=" => BinaryOp::UpdateMath(Math::Div),
+                "%=" => BinaryOp::UpdateMath(Math::Rem),
+                "<" => BinaryOp::Cmp(Cmp::Lt),
+                ">" => BinaryOp::Cmp(Cmp::Gt),
+                "<=" => BinaryOp::Cmp(Cmp::Le),
+                ">=" => BinaryOp::Cmp(Cmp::Ge),
+                "==" => BinaryOp::Cmp(Cmp::Eq),
+                "!=" => BinaryOp::Cmp(Cmp::Ne),
                 "//" => BinaryOp::Alt,
                 "//=" => BinaryOp::UpdateAlt,
                 "or" => BinaryOp::Or,
@@ -505,8 +505,8 @@ impl<'s, 't> Parser<'s, 't> {
 
                 if let Some(key) = key {
                     let head = (path::Part::Index(key), self.opt());
-                    let path = core::iter::once(head).chain(self.path()?).collect();
-                    Term::Path(Box::new(Term::Id), path)
+                    let path = core::iter::once(head).chain(self.path()?.0).collect();
+                    Term::Path(Box::new(Term::Id), Path(path))
                 } else {
                     Term::Id
                 }
@@ -530,7 +530,7 @@ impl<'s, 't> Parser<'s, 't> {
         };
 
         let path = self.path()?;
-        Ok(if path.is_empty() {
+        Ok(if path.0.is_empty() {
             tm
         } else {
             Term::Path(Box::new(tm), path)
@@ -592,7 +592,7 @@ impl<'s, 't> Parser<'s, 't> {
             path.push((path::Part::Index(key), self.opt()));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
-        Ok(path)
+        Ok(Path(path))
     }
 
     /// Parse `[]`, `[t]`, `[t:]`, `[t:t]`, `[:t]` (all without brackets).
@@ -769,17 +769,18 @@ impl<S, F> Def<S, F> {
 
 impl prec_climb::Op for BinaryOp {
     fn precedence(&self) -> usize {
+        use ops::{Cmp, Math};
         match self {
             Self::Comma => 1,
             Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 2,
             Self::Alt => 3,
             Self::Or => Self::Alt.precedence() + 1,
             Self::And => Self::Or.precedence() + 1,
-            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::And.precedence() + 1,
-            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => Self::And.precedence() + 2,
-            Self::Math(MathOp::Add | MathOp::Sub) => Self::And.precedence() + 3,
-            Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).precedence() + 1,
-            Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).precedence() + 1,
+            Self::Cmp(Cmp::Eq | Cmp::Ne) => Self::And.precedence() + 1,
+            Self::Cmp(Cmp::Lt | Cmp::Gt | Cmp::Le | Cmp::Ge) => Self::And.precedence() + 2,
+            Self::Math(Math::Add | Math::Sub) => Self::And.precedence() + 3,
+            Self::Math(Math::Mul | Math::Div) => Self::Math(Math::Add).precedence() + 1,
+            Self::Math(Math::Rem) => Self::Math(Math::Mul).precedence() + 1,
         }
     }
 

@@ -1,7 +1,7 @@
-/*
+//! Exceptions and errors.
+
 use alloc::{string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
-*/
 
 /// Exception.
 ///
@@ -11,7 +11,7 @@ use core::fmt::{self, Display};
 pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
 
 #[derive(Clone, Debug)]
-pub enum Inner<'a, V> {
+pub(crate) enum Inner<'a, V> {
     Err(Error<V>),
     /// Tail-recursive call.
     ///
@@ -37,19 +37,63 @@ impl<V> From<Error<V>> for Exn<'_, V> {
     }
 }
 
-use crate::Error;
-
-/*
-pub enum Part<V, S = &'static str> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Part<V, S = &'static str> {
     Val(V),
     Str(S),
 }
 
+/// Error that occurred during filter execution.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Error<V>(Part<V, Vec<Part<V>>>);
 
 impl<V> Error<V> {
+    /// Create a new error from a value.
     pub fn new(v: V) -> Self {
         Self(Part::Val(v))
+    }
+
+    /// Create a path expression error.
+    pub fn path_expr() -> Self {
+        Self(Part::Str(Vec::from([Part::Str("invalid path expression")])))
+    }
+
+    /// Create a type error.
+    pub fn typ(v: V, typ: &'static str) -> Self {
+        use Part::{Str, Val};
+        [Str("cannot use "), Val(v), Str(" as "), Str(typ)]
+            .into_iter()
+            .collect()
+    }
+
+    /// Create a math error.
+    pub fn math(l: V, op: crate::ops::Math, r: V) -> Self {
+        use Part::{Str, Val};
+        [
+            Str("cannot calculate "),
+            Val(l),
+            Str(" "),
+            Str(op.as_str()),
+            Str(" "),
+            Val(r),
+        ]
+        .into_iter()
+        .collect()
+    }
+
+    /// Create an indexing error.
+    pub fn index(l: V, r: V) -> Self {
+        use Part::{Str, Val};
+        [Str("cannot index "), Val(l), Str(" with "), Val(r)]
+            .into_iter()
+            .collect()
+    }
+}
+
+impl<V: From<String>> Error<V> {
+    /// Build an error from something that can be converted to a string.
+    pub fn str(s: impl ToString) -> Self {
+        Self(Part::Val(V::from(s.to_string())))
     }
 }
 
@@ -81,4 +125,3 @@ impl<V: Display> Display for Error<V> {
         }
     }
 }
-*/

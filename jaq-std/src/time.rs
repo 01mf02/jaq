@@ -1,7 +1,6 @@
-use crate::{ValR, ValT};
+use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
 use chrono::DateTime;
-use jaq_interpret::Error;
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).

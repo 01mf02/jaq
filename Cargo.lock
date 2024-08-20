@@ -239,9 +239,8 @@ dependencies = [
  "env_logger",
  "hifijson",
  "jaq-core",
- "jaq-interpret",
+ "jaq-json",
  "jaq-std",
- "jaq-syn",
  "memmap2",
  "mimalloc",
  "tempfile",
@@ -251,31 +250,23 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "1.5.1"
+version = "1.5.0"
 dependencies = [
- "aho-corasick",
- "base64",
- "chrono",
- "hifijson",
- "jaq-interpret",
- "jaq-syn",
- "libm",
- "log",
- "regex",
+ "dyn-clone",
+ "jaq-json",
+ "once_cell",
  "serde_json",
- "urlencoding",
+ "typed-arena",
 ]
 
 [[package]]
-name = "jaq-interpret"
-version = "1.5.0"
+name = "jaq-json"
+version = "1.0.0"
 dependencies = [
  "ahash",
- "dyn-clone",
  "hifijson",
  "indexmap",
- "jaq-syn",
- "once_cell",
+ "jaq-core",
  "serde_json",
 ]
 
@@ -289,9 +280,8 @@ dependencies = [
  "getrandom",
  "hifijson",
  "jaq-core",
- "jaq-interpret",
+ "jaq-json",
  "jaq-std",
- "jaq-syn",
  "js-sys",
  "log",
  "unicode-width",
@@ -303,17 +293,17 @@ dependencies = [
 name = "jaq-std"
 version = "1.6.0"
 dependencies = [
+ "aho-corasick",
+ "base64",
+ "chrono",
+ "hifijson",
  "jaq-core",
- "jaq-interpret",
- "jaq-syn",
+ "jaq-json",
+ "libm",
+ "log",
+ "regex",
  "serde_json",
-]
-
-[[package]]
-name = "jaq-syn"
-version = "1.6.0"
-dependencies = [
- "typed-arena",
+ "urlencoding",
 ]
 
 [[package]]

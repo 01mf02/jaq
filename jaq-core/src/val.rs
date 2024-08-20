@@ -1,7 +1,9 @@
+//! Values that can be processed by jaq.
+
 use crate::box_iter::BoxIter;
+use crate::path::Opt;
 use core::fmt::Display;
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
-use jaq_syn::path::Opt;
 
 // Makes `f64::from_str` accessible as intra-doc link.
 #[cfg(doc)]
@@ -14,9 +16,10 @@ pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
 pub type ValXs<'a, V> = BoxIter<'a, ValX<'a, V>>;
 
-pub(crate) type Range<V> = core::ops::Range<Option<V>>;
+/// Range of options, used for iteration operations.
+pub type Range<V> = core::ops::Range<Option<V>>;
 
-/// Values that can be processed by the interpreter.
+/// Values that can be processed by jaq.
 ///
 /// Implement this trait if you want jaq to process your own type of values.
 pub trait ValT:
@@ -48,7 +51,7 @@ pub trait ValT:
     /// Yield the children of a value.
     ///
     /// This is used by `.[]`.
-    fn values(self) -> impl Iterator<Item = ValR<Self>>;
+    fn values(self) -> alloc::boxed::Box<dyn Iterator<Item = ValR<Self>>>;
 
     /// Yield the child of a value at the given index.
     ///

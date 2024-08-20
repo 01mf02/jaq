@@ -1,301 +1,402 @@
-//! Tests for named core filters, sorted by name.
+//! Tests for unnamed core filters.
 
 pub mod common;
 
-use common::{fail, give, gives};
-use jaq_interpret::error::{Error, Type};
-use jaq_interpret::Val;
+use common::{give, gives};
 use serde_json::json;
 
-yields!(repeat, "def r(f): f, r(f); [limit(3; r(1, 2))]", [1, 2, 1]);
-
-yields!(lazy_array, "def f: 1, [f]; limit(1; f)", 1);
-
-yields!(
-    lazy_foreach,
-    "def f: f; limit(1; foreach (1, f) as $x (0; .))",
-    0
-);
-
-yields!(nested_rec, "def f: def g: 0, g; g; def h: h; first(f)", 0);
-
-yields!(
-    rec_two_var_args,
-    "def f($a; $b): [$a, $b], f($a+1; $b+1); [limit(3; f(0; 1))]",
-    [[0, 1], [1, 2], [2, 3]]
-);
-
-yields!(
-    rec_update,
-    "def upto($x): .[$x], (if $x > 0 then upto($x-1) else {}[] as $x | . end); [1, 2, 3, 4] | upto(1) |= .+1",
-    [2, 3, 3, 4]
-);
-
 #[test]
-fn ascii() {
-    give(json!("aAaAäの"), "ascii_upcase", json!("AAAAäの"));
-    give(json!("aAaAäの"), "ascii_downcase", json!("aaaaäの"));
+fn update_assign() {
+    let ab = |v| json!({"a": v, "b": 2});
+    gives(ab(1), ".a  = (.a, .b)", [ab(1), ab(2)]);
+    gives(ab(1), ".a += (.a, .b)", [ab(2), ab(3)]);
+    gives(ab(1), ".a |= (.+1, .)", [ab(2)]);
 }
 
-yields!(
-    fromdate,
-    r#""1970-01-02T00:00:00Z" | fromdateiso8601"#,
-    86400
-);
-yields!(
-    fromdate_micros,
-    r#""1970-01-02T00:00:00.123456Z" | fromdateiso8601"#,
-    86400.123456
-);
-yields!(todate, r#"86400 | todateiso8601"#, "1970-01-02T00:00:00Z");
-yields!(
-    todate_micros,
-    r#"86400.123456 | todateiso8601"#,
-    "1970-01-02T00:00:00.123456Z"
-);
+// here, jaq diverges from jq, which returns [3,6,4,8]!
+// idem for other arithmetic operations
+yields!(cartesian_arith, "[(1,2) * (3,4)]", [3, 4, 6, 8]);
 
 #[test]
-fn explode_implode() {
-    give(json!("❤ の"), "explode", json!([10084, 32, 12398]));
-    give(json!("y̆"), "explode", json!([121, 774]));
+fn add() {
+    give(json!(1), ". + 2", json!(3));
+    give(json!(1.0), ". + 2.0", json!(3.0));
+    give(json!(1), "2.0 + .", json!(3.0));
+    give(json!(null), "1.0e1 + 2.1e2", json!(220.0));
 
-    give(json!("❤ の"), "explode | implode", json!("❤ の"));
-    give(json!("y̆"), "explode | implode", json!("y̆"));
+    give(json!("Hello "), ". + \"world\"", json!("Hello world"));
+    give(json!([1, 2]), ". + [3, 4]", json!([1, 2, 3, 4]));
+    give(
+        json!({"a": 1, "b": 2}),
+        ". + {c: 3, a: 4}",
+        json!({"a": 4, "b": 2, "c": 3}),
+    );
 
-    give(json!([1114112]), "try implode catch -1", json!(-1));
+    give(json!({}), ". + {}", json!({}));
+    give(json!({"a": 1}), ". + {}", json!({"a": 1}));
 }
 
-yields!(first_empty, "[first({}[])]", json!([]));
-yields!(first_some, "first(1, 2, 3)", 1);
+#[test]
+fn sub() {
+    give(json!(1), ". - -2", json!(3));
+    give(json!(1.0), ". - 0.1", json!(0.9));
+    give(json!(1.0), ". - 1", json!(0.0));
+}
 
-yields!(
-    encode_base64,
-    r#""hello cruel world" | encode_base64"#,
-    "aGVsbG8gY3J1ZWwgd29ybGQ="
-);
-yields!(
-    encode_decode_base64,
-    r#""hello cruel world" | encode_base64 | decode_base64"#,
-    "hello cruel world"
-);
-
-yields!(
-    escape_html,
-    r#""<p style='visibility: hidden'>sneaky</p>" | escape_html"#,
-    "&lt;p style=&apos;visibility: hidden&apos;&gt;sneaky&lt;/p&gt;"
-);
-yields!(
-    encode_uri,
-    r#""abc123 ?#+&[]" | encode_uri"#,
-    "abc123%20%3F%23%2B%26%5B%5D"
-);
+yields!(sub_arr, "[1, 2, 3] - [2, 3, 4]", json!([1]));
 
 #[test]
-fn group_by() {
-    gives(json!([]), "group_by(.)", [json!([])]);
-    gives(
-        json!([{"key":1, "value": "foo"},{"key":2, "value":"bar"},{"key":1,"value":"baz"}]),
-        "group_by(.key)",
-        [json!([[{"key":1,"value":"foo"}, {"key":1,"value":"baz"}],[{"key":2,"value":"bar"}]])],
+fn mul() {
+    give(json!(1), ". * 2", json!(2));
+    give(json!(1.0), ". * 2.0", json!(2.0));
+    give(json!(1), "2.0 * .", json!(2.0));
+
+    give(json!("Hello"), "2 * .", json!("HelloHello"));
+    give(json!(2), ". * \"Hello\"", json!("HelloHello"));
+
+    give(json!("Hello"), "0 * .", json!(null));
+    give(json!(-1), ". * \"Hello\"", json!(null));
+    give(
+        json!({"k": {"a": 1, "b": 2}}),
+        ". * {k: {a: 0, c: 3}}",
+        json!({"k": {"a": 0, "b": 2, "c": 3}}),
     );
 }
 
+yields!(div_str, r#""abcabcdab" / "ab""#, ["", "c", "cd", ""]);
+yields!(div_str_empty, r#""" / """#, json!([]));
+yields!(div_str_empty_str, r#""" / "ab""#, json!([]));
+yields!(div_str_empty_sep, r#""aöß" / """#, ["a", "ö", "ß"]);
+
 #[test]
-fn has() {
-    let err = Error::Index(Val::Null, Val::Int(0));
-    fail(json!(null), "has(0)", err);
-    let err = Error::Index(Val::Int(0), Val::Null);
-    fail(json!(0), "has([][0])", err);
-    let err = Error::Index(Val::Int(0), Val::Int(1));
-    fail(json!(0), "has(1)", err);
-    let err = Error::Index(Val::Str("a".to_string().into()), Val::Int(0));
-    fail(json!("a"), "has(0)", err);
-
-    give(json!([0, null]), "has(0)", json!(true));
-    give(json!([0, null]), "has(1)", json!(true));
-    give(json!([0, null]), "has(2)", json!(false));
-
-    give(json!({"a": 1, "b": null}), r#"has("a")"#, json!(true));
-    give(json!({"a": 1, "b": null}), r#"has("b")"#, json!(true));
-    give(json!({"a": 1, "b": null}), r#"has("c")"#, json!(false));
+fn logic() {
+    let tf = json!([true, false]);
+    give(tf.clone(), "[.[] and .[]]", json!([true, false, false]));
+    give(tf, "[.[] or .[]]", json!([true, true, false]));
 }
 
-yields!(indices_str, r#""a,b, cd, efg" | indices(", ")"#, [3, 7]);
+#[test]
+fn alt() {
+    give(json!([]), ".[] // 0", json!(0));
+    give(json!([null, false]), ".[] // 0", json!(0));
+    give(json!([null, 1, false, 2]), "[.[] // 0]", json!([1, 2]));
+    give(json!([1, 2]), "[.[] // 0]", json!([1, 2]));
+    give(json!([1, 2]), r#"[.[] // -"a"]"#, json!([1, 2]));
+}
+
+#[test]
+fn try_() {
+    give(json!(0), ".?", json!(0));
+    give(json!(0), r#"(-"a")?, 1"#, json!(1));
+    give(json!(0), r#"[(1, -"a", 2)?]"#, json!([1, 2]));
+}
+
+#[test]
+fn precedence() {
+    // concatenation binds stronger than application
+    give(json!(null), "[0, 1 | . + 1]", json!([1, 2]));
+    give(json!(null), "[0, (1 | . + 1)]", json!([0, 2]));
+
+    // assignment binds stronger than concatenation
+    give(json!(1), "[. += 1, 2]", json!([2, 2]));
+    give(json!(1), "[. += (1, 2)]", json!([2, 3]));
+
+    // alternation binds stronger than assignment
+    give(json!(false), "[(., .) | . = . // 0]", json!([0, 0]));
+    give(json!(false), "((., .) | . = .) // 0", json!(0));
+
+    // disjunction binds stronger than alternation
+    give(json!(false), ". or . // 0", json!(0));
+    give(json!(false), ". or (. // 0)", json!(true));
+
+    // conjunction binds stronger than disjunction
+    give(json!(true), "(0 != 0) and . or .", json!(true));
+    give(json!(true), "(0 != 0) and (. or .)", json!(false));
+
+    give(json!(null), "1 + 2 * 3", json!(7));
+    give(json!(null), "2 * 3 + 1", json!(7));
+}
+
+// these tests use the trick that `try t catch c` is valid syntax only for atomic terms `t`
+// TODO for v2.0
+//yields!(atomic_def, "try def x: 1; x + x catch 0", 2);
+yields!(atomic_neg, "try - 1 catch 0", -1);
+yields!(atomic_if, "try if 0 then 1 end catch 2", 1);
+yields!(atomic_try, "try try 0[0] catch 1 catch 2", 1);
+yields!(atomic_fold, "try reduce [][] as $x (0; 0) catch 1", 0);
+yields!(atomic_var, "0 as $x | try $x catch 1", 0);
+yields!(atomic_call, "def x: 0; try x catch 1", 0);
+yields!(atomic_str1, r#"try "" catch 1"#, "");
+yields!(atomic_str2, r#"def @f: .; try @f "" catch 1"#, "");
+yields!(atomic_rec, "try .. catch 0", json!(null));
+yields!(atomic_id, "try . catch 0", json!(null));
+yields!(atomic_key1, "{key: 0} | try .key catch 1", 0);
+yields!(atomic_key2, r#"{key: 0} | try . "key" catch 1"#, 0);
+yields!(atomic_key3, r#"def @f: .; {k: 0} | try .@f"k" catch 1"#, 0);
+yields!(atomic_num, "try 0 catch 1", 0);
+yields!(atomic_block, "try (1 + 1) catch 0", 2);
+yields!(atomic_path, "try [1][0] catch 0", 1);
+yields!(atomic_opt, "def x: 0; try x? catch 1", 0);
+
+yields!(neg_arr_iter1, "[-[][]]", json!([]));
+yields!(neg_arr_iter2, "try (-[])[] catch 0", 0);
+
+yields!(interpolation, r#"1 | "yields \(.+1)!""#, "yields 2!");
+// this diverges from jq, which yields ["2 2", "3 2", "2 4", "3 4"],
+// probably due to different order of evaluation addition
 yields!(
-    indices_arr_num,
-    "[0, 1, 2, 1, 3, 1, 4] | indices(1)",
-    [1, 3, 5]
+    interpolation_many,
+    r#"2 | ["\(., .+1) \(., .*2)"]"#,
+    ["2 2", "2 4", "3 2", "3 4"]
+);
+// this does not work in jq, because jq does not allow for defining formatters
+yields!(
+    interpolation_fmt,
+    r#"def @say: "say " + .; @say "I \("disco"), you \("party")""#,
+    "I say disco, you say party"
 );
 yields!(
-    indices_arr_arr,
-    "[0, 1, 2, 3, 1, 4, 2, 5, 1, 2, 6, 7] | indices([1, 2])",
-    [1, 8]
+    interpolation_nested,
+    r#""Here \("be \("nestings")")""#,
+    "Here be nestings"
 );
-yields!(indices_arr_str, r#"["a", "b", "c"] | indices("b")"#, [1]);
 
-yields!(indices_arr_empty, "[0, 1] | indices([])", json!([]));
-yields!(indices_arr_larger, "[1, 2] | indices([1, 2, 3])", json!([]));
+yields!(interpolation_str, r#""\("\tHi'\"\n❤\\")""#, "\tHi'\"\n❤\\");
+yields!(
+    interpolation_arr_str,
+    r#""\(["\tHi'\"\n❤\\"])""#,
+    "[\"\\tHi'\\\"\\n❤\\\\\"]"
+);
+yields!(interpolation_obj_str, r#""\({"❤\n": 0})""#, "{\"❤\\n\":0}");
 
-yields!(indices_arr_overlap, "[0, 0, 0] | indices([0, 0])", [0, 1]);
-yields!(indices_str_overlap, r#""aaa" | indices("aa")"#, [0, 1]);
-yields!(indices_str_gb1, r#""🇬🇧!" | indices("!")"#, [2]);
-yields!(indices_str_gb2, r#""🇬🇧🇬🇧" | indices("🇬🇧")"#, [0, 2]);
-
-#[test]
-fn json() {
-    // TODO: correct this
-    give(json!(1.0), "tojson", json!("1.0"));
-    give(json!(0), "1.0 | tojson", json!("1.0"));
-    give(json!(0), "1.1 | tojson", json!("1.1"));
-    give(json!(0), "0.0 / 0.0 | tojson", json!("null"));
-    give(json!(0), "1.0 / 0.0 | tojson", json!("null"));
-}
-
-#[test]
-fn keys_unsorted() {
-    give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
-    give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
-
-    let err = |v| Error::Type(v, Type::Iter);
-    fail(json!(0), "keys_unsorted", err(Val::Int(0)));
-    fail(json!(null), "keys_unsorted", err(Val::Null));
-}
-
-yields!(length_str_foo, r#""ƒoo" | length"#, 3);
-yields!(length_str_namaste, r#""नमस्ते" | length"#, 6);
-yields!(length_obj, r#"{"a": 5, "b": 3} | length"#, 2);
-yields!(length_int_pos, " 2 | length", 2);
-yields!(length_int_neg, "-2 | length", 2);
-yields!(length_float_pos, " 2.5 | length", 2.5);
-yields!(length_float_neg, "-2.5 | length", 2.5);
-
-yields!(utf8bytelength_foo1, r#""foo" | utf8bytelength"#, 3);
-yields!(utf8bytelength_foo2, r#""ƒoo" | utf8bytelength"#, 4);
-yields!(utf8bytelength_namaste, r#""नमस्ते" | utf8bytelength"#, 18);
+yields!(
+    obj_trailing_comma,
+    "{a:1, b:2, c:3,}",
+    json!({"a": 1, "b": 2, "c": 3})
+);
+yields!(
+    obj_complex_key,
+    r#""c" | {a: 1, "b": 2, (.): 3}"#,
+    json!({"a": 1, "b": 2, "c": 3})
+);
+yields!(obj_proj, "{a: 1, b: 2} | {a,}", json!({"a": 1}));
+yields!(
+    obj_proj_set,
+    "{a: 1, b: 2} | {a, c: 3}",
+    json!({"a": 1, "c": 3})
+);
+yields!(obj_var, r#""x" as $k | {$k}"#, json!({"k": "x"}));
+yields!(obj_var_val, r#""x" as $k | {$k: 0}"#, json!({"x": 0}));
+yields!(
+    obj_multi_keys,
+    r#"[{("a", "b"): 1}]"#,
+    json!([{"a": 1}, {"b": 1}])
+);
+yields!(
+    obj_multi_vals,
+    "[{a: (1,2), b: (3,4)}]",
+    json!([{"a": 1, "b": 3}, {"a": 1, "b": 4}, {"a": 2, "b": 3}, {"a": 2, "b": 4}])
+);
 
 #[test]
-fn limit() {
-    // a big WTF: jq outputs "1" here! that looks like another bug ...
-    gives(json!(null), "limit(0; 1,2)", []);
-    give(json!(null), "[limit(1, 0, 3; 0, 1)]", json!([0, 0, 1]));
+fn if_then_else() {
+    gives(json!([]), "if . | .[] then 0 else 0 end", []);
 
-    // here, jaq diverges from jq, which returns `[0, 1]`
-    give(json!(null), "[limit(-1; 0, 1)]", json!([]));
+    let f = r#".[] | if . < 0 then "n" else "p" end"#;
+    gives(json!([-1, 1, -1]), f, [json!("n"), json!("p"), json!("n")]);
+
+    let f = r#".[] | if .<0 then "n" elif .>0 then "p" else "z" end"#;
+    gives(json!([-1, 0, 1]), f, [json!("n"), json!("z"), json!("p")]);
+
+    let f = r#"if .>0, .<0 then 0 elif .>0, .<0 then 1 else 2 end"#;
+    gives(json!(1), f, [json!(0), json!(1), json!(2)]);
 }
 
 yields!(
-    math_0_argument_scalar_filters,
-    "[-2.2, -1.1, 0, 1.1, 2.2 | sin as $s | cos as $c | $s * $s + $c * $c]",
-    [1.0, 1.0, 1.0, 1.0, 1.0]
+    label_break,
+    "[label $x | 0, (label $y | 1, break $x, 2), 3]",
+    [0, 1]
+);
+
+yields!(label_break_rec, "def f(a): (label $x | a | ., f(a)), {}; [0 | label $y | f(if . > 1 then break $y else . + 1 end)]", [1, 2]);
+
+// This is some nasty stuff.
+// Whenever a `break $x` is executed here, `$x` refers to
+// the `label` that was defined in the *parent call*.
+yields!(
+    label_break_rec2,
+    "def f(a): (label $x | a | ., f(if . > 1 then break $x else .+1 end)), .; [0 | f(1)]",
+    [1, 2, 1, 0]
 );
 
 yields!(
-    math_0_argument_vector_filters,
-    "[3, 3.25, 3.5 | modf]",
-    [[0.0, 3.0], [0.25, 3.0], [0.5, 3.0]]
+    label_break_rec3,
+    "[label $x | def f: .+1 | if . > 2 then break $x end, f; 0 | f]",
+    [1, 2]
 );
+
+// This behaviour diverges from jq. In jaq, a `try` will propagate all
+// errors in the stream to the `catch` filter.
+yields!(
+    try_catch_does_not_short_circuit,
+    "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
+    ["1", "2", "cannot index {} with 0", "4"]
+);
+yields!(
+    try_catch_nested,
+    "try try {}[0] catch {}[1] catch .",
+    "cannot index {} with 1"
+);
+yields!(
+    try_catch_multi_valued,
+    "[(try (1,2,3[0]) catch (3,4)) | . - 1]",
+    [0, 1, 2, 3]
+);
+yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2, 4]);
+yields!(
+    try_catch_prefix_operation,
+    r#"(try -[] catch .) | . > "" and . < []"#,
+    true
+);
+yields!(
+    try_catch_postfix_operation,
+    "[try 0[0]? catch .]",
+    json!([])
+);
+
+// try should not gulp expressions after an infix operator; if it did,
+// the inner try in these tests would resolve to empty and omit the
+// 1[1] error expression, and the whole expression would yield an
+// empty stream
+yields!(
+    try_parsing_isnt_greedy_wrt_comma,
+    "try (try 0[0], 1[1]) catch . == try 1[1] catch .",
+    true
+);
+yields!(
+    try_parsing_isnt_greedy_wrt_pipe,
+    "try (try 0 | 1[1]) catch . == try 1[1] catch .",
+    true
+);
+yields!(
+    try_parsing_isnt_greedy_wrt_plus,
+    "try (try 0 + 1[1]) catch . == try 1[1] catch .",
+    true
+);
+
+#[test]
+fn ord() {
+    give(json!(null), ". < (0 != 0)", json!(true));
+    give(json!(false), ". < (0 == 0)", json!(true));
+    give(json!(1), ". > 0.0", json!(true));
+    give(json!(1), ". < 1.5", json!(true));
+    give(json!(1.1), ". < 1.5", json!(true));
+    give(json!(1.5), ". > 1.1", json!(true));
+    give(json!("ab"), ". < \"b\"", json!(true));
+    give(json!("a"), ". < \"ab\"", json!(true));
+    give(json!({"a": 2}), r#". < {"a": 1, "b": 0}"#, json!(true));
+}
+
+#[test]
+fn eq() {
+    give(json!(1), ". == 1", json!(true));
+    give(json!(1), "0 == . - .", json!(true));
+    give(json!(1), ". == -1 * -1", json!(true));
+    give(json!(1), ". == 2 / 2", json!(true));
+
+    give(json!(0), ". == -.", json!(true));
+    give(json!(0), "-. == .", json!(true));
+    give(json!(0.0), ". == -.", json!(true));
+    give(json!(0.0), "-. == .", json!(true));
+
+    gives(json!([0, 1]), ".[] == 0", [json!(true), json!(false)]);
+
+    give(json!(1), ". == 1.0", json!(true));
+    give(json!(1), ". == 2 / 2.0", json!(true));
+
+    give(json!({"a": 1, "b": 2}), ". == {b: 2, a: 1}", json!(true));
+}
+
+yields!(def_var_filter, "def f($a; b): $a+b; f(1; 2)", 3);
+
+#[test]
+fn vars() {
+    give(json!(1), " 2  as $x | . + $x", json!(3));
+    give(json!(1), ".+1 as $x | . + $x", json!(3));
+    give(json!(1), ". as $x | (2 as $y | 3) | $x", json!(1));
+
+    give(json!(1), "def g(f): f; . as $x | g($x)", json!(1));
+
+    let f = r#"def g(f): "z" as $z | f | .+$z; "x" as $x | g("y" as $y | $x+$y)"#;
+    give(json!(null), f, json!("xyz"));
+
+    let f = r#"def g(f): "a" as $a | "b" as $b | $a + $b + f; "c" as $c | g($c)"#;
+    give(json!(null), f, json!("abc"));
+
+    let f = r#". as $x | ("y" as $y | "z") | $x"#;
+    give(json!("x"), f, json!("x"));
+
+    let out = || json!([[1, 4], [1, 5], [2, 4], [2, 5]]);
+    let f = "def f($a; b; $c; d): [$a+b, $c+d]; [f((1, 2); 0; (3, 4); 1)]";
+    give(json!(null), f, out());
+    let f = "def f($a; b; $c; d): [$a+b, $c+d]; 0 as $a | 1 as $b | [f((1, 2); $a; (3, 4); $b)]";
+    give(json!(null), f, out());
+}
+
+yields!(shadow_funs, "def a: 1; def b: a; def a: 2; a + b", 3);
+yields!(shadow_vars, "1 as $x | 2 as $x | $x", 2);
+// arguments from the right are stronger than from the left
+yields!(shadow_args, "def f(g; g): g; f(1; 2)", 2);
+
+yields!(id_var, "def f($a): $a; f(0)", 0);
+yields!(id_arg, "def f( a):  a; f(0)", 0);
+yields!(args_mixed, "def f(a; $b): a + $b; 1 as $a | f($a; 2)", 3);
+
+yields!(nested_comb_args, "def f(a): def g(b): a + b; g(1); f(2)", 3);
+yields!(nested_general, "1 + (2 as $x | def f(a): a*$x; f(3))", 7);
+
+const ACKERMANN: &str = "def ack($m; $n):
+  if $m == 0 then $n + 1
+  elif $n == 0 then ack($m-1; 1)
+  else ack($m-1; ack($m; $n-1))
+  end;";
+
+yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 4)"), 125);
+
+#[test]
+fn reduce() {
+    let ff = |s| format!(". as $x | reduce 2 as $y (4; {}) | . + $x", s);
+
+    let f = ff("3 as $z | . + $x + $y + $z");
+    give(json!(1), &f, json!(11));
+
+    let f = "def g(x; y): 3 as $z | . + x + y + $z; ".to_owned() + &ff("g($x; $y)");
+    give(json!(1), &f, json!(11));
+}
 
 yields!(
-    math_2_argument_filters,
-    "[pow(0.25, 4, 9; 1, 0.5, 2)]",
-    [0.25, 0.5, 0.0625, 4.0, 2.0, 16.0, 9.0, 3.0, 81.0]
+    foreach_cumulative_sum,
+    "[1, 2, 3] | [foreach .[] as $x (0; .+$x)]",
+    [1, 3, 6]
 );
-
 yields!(
-    math_3_argument_filters,
-    "[fma(2, 1; 3, 4; 4, 5)]",
-    [10.0, 11.0, 12.0, 13.0, 7.0, 8.0, 8.0, 9.0]
+    for_cumulative_sum,
+    "[1, 2, 3] | [for .[] as $x (0; .+$x)]",
+    [0, 1, 3, 6]
 );
 
-yields!(range_pp, "[range(0; 6;  2)]", [0, 2, 4]);
-yields!(range_pn, "[range(0; 6; -2)]", json!([]));
-yields!(range_np, "[range(0; -6; 2)]", json!([]));
-yields!(range_nn, "[range(0; -6; -2)]", [0, -2, -4]);
-yields!(range_zz, "[range(0; 0; 0)]", json!([]));
-yields!(range_fp, "[range(0.0; 2; 0.5)]", [0.0, 0.5, 1.0, 1.5]);
-yields!(range_ip, "[limit(3; range(0; 1/0; 1))]", [0, 1, 2]);
-yields!(range_in, "[limit(3; range(0; -1/0; -1))]", [0, -1, -2]);
-// here, we diverge from jq, which just returns the empty list
-yields!(range_pz, "[limit(3; range(0; 6; 0))]", json!([0, 0, 0]));
-yields!(range_nz, "[limit(3; range(0; -6; 0))]", json!([0, 0, 0]));
+// jq will give only [4, 3, 7, 12] here because
+// it keeps only the *last* output value as input value for the next iteration, whereas
+// jaq keeps all output values as input values
+yields!(
+    foreach_many_outputs,
+    "[foreach (3,4) as $x (1; .+$x, .*$x)]",
+    [4, 8, 16, 3, 7, 12]
+);
+yields!(
+    for_many_outputs,
+    "[for (3,4) as $x (1; .+$x, .*$x)]",
+    [1, 4, 8, 16, 3, 7, 12]
+);
 
-#[test]
-fn regex() {
-    let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;
-    let s = "2012-03-14, 2013-01-01 and 2014-07-05";
-    let f = |f, re, flags| format!("{f}(\"{re}\"; \"{flags}\")");
-
-    let out = json!(["", ", ", " and ", ""]);
-    give(json!(s), &f("split_", date, "g"), out);
-
-    let c = |o: usize, s: &str| {
-        json!({
-          "offset": o,
-          "length": s.chars().count(),
-          "string": s
-        })
-    };
-    let d1 = json!([c(00, "2012-03-14"), c(00, "2012"), c(05, "03"), c(08, "14")]);
-    let d2 = json!([c(12, "2013-01-01"), c(12, "2013"), c(17, "01"), c(20, "01")]);
-    let d3 = json!([c(27, "2014-07-05"), c(27, "2014"), c(32, "07"), c(35, "05")]);
-
-    give(json!(s), &f("matches", date, "g"), json!([d1, d2, d3]));
-
-    let out = json!(["", d1, ", ", d2, " and ", d3, ""]);
-    give(json!(s), &f("split_matches", date, "g"), out);
-
-    let out = json!(["", d1, ", 2013-01-01 and 2014-07-05"]);
-    give(json!(s), &f("split_matches", date, ""), out);
-}
-
-#[test]
-fn round() {
-    give(json!(1), "round", json!(1));
-    give(json!(1.0), "round", json!(1));
-    give(json!(-1.0), "round", json!(-1));
-    give(json!(-1), "round", json!(-1));
-
-    give(json!(-1.5), "round", json!(-2));
-    give(json!(-1.5), "floor", json!(-2));
-    give(json!(-1.5), "ceil", json!(-1));
-
-    give(json!(-1.4), "round", json!(-1));
-    give(json!(-1.4), "floor", json!(-2));
-    give(json!(-1.4), "ceil", json!(-1));
-
-    let err = |v| Error::Type(Val::from(v), Type::Float);
-    fail(json!([]), "round", err(json!([])));
-    fail(json!({}), "round", err(json!({})));
-}
-
-#[test]
-fn startswith() {
-    give(json!("foobar"), r#"startswith("")"#, json!(true));
-    give(json!("foobar"), r#"startswith("bar")"#, json!(false));
-    give(json!("foobar"), r#"startswith("foo")"#, json!(true));
-    give(json!(""), r#"startswith("foo")"#, json!(false));
-}
-
-#[test]
-fn endswith() {
-    give(json!("foobar"), r#"endswith("")"#, json!(true));
-    give(json!("foobar"), r#"endswith("foo")"#, json!(false));
-    give(json!("foobar"), r#"endswith("bar")"#, json!(true));
-    give(json!(""), r#"endswith("foo")"#, json!(false));
-}
-
-#[test]
-fn ltrimstr() {
-    give(json!("foobar"), r#"ltrimstr("")"#, json!("foobar"));
-    give(json!("foobar"), r#"ltrimstr("foo")"#, json!("bar"));
-    give(json!("foobar"), r#"ltrimstr("bar")"#, json!("foobar"));
-    give(json!("اَلْعَرَبِيَّةُ"), r#"ltrimstr("ا")"#, json!("َلْعَرَبِيَّةُ"));
-}
-
-#[test]
-fn rtrimstr() {
-    give(json!("foobar"), r#"rtrimstr("")"#, json!("foobar"));
-    give(json!("foobar"), r#"rtrimstr("bar")"#, json!("foo"));
-    give(json!("foobar"), r#"rtrimstr("foo")"#, json!("foobar"));
-    give(json!("اَلْعَرَبِيَّةُ"), r#"rtrimstr("ا")"#, json!("اَلْعَرَبِيَّةُ"));
-}
+yields!(update_alt, "[[0!=0, 3] | .[] //= (1, 2)]", [[1, 3], [2, 3]]);
