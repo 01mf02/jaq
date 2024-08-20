@@ -295,7 +295,7 @@ fn parse_defs(code: &str) -> Result<parse::Module<&str, Vec<Def<&str>>>, Error<&
 /// Example:
 ///
 /// ~~~
-/// # use jaq_syn::parse;
+/// # use jaq_interpret::load::parse;
 /// let t = parse("[] | .[]", |p| p.term());
 /// ~~~
 pub fn parse<'s, T: Default, F>(s: &'s str, f: F) -> Option<T>

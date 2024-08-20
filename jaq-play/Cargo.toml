@@ -17,7 +17,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
-jaq-core      = { version = "1.2.0", path = "../jaq-core" }
 jaq-std       = { version = "1.2.0", path = "../jaq-std" }
 
 aho-corasick = "1.1.2"

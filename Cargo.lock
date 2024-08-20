@@ -238,7 +238,6 @@ dependencies = [
  "codesnake",
  "env_logger",
  "hifijson",
- "jaq-core",
  "jaq-interpret",
  "jaq-std",
  "memmap2",
@@ -246,22 +245,6 @@ dependencies = [
  "tempfile",
  "unicode-width",
  "yansi",
-]
-
-[[package]]
-name = "jaq-core"
-version = "1.5.1"
-dependencies = [
- "aho-corasick",
- "base64",
- "chrono",
- "hifijson",
- "jaq-interpret",
- "libm",
- "log",
- "regex",
- "serde_json",
- "urlencoding",
 ]
 
 [[package]]
@@ -286,7 +269,6 @@ dependencies = [
  "console_log",
  "getrandom",
  "hifijson",
- "jaq-core",
  "jaq-interpret",
  "jaq-std",
  "js-sys",
@@ -300,9 +282,16 @@ dependencies = [
 name = "jaq-std"
 version = "1.6.0"
 dependencies = [
- "jaq-core",
+ "aho-corasick",
+ "base64",
+ "chrono",
+ "hifijson",
  "jaq-interpret",
+ "libm",
+ "log",
+ "regex",
  "serde_json",
+ "urlencoding",
 ]
 
 [[package]]

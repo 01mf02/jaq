@@ -10,13 +10,13 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{Compiler, Ctx, Error, FilterT, Native, RcIter, Val};
+//! use jaq_interpret::{load, Compiler, Ctx, Error, FilterT, Native, RcIter, Val};
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
 //! let code = ".[]";
 //!
-//! use jaq_syn::load::{Arena, File, Loader};
+//! use load::{Arena, File, Loader};
 //!
 //! // start out only from core filters,
 //! // which do not include filters in the standard library
