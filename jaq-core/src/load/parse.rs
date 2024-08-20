@@ -681,18 +681,19 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
-    fn include(&mut self) -> Result<'s, 't, (&'s str, Option<&'s str>)> {
-        self.bare_str().map(|path| (path, None))
-    }
-
-    fn import(&mut self) -> Result<'s, 't, (&'s str, Option<&'s str>)> {
+    /// Parse what comes after an include / import.
+    fn dep(&mut self, import: bool) -> Result<'s, 't, Dep<&'s str>> {
         let path = self.bare_str()?;
-        self.just("as")?;
-        let name = match self.i.next() {
-            Some(Token(v, Tok::Word | Tok::Var)) => *v,
-            next => return Err((Expect::Ident, next)),
-        };
-        Ok((path, Some(name)))
+        let name = import.then(|| {
+            self.just("as")?;
+            match self.i.next() {
+                Some(Token(v, Tok::Word | Tok::Var)) => Ok(*v),
+                next => Err((Expect::Ident, next)),
+            }
+        }).transpose()?;
+        let meta = !matches!(self.i.as_slice(), [Token(";", _), ..]);
+        let meta = meta.then(|| self.term()).transpose()?;
+        Ok((path, name, meta))
     }
 
     /// Parse a module with a body returned by the given function.
@@ -709,8 +710,8 @@ impl<'s, 't> Parser<'s, 't> {
 
         let deps = core::iter::from_fn(|| {
             self.maybe(|p| match p.i.next() {
-                Some(Token("include", _)) => Some(p.terminated(Self::include)),
-                Some(Token("import", _)) => Some(p.terminated(Self::import)),
+                Some(Token("include", _)) => Some(p.terminated(|p| p.dep(false))),
+                Some(Token("import", _)) => Some(p.terminated(|p| p.dep(true))),
                 _ => None,
             })
         })
@@ -721,6 +722,8 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(Module { meta, deps, body })
     }
 }
+
+type Dep<S> = (S, Option<S>, Option<Term<S>>);
 
 /// jq module, consisting of metadata, imports/includes, and a body.
 ///
@@ -737,7 +740,7 @@ impl<'s, 't> Parser<'s, 't> {
 #[derive(Debug, Default)]
 pub(crate) struct Module<S, B> {
     pub meta: Option<Term<S>>,
-    pub deps: Vec<(S, Option<S>)>,
+    pub deps: Vec<Dep<S>>,
     pub body: B,
 }
 

@@ -77,18 +77,18 @@ pub enum Error<S> {
 #[derive(Default)]
 pub struct Module<S, B = Vec<Def<S>>> {
     /// metadata (optional)
-    pub meta: Option<Term<S>>,
+    pub(crate) meta: Option<Term<S>>,
     /// included and imported modules
     ///
     /// Suppose that we have [`Modules`] `mods` and the current [`Module`] is `mods[id]`.
     /// Then for every `(id_, name)` in `mods[id].1.mods`, we have that
     /// the included/imported module is stored in `mods[id_]` (`id_ < id`), and
     /// the module is included if `name` is `None` and imported if `name` is `Some(name)`.
-    pub mods: Vec<(usize, Option<S>)>,
+    pub(crate) mods: Vec<(usize, Option<S>)>,
     /// imported variables, storing path and name (always starts with `$`)
-    pub vars: Vec<(S, S)>,
+    pub(crate) vars: Vec<(S, S)>,
     /// everything that comes after metadata and includes/imports
-    pub body: B,
+    pub(crate) body: B,
 }
 
 /// Tree of modules containing definitions.
@@ -112,7 +112,7 @@ impl<S: core::ops::Deref<Target = str>, B> parse::Module<S, B> {
         let mut mods = Vec::from([(0, None)]);
         let mut vars = Vec::new();
         let mut errs = Vec::new();
-        for (path, as_) in self.deps {
+        for (path, as_, _meta) in self.deps {
             match as_ {
                 Some(x) if x.starts_with('$') => vars.push((path, x)),
                 as_ => match f(&path) {
