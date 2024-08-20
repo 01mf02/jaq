@@ -21,10 +21,9 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
-use jaq_interpret::error::{self, Error};
-use jaq_interpret::results::{run_if_ok, then};
-use jaq_interpret::{load, Bind, FilterT, Native, RunPtr, UpdatePtr};
-use jaq_interpret::{Exn, ValR, ValX, ValXs};
+use jaq_core::error::{self, Error};
+use jaq_core::results::{run_if_ok, then};
+use jaq_core::{load, Bind, Cv, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
 use jaq_json::Val;
 
 /// Definitions of the standard library.
@@ -63,7 +62,7 @@ pub fn generic_extra<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
 }
 
 /// Values that the core library can operate on.
-pub trait ValT: jaq_interpret::ValT + Ord + From<f64> {
+pub trait ValT: jaq_core::ValT + Ord + From<f64> {
     /// Convert an array into a sequence.
     ///
     /// This returns the original value as `Err` if it is not an array.
@@ -627,8 +626,6 @@ fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         math::fff_f!(fma),
     ])
 }
-
-type Cv<'a, V = Val> = (jaq_interpret::Ctx<'a, V>, V);
 
 #[cfg(feature = "regex")]
 fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {

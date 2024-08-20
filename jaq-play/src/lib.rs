@@ -1,8 +1,9 @@
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_interpret::{compile, Ctx, Native, RcIter, Val};
+use jaq_core::{load, compile, Ctx, Native, RcIter};
+use jaq_json::Val;
 use wasm_bindgen::prelude::*;
 
-type Filter = jaq_interpret::Filter<Native<Val>>;
+type Filter = jaq_core::Filter<Native<Val>>;
 
 struct FormatterFn<F>(F);
 
@@ -131,12 +132,12 @@ impl Settings {
 
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
-type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
+type FileReports = (load::File<String>, Vec<Report>);
 
 enum Error {
     Report(Vec<FileReports>),
     Hifijson(String),
-    Jaq(jaq_interpret::Error<Val>),
+    Jaq(jaq_core::Error<Val>),
 }
 
 #[wasm_bindgen]
@@ -257,11 +258,11 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_syn::load::{import, Arena, File, Loader};
+    use jaq_core::load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::std()).with_std_read();
+    let loader = Loader::new(jaq_std::defs()).with_std_read();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
@@ -270,14 +271,14 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
     let compiler = Compiler::default()
-        .with_funs(jaq_core::core())
+        .with_funs(jaq_std::funs())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))
 }
 
-fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
-    use jaq_syn::load::Error;
+fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
+    use load::Error;
 
     let errs = errs.into_iter().map(|(file, err)| {
         let code = file.code;
@@ -323,15 +324,15 @@ impl Color {
 }
 
 fn report_io(code: &str, (path, error): (&str, String)) -> Report {
-    let path_range = jaq_syn::span(code, path);
+    let path_range = load::span(code, path);
     Report {
         message: format!("could not load file {}: {}", path, error),
         labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
     }
 }
 
-fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
-    use jaq_syn::span;
+fn report_lex(code: &str, (expected, found): load::lex::Error<&str>) -> Report {
+    use load::span;
     // truncate found string to its first character
     let found = &found[..found.char_indices().nth(1).map_or(found.len(), |(i, _)| i)];
 
@@ -345,7 +346,7 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     let label = (found_range, found, Color::Red);
 
     let labels = match expected {
-        jaq_syn::lex::Expect::Delim(open) => {
+        load::lex::Expect::Delim(open) => {
             let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
                 .map(|(s, c)| (s.into(), c));
             Vec::from([(span(code, open), text.into(), Color::Yellow), label])
@@ -359,8 +360,8 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     }
 }
 
-fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
-    let found_range = jaq_syn::span(code, found);
+fn report_parse(code: &str, (expected, found): load::parse::Error<&str>) -> Report {
+    let found_range = load::span(code, found);
 
     let found = if found.is_empty() {
         "unexpected end of input"
@@ -376,7 +377,7 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> R
 }
 
 fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
-    let found_range = jaq_syn::span(code, found);
+    let found_range = load::span(code, found);
     let message = format!("undefined {}", undefined.as_str());
     let found = [(message.clone(), None)].into();
 

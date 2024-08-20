@@ -1,12 +1,12 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_interpret::{compile, load, Ctx, Native, RcIter};
+use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
 
-type Filter = jaq_interpret::Filter<Native<Val>>;
+type Filter = jaq_core::Filter<Native<Val>>;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -400,7 +400,7 @@ enum Error {
     Io(Option<String>, io::Error),
     Report(Vec<FileReports>),
     Parse(String),
-    Jaq(jaq_interpret::Error<Val>),
+    Jaq(jaq_core::Error<Val>),
     Persist(tempfile::PersistError),
     FalseOrNull,
     NoOutput,

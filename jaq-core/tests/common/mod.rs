@@ -2,8 +2,8 @@ use jaq_json::{Error, Val, ValR};
 use serde_json::Value;
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
-    use jaq_interpret::load::{Arena, File, Loader};
-    use jaq_interpret::{Compiler, Native};
+    use jaq_core::load::{Arena, File, Loader};
+    use jaq_core::{Compiler, Native};
 
     let arena = Arena::default();
     let loader = Loader::new([]);

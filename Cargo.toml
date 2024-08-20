@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "jaq-interpret",
+    "jaq-core",
     "jaq-std",
     "jaq-json",
     "jaq",

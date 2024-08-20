@@ -3,7 +3,7 @@
 pub mod common;
 
 use common::{fail, give, gives};
-use jaq_interpret::error::{Error, Type};
+use jaq_core::error::{Error, Type};
 use jaq_json::Val;
 use serde_json::json;
 

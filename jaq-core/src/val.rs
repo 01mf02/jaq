@@ -16,6 +16,7 @@ pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
 pub type ValXs<'a, V> = BoxIter<'a, ValX<'a, V>>;
 
+/// Range of options, used for iteration operations.
 pub type Range<V> = core::ops::Range<Option<V>>;
 
 /// Values that can be processed by jaq.

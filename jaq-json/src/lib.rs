@@ -2,14 +2,13 @@
 
 extern crate alloc;
 
-use jaq_interpret::error::Type;
-use jaq_interpret::val::{Range, ValT};
-use jaq_interpret::{Exn, ops};
-use jaq_interpret::{path::Opt};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
+use jaq_core::error::Type;
+use jaq_core::val::{Range, ValT};
+use jaq_core::{ops, path, Exn};
 
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
@@ -48,11 +47,11 @@ pub enum Val {
 type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 /// Error that can occur during filter execution.
-pub type Error = jaq_interpret::Error<Val>;
+pub type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
-pub type ValR = jaq_interpret::ValR<Val>;
+pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-pub type ValX<'a> = jaq_interpret::ValX<'a, Val>;
+pub type ValX<'a> = jaq_core::ValX<'a, Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -122,7 +121,7 @@ impl ValT for Val {
 
     fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
         self,
-        opt: Opt,
+        opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
         match self {
@@ -142,7 +141,7 @@ impl ValT for Val {
     fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
         index: &Self,
-        opt: Opt,
+        opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
         match self {
@@ -192,7 +191,7 @@ impl ValT for Val {
     fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
         range: Range<&Self>,
-        opt: Opt,
+        opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
         if let Val::Arr(ref mut a) = self {

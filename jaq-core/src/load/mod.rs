@@ -5,12 +5,12 @@ pub mod parse;
 mod prec_climb;
 pub mod test;
 
-pub use lex::Lexer;
-pub use parse::Parser;
 use crate::{ops, path};
 use alloc::string::String;
 use alloc::vec::Vec;
+pub use lex::Lexer;
 use lex::Token;
+pub use parse::Parser;
 use parse::{Def, Term};
 
 #[cfg(feature = "std")]
@@ -292,7 +292,7 @@ fn parse_defs(code: &str) -> Result<parse::Module<&str, Vec<Def<&str>>>, Error<&
 /// Example:
 ///
 /// ~~~
-/// # use jaq_interpret::load::parse;
+/// # use jaq_core::load::parse;
 /// let t = parse("[] | .[]", |p| p.term());
 /// ~~~
 pub fn parse<'s, T: Default, F>(s: &'s str, f: F) -> Option<T>

@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{load, Compiler, Ctx, Error, FilterT, Native, RcIter};
+//! use jaq_core::{load, Compiler, Ctx, Error, FilterT, Native, RcIter};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
 //!
@@ -29,7 +29,7 @@
 //! let modules = loader.load(&arena, File { path: "", code }).unwrap();
 //!
 //! // compile the filter
-//! let filter = jaq_interpret::Compiler::<_, Native<_>>::default()
+//! let filter = jaq_core::Compiler::<_, Native<_>>::default()
 //!     .compile(modules)
 //!     .unwrap();
 //!

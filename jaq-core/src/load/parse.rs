@@ -2,7 +2,7 @@
 
 use super::lex::{StrPart, Tok, Token};
 use super::path::{self, Path};
-use super::{prec_climb, ops};
+use super::{ops, prec_climb};
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
@@ -322,7 +322,7 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Parse a binary operator, including `,` if `with_comma` is true.
     fn op(&mut self, with_comma: bool) -> Option<BinaryOp> {
-        use ops::{Math, Cmp};
+        use ops::{Cmp, Math};
         self.maybe(|p| match p.i.next() {
             Some(Token(s, _)) => Some(match *s {
                 "," if with_comma => BinaryOp::Comma,
@@ -769,7 +769,7 @@ impl<S, F> Def<S, F> {
 
 impl prec_climb::Op for BinaryOp {
     fn precedence(&self) -> usize {
-        use ops::{Math, Cmp};
+        use ops::{Cmp, Math};
         match self {
             Self::Comma => 1,
             Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 2,

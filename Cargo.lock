@@ -238,7 +238,7 @@ dependencies = [
  "codesnake",
  "env_logger",
  "hifijson",
- "jaq-interpret",
+ "jaq-core",
  "jaq-json",
  "jaq-std",
  "memmap2",
@@ -249,7 +249,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "jaq-interpret"
+name = "jaq-core"
 version = "1.5.0"
 dependencies = [
  "dyn-clone",
@@ -266,7 +266,7 @@ dependencies = [
  "ahash",
  "hifijson",
  "indexmap",
- "jaq-interpret",
+ "jaq-core",
  "serde_json",
 ]
 
@@ -279,7 +279,8 @@ dependencies = [
  "console_log",
  "getrandom",
  "hifijson",
- "jaq-interpret",
+ "jaq-core",
+ "jaq-json",
  "jaq-std",
  "js-sys",
  "log",
@@ -296,7 +297,7 @@ dependencies = [
  "base64",
  "chrono",
  "hifijson",
- "jaq-interpret",
+ "jaq-core",
  "jaq-json",
  "libm",
  "log",

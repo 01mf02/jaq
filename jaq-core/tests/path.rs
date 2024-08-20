@@ -1,7 +1,7 @@
 pub mod common;
 
 use common::{fail, give, gives};
-use jaq_interpret::Error;
+use jaq_core::Error;
 use serde_json::json;
 
 #[test]
