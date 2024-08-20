@@ -1,6 +1,7 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_interpret::{compile, load, Ctx, Native, RcIter, Val};
+use jaq_interpret::{compile, load, Ctx, Native, RcIter};
+use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};

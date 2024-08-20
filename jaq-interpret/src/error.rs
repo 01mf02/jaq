@@ -15,7 +15,7 @@ pub enum Error<V> {
     /// Expected a value of given type, but got something else
     Type(V, Type),
     /// `1 - "a"`
-    MathOp(V, crate::MathOp, V),
+    MathOp(V, crate::ops::Math, V),
     /// `{} | .[0]` or `[] | has("a")` or `{} | has(0)`
     Index(V, V),
 

@@ -1,8 +1,7 @@
 //! Program compilation.
 
 use crate::load::{self, lex, parse};
-use crate::{Bind, Filter};
-use crate::{MathOp, OrdOp};
+use crate::{ops, Bind, Filter};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
 type NativeId = usize;
@@ -111,15 +110,15 @@ pub(crate) enum Term<T = TermId> {
     /// Update-assignment (`f |= g`)
     Update(T, T),
     /// Arithmetical update-assignment (`f += g`, `f -= g`, `f *= g`, `f /= g`, `f %= g`)
-    UpdateMath(T, MathOp, T),
+    UpdateMath(T, ops::Math, T),
     /// Alternation update-assignment (`f //= g`)
     UpdateAlt(T, T),
     /// Logical operation (`f and g`, `f or g`)
     Logic(T, bool, T),
     /// Arithmetical operation (`f + g`, `f - g`, `f * g`, `f / g`, `f % g`)
-    Math(T, MathOp, T),
+    Math(T, ops::Math, T),
     /// Comparison operation (`f < g`, `f <= g`, `f > g`, `f >= g`, `f == g`, `f != g`)
-    Ord(T, OrdOp, T),
+    Cmp(T, ops::Cmp, T),
     /// Alternation (`f // g`)
     Alt(T, T),
     /// Try-catch (`try f catch g`)
@@ -471,7 +470,7 @@ impl<'s, F> Compiler<&'s str, F> {
                     Assign => Term::Assign(l, r),
                     Update => Term::Update(l, r),
                     UpdateMath(op) => Term::UpdateMath(l, op, r),
-                    Ord(op) => Term::Ord(l, op, r),
+                    Cmp(op) => Term::Cmp(l, op, r),
                     Or => Term::Logic(l, true, r),
                     And => Term::Logic(l, false, r),
                     Alt => Term::Alt(l, r),
@@ -655,7 +654,7 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn sum_or(&mut self, f: impl FnOnce() -> Term, terms: Vec<Term>) -> Term {
-        use MathOp::Add;
+        use ops::Math::Add;
         let mut iter = terms.into_iter().rev();
         let last = iter.next().unwrap_or_else(f);
         iter.fold(last, |acc, x| {

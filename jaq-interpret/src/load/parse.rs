@@ -2,7 +2,7 @@
 
 use super::lex::{StrPart, Tok, Token};
 use super::path::{self, Path};
-use super::{prec_climb, MathOp, OrdOp};
+use super::{prec_climb, ops};
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
@@ -135,16 +135,16 @@ pub enum BinaryOp {
     /// Logical conjunction, i.e. `l and r`
     And,
     /// Mathematical operation, e.g. `l + r`, `l - r`, ...
-    Math(MathOp),
-    /// Ordering operation, e.g. `l == r`, `l <= r`, ...
-    Ord(OrdOp),
+    Math(ops::Math),
+    /// Comparison operation, e.g. `l == r`, `l <= r`, ...
+    Cmp(ops::Cmp),
     /// Assignment, i.e. `l = r`,
     Assign,
     /// Update, i.e. `l |= r`
     Update,
     /// Mathematical assignment, i.e. `l += r`, `l -= r`, ...
     /// (this is identical to `r as $x | l |= . + $x`, ...)
-    UpdateMath(MathOp),
+    UpdateMath(ops::Math),
     /// `l //= r`
     UpdateAlt,
 }
@@ -322,27 +322,28 @@ impl<'s, 't> Parser<'s, 't> {
 
     /// Parse a binary operator, including `,` if `with_comma` is true.
     fn op(&mut self, with_comma: bool) -> Option<BinaryOp> {
+        use ops::{Math, Cmp};
         self.maybe(|p| match p.i.next() {
             Some(Token(s, _)) => Some(match *s {
                 "," if with_comma => BinaryOp::Comma,
-                "+" => BinaryOp::Math(MathOp::Add),
-                "-" => BinaryOp::Math(MathOp::Sub),
-                "*" => BinaryOp::Math(MathOp::Mul),
-                "/" => BinaryOp::Math(MathOp::Div),
-                "%" => BinaryOp::Math(MathOp::Rem),
+                "+" => BinaryOp::Math(Math::Add),
+                "-" => BinaryOp::Math(Math::Sub),
+                "*" => BinaryOp::Math(Math::Mul),
+                "/" => BinaryOp::Math(Math::Div),
+                "%" => BinaryOp::Math(Math::Rem),
                 "=" => BinaryOp::Assign,
                 "|=" => BinaryOp::Update,
-                "+=" => BinaryOp::UpdateMath(MathOp::Add),
-                "-=" => BinaryOp::UpdateMath(MathOp::Sub),
-                "*=" => BinaryOp::UpdateMath(MathOp::Mul),
-                "/=" => BinaryOp::UpdateMath(MathOp::Div),
-                "%=" => BinaryOp::UpdateMath(MathOp::Rem),
-                "<" => BinaryOp::Ord(OrdOp::Lt),
-                ">" => BinaryOp::Ord(OrdOp::Gt),
-                "<=" => BinaryOp::Ord(OrdOp::Le),
-                ">=" => BinaryOp::Ord(OrdOp::Ge),
-                "==" => BinaryOp::Ord(OrdOp::Eq),
-                "!=" => BinaryOp::Ord(OrdOp::Ne),
+                "+=" => BinaryOp::UpdateMath(Math::Add),
+                "-=" => BinaryOp::UpdateMath(Math::Sub),
+                "*=" => BinaryOp::UpdateMath(Math::Mul),
+                "/=" => BinaryOp::UpdateMath(Math::Div),
+                "%=" => BinaryOp::UpdateMath(Math::Rem),
+                "<" => BinaryOp::Cmp(Cmp::Lt),
+                ">" => BinaryOp::Cmp(Cmp::Gt),
+                "<=" => BinaryOp::Cmp(Cmp::Le),
+                ">=" => BinaryOp::Cmp(Cmp::Ge),
+                "==" => BinaryOp::Cmp(Cmp::Eq),
+                "!=" => BinaryOp::Cmp(Cmp::Ne),
                 "//" => BinaryOp::Alt,
                 "//=" => BinaryOp::UpdateAlt,
                 "or" => BinaryOp::Or,
@@ -768,17 +769,18 @@ impl<S, F> Def<S, F> {
 
 impl prec_climb::Op for BinaryOp {
     fn precedence(&self) -> usize {
+        use ops::{Math, Cmp};
         match self {
             Self::Comma => 1,
             Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 2,
             Self::Alt => 3,
             Self::Or => Self::Alt.precedence() + 1,
             Self::And => Self::Or.precedence() + 1,
-            Self::Ord(OrdOp::Eq | OrdOp::Ne) => Self::And.precedence() + 1,
-            Self::Ord(OrdOp::Lt | OrdOp::Gt | OrdOp::Le | OrdOp::Ge) => Self::And.precedence() + 2,
-            Self::Math(MathOp::Add | MathOp::Sub) => Self::And.precedence() + 3,
-            Self::Math(MathOp::Mul | MathOp::Div) => Self::Math(MathOp::Add).precedence() + 1,
-            Self::Math(MathOp::Rem) => Self::Math(MathOp::Mul).precedence() + 1,
+            Self::Cmp(Cmp::Eq | Cmp::Ne) => Self::And.precedence() + 1,
+            Self::Cmp(Cmp::Lt | Cmp::Gt | Cmp::Le | Cmp::Ge) => Self::And.precedence() + 2,
+            Self::Math(Math::Add | Math::Sub) => Self::And.precedence() + 3,
+            Self::Math(Math::Mul | Math::Div) => Self::Math(Math::Add).precedence() + 1,
+            Self::Math(Math::Rem) => Self::Math(Math::Mul).precedence() + 1,
         }
     }
 

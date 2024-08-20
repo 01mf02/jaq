@@ -1,0 +1,20 @@
+[package]
+name = "jaq-json"
+version = "1.0.0"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
+edition = "2021"
+license = "MIT"
+readme = "../README.md"
+description = "JSON values for jaq"
+repository = "https://github.com/01mf02/jaq"
+keywords = ["json", "query", "jq"]
+categories = ["data-structures"]
+rust-version = "1.63"
+
+[dependencies]
+jaq-interpret = { version = "1.5.0", path = "../jaq-interpret" }
+
+ahash = "0.8.6"
+hifijson = { version = "0.2.0", optional = true }
+indexmap = "2.0"
+serde_json = { version = "1.0.81", optional = true }

@@ -23,10 +23,9 @@ use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use jaq_interpret::error::{self, Error};
 use jaq_interpret::results::{run_if_ok, then};
-use jaq_interpret::{Bind, FilterT, Native, RunPtr, UpdatePtr, Val};
+use jaq_interpret::{load, Bind, FilterT, Native, RunPtr, UpdatePtr};
 use jaq_interpret::{Exn, ValR, ValX, ValXs};
-
-use jaq_interpret::load;
+use jaq_json::Val;
 
 /// Definitions of the standard library.
 pub fn defs() -> alloc::vec::Vec<load::parse::Def<&'static str>> {

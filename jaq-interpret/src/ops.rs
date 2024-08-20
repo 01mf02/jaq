@@ -5,7 +5,7 @@ use core::ops::{Add, Div, Mul, Rem, Sub};
 
 /// Arithmetic operation, such as `+`, `-`, `*`, `/`, `%`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum MathOp {
+pub enum Math {
     /// Addition
     Add,
     /// Subtraction
@@ -18,7 +18,7 @@ pub enum MathOp {
     Rem,
 }
 
-impl MathOp {
+impl Math {
     /// Perform the arithmetic operation on the given inputs.
     pub fn run<I, O>(&self, l: I, r: I) -> O
     where
@@ -34,7 +34,7 @@ impl MathOp {
     }
 }
 
-impl fmt::Display for MathOp {
+impl fmt::Display for Math {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Add => "+".fmt(f),
@@ -48,7 +48,7 @@ impl fmt::Display for MathOp {
 
 /// An operation that orders two values, such as `<`, `<=`, `>`, `>=`, `==`, `!=`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OrdOp {
+pub enum Cmp {
     /// Less-than (<).
     Lt,
     /// Less-than or equal (<=).
@@ -63,7 +63,7 @@ pub enum OrdOp {
     Ne,
 }
 
-impl OrdOp {
+impl Cmp {
     /// Perform the ordering operation on the given inputs.
     pub fn run<I: PartialOrd + PartialEq>(&self, l: &I, r: &I) -> bool {
         match self {
@@ -77,7 +77,7 @@ impl OrdOp {
     }
 }
 
-impl fmt::Display for OrdOp {
+impl fmt::Display for Cmp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Lt => "<".fmt(f),

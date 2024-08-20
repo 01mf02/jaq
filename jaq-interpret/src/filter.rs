@@ -220,7 +220,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Math(l, op, r) => {
                 Box::new(Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(op.run(x?, y?)?)))
             }
-            Ast::Ord(l, op, r) => Box::new(
+            Ast::Cmp(l, op, r) => Box::new(
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
@@ -289,7 +289,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
             Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
-            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Ord(..) => err,
+            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err,
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)

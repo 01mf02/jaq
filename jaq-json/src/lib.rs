@@ -1,14 +1,16 @@
 //! JSON values with reference-counted sharing.
 
-use crate::box_iter::{box_once, BoxIter};
-use crate::error::Type;
-use crate::val::{Range, ValT};
-use crate::Exn;
-use crate::{path::Opt, MathOp};
+extern crate alloc;
+
+use jaq_interpret::error::Type;
+use jaq_interpret::val::{Range, ValT};
+use jaq_interpret::{Exn, ops};
+use jaq_interpret::{path::Opt};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
+
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
 
@@ -46,11 +48,11 @@ pub enum Val {
 type Map<K, V> = indexmap::IndexMap<K, V, ahash::RandomState>;
 
 /// Error that can occur during filter execution.
-pub type Error = crate::Error<Val>;
+pub type Error = jaq_interpret::Error<Val>;
 /// A value or an eRror.
-pub type ValR = crate::ValR<Val>;
+pub type ValR = jaq_interpret::ValR<Val>;
 /// A value or an eXception.
-pub type ValX<'a> = crate::ValX<'a, Val>;
+pub type ValX<'a> = jaq_interpret::ValX<'a, Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -70,10 +72,11 @@ impl ValT for Val {
     }
 
     fn values(self) -> impl Iterator<Item = ValR> {
+        type BoxIter<T> = Box<dyn Iterator<Item = T>>;
         match self {
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as BoxIter<_>,
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
-            _ => box_once(Err(Error::Type(self, Type::Iter))),
+            _ => Box::new(core::iter::once(Err(Error::Type(self, Type::Iter)))),
         }
     }
 
@@ -579,7 +582,7 @@ impl core::ops::Add for Val {
                 Rc::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
                 Ok(Obj(l))
             }
-            (l, r) => Err(Error::MathOp(l, MathOp::Add, r)),
+            (l, r) => Err(Error::MathOp(l, ops::Math::Add, r)),
         }
     }
 }
@@ -600,7 +603,7 @@ impl core::ops::Sub for Val {
                 Rc::make_mut(&mut l).retain(|x| !r.contains(x));
                 Ok(Arr(l))
             }
-            (l, r) => Err(Error::MathOp(l, MathOp::Sub, r)),
+            (l, r) => Err(Error::MathOp(l, ops::Math::Sub, r)),
         }
     }
 }
@@ -635,13 +638,13 @@ impl core::ops::Mul for Val {
                 obj_merge(&mut l, r);
                 Ok(Obj(l))
             }
-            (l, r) => Err(Error::MathOp(l, MathOp::Mul, r)),
+            (l, r) => Err(Error::MathOp(l, ops::Math::Mul, r)),
         }
     }
 }
 
 /// Split a string by a given separator string.
-fn split<'a>(s: &'a str, sep: &'a str) -> BoxIter<'a, String> {
+fn split<'a>(s: &'a str, sep: &'a str) -> Box<dyn Iterator<Item = String> + 'a> {
     if s.is_empty() {
         Box::new(core::iter::empty())
     } else if sep.is_empty() {
@@ -666,7 +669,7 @@ impl core::ops::Div for Val {
             (Num(n), r) => Self::from_dec_str(&n) / r,
             (l, Num(n)) => l / Self::from_dec_str(&n),
             (Str(x), Str(y)) => Ok(Val::arr(split(&x, &y).map(Val::str).collect())),
-            (l, r) => Err(Error::MathOp(l, MathOp::Div, r)),
+            (l, r) => Err(Error::MathOp(l, ops::Math::Div, r)),
         }
     }
 }
@@ -677,7 +680,7 @@ impl core::ops::Rem for Val {
         use Val::Int;
         match (self, rhs) {
             (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
-            (l, r) => Err(Error::MathOp(l, MathOp::Rem, r)),
+            (l, r) => Err(Error::MathOp(l, ops::Math::Rem, r)),
         }
     }
 }

@@ -10,7 +10,8 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_interpret::{load, Compiler, Ctx, Error, FilterT, Native, RcIter, Val};
+//! use jaq_interpret::{load, Compiler, Ctx, Error, FilterT, Native, RcIter};
+//! use jaq_json::Val;
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
@@ -55,27 +56,24 @@ pub mod error;
 pub(crate) mod exn;
 mod filter;
 mod into_iter;
-pub mod json;
 pub mod load;
-mod ops;
+pub mod ops;
 pub mod path;
 mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
 pub mod results;
 mod stack;
-mod val;
+pub mod val;
 
 pub use compile::Compiler;
 pub use error::Error;
 pub use exn::Exn;
 pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
-pub use json::Val;
 pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};
 
 use alloc::string::String;
-use ops::{MathOp, OrdOp};
 use rc_list::List as RcList;
 use stack::Stack;
 

@@ -7,10 +7,7 @@ pub mod test;
 
 pub use lex::Lexer;
 pub use parse::Parser;
-
-use crate::ops::{MathOp, OrdOp};
-use crate::path;
-
+use crate::{ops, path};
 use alloc::string::String;
 use alloc::vec::Vec;
 use lex::Token;

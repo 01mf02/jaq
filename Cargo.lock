@@ -239,6 +239,7 @@ dependencies = [
  "env_logger",
  "hifijson",
  "jaq-interpret",
+ "jaq-json",
  "jaq-std",
  "memmap2",
  "mimalloc",
@@ -251,13 +252,22 @@ dependencies = [
 name = "jaq-interpret"
 version = "1.5.0"
 dependencies = [
- "ahash",
  "dyn-clone",
- "hifijson",
- "indexmap",
+ "jaq-json",
  "once_cell",
  "serde_json",
  "typed-arena",
+]
+
+[[package]]
+name = "jaq-json"
+version = "1.0.0"
+dependencies = [
+ "ahash",
+ "hifijson",
+ "indexmap",
+ "jaq-interpret",
+ "serde_json",
 ]
 
 [[package]]
@@ -287,18 +297,12 @@ dependencies = [
  "chrono",
  "hifijson",
  "jaq-interpret",
+ "jaq-json",
  "libm",
  "log",
  "regex",
  "serde_json",
  "urlencoding",
-]
-
-[[package]]
-name = "jaq-syn"
-version = "1.6.0"
-dependencies = [
- "typed-arena",
 ]
 
 [[package]]

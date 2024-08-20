@@ -4,7 +4,7 @@ pub mod common;
 
 use common::{fail, give, gives};
 use jaq_interpret::error::{Error, Type};
-use jaq_interpret::Val;
+use jaq_json::Val;
 use serde_json::json;
 
 yields!(repeat, "def r(f): f, r(f); [limit(3; r(1, 2))]", [1, 2, 1]);

@@ -1,3 +1,5 @@
+//! Values that can be processed by jaq.
+
 use crate::box_iter::BoxIter;
 use crate::path::Opt;
 use core::fmt::Display;
@@ -14,9 +16,9 @@ pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
 pub type ValXs<'a, V> = BoxIter<'a, ValX<'a, V>>;
 
-pub(crate) type Range<V> = core::ops::Range<Option<V>>;
+pub type Range<V> = core::ops::Range<Option<V>>;
 
-/// Values that can be processed by the interpreter.
+/// Values that can be processed by jaq.
 ///
 /// Implement this trait if you want jaq to process your own type of values.
 pub trait ValT:

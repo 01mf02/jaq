@@ -40,7 +40,7 @@ impl<I> Default for Part<I> {
 
 impl Opt {
     /// If `self` is optional, return `x`, else fail with `f(x)`.
-    pub(crate) fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
+    pub fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
         match self {
             Self::Optional => Ok(x),
             Self::Essential => Err(f(x)),
