@@ -51,7 +51,7 @@ pub trait ValT:
     /// Yield the children of a value.
     ///
     /// This is used by `.[]`.
-    fn values(self) -> impl Iterator<Item = ValR<Self>>;
+    fn values(self) -> alloc::boxed::Box<dyn Iterator<Item = ValR<Self>>>;
 
     /// Yield the child of a value at the given index.
     ///

@@ -102,10 +102,9 @@ impl ValT for Val {
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
     }
 
-    fn values(self) -> impl Iterator<Item = ValR> {
-        type BoxIter<T> = Box<dyn Iterator<Item = T>>;
+    fn values(self) -> Box<dyn Iterator<Item = ValR>> {
         match self {
-            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)) as BoxIter<_>,
+            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => Box::new(core::iter::once(Err(Error::typ(self, Type::Iter.as_str())))),
         }

@@ -72,10 +72,9 @@ fn bind<T>(s: &str, x: T) -> Bind<T> {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) enum Term<T = TermId> {
     /// Identity (`.`)
-    #[default]
     Id,
     ToString,
 
@@ -151,6 +150,12 @@ pub(crate) enum Term<T = TermId> {
     Fold(FoldType, T, T, T),
 
     Path(T, crate::path::Path<T>),
+}
+
+impl<T> Default for Term<T> {
+    fn default() -> Self {
+        Self::Id
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -564,7 +569,8 @@ impl<'s, F> Compiler<&'s str, F> {
                     if sig.matches(name, &args) {
                         def.tailrec = def.tailrec || tailrec;
                         let call = tailrec.then_some(Tailrec::Throw);
-                        let args = sig.args.iter().zip(args).map(|(x, id)| bind(x, id));
+                        let args = sig.args.iter().zip(args.to_vec());
+                        let args = args.map(|(x, id)| bind(x, id));
                         return Term::CallDef(def.id, args.collect(), i, call);
                     }
                 }

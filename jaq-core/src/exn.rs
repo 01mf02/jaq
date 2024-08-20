@@ -11,7 +11,7 @@ use core::fmt::{self, Display};
 pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
 
 #[derive(Clone, Debug)]
-pub enum Inner<'a, V> {
+pub(crate) enum Inner<'a, V> {
     Err(Error<V>),
     /// Tail-recursive call.
     ///
