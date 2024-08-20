@@ -56,7 +56,9 @@ pub(crate) mod exn;
 mod filter;
 mod into_iter;
 pub mod json;
-mod path;
+pub mod load;
+mod ops;
+pub mod path;
 mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
@@ -73,6 +75,7 @@ pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};
 
 use alloc::string::String;
+use ops::{MathOp, OrdOp};
 use rc_list::List as RcList;
 use stack::Stack;
 

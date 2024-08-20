@@ -4,13 +4,13 @@ use crate::box_iter::{box_once, BoxIter};
 use crate::error::Type;
 use crate::val::{Range, ValT};
 use crate::Exn;
+use crate::{path::Opt, MathOp};
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
-use jaq_syn::{path::Opt, MathOp};
 
 /// JSON value with sharing.
 ///

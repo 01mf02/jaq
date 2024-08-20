@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_interpret::{compile, Ctx, Native, RcIter, Val};
+use jaq_interpret::{compile, load, Ctx, Native, RcIter, Val};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -263,7 +263,7 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
 
 fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
-    use jaq_syn::load::{import, Arena, File, Loader};
+    use load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
@@ -286,8 +286,8 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     Ok((vals, filter))
 }
 
-fn load_errors(errs: jaq_syn::load::Errors<&str>) -> Vec<FileReports> {
-    use jaq_syn::load::Error;
+fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
+    use load::Error;
 
     let errs = errs.into_iter().map(|(file, err)| {
         let code = file.code;
@@ -392,7 +392,7 @@ fn collect_if<'a, T: 'a, E: 'a>(
     }
 }
 
-type FileReports = (jaq_syn::load::File<String>, Vec<Report>);
+type FileReports = (load::File<String>, Vec<Report>);
 
 #[derive(Debug)]
 enum Error {
@@ -626,20 +626,18 @@ impl Color {
 }
 
 fn report_io(code: &str, (path, error): (&str, String)) -> Report {
-    let path_range = jaq_syn::span(code, path);
+    let path_range = load::span(code, path);
     Report {
         message: format!("could not load file {}: {}", path, error),
         labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
     }
 }
 
-fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Report {
-    use jaq_syn::span;
-
+fn report_lex(code: &str, (expected, found): load::lex::Error<&str>) -> Report {
     // truncate found string to its first character
     let found = &found[..found.char_indices().nth(1).map_or(found.len(), |(i, _)| i)];
 
-    let found_range = span(code, found);
+    let found_range = load::span(code, found);
     let found = match found {
         "" => [("unexpected end of input".to_string(), None)].into(),
         c => [("unexpected character ", None), (c, Some(Color::Red))]
@@ -649,10 +647,10 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     let label = (found_range, found, Color::Red);
 
     let labels = match expected {
-        jaq_syn::lex::Expect::Delim(open) => {
+        load::lex::Expect::Delim(open) => {
             let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
                 .map(|(s, c)| (s.into(), c));
-            Vec::from([(span(code, open), text.into(), Color::Yellow), label])
+            Vec::from([(load::span(code, open), text.into(), Color::Yellow), label])
         }
         _ => Vec::from([label]),
     };
@@ -663,8 +661,8 @@ fn report_lex(code: &str, (expected, found): jaq_syn::lex::Error<&str>) -> Repor
     }
 }
 
-fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> Report {
-    let found_range = jaq_syn::span(code, found);
+fn report_parse(code: &str, (expected, found): load::parse::Error<&str>) -> Report {
+    let found_range = load::span(code, found);
 
     let found = if found.is_empty() {
         "unexpected end of input"
@@ -680,7 +678,7 @@ fn report_parse(code: &str, (expected, found): jaq_syn::parse::Error<&str>) -> R
 }
 
 fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
-    let found_range = jaq_syn::span(code, found);
+    let found_range = load::span(code, found);
     let message = format!("undefined {}", undefined.as_str());
     let found = [(message.clone(), None)].into();
 
@@ -713,7 +711,7 @@ impl Report {
     }
 }
 
-fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
+fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     let (ctx, filter) = parse("", &test.filter, &[]).map_err(Error::Report)?;
 
     let inputs = RcIter::new(Box::new(core::iter::empty()));
@@ -733,7 +731,7 @@ fn run_test(test: jaq_syn::test::Test<String>) -> Result<(Val, Val), Error> {
 
 fn run_tests(file: std::fs::File) -> ExitCode {
     let lines = io::BufReader::new(file).lines().map(Result::unwrap);
-    let tests = jaq_syn::test::Parser::new(lines);
+    let tests = load::test::Parser::new(lines);
 
     let (mut passed, mut total) = (0, 0);
     for test in tests {

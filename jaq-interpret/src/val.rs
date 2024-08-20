@@ -1,7 +1,7 @@
 use crate::box_iter::BoxIter;
+use crate::path::Opt;
 use core::fmt::Display;
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
-use jaq_syn::path::Opt;
 
 // Makes `f64::from_str` accessible as intra-doc link.
 #[cfg(doc)]

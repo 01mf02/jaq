@@ -11,9 +11,8 @@ keywords = ["json", "query", "jq"]
 rust-version = "1.64"
 
 [dependencies]
-jaq-syn   = { version = "1.6.0", path = "../jaq-syn" }
+jaq-interpret   = { version = "1.5.0", path = "../jaq-interpret" }
 
 [dev-dependencies]
-jaq-interpret = { version = "1.2.0", path = "../jaq-interpret" }
 jaq-core      = { version = "1.4.0", path = "../jaq-core" }
 serde_json = "1.0"

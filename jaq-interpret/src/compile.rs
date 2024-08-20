@@ -1,8 +1,9 @@
 //! Program compilation.
 
+use crate::load::{self, lex, parse};
 use crate::{Bind, Filter};
+use crate::{MathOp, OrdOp};
 use alloc::{boxed::Box, string::String, vec::Vec};
-use jaq_syn::{load, parse, MathOp, OrdOp};
 
 type NativeId = usize;
 type ModId = usize;
@@ -332,7 +333,7 @@ impl<'s, F> Compiler<&'s str, F> {
         y
     }
 
-    fn module(&mut self, m: jaq_syn::load::Module<&'s str>) {
+    fn module(&mut self, m: load::Module<&'s str>) {
         self.imported_mods.clear();
         self.included_mods.clear();
         for (mid, as_) in m.mods {
@@ -458,7 +459,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 Term::Fold(fold, xs, init, update)
             }
             BinOp(l, op, r) => {
-                use jaq_syn::parse::BinaryOp::*;
+                use parse::BinaryOp::*;
                 let (l, r) = match op {
                     Comma => (self.iterm_tr(*l), self.iterm_tr(*r)),
                     Alt => (self.iterm(*l), self.iterm_tr(*r)),
@@ -478,21 +479,13 @@ impl<'s, F> Compiler<&'s str, F> {
                 }
             }
             Path(t, path) => {
-                use crate::path::Part;
-                use jaq_syn::path::Part::{Index, Range};
                 let t = self.iterm(*t);
-                let path = path.into_iter().map(|(p, opt)| match p {
-                    Index(i) => (Part::Index(self.iterm(i)), opt),
-                    Range(lower, upper) => {
-                        let lower = lower.map(|f| self.iterm(f));
-                        let upper = upper.map(|f| self.iterm(f));
-                        (Part::Range(lower, upper), opt)
-                    }
-                });
+                let path = path.0.into_iter();
+                let path = path.map(|(p, opt)| (p.map(|f| self.iterm(f)), opt));
                 Term::Path(t, crate::path::Path(path.collect()))
             }
             Str(fmt, parts) => {
-                use jaq_syn::lex::StrPart;
+                use lex::StrPart;
                 let fmt = match fmt {
                     Some(fmt) => self.iterm(Call(fmt, Vec::new())),
                     None => self.lut.insert_term(Term::ToString),

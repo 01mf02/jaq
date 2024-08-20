@@ -1,8 +1,8 @@
 //! Parsing.
 
-use crate::lex::{StrPart, Tok, Token};
-use crate::path::{self, Path};
-use crate::{prec_climb, MathOp, OrdOp};
+use super::lex::{StrPart, Tok, Token};
+use super::path::{self, Path};
+use super::{prec_climb, MathOp, OrdOp};
 use alloc::{boxed::Box, vec::Vec};
 
 /// Parse error, storing what we expected and what we got instead.
@@ -156,18 +156,17 @@ impl<S> Term<S> {
 
     /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`.
     pub(crate) fn recurse(recurse: S) -> Self {
-        use Term::*;
         // `[]?`
         let path = (path::Part::Range(None, None), path::Opt::Optional);
         // `.[]?` (returns array/object elements or nothing instead)
-        let path = Term::Path(Id.into(), Vec::from([path]));
+        let path = Term::Path(Term::Id.into(), Path(Vec::from([path])));
 
         // `..`
         let f = Term::Call(recurse, Vec::new());
         // .[]? | ..
         let pipe = Term::Pipe(path.into(), None, f.into());
         // ., (.[]? | ..)
-        Term::BinOp(Id.into(), BinaryOp::Comma, pipe.into())
+        Term::BinOp(Term::Id.into(), BinaryOp::Comma, pipe.into())
     }
 
     /// `{}[]` returns zero values.
@@ -177,7 +176,7 @@ impl<S> Term<S> {
         // `{}`
         let obj = Term::Obj(Vec::new());
         // `{}[]`
-        Term::Path(obj.into(), Vec::from([path]))
+        Term::Path(obj.into(), Path(Vec::from([path])))
     }
 }
 
@@ -505,8 +504,8 @@ impl<'s, 't> Parser<'s, 't> {
 
                 if let Some(key) = key {
                     let head = (path::Part::Index(key), self.opt());
-                    let path = core::iter::once(head).chain(self.path()?).collect();
-                    Term::Path(Box::new(Term::Id), path)
+                    let path = core::iter::once(head).chain(self.path()?.0).collect();
+                    Term::Path(Box::new(Term::Id), Path(path))
                 } else {
                     Term::Id
                 }
@@ -530,7 +529,7 @@ impl<'s, 't> Parser<'s, 't> {
         };
 
         let path = self.path()?;
-        Ok(if path.is_empty() {
+        Ok(if path.0.is_empty() {
             tm
         } else {
             Term::Path(Box::new(tm), path)
@@ -592,7 +591,7 @@ impl<'s, 't> Parser<'s, 't> {
             path.push((path::Part::Index(key), self.opt()));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
-        Ok(path)
+        Ok(Path(path))
     }
 
     /// Parse `[]`, `[t]`, `[t:]`, `[t:t]`, `[:t]` (all without brackets).

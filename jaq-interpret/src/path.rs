@@ -1,25 +1,55 @@
+//! Paths and their parts.
+
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::results::then;
 use crate::val::{ValR, ValT, ValX, ValXs};
 use alloc::{boxed::Box, vec::Vec};
-use jaq_syn::path::Opt;
 
+/// Path such as `.[].a?[1:]`.
 #[derive(Clone, Debug)]
 pub struct Path<F>(pub Vec<(Part<F>, Opt)>);
 
-/// Part of a path.
-///
-/// This is identical to [`jaq_syn::path::Part`], but we cannot use that here directly
-/// because that way, we could not implement new methods for that type.
+/// Part of a path, such as `[]`, `a`, and `[1:]` in `.[].a?[1:]`.
 #[derive(Clone, Debug)]
 pub enum Part<I> {
+    /// Access arrays with integer and objects with string indices
     Index(I),
-    /// if both are `None`, return iterator over whole array/object
+    /// Iterate over arrays with optional range bounds and over objects without bounds
+    /// If both are `None`, return iterator over whole array/object
     Range(Option<I>, Option<I>),
 }
 
+/// Optionality of a path part, i.e. whether `?` is present.
+///
+/// For example, `[] | .a` fails with an error, while `[] | .a?` returns nothing.
+/// By default, path parts are *essential*, meaning that they fail.
+/// Annotating them with `?` makes them *optional*.
+#[derive(Copy, Clone, Debug)]
+pub enum Opt {
+    /// Return nothing if the input cannot be accessed with the path
+    Optional,
+    /// Fail if the input cannot be accessed with the path
+    Essential,
+}
+
+impl<I> Default for Part<I> {
+    fn default() -> Self {
+        Self::Range(None, None)
+    }
+}
+
+impl Opt {
+    /// If `self` is optional, return `x`, else fail with `f(x)`.
+    pub(crate) fn fail<T, E>(self, x: T, f: impl FnOnce(T) -> E) -> Result<T, E> {
+        match self {
+            Self::Optional => Ok(x),
+            Self::Essential => Err(f(x)),
+        }
+    }
+}
+
 impl<'a, U: Clone + 'a, E: Clone + 'a, T: Clone + IntoIterator<Item = Result<U, E>> + 'a> Path<T> {
-    pub fn explode(self) -> impl Iterator<Item = Result<Path<U>, E>> + 'a {
+    pub(crate) fn explode(self) -> impl Iterator<Item = Result<Path<U>, E>> + 'a {
         Path(Vec::new())
             .combinations(self.0.into_iter())
             .map(Path::transpose)
@@ -45,11 +75,11 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl<'a, V: ValT + 'a> Path<V> {
-    pub fn run(self, v: V) -> BoxIter<'a, ValR<V>> {
+    pub(crate) fn run(self, v: V) -> BoxIter<'a, ValR<V>> {
         run(self.0.into_iter(), v)
     }
 
-    pub fn update<F>(mut self, v: V, f: F) -> ValX<'a, V>
+    pub(crate) fn update<F>(mut self, v: V, f: F) -> ValX<'a, V>
     where
         F: Fn(V) -> ValXs<'a, V>,
     {
@@ -134,7 +164,7 @@ impl<'a, U: Clone + 'a, F: IntoIterator<Item = U> + Clone + 'a> Part<F> {
 }
 
 impl<T> Path<T> {
-    pub fn map_ref<'a, U>(&'a self, mut f: impl FnMut(&'a T) -> U) -> Path<U> {
+    pub(crate) fn map_ref<'a, U>(&'a self, mut f: impl FnMut(&'a T) -> U) -> Path<U> {
         let path = self.0.iter();
         let path = path.map(move |(part, opt)| (part.as_ref().map(&mut f), *opt));
         Path(path.collect())
@@ -142,7 +172,8 @@ impl<T> Path<T> {
 }
 
 impl<T> Part<T> {
-    fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Part<U> {
+    /// Apply a function to the contained indices.
+    pub(crate) fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Part<U> {
         use Part::{Index, Range};
         match self {
             Index(i) => Index(f(i)),

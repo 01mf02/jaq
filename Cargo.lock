@@ -241,7 +241,6 @@ dependencies = [
  "jaq-core",
  "jaq-interpret",
  "jaq-std",
- "jaq-syn",
  "memmap2",
  "mimalloc",
  "tempfile",
@@ -258,7 +257,6 @@ dependencies = [
  "chrono",
  "hifijson",
  "jaq-interpret",
- "jaq-syn",
  "libm",
  "log",
  "regex",
@@ -274,9 +272,9 @@ dependencies = [
  "dyn-clone",
  "hifijson",
  "indexmap",
- "jaq-syn",
  "once_cell",
  "serde_json",
+ "typed-arena",
 ]
 
 [[package]]
@@ -291,7 +289,6 @@ dependencies = [
  "jaq-core",
  "jaq-interpret",
  "jaq-std",
- "jaq-syn",
  "js-sys",
  "log",
  "unicode-width",
@@ -305,7 +302,6 @@ version = "1.6.0"
 dependencies = [
  "jaq-core",
  "jaq-interpret",
- "jaq-syn",
  "serde_json",
 ]
 
