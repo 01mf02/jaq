@@ -1,7 +1,7 @@
 def empty: {}[] as $x | .;
 def null:  [][0];
 
-def error(f): f | error;
+def error: error(.);
 
 # Booleans
 def true:  0 == 0;

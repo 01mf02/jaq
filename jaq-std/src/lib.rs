@@ -666,13 +666,13 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     ])
 }
 
-fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
+fn error<V: Clone, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
     (
         "error",
-        v(0),
+        v(1),
         (
-            |_, cv| ow!(Err(Error::new(cv.1))),
-            |_, cv, _| ow!(Err(Error::new(cv.1))),
+            |_, mut cv| ow!(Err(Error::new(cv.0.pop_var()))),
+            |_, mut cv, _| ow!(Err(Error::new(cv.0.pop_var()))),
         ),
     )
 }
