@@ -64,7 +64,6 @@ def scalars:   select(. <  []);
 
 # Conversion
 def tostring: "\(.)";
-def tonumber: if isnumber then . else fromjson end;
 
 # Generators
 def range(from; to): range(from; to; 1);
@@ -91,24 +90,12 @@ def unique: unique_by(.);
 def del(f): f |= empty;
 
 # Arrays
-def transpose: [range([.[] | length] | max) as $i | [.[][$i]]];
 def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
 
 def last(g): (reduce g as $item ([]; [$item]))[];
 def nth(n; g): last(limit(n + 1; g));
-
-# Objects <-> Arrays
-def keys: keys_unsorted | sort;
-def   to_entries: [keys_unsorted[] as $k | { key: $k, value: .[$k] }];
-def from_entries: map({ (.key): .value }) | add + {};
-def with_entries(f): to_entries | map(f) | from_entries;
-
-# Paths
-def paths:
-  def rec($p): $p, ((keys_unsorted?)[] as $k | .[$k] | rec($p + [$k]));
-  (keys_unsorted?)[] as $k | .[$k] | rec([$k]);
 
 # Predicates
 def isempty(g): first((g | false), true);
@@ -118,12 +105,6 @@ def all(cond): all(.[]; cond);
 def any(cond): any(.[]; cond);
 def all: all(.[]; .);
 def any: any(.[]; .);
-def in(xs)    : . as $x | xs | has     ($x);
-def inside(xs): . as $x | xs | contains($x);
-
-# Indexing
-def  index($i): indices($i)[ 0];
-def rindex($i): indices($i)[-1];
 
 # Walking
 def walk(f): def rec: (.[]? |= rec) | f; rec;
@@ -134,7 +115,7 @@ def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) 
 # Regular expressions
 def capture_of_match: map(select(.name) | { (.name): .string} ) | add + {};
 
-def    test(re; flags): matches(re; flags) | length > 0;
+def    test(re; flags): matches(re; flags) | any;
 def    scan(re; flags): matches(re; flags)[] | .[0].string;
 def   match(re; flags): matches(re; flags)[] | .[0] + { captures: .[1:] };
 def capture(re; flags): matches(re; flags)[] | capture_of_match;
@@ -172,7 +153,6 @@ def @csv: .[] |= fmt_row(""; "\"\(escape_csv)\"") | join("," );
 def @tsv: .[] |= fmt_row("";      escape_tsv    ) | join("\t");
 def @sh: [if isarray then .[] end | fmt_row("null"; "'\(escape_sh)'")] | join(" ");
 def @text: "\(.)";
-def @json: tojson;
 def @html   : tostring | escape_html;
 def @uri    : tostring | encode_uri;
 def @base64 : tostring | encode_base64;

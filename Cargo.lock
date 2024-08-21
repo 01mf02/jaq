@@ -267,6 +267,7 @@ dependencies = [
  "hifijson",
  "indexmap",
  "jaq-core",
+ "jaq-std",
  "serde_json",
 ]
 

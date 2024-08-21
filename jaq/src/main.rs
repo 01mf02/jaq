@@ -248,7 +248,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     })?;
 
     var_val.push(("ARGS".to_string(), args_named(&var_val)));
-    let env = std::env::vars().map(|(k, v)| (k.into(), Val::str(v)));
+    let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
     var_val.push(("ENV".to_string(), Val::obj(env.collect())));
 
     Ok(var_val)
@@ -268,7 +268,7 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::defs()).with_std_read();
+    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
@@ -281,7 +281,7 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     .map_err(load_errors)?;
 
     let compiler = Compiler::default()
-        .with_funs(jaq_std::funs())
+        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))
@@ -350,7 +350,7 @@ where
     R: BufRead + 'a,
 {
     if cli.raw_input {
-        Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::str)))
+        Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
     } else {
         let vals = json_read(read);
         Box::new(collect_if(cli.slurp, vals, Val::arr))
@@ -360,7 +360,7 @@ where
 fn read_slice<'a>(cli: &Cli, slice: &'a [u8]) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
     if cli.raw_input {
         let read = io::BufReader::new(slice);
-        Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::str)))
+        Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
     } else {
         let vals = json_slice(slice);
         Box::new(collect_if(cli.slurp, vals, Val::arr))
@@ -480,6 +480,7 @@ fn run(
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
         for output in filter.run((ctx.clone(), input)) {
+            use jaq_core::ValT;
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;

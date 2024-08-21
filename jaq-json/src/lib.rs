@@ -6,8 +6,8 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
-use jaq_core::val::{Range, ValT};
-use jaq_core::{ops, path, Exn};
+use jaq_core::{load, ops, path, Exn, Native, RunPtr};
+use jaq_std::{once_with, ow, run, unary, v, Filter};
 
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
@@ -92,13 +92,13 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
     Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
-impl ValT for Val {
+impl jaq_core::ValT for Val {
     fn from_num(n: &str) -> ValR {
         Ok(Val::Num(Rc::new(n.to_string())))
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
-        let iter = iter.into_iter().map(|(k, v)| Ok((k.to_str()?, v)));
+        let iter = iter.into_iter().map(|(k, v)| Ok((k.into_str()?, v)));
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
     }
 
@@ -121,7 +121,7 @@ impl ValT for Val {
         }
     }
 
-    fn range(self, range: Range<&Self>) -> ValR {
+    fn range(self, range: jaq_core::val::Range<&Self>) -> ValR {
         let (from, upto) = (range.start, range.end);
         match self {
             Val::Arr(a) => {
@@ -223,7 +223,7 @@ impl ValT for Val {
 
     fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
-        range: Range<&Self>,
+        range: jaq_core::val::Range<&Self>,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
@@ -249,8 +249,9 @@ impl ValT for Val {
         }
     }
 
+    /// True if the value is neither null nor false.
     fn as_bool(&self) -> bool {
-        self.as_bool()
+        !matches!(self, Self::Null | Self::Bool(false))
     }
 
     /// If the value is a string, return it, else fail.
@@ -261,6 +262,130 @@ impl ValT for Val {
             None
         }
     }
+}
+
+impl jaq_std::ValT for Val {
+    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self> {
+        match self {
+            Self::Arr(a) => match Rc::try_unwrap(a) {
+                Ok(a) => Ok(a.into_iter().collect()),
+                Err(a) => Ok(a.iter().cloned().collect()),
+            },
+            _ => Err(self),
+        }
+    }
+
+    fn as_isize(&self) -> Option<isize> {
+        match self {
+            Self::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    fn as_f64(&self) -> Result<f64, Error> {
+        Self::as_float(self)
+    }
+}
+
+/// Definitions of the standard library.
+pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
+    load::parse(include_str!("defs.jq"), |p| p.defs())
+        .unwrap()
+        .into_iter()
+}
+
+impl Val {
+    /// Return 0 for null, the absolute value for numbers, and
+    /// the length for strings, arrays, and objects.
+    ///
+    /// Fail on booleans.
+    fn length(&self) -> ValR {
+        match self {
+            Val::Null => Ok(Val::Int(0)),
+            Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
+            Val::Int(i) => Ok(Val::Int(i.abs())),
+            Val::Num(n) => Val::from_dec_str(n).length(),
+            Val::Float(f) => Ok(Val::Float(f.abs())),
+            Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
+            Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
+            Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
+        }
+    }
+
+    /// Return the indices of `y` in `self`.
+    fn indices<'a>(&'a self, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
+        match (self, y) {
+            (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
+            (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
+            (Val::Str(x), Val::Str(y)) => {
+                let iw = str_windows(x, y.chars().count()).enumerate();
+                Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
+            }
+            (Val::Arr(x), Val::Arr(y)) => {
+                let iw = x.windows(y.len()).enumerate();
+                Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
+            }
+            (Val::Arr(x), y) => {
+                let ix = x.iter().enumerate();
+                Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
+            }
+            (x, y) => Err(Error::index(x.clone(), y.clone())),
+        }
+    }
+}
+
+/// Return the string windows having `n` characters, where `n` > 0.
+///
+/// Taken from <https://users.rust-lang.org/t/iterator-over-windows-of-chars/17841/3>.
+fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
+    line.char_indices()
+        .zip(line.char_indices().skip(n).chain(Some((line.len(), ' '))))
+        .map(move |((i, _), (j, _))| &line[i..j])
+}
+
+#[cfg(feature = "parse")]
+pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+    let base_run = base_funs().into_vec().into_iter().map(run);
+    base_run.chain([run(parse_fun())])
+}
+
+fn base_funs() -> Box<[Filter<RunPtr<Val>>]> {
+    Box::new([
+        ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
+        ("length", v(0), |_, cv| ow!(cv.1.length())),
+        ("keys_unsorted", v(0), |_, cv| {
+            ow!(cv.1.keys_unsorted().map(Val::arr))
+        }),
+        ("contains", v(1), |_, cv| {
+            unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
+        }),
+        ("has", v(1), |_, cv| {
+            unary(cv, |v, k| v.has(&k).map(Val::from))
+        }),
+        ("indices", v(1), |_, cv| {
+            let to_int = |i: usize| Val::Int(i.try_into().unwrap());
+            unary(cv, move |x, v| {
+                x.indices(&v).map(|idxs| idxs.map(to_int).collect())
+            })
+        }),
+    ])
+}
+
+#[cfg(feature = "parse")]
+/// Convert string to a single JSON value.
+fn from_json(s: &str) -> ValR {
+    use hifijson::token::Lex;
+    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
+    lexer
+        .exactly_one(Val::parse)
+        .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
+}
+
+#[cfg(feature = "parse")]
+fn parse_fun() -> Filter<RunPtr<Val>> {
+    ("fromjson", v(0), |_, cv| {
+        ow!(cv.1.as_str().and_then(|s| from_json(s)))
+    })
 }
 
 fn skip_take(from: usize, until: usize) -> (usize, usize) {
@@ -299,11 +424,6 @@ fn wrap_test() {
 }
 
 impl Val {
-    /// Construct a string value.
-    pub fn str(s: String) -> Self {
-        Self::Str(s.into())
-    }
-
     /// Construct an array value.
     pub fn arr(v: Vec<Self>) -> Self {
         Self::Arr(v.into())
@@ -314,13 +434,8 @@ impl Val {
         Self::Obj(m.into())
     }
 
-    /// True if the value is neither null nor false.
-    pub fn as_bool(&self) -> bool {
-        !matches!(self, Self::Null | Self::Bool(false))
-    }
-
     /// If the value is integer, return it, else fail.
-    pub fn as_int(&self) -> Result<isize, Error> {
+    fn as_int(&self) -> Result<isize, Error> {
         match self {
             Self::Int(i) => Ok(*i),
             _ => Err(Error::typ(self.clone(), Type::Int.as_str())),
@@ -329,7 +444,7 @@ impl Val {
 
     /// If the value is or can be converted to float, return it, else
     /// fail.
-    pub fn as_float(&self) -> Result<f64, Error> {
+    fn as_float(&self) -> Result<f64, Error> {
         match self {
             Self::Int(n) => Ok(*n as f64),
             Self::Float(n) => Ok(*n),
@@ -341,7 +456,7 @@ impl Val {
     }
 
     /// If the value is a string, return it, else fail.
-    pub fn to_str(self) -> Result<Rc<String>, Error> {
+    fn into_str(self) -> Result<Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
             _ => Err(Error::typ(self, Type::Str.as_str())),
@@ -349,60 +464,30 @@ impl Val {
     }
 
     /// If the value is a string, return it, else fail.
-    pub fn as_str(&self) -> Result<&Rc<String>, Error> {
+    fn as_str(&self) -> Result<&Rc<String>, Error> {
         match self {
             Self::Str(s) => Ok(s),
             _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
         }
     }
 
-    /// If the value is a Str, extract the inner string, else convert
-    /// it to string.
-    pub fn to_string_or_clone(&self) -> String {
-        match self {
-            Self::Str(s) => (**s).clone(),
-            _ => self.to_string(),
-        }
-    }
-
     /// If the value is an array, return it, else fail.
-    pub fn into_arr(self) -> Result<Rc<Vec<Self>>, Error> {
+    fn into_arr(self) -> Result<Rc<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::typ(self, Type::Arr.as_str())),
         }
     }
 
-    /// If the value is an array, return it, else fail.
-    pub fn as_arr(&self) -> Result<&Rc<Vec<Self>>, Error> {
-        match self {
-            Self::Arr(a) => Ok(a),
-            _ => Err(Error::typ(self.clone(), Type::Arr.as_str())),
-        }
-    }
-
     /// Try to parse a string to a [`Self::Float`], else return [`Self::Null`].
-    pub fn from_dec_str(n: &str) -> Self {
+    fn from_dec_str(n: &str) -> Self {
         n.parse().map_or(Self::Null, Self::Float)
-    }
-
-    /// Apply a rounding function to floating-point numbers, then convert them to integers.
-    ///
-    /// Return integers unchanged, and fail on any other input.
-    pub fn round(&self, f: impl FnOnce(f64) -> f64) -> Result<Self, Error> {
-        match self {
-            Self::Int(_) => Ok(self.clone()),
-            // TODO: this should fail if float does not fit into isize!
-            Self::Float(x) => Ok(Self::Int(f(*x) as isize)),
-            Self::Num(n) => Self::from_dec_str(n).round(f),
-            _ => Err(Error::typ(self.clone(), Type::Num.as_str())),
-        }
     }
 
     /// Return true if `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
-    pub fn has(&self, key: &Self) -> Result<bool, Error> {
+    fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
             (Self::Arr(a), Self::Int(i)) if *i >= 0 => Ok((*i as usize) < a.len()),
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
@@ -413,23 +498,11 @@ impl Val {
     /// Return any `key` for which `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
-    pub fn keys_unsorted(&self) -> Result<Vec<Self>, Error> {
+    fn keys_unsorted(&self) -> Result<Vec<Self>, Error> {
         match self {
             Self::Arr(a) => Ok((0..a.len() as isize).map(Self::Int).collect()),
             Self::Obj(o) => Ok(o.keys().map(|k| Self::Str(Rc::clone(k))).collect()),
             _ => Err(Error::typ(self.clone(), Type::Iter.as_str())),
-        }
-    }
-
-    /// Return the elements of an array or the values of an object (omitting its keys).
-    ///
-    /// Fail on any other value.
-    #[deprecated(since = "1.3.0", note = "use `ValT::values` instead")]
-    pub fn try_into_iter(self) -> Result<Box<dyn Iterator<Item = Self>>, Error> {
-        match self {
-            Self::Arr(a) => Ok(Box::new(rc_unwrap_or_clone(a).into_iter())),
-            Self::Obj(o) => Ok(Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| v))),
-            _ => Err(Error::typ(self, Type::Iter.as_str())),
         }
     }
 
@@ -439,7 +512,7 @@ impl Val {
     /// * for every key-value pair `k, v` in `b`,
     ///   there is a key-value pair `k, v'` in `a` such that `v'` contains `v`, or
     /// * `a` equals `b`.
-    pub fn contains(&self, other: &Self) -> bool {
+    fn contains(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.contains(&**r),
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
@@ -448,27 +521,6 @@ impl Val {
                 .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
             _ => self == other,
         }
-    }
-
-    /// Apply a function to a string.
-    pub fn mutate_str(self, f: impl Fn(&mut String)) -> ValR {
-        let mut s = self.to_str()?;
-        f(Rc::make_mut(&mut s));
-        Ok(Self::Str(s))
-    }
-
-    /// Apply a function to an array.
-    pub fn mutate_arr(self, f: impl Fn(&mut Vec<Self>)) -> ValR {
-        let mut a = self.into_arr()?;
-        f(Rc::make_mut(&mut a));
-        Ok(Self::Arr(a))
-    }
-
-    /// Apply a fallible function to an array.
-    pub fn try_mutate_arr(self, f: impl Fn(&mut Vec<Self>) -> Result<(), Error>) -> ValR {
-        let mut a = self.into_arr()?;
-        f(Rc::make_mut(&mut a))?;
-        Ok(Self::Arr(a))
     }
 
     /// Parse at least one JSON value, given an initial token and a lexer.
@@ -494,7 +546,7 @@ impl Val {
                 }
                 Ok(Self::Num(Rc::new(num.to_string())))
             }
-            Token::Quote => Ok(Self::str(lexer.str_string()?.to_string())),
+            Token::Quote => Ok(Self::from(lexer.str_string()?.to_string())),
             Token::LSquare => Ok(Self::arr({
                 let mut arr = Vec::new();
                 lexer.seq(Token::RSquare, |token, lexer| {
@@ -532,8 +584,8 @@ impl From<serde_json::Value> for Val {
                 .to_string()
                 .parse()
                 .map_or_else(|_| Self::Num(Rc::new(n.to_string())), Self::Int),
-            String(s) => Self::str(s),
-            Array(a) => Self::arr(a.into_iter().map(Into::into).collect()),
+            String(s) => Self::from(s),
+            Array(a) => a.into_iter().map(Self::from).collect(),
             Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
         }
     }
@@ -662,7 +714,7 @@ impl core::ops::Mul for Val {
             (Int(x), Int(y)) => Ok(Int(x * y)),
             (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
-            (Str(s), Int(i)) | (Int(i), Str(s)) if i > 0 => Ok(Self::str(s.repeat(i as usize))),
+            (Str(s), Int(i)) | (Int(i), Str(s)) if i > 0 => Ok(Self::from(s.repeat(i as usize))),
             // string multiplication with negatives or 0 results in null
             // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
             (Str(_), Int(_)) | (Int(_), Str(_)) => Ok(Null),
@@ -702,7 +754,7 @@ impl core::ops::Div for Val {
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from_dec_str(&n) / r,
             (l, Num(n)) => l / Self::from_dec_str(&n),
-            (Str(x), Str(y)) => Ok(Val::arr(split(&x, &y).map(Val::str).collect())),
+            (Str(x), Str(y)) => Ok(Val::arr(split(&x, &y).map(Val::from).collect())),
             (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
     }

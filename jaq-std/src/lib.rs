@@ -20,30 +20,46 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::results::{run_if_ok, then};
 use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
-use jaq_json::Val;
 
 /// Definitions of the standard library.
-pub fn defs() -> alloc::vec::Vec<load::parse::Def<&'static str>> {
-    load::parse(include_str!("std.jq"), |p| p.defs()).unwrap()
+pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
+    load::parse(include_str!("defs.jq"), |p| p.defs())
+        .unwrap()
+        .into_iter()
 }
 
-type Filter<F> = (&'static str, Box<[Bind]>, F);
+/// Name, arguments, and implementation of a filter.
+pub type Filter<F> = (&'static str, Box<[Bind]>, F);
 
+/// Return those named filters available by default in jaq
+/// which are implemented as native filters, such as `length`, `keys`, ...,
+/// but also `now`, `debug`, `fromdateiso8601`, ...
+///
+/// Does not return filters from the standard library, such as `map`.
+#[cfg(all(
+    feature = "std",
+    feature = "format",
+    feature = "log",
+    feature = "math",
+    feature = "regex",
+    feature = "time",
+))]
+pub fn funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
+    base_funs().chain(extra_funs())
+}
+
+/// Minimal set of filters that are generic over the value type.
 /// Return the minimal set of named filters available in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn minimal() -> impl Iterator<Item = Filter<Native<Val>>> {
-    run_many(json_minimal()).chain(generic_base())
-}
-
-/// Minimal set of filters that are generic over the value type.
-pub fn generic_base<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
-    run_many(core_run()).chain([upd(error())])
+pub fn base_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
+    let base_run = base_run().into_vec().into_iter().map(run);
+    base_run.chain([upd(error())])
 }
 
 /// Supplementary set of filters that are generic over the value type.
@@ -55,9 +71,11 @@ pub fn generic_base<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     feature = "regex",
     feature = "time",
 ))]
-pub fn generic_extra<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
-    let filters = [std(), format(), math(), regex(), time()];
-    filters.into_iter().flat_map(run_many).chain([upd(debug())])
+pub fn extra_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
+    [std(), format(), math(), regex(), time()]
+        .into_iter()
+        .flat_map(|fs| fs.into_vec().into_iter().map(run))
+        .chain([upd(debug())])
 }
 
 /// Values that the core library can operate on.
@@ -132,74 +150,14 @@ trait ValTx: ValT + Sized {
 }
 impl<T: ValT> ValTx for T {}
 
-impl ValT for Val {
-    fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self> {
-        match self {
-            Self::Arr(a) => match Rc::try_unwrap(a) {
-                Ok(a) => Ok(a.into_iter().collect()),
-                Err(a) => Ok(a.iter().cloned().collect()),
-            },
-            _ => Err(self),
-        }
-    }
-
-    fn as_isize(&self) -> Option<isize> {
-        match self {
-            Self::Int(i) => Some(*i),
-            _ => None,
-        }
-    }
-
-    fn as_f64(&self) -> Result<f64, Error<Self>> {
-        Self::as_float(self)
-    }
-}
-
-/// Return those named filters available by default in jaq
-/// which are implemented as native filters, such as `length`, `keys`, ...,
-/// but also `now`, `debug`, `fromdateiso8601`, ...
-///
-/// Does not return filters from the standard library, such as `map`.
-#[cfg(all(
-    feature = "std",
-    feature = "format",
-    feature = "log",
-    feature = "math",
-    feature = "parse_json",
-    feature = "regex",
-    feature = "time",
-))]
-pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
-    minimal().chain(generic_extra()).chain([run(parse_json())])
-}
-
-fn run_many<V>(fs: Box<[Filter<RunPtr<V>>]>) -> impl Iterator<Item = Filter<Native<V>>> {
-    fs.into_vec().into_iter().map(run)
-}
-
-fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
+/// Convert a filter with a run pointer to a native filter.
+pub fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
     (name, arity, Native::new(run))
 }
 
+/// Convert a filter with a run and an update pointer to a native filter.
 fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
     (name, arity, Native::new(run).with_update(update))
-}
-
-/// Return 0 for null, the absolute value for numbers, and
-/// the length for strings, arrays, and objects.
-///
-/// Fail on booleans.
-fn length(v: &Val) -> Result<Val, Error<Val>> {
-    match v {
-        Val::Null => Ok(Val::Int(0)),
-        Val::Bool(_) => Err(Error::str(format_args!("{v} has no length"))),
-        Val::Int(i) => Ok(Val::Int(i.abs())),
-        Val::Num(n) => length(&Val::from_dec_str(n)),
-        Val::Float(f) => Ok(Val::Float(f.abs())),
-        Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
-        Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
-        Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
-    }
 }
 
 /// Sort array by the given function.
@@ -307,37 +265,8 @@ fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<
     })
 }
 
-/// Return the string windows having `n` characters, where `n` > 0.
-///
-/// Taken from <https://users.rust-lang.org/t/iterator-over-windows-of-chars/17841/3>.
-fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
-    line.char_indices()
-        .zip(line.char_indices().skip(n).chain(Some((line.len(), ' '))))
-        .map(move |((i, _), (j, _))| &line[i..j])
-}
-
-/// Return the indices of `y` in `x`.
-fn indices<'a>(x: &'a Val, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error<Val>> {
-    match (x, y) {
-        (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
-        (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
-        (Val::Str(x), Val::Str(y)) => {
-            let iw = str_windows(x, y.chars().count()).enumerate();
-            Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
-        }
-        (Val::Arr(x), Val::Arr(y)) => {
-            let iw = x.windows(y.len()).enumerate();
-            Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
-        }
-        (Val::Arr(x), y) => {
-            let ix = x.iter().enumerate();
-            Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
-        }
-        (x, y) => Err(Error::index(x.clone(), y.clone())),
-    }
-}
-
-fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
+/// Return a boxed iterator that lazily evaluates the given function.
+pub fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once_with(f))
 }
 
@@ -345,43 +274,27 @@ fn once_or_empty<'a, T>(f: impl FnOnce() -> Option<T> + 'a) -> Box<dyn Iterator<
     Box::new(core::iter::once_with(f).flatten())
 }
 
+/// Convenience macro for `once_with` which creates a closure and maps errors to exceptions.
+#[macro_export]
 macro_rules! ow {
     ( $f:expr ) => {
-        once_with(move || $f.map_err(|e: Error<_>| Exn::from(e)))
+        once_with(move || $f.map_err(|e: jaq_core::Error<_>| Exn::from(e)))
     };
 }
 
-fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(&V, V) -> ValR<V> + 'a) -> ValXs<'a, V> {
-    ow!(f(&cv.1, cv.0.pop_var()))
+/// Create a filter that takes a single variable argument and whose output is given by
+/// the function `f` that takes the input value and the value of the variable.
+pub fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(V, V) -> ValR<V> + 'a) -> ValXs<'a, V> {
+    ow!(f(cv.1, cv.0.pop_var()))
 }
 
-fn v(n: usize) -> Box<[Bind]> {
+/// Creates `n` variable arguments.
+pub fn v(n: usize) -> Box<[Bind]> {
     core::iter::repeat(Bind::Var(())).take(n).collect()
 }
 
-fn json_minimal() -> Box<[Filter<RunPtr<Val>>]> {
-    Box::new([
-        ("length", v(0), |_, cv| ow!(length(&cv.1))),
-        ("keys_unsorted", v(0), |_, cv| {
-            ow!(cv.1.keys_unsorted().map(Val::arr))
-        }),
-        ("contains", v(1), |_, cv| {
-            unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
-        }),
-        ("has", v(1), |_, cv| {
-            unary(cv, |v, k| v.has(&k).map(Val::from))
-        }),
-        ("indices", v(1), |_, cv| {
-            let to_int = |i: usize| Val::Int(i.try_into().unwrap());
-            unary(cv, move |x, v| {
-                indices(x, &v).map(|idxs| idxs.map(to_int).collect())
-            })
-        }),
-    ])
-}
-
 #[allow(clippy::unit_arg)]
-fn core_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
+fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
     let f = || [Bind::Fun(())].into();
     let vf = [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
@@ -391,7 +304,6 @@ fn core_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                     .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
             )
         }),
-        ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
         ("floor", v(0), |_, cv| ow!(cv.1.round(f64::floor))),
         ("round", v(0), |_, cv| ow!(cv.1.round(f64::round))),
         ("ceil", v(0), |_, cv| ow!(cv.1.round(f64::ceil))),
@@ -503,33 +415,18 @@ fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         }),
         ("now", v(0), |_, _| ow!(now().map(V::from))),
         ("halt", v(0), |_, _| once_with(|| std::process::exit(0))),
-        ("halt_error", v(1), |_, mut cv| once_with(move || {
-            let exit_code = cv.0.pop_var().try_as_isize()?;
-            if let Some(s) = cv.1.as_str() {
-                std::print!("{}", s);
-            } else {
-                std::println!("{}", cv.1);
-            }
-            std::process::exit(exit_code as i32)
-        })),
+        ("halt_error", v(1), |_, mut cv| {
+            once_with(move || {
+                let exit_code = cv.0.pop_var().try_as_isize()?;
+                if let Some(s) = cv.1.as_str() {
+                    std::print!("{}", s);
+                } else {
+                    std::println!("{}", cv.1);
+                }
+                std::process::exit(exit_code as i32)
+            })
+        }),
     ])
-}
-
-#[cfg(feature = "parse_json")]
-/// Convert string to a single JSON value.
-fn from_json(s: &str) -> Result<Val, Error<Val>> {
-    use hifijson::token::Lex;
-    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
-    lexer
-        .exactly_one(Val::parse)
-        .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
-}
-
-#[cfg(feature = "parse_json")]
-fn parse_json() -> Filter<RunPtr<Val>> {
-    ("fromjson", v(0), |_, cv| {
-        ow!(cv.1.as_str().and_then(|s| from_json(s)))
-    })
 }
 
 #[cfg(feature = "format")]
