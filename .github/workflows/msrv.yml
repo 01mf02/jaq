@@ -13,8 +13,8 @@ jobs:
     - uses: actions/checkout@v2
 
     - uses: dtolnay/rust-toolchain@1.63
-    - name: Check jaq-std
-      working-directory: jaq-std
+    - name: Check jaq-json
+      working-directory: jaq-json
       run: cargo check
 
     - uses: dtolnay/rust-toolchain@1.64
