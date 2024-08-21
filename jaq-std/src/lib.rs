@@ -502,6 +502,16 @@ fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
             ow!(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
         }),
         ("now", v(0), |_, _| ow!(now().map(V::from))),
+        ("halt", v(0), |_, _| once_with(|| std::process::exit(0))),
+        ("halt_error", v(1), |_, mut cv| once_with(move || {
+            let exit_code = cv.0.pop_var().try_as_isize()?;
+            if let Some(s) = cv.1.as_str() {
+                std::print!("{}", s);
+            } else {
+                std::println!("{}", cv.1);
+            }
+            std::process::exit(exit_code as i32)
+        })),
     ])
 }
 

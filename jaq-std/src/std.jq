@@ -2,6 +2,7 @@ def empty: {}[] as $x | .;
 def null:  [][0];
 
 def error: error(.);
+def halt: halt_error(5);
 
 # Booleans
 def true:  0 == 0;
