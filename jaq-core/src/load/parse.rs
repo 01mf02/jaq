@@ -690,7 +690,8 @@ impl<'s, 't> Parser<'s, 't> {
                 Some(Token(v, Tok::Word | Tok::Var)) => Ok(*v),
                 next => Err((Expect::Ident, next)),
             }
-        }).transpose()?;
+        });
+        let name = name.transpose()?;
         let meta = !matches!(self.i.as_slice(), [Token(";", _), ..]);
         let meta = meta.then(|| self.term()).transpose()?;
         Ok((path, name, meta))
