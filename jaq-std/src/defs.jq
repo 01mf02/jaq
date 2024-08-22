@@ -25,6 +25,7 @@ def isfinite:   isnumber and (isinfinite | not);
 def isnormal:   isnumber and ((. == 0 or isnan or isinfinite) | not);
 
 # Math
+def abs: if . < 0 then - . end;
 def logb:
     if . == 0.0 then -infinite
   elif isinfinite then infinite
