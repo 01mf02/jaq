@@ -5,7 +5,7 @@
 [![Documentation](https://docs.rs/jaq-core/badge.svg)](https://docs.rs/jaq-core)
 [![Rust 1.64+](https://img.shields.io/badge/rust-1.64+-orange.svg)](https://www.rust-lang.org)
 
-jaq (pronounced like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
+jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
 You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
