@@ -87,6 +87,12 @@ struct Cli {
     #[arg(short, long, value_name = "FILE")]
     from_file: Option<PathBuf>,
 
+    /// Search for modules and data in given directory
+    ///
+    /// If this option is given multiple times, all given directories are searched.
+    #[arg(short = 'L', value_name = "DIR")]
+    search_paths: Vec<PathBuf>,
+
     /// Set variable `$<a>` to string `<v>`
     #[arg(long, value_names = &["a", "v"])]
     arg: Vec<String>,
@@ -173,7 +179,9 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let (vals, filter) = match file {
         None => (Vec::new(), Filter::default()),
-        Some((path, code)) => parse(&path, &code, &vars).map_err(Error::Report)?,
+        Some((path, code)) => {
+            parse(&path, &code, &vars, &cli.search_paths).map_err(Error::Report)?
+        }
     };
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
@@ -262,20 +270,27 @@ fn args_named(var_val: &[(String, Val)]) -> Val {
     Val::obj(args.collect())
 }
 
-fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
+fn parse(
+    path: &str,
+    code: &str,
+    vars: &[String],
+    paths: &[PathBuf],
+) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
     use load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read();
+    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read(paths);
+    let path = path.into();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
 
     let mut vals = Vec::new();
     import(&modules, |p| {
-        vals.push(json_array(p).map_err(|e| e.to_string())?);
+        // TODO: consider search path here!
+        vals.push(json_array(p.path).map_err(|e| e.to_string())?);
         Ok(())
     })
     .map_err(load_errors)?;
@@ -297,7 +312,7 @@ fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
             Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
             Error::Parse(errs) => errs.into_iter().map(|e| report_parse(code, e)).collect(),
         };
-        (file.map(|s| s.into()), err)
+        (file.map_code(|s| s.into()), err)
     });
     errs.collect()
 }
@@ -306,7 +321,7 @@ fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
     let errs = errs.into_iter().map(|(file, errs)| {
         let code = file.code;
         let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
-        (file.map(|s| s.into()), errs)
+        (file.map_code(|s| s.into()), errs)
     });
     errs.collect()
 }
@@ -714,7 +729,7 @@ impl Report {
 }
 
 fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
-    let (ctx, filter) = parse("", &test.filter, &[]).map_err(Error::Report)?;
+    let (ctx, filter) = parse("", &test.filter, &[], &[]).map_err(Error::Report)?;
 
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(ctx, &inputs);

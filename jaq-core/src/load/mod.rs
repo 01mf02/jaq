@@ -27,37 +27,47 @@ pub struct Arena(typed_arena::Arena<String>);
 /// Combined file loader, lexer, and parser for multiple modules.
 pub struct Loader<S, R> {
     #[allow(clippy::type_complexity)]
-    mods: Vec<(File<S>, Result<Module<S>, Error<S>>)>,
+    mods: Vec<(File<S, String>, Result<Module<S>, Error<S>>)>,
     /// function to read module file contents from a path
     read: R,
     /// currently processed modules
     ///
     /// This is used to detect circular dependencies between modules.
-    open: Vec<S>,
+    open: Vec<String>,
 }
-
-type ReadFn = fn(&str) -> Result<String, String>;
 
 /// Path and contents of a (module) file, both represented by `S`.
 ///
 /// This is useful for creating precise error messages.
 #[derive(Clone, Debug, Default)]
-pub struct File<S> {
-    /// path of the file
-    pub path: S,
+pub struct File<C, P = C> {
     /// contents of the file
-    pub code: S,
+    pub code: C,
+    /// path of the file
+    pub path: P,
 }
 
-impl<S> File<S> {
-    /// Apply a function to both path and contents of file.
+/// Information to resolve module/data imports.
+pub struct Import<'a, S> {
+    /// absolute path of the module where the import/include directive appears
+    ///
+    /// This is a String, not an `S`, because it usually does not appear in the source.
+    pub parent: &'a String,
+    /// relative path of the imported/included module
+    pub path: &'a S,
+    /// metadata attached to the import/include directive
+    pub meta: &'a Option<Term<S>>,
+}
+
+impl<C, P> File<C, P> {
+    /// Apply a function to the contents of a file.
     ///
     /// This is useful to go from a reference `&str` to an owned `String`,
     /// in order to save the `File` without its corresponding [`Arena`].
-    pub fn map<S2>(self, f: impl Fn(S) -> S2) -> File<S2> {
+    pub fn map_code<C2>(self, f: impl Fn(C) -> C2) -> File<C2, P> {
         File {
-            path: f(self.path),
             code: f(self.code),
+            path: self.path,
         }
     }
 }
@@ -86,7 +96,7 @@ pub struct Module<S, B = Vec<Def<S>>> {
     /// the module is included if `name` is `None` and imported if `name` is `Some(name)`.
     pub(crate) mods: Vec<(usize, Option<S>)>,
     /// imported variables, storing path and name (always starts with `$`)
-    pub(crate) vars: Vec<(S, S)>,
+    pub(crate) vars: Vec<(S, S, Option<Term<S>>)>,
     /// everything that comes after metadata and includes/imports
     pub(crate) body: B,
 }
@@ -94,7 +104,7 @@ pub struct Module<S, B = Vec<Def<S>>> {
 /// Tree of modules containing definitions.
 ///
 /// By convention, the last module contains a single definition that is the `main` filter.
-pub type Modules<S> = Vec<(File<S>, Module<S>)>;
+pub type Modules<S> = Vec<(File<S, String>, Module<S>)>;
 
 /// Errors occurring during loading of multiple modules.
 ///
@@ -104,18 +114,21 @@ pub type Modules<S> = Vec<(File<S>, Module<S>)>;
 /// a file `i.jq` that includes a non-existing module.
 /// If we then include all these files in our main program,
 /// [`Errors`] will contain each file with a different [`Error`].
-pub type Errors<S> = Vec<(File<S>, Error<S>)>;
+pub type Errors<S, E = Error<S>> = Vec<(File<S, String>, E)>;
 
 impl<S: core::ops::Deref<Target = str>, B> parse::Module<S, B> {
-    fn map(self, mut f: impl FnMut(&S) -> Result<usize, String>) -> Result<Module<S, B>, Error<S>> {
+    fn map(
+        self,
+        mut f: impl FnMut(&S, Option<Term<S>>) -> Result<usize, String>,
+    ) -> Result<Module<S, B>, Error<S>> {
         // the prelude module is included implicitly in every module (except itself)
         let mut mods = Vec::from([(0, None)]);
         let mut vars = Vec::new();
         let mut errs = Vec::new();
-        for (path, as_, _meta) in self.deps {
+        for (path, as_, meta) in self.deps {
             match as_ {
-                Some(x) if x.starts_with('$') => vars.push((path, x)),
-                as_ => match f(&path) {
+                Some(x) if x.starts_with('$') => vars.push((path, x, meta)),
+                as_ => match f(&path, meta) {
                     Ok(mid) => mods.push((mid, as_)),
                     Err(e) => errs.push((path, e)),
                 },
@@ -144,6 +157,8 @@ impl<S, B> Module<S, B> {
         }
     }
 }
+
+type ReadFn = fn(Import<&str>) -> Result<File<String>, String>;
 
 impl<'s> Loader<&'s str, ReadFn> {
     /// Initialise the loader with prelude definitions.
@@ -174,30 +189,34 @@ impl<'s> Loader<&'s str, ReadFn> {
 }
 
 #[cfg(feature = "std")]
-fn std_read(path: &str) -> Result<String, String> {
+fn std_read(_paths: &[std::path::PathBuf], import: Import<&str>) -> Result<File<String>, String> {
     use alloc::string::ToString;
-    let mut path = std::path::Path::new(path).to_path_buf();
-    path.set_extension("jq");
-    std::fs::read_to_string(path).map_err(|e| e.to_string())
+    let mut path_buf = std::path::Path::new(import.path).to_path_buf();
+    path_buf.set_extension("jq");
+    let path = path_buf.to_str().unwrap().to_string();
+    std::fs::read_to_string(&path_buf)
+        .map(|code| File { code, path })
+        .map_err(|e| e.to_string())
 }
 
 /// Apply function to path of every imported data file, accumulating errors.
 pub fn import<S: Copy>(
     mods: &Modules<S>,
-    mut f: impl FnMut(S) -> Result<(), String>,
+    mut f: impl FnMut(Import<S>) -> Result<(), String>,
 ) -> Result<(), Errors<S>> {
     let mut errs = Vec::new();
     let mut vals = Vec::new();
-    for (file, module) in mods {
+    for (mod_file, module) in mods {
         let mut mod_errs = Vec::new();
-        for (file, _name) in &module.vars {
-            match f(*file) {
+        for (path, _name, meta) in &module.vars {
+            let parent = &mod_file.path;
+            match f(Import { parent, path, meta }) {
                 Ok(v) => vals.push(v),
-                Err(e) => mod_errs.push((*file, e)),
+                Err(e) => mod_errs.push((*path, e)),
             }
         }
         if !mod_errs.is_empty() {
-            errs.push((file.clone(), Error::Io(mod_errs)));
+            errs.push((mod_file.clone(), Error::Io(mod_errs)));
         }
     }
     if errs.is_empty() {
@@ -220,20 +239,28 @@ impl<S, R> Loader<S, R> {
 
     /// Read the contents of included/imported module files by performing file I/O.
     #[cfg(feature = "std")]
-    pub fn with_std_read(self) -> Loader<S, ReadFn> {
-        self.with_read(std_read)
+    pub fn with_std_read(
+        self,
+        paths: &[std::path::PathBuf],
+    ) -> Loader<S, impl FnMut(Import<&str>) -> Result<File<String>, String> + '_> {
+        self.with_read(|import: Import<&str>| std_read(paths, import))
     }
 }
 
-impl<'s, R: FnMut(&str) -> Result<String, String>> Loader<&'s str, R> {
+impl<'s, R: FnMut(Import<&str>) -> Result<File<String>, String>> Loader<&'s str, R> {
     /// Load a set of modules, starting from a given file.
     pub fn load(
         mut self,
         arena: &'s Arena,
-        file: File<&'s str>,
+        file: File<&'s str, String>,
     ) -> Result<Modules<&'s str>, Errors<&'s str>> {
         let result = parse_main(file.code)
-            .and_then(|m| m.map(|path| self.find(arena, path)))
+            .and_then(|m| {
+                m.map(|path, meta| {
+                    let (parent, meta) = (&file.path, &meta);
+                    self.find(arena, Import { parent, path, meta })
+                })
+            })
             .map(|m| m.map_body(|body| Vec::from([Def::new("main", Vec::new(), body)])));
         self.mods.push((file, result));
 
@@ -252,20 +279,29 @@ impl<'s, R: FnMut(&str) -> Result<String, String>> Loader<&'s str, R> {
         }
     }
 
-    fn find(&mut self, arena: &'s Arena, path: &'s str) -> Result<usize, String> {
-        if let Some(id) = self.mods.iter().position(|(file, _)| path == file.path) {
+    fn find(&mut self, arena: &'s Arena, import: Import<&'s str>) -> Result<usize, String> {
+        let file = (self.read)(import)?;
+
+        let mut mods = self.mods.iter();
+        if let Some(id) = mods.position(|(file_, _)| file.path == file_.path) {
             return Ok(id);
         };
-        if self.open.contains(&path) {
+        if self.open.contains(&file.path) {
             return Err("circular include/import".into());
         }
 
-        let code = &**arena.0.alloc((self.read)(path)?);
-        self.open.push(path);
-        let defs = parse_defs(code).and_then(|m| m.map(|path| self.find(arena, path)));
-        assert_eq!(self.open.pop(), Some(path));
+        let code = &**arena.0.alloc(file.code);
+        self.open.push(file.path.clone());
+        let defs = parse_defs(code).and_then(|m| {
+            m.map(|path, meta| {
+                let (parent, meta) = (&file.path, &meta);
+                self.find(arena, Import { parent, path, meta })
+            })
+        });
+        assert_eq!(self.open.pop().as_ref(), Some(&file.path));
 
         let id = self.mods.len();
+        let path = file.path;
         self.mods.push((File { path, code }, defs));
         Ok(id)
     }

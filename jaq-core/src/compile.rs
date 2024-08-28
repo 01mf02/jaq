@@ -169,7 +169,7 @@ pub(crate) enum FoldType {
 pub type Error<S> = (S, Undefined);
 
 /// Compilation errors.
-pub type Errors<S> = Vec<(load::File<S>, Vec<Error<S>>)>;
+pub type Errors<S> = load::Errors<S, Vec<Error<S>>>;
 
 /// Type of an undefined symbol.
 #[derive(Debug)]
@@ -308,7 +308,7 @@ impl<'s, F> Compiler<&'s str, F> {
         self.imported_vars = mods
             .iter()
             .enumerate()
-            .flat_map(|(mid, (_file, m))| m.vars.iter().map(move |(_path, x)| (*x, mid)))
+            .flat_map(|(mid, (_file, m))| m.vars.iter().map(move |(_path, x, _meta)| (*x, mid)))
             .collect();
 
         let mut errs = Vec::new();
