@@ -15,7 +15,10 @@
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
-//! let code = ".[]";
+//! let program = File {
+//!     path: "".into(),
+//!     code: ".[]",
+//! };
 //!
 //! use load::{Arena, File, Loader};
 //!
@@ -26,7 +29,7 @@
 //! let arena = Arena::default();
 //!
 //! // parse the filter
-//! let modules = loader.load(&arena, File { path: "", code }).unwrap();
+//! let modules = loader.load(&arena, program).unwrap();
 //!
 //! // compile the filter
 //! let filter = jaq_core::Compiler::<_, Native<_>>::default()
