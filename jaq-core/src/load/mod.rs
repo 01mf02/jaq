@@ -229,7 +229,7 @@ fn std_read(
         if let Ok(code) = std::fs::read_to_string(&path) {
             use alloc::string::ToString;
             let path = path.display().to_string();
-            return Ok(File { code, path })
+            return Ok(File { code, path });
         }
     }
     Err("file not found".into())
