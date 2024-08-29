@@ -206,43 +206,44 @@ impl<S: PartialEq> Term<S> {
 }
 
 #[cfg(feature = "std")]
-fn std_read(
-    paths: &[std::path::PathBuf],
-    extension: &str,
-    import: Import<&str>,
-) -> Result<File<String>, String> {
-    use std::path::Path;
-
-    let search = import.meta.as_ref().and_then(|meta| {
-        use alloc::boxed::Box;
-        let v = meta.obj_key("search")?;
-        let iter = if let Term::Arr(a) = v {
-            Box::new(a.iter().filter_map(|v| v.as_str()))
-        } else if let Some(s) = v.as_str() {
-            Box::new(core::iter::once(s))
-        } else {
-            Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
-        };
-        Some(iter.map(|s| Path::new(*s).to_path_buf()).collect())
-    });
-
-    let parent = Path::new(import.parent).parent().unwrap_or(Path::new("."));
-
-    let mut rel = Path::new(import.path).to_path_buf();
-    if !rel.is_relative() {
-        return Err("non-relative path".into());
+impl<'a> Import<'a, &'a str> {
+    fn meta_paths(&self) -> Option<Vec<std::path::PathBuf>> {
+        self.meta.as_ref().and_then(|meta| {
+            use alloc::boxed::Box;
+            use std::path::Path;
+            let v = meta.obj_key("search")?;
+            let iter = if let Term::Arr(a) = v {
+                Box::new(a.iter().filter_map(|v| v.as_str()))
+            } else if let Some(s) = v.as_str() {
+                Box::new(core::iter::once(s))
+            } else {
+                Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
+            };
+            Some(iter.map(|s| Path::new(*s).to_path_buf()).collect())
+        })
     }
-    rel.set_extension(extension);
 
-    for search_path in search.iter().chain(paths.iter()) {
-        let path = parent.join(search_path).join(&rel);
-        if let Ok(code) = std::fs::read_to_string(&path) {
-            use alloc::string::ToString;
-            let path = path.display().to_string();
-            return Ok(File { code, path });
+    fn read(self, paths: &[std::path::PathBuf], ext: &str) -> Result<File<String>, String> {
+        use std::path::Path;
+
+        let parent = Path::new(self.parent).parent().unwrap_or(Path::new("."));
+
+        let mut rel = Path::new(self.path).to_path_buf();
+        if !rel.is_relative() {
+            return Err("non-relative path".into());
         }
+        rel.set_extension(ext);
+
+        for search_path in self.meta_paths().iter().flatten().chain(paths.iter()) {
+            let path = parent.join(search_path).join(&rel);
+            if let Ok(code) = std::fs::read_to_string(&path) {
+                use alloc::string::ToString;
+                let path = path.display().to_string();
+                return Ok(File { code, path });
+            }
+        }
+        Err("file not found".into())
     }
-    Err("file not found".into())
 }
 
 /// Apply function to path of every imported data file, accumulating errors.
@@ -289,7 +290,7 @@ impl<S, R> Loader<S, R> {
         self,
         paths: &[std::path::PathBuf],
     ) -> Loader<S, impl FnMut(Import<&str>) -> Result<File<String>, String> + '_> {
-        self.with_read(|import: Import<&str>| std_read(paths, "jq", import))
+        self.with_read(|import: Import<&str>| import.read(paths, "jq"))
     }
 }
 
