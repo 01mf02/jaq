@@ -7,7 +7,8 @@ fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
 
     let arena = Arena::default();
     let loader = Loader::new([]);
-    let modules = loader.load(&arena, File { path: "", code }).unwrap();
+    let path = "".into();
+    let modules = loader.load(&arena, File { path, code }).unwrap();
     let filter = Compiler::<_, Native<_>>::default()
         .compile(modules)
         .unwrap();
