@@ -150,7 +150,16 @@ pub enum BinaryOp {
 }
 
 impl<S> Term<S> {
-    pub(crate) fn str(s: S) -> Self {
+    pub(crate) fn as_str(&self) -> Option<&S> {
+        if let Term::Str(None, s) = self {
+            if let [StrPart::Str(s)] = &s[..] {
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn from_str(s: S) -> Self {
         Self::Str(None, [StrPart::Str(s)].into())
     }
 
@@ -496,7 +505,7 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token("..", _)) => Term::Recurse,
             Some(Token(c, Tok::Sym)) if c.starts_with('.') => {
                 let key = if c.len() > 1 {
-                    Some(Term::str(&c[1..]))
+                    Some(Term::from_str(&c[1..]))
                 } else {
                     // TODO: this returns None on things like "@json .",
                     // whereas it should return an error instead
@@ -556,7 +565,7 @@ impl<'s, 't> Parser<'s, 't> {
                 self.just(":")?;
                 return Ok((k, Some(self.term_with_comma(false)?)));
             }
-            Some(Token(id, Tok::Word)) if !id.contains("::") => Term::str(*id),
+            Some(Token(id, Tok::Word)) if !id.contains("::") => Term::from_str(*id),
             _ => {
                 self.i = i;
                 self.key()?
@@ -587,7 +596,7 @@ impl<'s, 't> Parser<'s, 't> {
             let key = if key.is_empty() {
                 self.key()?
             } else {
-                Term::str(key)
+                Term::from_str(key)
             };
             path.push((path::Part::Index(key), self.opt()));
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
