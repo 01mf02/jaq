@@ -189,6 +189,23 @@ impl<'s> Loader<&'s str, ReadFn> {
 }
 
 #[cfg(feature = "std")]
+impl<S: PartialEq> Term<S> {
+    fn obj_key(&self, key: S) -> Option<&Self> {
+        if let Term::Obj(kvs) = self {
+            kvs.iter().find_map(|(k, v)| {
+                if *k.as_str()? == key {
+                    v.as_ref()
+                } else {
+                    None
+                }
+            })
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "std")]
 fn std_read(
     paths: &[std::path::PathBuf],
     extension: &str,
@@ -196,25 +213,18 @@ fn std_read(
 ) -> Result<File<String>, String> {
     use std::path::Path;
 
-    let search = if let Some(Term::Obj(kvs)) = import.meta {
-        kvs.iter().find_map(|(k, v)| {
-            let v = v.as_ref()?;
-            (*k.as_str()? == "search").then(|| {
-                use alloc::boxed::Box;
-                if let Term::Arr(a) = v {
-                    Box::new(a.iter().filter_map(|v| v.as_str()))
-                } else if let Some(s) = v.as_str() {
-                    Box::new(core::iter::once(s))
-                } else {
-                    Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
-                }
-                .map(|s| Path::new(*s).to_path_buf())
-                .collect()
-            })
-        })
-    } else {
-        None
-    };
+    let search = import.meta.as_ref().and_then(|meta| {
+        use alloc::boxed::Box;
+        let v = meta.obj_key("search")?;
+        let iter = if let Term::Arr(a) = v {
+            Box::new(a.iter().filter_map(|v| v.as_str()))
+        } else if let Some(s) = v.as_str() {
+            Box::new(core::iter::once(s))
+        } else {
+            Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
+        };
+        Some(iter.map(|s| Path::new(*s).to_path_buf()).collect())
+    });
 
     let parent = Path::new(import.parent).parent().unwrap_or(Path::new("."));
 
