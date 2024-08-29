@@ -189,14 +189,50 @@ impl<'s> Loader<&'s str, ReadFn> {
 }
 
 #[cfg(feature = "std")]
-fn std_read(_paths: &[std::path::PathBuf], import: Import<&str>) -> Result<File<String>, String> {
-    use alloc::string::ToString;
-    let mut path_buf = std::path::Path::new(import.path).to_path_buf();
-    path_buf.set_extension("jq");
-    let path = path_buf.to_str().unwrap().to_string();
-    std::fs::read_to_string(&path_buf)
-        .map(|code| File { code, path })
-        .map_err(|e| e.to_string())
+fn std_read(
+    paths: &[std::path::PathBuf],
+    extension: &str,
+    import: Import<&str>,
+) -> Result<File<String>, String> {
+    use std::path::Path;
+
+    let search = if let Some(Term::Obj(kvs)) = import.meta {
+        kvs.iter().find_map(|(k, v)| {
+            let v = v.as_ref()?;
+            (*k.as_str()? == "search").then(|| {
+                use alloc::boxed::Box;
+                if let Term::Arr(a) = v {
+                    Box::new(a.iter().filter_map(|v| v.as_str()))
+                } else if let Some(s) = v.as_str() {
+                    Box::new(core::iter::once(s))
+                } else {
+                    Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
+                }
+                .map(|s| Path::new(*s).to_path_buf())
+                .collect()
+            })
+        })
+    } else {
+        None
+    };
+
+    let parent = Path::new(import.parent).parent().unwrap_or(Path::new("."));
+
+    let mut rel = Path::new(import.path).to_path_buf();
+    if !rel.is_relative() {
+        return Err("non-relative path".into());
+    }
+    rel.set_extension(extension);
+
+    for search_path in search.iter().chain(paths.iter()) {
+        let path = parent.join(search_path).join(&rel);
+        if let Ok(code) = std::fs::read_to_string(&path) {
+            use alloc::string::ToString;
+            let path = path.display().to_string();
+            return Ok(File { code, path })
+        }
+    }
+    Err("file not found".into())
 }
 
 /// Apply function to path of every imported data file, accumulating errors.
@@ -243,7 +279,7 @@ impl<S, R> Loader<S, R> {
         self,
         paths: &[std::path::PathBuf],
     ) -> Loader<S, impl FnMut(Import<&str>) -> Result<File<String>, String> + '_> {
-        self.with_read(|import: Import<&str>| std_read(paths, import))
+        self.with_read(|import: Import<&str>| std_read(paths, "jq", import))
     }
 }
 
