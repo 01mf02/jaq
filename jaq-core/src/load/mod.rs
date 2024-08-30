@@ -238,7 +238,7 @@ impl<'a> Import<'a, &'a str> {
         self.meta_paths()
             .iter()
             .chain(paths)
-            .map(|path| parent.join(path).join(&rel))
+            .filter_map(|path| parent.join(path).join(&rel).canonicalize().ok())
             .find(|path| path.is_file())
             .ok_or_else(|| "file not found".into())
     }
