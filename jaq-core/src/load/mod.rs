@@ -38,7 +38,7 @@ pub struct Loader<S, R> {
     open: Vec<String>,
 }
 
-/// Path and contents of a (module) file, both represented by `S`.
+/// Contents `C` and path `P` of a (module) file.
 ///
 /// This is useful for creating precise error messages.
 #[derive(Clone, Debug, Default)]
@@ -55,7 +55,7 @@ pub struct Import<'a, S> {
     ///
     /// This is a String, not an `S`, because it usually does not appear in the source.
     pub parent: &'a String,
-    /// relative path of the imported/included module
+    /// relative path of the imported/included module, as given in the source
     pub path: &'a S,
     /// metadata attached to the import/include directive
     pub meta: &'a Option<Term<S>>,
