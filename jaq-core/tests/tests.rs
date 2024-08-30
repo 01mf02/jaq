@@ -400,3 +400,17 @@ yields!(
 );
 
 yields!(update_alt, "[[0!=0, 3] | .[] //= (1, 2)]", [[1, 3], [2, 3]]);
+
+const FIRST: &str = "def first(f): label $x | f | ., break $x;";
+
+yields!(first, &(FIRST.to_owned() + "first(1, 2, 3)"), 1);
+
+const LIMIT: &str = "def limit($n; f):
+  foreach f as $x ({$n}; {$x, n: .n - 1} | if .n < 0 then {}[] end) | .x;";
+
+yields!(limit01, &(LIMIT.to_owned() + "[limit(0; 1)]"), json!([]));
+yields!(limit00, &(LIMIT.to_owned() + "[limit(0; {}[])]"), json!([]));
+yields!(limit10, &(LIMIT.to_owned() + "[limit(1; {}[])]"), json!([]));
+yields!(limit12, &(LIMIT.to_owned() + "[limit(1; 1, 2)]"), [1]);
+yields!(limit21, &(LIMIT.to_owned() + "[limit(2; 1)]"), [1]);
+yields!(limit22, &(LIMIT.to_owned() + "[limit(2; 1, 2)]"), [1, 2]);
