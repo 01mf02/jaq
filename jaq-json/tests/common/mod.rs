@@ -6,7 +6,8 @@ fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
 
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
-    let modules = loader.load(&arena, File { path: "", code }).unwrap();
+    let path = "".into();
+    let modules = loader.load(&arena, File { path, code }).unwrap();
     let filter = jaq_core::Compiler::default()
         .with_funs(jaq_std::funs().chain(jaq_json::funs()))
         .compile(modules)

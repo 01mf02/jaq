@@ -262,7 +262,8 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read();
+    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+    let path = path.into();
     let modules = loader
         .load(&arena, File { path, code })
         .map_err(load_errors)?;
@@ -287,7 +288,7 @@ fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
             Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
             Error::Parse(errs) => errs.into_iter().map(|e| report_parse(code, e)).collect(),
         };
-        (file.map(|s| s.into()), err)
+        (file.map_code(|s| s.into()), err)
     });
     errs.collect()
 }
@@ -296,7 +297,7 @@ fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
     let errs = errs.into_iter().map(|(file, errs)| {
         let code = file.code;
         let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
-        (file.map(|s| s.into()), errs)
+        (file.map_code(|s| s.into()), errs)
     });
     errs.collect()
 }
