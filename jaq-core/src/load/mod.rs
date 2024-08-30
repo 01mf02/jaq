@@ -225,7 +225,8 @@ impl<'a> Import<'a, &'a str> {
         paths.into_iter().flatten().collect()
     }
 
-    fn find(self, paths: &[PathBuf], ext: &str) -> Result<PathBuf, String> {
+    /// Try to find a file with given extension in the given search paths.
+    pub fn find(self, paths: &[PathBuf], ext: &str) -> Result<PathBuf, String> {
         let parent = Path::new(self.parent).parent().unwrap_or(Path::new("."));
 
         let mut rel = Path::new(self.path).to_path_buf();

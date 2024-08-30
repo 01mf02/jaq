@@ -289,8 +289,8 @@ fn parse(
 
     let mut vals = Vec::new();
     import(&modules, |p| {
-        // TODO: consider search path here!
-        vals.push(json_array(p.path).map_err(|e| e.to_string())?);
+        let path = p.find(paths, "json")?;
+        vals.push(json_array(path).map_err(|e| e.to_string())?);
         Ok(())
     })
     .map_err(load_errors)?;
