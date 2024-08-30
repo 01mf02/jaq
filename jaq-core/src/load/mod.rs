@@ -12,6 +12,8 @@ pub use lex::Lexer;
 use lex::Token;
 pub use parse::Parser;
 use parse::{Def, Term};
+#[cfg(feature = "std")]
+use std::path::{Path, PathBuf};
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -207,10 +209,9 @@ impl<S: PartialEq> Term<S> {
 
 #[cfg(feature = "std")]
 impl<'a> Import<'a, &'a str> {
-    fn meta_paths(&self) -> Option<Vec<std::path::PathBuf>> {
-        self.meta.as_ref().and_then(|meta| {
+    fn meta_paths(&self) -> Vec<PathBuf> {
+        let paths = self.meta.as_ref().and_then(|meta| {
             use alloc::boxed::Box;
-            use std::path::Path;
             let v = meta.obj_key("search")?;
             let iter = if let Term::Arr(a) = v {
                 Box::new(a.iter().filter_map(|v| v.as_str()))
@@ -219,30 +220,34 @@ impl<'a> Import<'a, &'a str> {
             } else {
                 Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>
             };
-            Some(iter.map(|s| Path::new(*s).to_path_buf()).collect())
-        })
+            Some(iter.map(|s| Path::new(*s).to_path_buf()))
+        });
+        paths.into_iter().flatten().collect()
     }
 
-    fn read(self, paths: &[std::path::PathBuf], ext: &str) -> Result<File<String>, String> {
-        use std::path::Path;
-
+    fn find(self, paths: &[PathBuf], ext: &str) -> Result<PathBuf, String> {
         let parent = Path::new(self.parent).parent().unwrap_or(Path::new("."));
 
         let mut rel = Path::new(self.path).to_path_buf();
         if !rel.is_relative() {
-            return Err("non-relative path".into());
+            Err("non-relative path")?
         }
         rel.set_extension(ext);
 
-        for search_path in self.meta_paths().iter().flatten().chain(paths.iter()) {
-            let path = parent.join(search_path).join(&rel);
-            if let Ok(code) = std::fs::read_to_string(&path) {
-                use alloc::string::ToString;
-                let path = path.display().to_string();
-                return Ok(File { code, path });
-            }
-        }
-        Err("file not found".into())
+        self.meta_paths()
+            .iter()
+            .chain(paths)
+            .map(|path| parent.join(path).join(&rel))
+            .find(|path| path.is_file())
+            .ok_or_else(|| "file not found".into())
+    }
+
+    fn read(self, paths: &[PathBuf], ext: &str) -> Result<File<String>, String> {
+        use alloc::string::ToString;
+        let path = self.find(paths, ext)?;
+        let code = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let path = path.display().to_string();
+        Ok(File { code, path })
     }
 }
 
@@ -288,7 +293,7 @@ impl<S, R> Loader<S, R> {
     #[cfg(feature = "std")]
     pub fn with_std_read(
         self,
-        paths: &[std::path::PathBuf],
+        paths: &[PathBuf],
     ) -> Loader<S, impl FnMut(Import<&str>) -> Result<File<String>, String> + '_> {
         self.with_read(|import: Import<&str>| import.read(paths, "jq"))
     }
