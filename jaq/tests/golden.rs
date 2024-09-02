@@ -82,3 +82,10 @@ test!(
 "Two"
 "Three""#
 );
+
+test!(
+    mods,
+    &["-c", "-L", "tests", r#"include "a"; [a, data]"#],
+    "0",
+    r#"["bcddd",[1,2]]"#
+);
