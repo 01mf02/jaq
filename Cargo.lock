@@ -231,7 +231,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
 name = "jaq"
-version = "1.6.0"
+version = "2.0.0-alpha"
 dependencies = [
  "atty",
  "clap",
@@ -250,7 +250,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "1.5.0"
+version = "2.0.0-alpha"
 dependencies = [
  "dyn-clone",
  "jaq-json",
@@ -261,7 +261,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-json"
-version = "1.0.0"
+version = "1.0.0-alpha"
 dependencies = [
  "ahash",
  "hifijson",
@@ -273,7 +273,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-play"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "aho-corasick",
  "codesnake",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "1.6.0"
+version = "2.0.0-alpha"
 dependencies = [
  "aho-corasick",
  "base64",
