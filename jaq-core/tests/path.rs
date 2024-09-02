@@ -180,3 +180,6 @@ fn update_complex() {
     // does *not* work when `a` is a string, an array, or an object!
     fail(json!(0), "0 |= .+1", Error::path_expr());
 }
+
+yields!(alt_update_l, "[1, 2] | .[] // . |= 3", [3, 3]);
+yields!(alt_update_r, "[] | .[] // . |= 3", 3);
