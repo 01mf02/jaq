@@ -293,7 +293,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::TryCatch(..) | Ast::Label(_) | Ast::Alt(..) | Ast::Fold(..) => {
+            Ast::TryCatch(..) | Ast::Label(_) | Ast::Fold(..) => {
                 unimplemented!("updating with this operator is not supported yet")
             }
 
@@ -326,6 +326,12 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Ite(if_, then_, else_) => reduce(if_.run(lut, cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update(lut, (cv.0.clone(), v), f.clone())
             }),
+            Ast::Alt(l, r) => {
+                let some_true = l
+                    .run(lut, cv.clone())
+                    .any(|y| y.map_or(true, |y| y.as_bool()));
+                if some_true { l } else { r }.update(lut, cv, f)
+            }
 
             Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
