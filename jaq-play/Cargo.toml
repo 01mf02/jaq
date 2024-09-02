@@ -1,6 +1,7 @@
 [package]
 name = "jaq-play"
 description = "Web interface for jaq"
+version = "0.0.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 categories = ["wasm"]
 readme = "README.md"
