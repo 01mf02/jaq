@@ -253,7 +253,6 @@ name = "jaq-core"
 version = "2.0.0-alpha"
 dependencies = [
  "dyn-clone",
- "jaq-json",
  "once_cell",
  "serde_json",
  "typed-arena",
@@ -299,7 +298,6 @@ dependencies = [
  "chrono",
  "hifijson",
  "jaq-core",
- "jaq-json",
  "libm",
  "log",
  "regex",
