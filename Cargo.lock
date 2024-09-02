@@ -231,7 +231,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
 name = "jaq"
-version = "2.0.0-alpha"
+version = "2.0.0-alpha.1"
 dependencies = [
  "atty",
  "clap",
@@ -250,9 +250,10 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "2.0.0-alpha"
+version = "2.0.0-alpha.1"
 dependencies = [
  "dyn-clone",
+ "jaq-json",
  "once_cell",
  "serde_json",
  "typed-arena",
@@ -291,13 +292,14 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "2.0.0-alpha"
+version = "2.0.0-alpha.1"
 dependencies = [
  "aho-corasick",
  "base64",
  "chrono",
  "hifijson",
  "jaq-core",
+ "jaq-json",
  "libm",
  "log",
  "regex",
