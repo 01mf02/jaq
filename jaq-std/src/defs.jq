@@ -79,7 +79,8 @@ def until(cond; update): def rec: if cond then . else update | rec end; rec;
 # Iterators
 def map(f): [.[] | f];
 def map_values(f): .[] |= f;
-def add: reduce .[] as $x (null; . + $x);
+def add(f): reduce f as $x (null; . + $x);
+def add: add(.[]);
 def join(x): .[:-1][] += x | add;
 def min_by(f): reduce min_by_or_empty(f) as $x (null; $x);
 def max_by(f): reduce max_by_or_empty(f) as $x (null; $x);
