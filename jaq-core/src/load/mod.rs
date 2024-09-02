@@ -6,12 +6,11 @@ mod prec_climb;
 pub mod test;
 
 use crate::{ops, path};
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{boxed::Box, string::String, vec::Vec};
 pub use lex::Lexer;
 use lex::Token;
 pub use parse::Parser;
-use parse::{Def, Term};
+use parse::{BinaryOp, Def, Term};
 #[cfg(feature = "std")]
 use std::path::{Path, PathBuf};
 
@@ -205,16 +204,22 @@ impl<S: PartialEq> Term<S> {
             None
         }
     }
+
+    fn unconcat(&self) -> Box<dyn Iterator<Item = &Self> + '_> {
+        match self {
+            Self::BinOp(l, BinaryOp::Comma, r) => Box::new(l.unconcat().chain(r.unconcat())),
+            _ => Box::new(core::iter::once(self)),
+        }
+    }
 }
 
 #[cfg(feature = "std")]
 impl<'a> Import<'a, &'a str> {
     fn meta_paths(&self) -> Vec<PathBuf> {
         let paths = self.meta.as_ref().and_then(|meta| {
-            use alloc::boxed::Box;
             let v = meta.obj_key("search")?;
-            let iter = if let Term::Arr(a) = v {
-                Box::new(a.iter().filter_map(|v| v.as_str()))
+            let iter = if let Term::Arr(Some(a)) = v {
+                Box::new(a.unconcat().filter_map(|v| v.as_str()))
             } else if let Some(s) = v.as_str() {
                 Box::new(core::iter::once(s))
             } else {
