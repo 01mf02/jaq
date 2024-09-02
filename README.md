@@ -217,6 +217,7 @@ Here is an overview that summarises:
 - [x] if-then-else (`if .a < .b then .a else .b end`)
 - [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
 - [x] Error handling (`try ... catch ...`) (see the [differences from jq](#error-handling))
+- [x] Breaking (`label $x | f | ., break $x`)
 - [x] String interpolation (`"The successor of \(.) is \(.+1)."`)
 - [x] Format strings (`@json`, `@text`, `@csv`, `@tsv`, `@html`, `@sh`, `@base64`, `@base64d`)
 
@@ -367,11 +368,16 @@ Three-argument filters that ignore `.`:
 
 </details>
 
+## Modules
+
+- [x] `include "path";`
+- [x] `import "path" as mod;`
+- [x] `import "path" as $data;`
+
 ## Advanced features
 
 jaq currently does *not* aim to support several features of jq, such as:
 
-- Modules
 - SQL-style operators
 - Streaming
 
@@ -723,6 +729,14 @@ In jaq however, this holds:
   in jq, `join(x)` converts all elements of the input array to strings and intersperses them with `x`, whereas
   in jaq, `join(x)` simply calculates `x0 + x + x1 + x + ... + xn`.
   When all elements of the input array and `x` are strings, jq and jaq yield the same output.
+* Modules:
+  If the `-L` command-line option is not given, the search path for modules and data files
+  in jq is `["~/.jq", "$ORIGIN/../lib/jq", "$ORIGIN/../lib"]`, whereas
+  in jaq, it is `[]`.
+  However, this can be emulated in jaq by setting an alias such as
+  `alias jaq="jaq -L ~ -L \`which jaq\`/../lib/jq -L \`which jaq\`/../lib"`.
+  Furthermore, jq expands `~` and `$ORIGIN` at the beginning of search paths, whereas
+  jaq does not perform such an expansion.
 
 
 
