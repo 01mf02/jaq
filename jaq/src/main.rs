@@ -554,13 +554,8 @@ where
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     use yansi::Paint;
     match v {
-        Val::Null => "null".fmt(f),
-        Val::Bool(b) => b.fmt(f),
-        Val::Int(i) => i.fmt(f),
-        Val::Float(x) if x.is_finite() => write!(f, "{x:?}"),
-        Val::Float(_) => "null".fmt(f),
-        Val::Num(n) => n.fmt(f),
-        Val::Str(s) => write!(f, "{:?}", s.green()),
+        Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => v.fmt(f),
+        Val::Str(_) => write!(f, "{}", v.green()),
         Val::Arr(a) => {
             '['.bold().fmt(f)?;
             if !a.is_empty() {

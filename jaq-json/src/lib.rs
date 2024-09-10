@@ -876,6 +876,26 @@ fn float_cmp(left: f64, right: f64) -> Ordering {
     }
 }
 
+/// Format a string as valid JSON string, including leading and trailing quotes.
+pub fn fmt_str(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
+    write!(f, "\"")?;
+    for s in s.split_inclusive(|c| c < ' ' || c == '\\' || c == '"') {
+        // split s into last character and everything before (init)
+        let mut chars = s.chars();
+        let last = chars.next_back();
+        let init = chars.as_str();
+
+        match last {
+            Some(last @ ('\t' | '\n' | '\r' | '\\' | '"')) => {
+                write!(f, "{init}{}", last.escape_default())
+            }
+            Some(last) if last < ' ' => write!(f, "{init}\\u{:04x}", last as u8),
+            _ => write!(f, "{s}"),
+        }?;
+    }
+    write!(f, "\"")
+}
+
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -885,7 +905,7 @@ impl fmt::Display for Val {
             Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
             Self::Float(_) => write!(f, "null"),
             Self::Num(n) => write!(f, "{n}"),
-            Self::Str(s) => write!(f, "{s:?}"),
+            Self::Str(s) => fmt_str(f, s),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();

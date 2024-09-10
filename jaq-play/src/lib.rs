@@ -1,6 +1,6 @@
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter};
-use jaq_json::Val;
+use jaq_json::{fmt_str, Val};
 use wasm_bindgen::prelude::*;
 
 type Filter = jaq_core::Filter<Native<Val>>;
@@ -60,7 +60,10 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
         Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s) => span_dbg(f, "string", escape(s)),
+        Val::Str(s) => {
+            let display = FormatterFn(|f: &mut Formatter| fmt_str(f, &escape(s)));
+            span(f, "string", display)
+        }
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;

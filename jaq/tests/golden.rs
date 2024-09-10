@@ -84,6 +84,13 @@ test!(
 );
 
 test!(
+    fmt_str,
+    &[],
+    r#""\u0000\u200b\r\t\n asdf""#,
+    r#""\u0000​\r\t\n asdf""#
+);
+
+test!(
     mods,
     &["-c", "-L", "tests", r#"include "a"; [a, data]"#],
     "0",
