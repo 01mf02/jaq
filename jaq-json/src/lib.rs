@@ -9,6 +9,9 @@ use core::fmt::{self, Debug};
 use jaq_core::{load, ops, path, Exn, Native, RunPtr};
 use jaq_std::{once_with, ow, run, unary, v, Filter};
 
+#[cfg(feature = "serde_json")]
+use serde_json;
+
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
 
@@ -520,6 +523,14 @@ impl Val {
                 .iter()
                 .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
             _ => self == other,
+        }
+    }
+
+    #[cfg(feature = "serde_json")]
+    pub fn to_escaped_string(&self) -> Result<serde_json::Value, Error> {
+        match self {
+            Self::Str(s) => Ok(serde_json::Value::String(s.to_string())),
+            _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
         }
     }
 

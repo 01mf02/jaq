@@ -560,7 +560,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Float(x) if x.is_finite() => write!(f, "{x:?}"),
         Val::Float(_) => "null".fmt(f),
         Val::Num(n) => n.fmt(f),
-        Val::Str(s) => write!(f, "{:?}", s.green()),
+        Val::Str(_s) => write!(f, "{}", v.to_escaped_string().expect("Failed to escape string").green()),
         Val::Arr(a) => {
             '['.bold().fmt(f)?;
             if !a.is_empty() {
