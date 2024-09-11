@@ -214,6 +214,14 @@ impl<S: PartialEq> Term<S> {
 }
 
 #[cfg(feature = "std")]
+fn expand_prefix(path: &Path, pre: &str, f: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+    let rest = path.strip_prefix(pre).ok()?;
+    let mut replace = f()?;
+    replace.push(rest);
+    Some(replace)
+}
+
+#[cfg(feature = "std")]
 impl<'a> Import<'a, &'a str> {
     fn meta_paths(&self) -> Vec<PathBuf> {
         let paths = self.meta.as_ref().and_then(|meta| {
@@ -240,10 +248,24 @@ impl<'a> Import<'a, &'a str> {
         }
         rel.set_extension(ext);
 
+        #[cfg(target_os = "windows")]
+        let home = "USERPROFILE";
+        #[cfg(not(target_os = "windows"))]
+        let home = "HOME";
+
+        use std::env;
+        let home = || env::var_os(home).map(PathBuf::from);
+        let origin = || env::current_exe().ok()?.parent().map(PathBuf::from);
+
         self.meta_paths()
             .iter()
             .chain(paths)
-            .map(|path| parent.join(path).join(&rel))
+            .map(|path| {
+                let home = expand_prefix(path, "~", home);
+                let orig = expand_prefix(path, "$ORIGIN", origin);
+                let path = home.as_ref().or(orig.as_ref()).unwrap_or(path);
+                parent.join(path).join(&rel)
+            })
             .filter_map(|path| path.canonicalize().ok())
             .find(|path| path.is_file())
             .ok_or_else(|| "file not found".into())
