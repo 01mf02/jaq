@@ -239,7 +239,7 @@ impl jaq_core::ValT for Val {
             let from = abs_bound(from, len, 0);
             let upto = abs_bound(upto, len, len);
             let (skip, take) = skip_take(from, upto);
-            let arr = Val::arr(a.iter().skip(skip).take(take).cloned().collect());
+            let arr = a.iter().skip(skip).take(take).cloned().collect();
             let y = f(arr).map(|y| y?.into_arr().map_err(Exn::from)).next();
             let y = y.transpose()?.unwrap_or_default();
             a.splice(skip..skip + take, (*y).clone());
@@ -354,7 +354,7 @@ fn base_funs() -> Box<[Filter<RunPtr<Val>>]> {
         ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
         ("length", v(0), |_, cv| ow!(cv.1.length())),
         ("keys_unsorted", v(0), |_, cv| {
-            ow!(cv.1.keys_unsorted().map(Val::arr))
+            ow!(cv.1.keys_unsorted().map(|v| Val::Arr(v.into())))
         }),
         ("contains", v(1), |_, cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
@@ -424,11 +424,6 @@ fn wrap_test() {
 }
 
 impl Val {
-    /// Construct an array value.
-    pub fn arr(v: Vec<Self>) -> Self {
-        Self::Arr(v.into())
-    }
-
     /// Construct an object value.
     pub fn obj(m: Map<Rc<String>, Self>) -> Self {
         Self::Obj(m.into())
@@ -547,13 +542,13 @@ impl Val {
                 Ok(Self::Num(Rc::new(num.to_string())))
             }
             Token::Quote => Ok(Self::from(lexer.str_string()?.to_string())),
-            Token::LSquare => Ok(Self::arr({
+            Token::LSquare => Ok(Self::Arr({
                 let mut arr = Vec::new();
                 lexer.seq(Token::RSquare, |token, lexer| {
                     arr.push(Self::parse(token, lexer)?);
                     Ok::<_, hifijson::Error>(())
                 })?;
-                arr
+                arr.into()
             })),
             Token::LCurly => Ok(Self::obj({
                 let mut obj = Map::default();
@@ -754,7 +749,7 @@ impl core::ops::Div for Val {
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from_dec_str(&n) / r,
             (l, Num(n)) => l / Self::from_dec_str(&n),
-            (Str(x), Str(y)) => Ok(Val::arr(split(&x, &y).map(Val::from).collect())),
+            (Str(x), Str(y)) => Ok(split(&x, &y).map(Val::from).collect()),
             (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
     }

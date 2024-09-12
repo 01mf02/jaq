@@ -367,8 +367,7 @@ where
     if cli.raw_input {
         Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
     } else {
-        let vals = json_read(read);
-        Box::new(collect_if(cli.slurp, vals, Val::arr))
+        Box::new(collect_if(cli.slurp, json_read(read)))
     }
 }
 
@@ -377,8 +376,7 @@ fn read_slice<'a>(cli: &Cli, slice: &'a [u8]) -> Box<dyn Iterator<Item = io::Res
         let read = io::BufReader::new(slice);
         Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
     } else {
-        let vals = json_slice(slice);
-        Box::new(collect_if(cli.slurp, vals, Val::arr))
+        Box::new(collect_if(cli.slurp, json_slice(slice)))
     }
 }
 
@@ -395,14 +393,12 @@ where
     }
 }
 
-fn collect_if<'a, T: 'a, E: 'a>(
+fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     slurp: bool,
     iter: impl Iterator<Item = Result<T, E>> + 'a,
-    f: impl FnOnce(Vec<T>) -> T,
 ) -> Box<dyn Iterator<Item = Result<T, E>> + 'a> {
     if slurp {
-        let slurped: Result<Vec<_>, _> = iter.collect();
-        Box::new(core::iter::once(slurped.map(f)))
+        Box::new(core::iter::once(iter.collect()))
     } else {
         Box::new(iter)
     }
@@ -736,9 +732,9 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
             .map_err(invalid_data)
     };
     let input = json(test.input)?;
-    let expect: Result<Vec<_>, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Vec<_>, _> = filter.run((ctx, input)).collect();
-    Ok((Val::arr(expect?), Val::arr(obtain.map_err(Error::Jaq)?)))
+    let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
+    let obtain: Result<Val, _> = filter.run((ctx, input)).collect();
+    Ok((expect?, obtain.map_err(Error::Jaq)?))
 }
 
 fn run_tests(file: std::fs::File) -> ExitCode {
