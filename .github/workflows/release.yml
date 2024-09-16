@@ -90,7 +90,7 @@ jobs:
       run: |
         EXE_suffix="" ; case ${{ matrix.target }} in *-pc-windows-*) EXE_suffix=".exe" ;; esac
         BIN_PATH="target/${{ matrix.target }}/release/${NAME}${EXE_suffix}"
-        PKG_NAME=${NAME}-${VERSION}-${{ matrix.target }}${EXE_suffix}
+        PKG_NAME=${NAME}-${{ matrix.target }}${EXE_suffix}
         cp ${BIN_PATH} ${PKG_NAME}
         echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
