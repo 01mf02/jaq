@@ -147,6 +147,17 @@ trait ValTx: ValT + Sized {
             Ok(Self::from(f(self.as_f64()?)))
         }
     }
+
+    fn trim_with(self, f: impl FnOnce(&str) -> &str) -> ValR<Self> {
+        let s = self.try_as_str()?;
+        let t = f(s);
+        Ok(if core::ptr::eq(s, t) {
+            // the input was already trimmed, so do not allocate new memory
+            self
+        } else {
+            t.to_string().into()
+        })
+    }
 }
 impl<T: ValT> ValTx for T {}
 
@@ -389,13 +400,13 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             })
         }),
         ("trim", v(0), |_, cv| {
-            ow!(Ok(cv.1.try_as_str()?.trim().to_string().into()))
+            ow!(cv.1.trim_with(str::trim))
         }),
         ("ltrim", v(0), |_, cv| {
-            ow!(Ok(cv.1.try_as_str()?.trim_start().to_string().into()))
+            ow!(cv.1.trim_with(str::trim_start))
         }),
         ("rtrim", v(0), |_, cv| {
-            ow!(Ok(cv.1.try_as_str()?.trim_end().to_string().into()))
+            ow!(cv.1.trim_with(str::trim_end))
         }),
         ("escape_csv", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
