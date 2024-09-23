@@ -388,6 +388,15 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
+        ("trim", v(0), |_, cv| {
+            ow!(Ok(cv.1.try_as_str()?.trim().to_string().into()))
+        }),
+        ("ltrim", v(0), |_, cv| {
+            ow!(Ok(cv.1.try_as_str()?.trim_start().to_string().into()))
+        }),
+        ("rtrim", v(0), |_, cv| {
+            ow!(Ok(cv.1.try_as_str()?.trim_end().to_string().into()))
+        }),
         ("escape_csv", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
         }),

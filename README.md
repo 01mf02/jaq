@@ -263,6 +263,7 @@ Here is an overview that summarises:
 - [x] String <-> integers (`explode`, `implode`)
 - [x] String normalisation (`ascii_downcase`, `ascii_upcase`)
 - [x] String prefix/postfix (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
+- [x] String whitespace trimming (`trim`, `ltrim`, `rtrim`)
 - [x] String splitting (`split("foo")`)
 - [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
