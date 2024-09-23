@@ -230,3 +230,39 @@ fn rtrimstr() {
     give(json!("foobar"), r#"rtrimstr("foo")"#, json!("foobar"));
     give(json!("اَلْعَرَبِيَّةُ"), r#"rtrimstr("ا")"#, json!("اَلْعَرَبِيَّةُ"));
 }
+
+#[test]
+fn trim() {
+    give(json!(""), "trim", json!(""));
+    give(json!(" "), "trim", json!(""));
+    give(json!("  "), "trim", json!(""));
+    give(json!("foo"), "trim", json!("foo"));
+    give(json!(" foo  "), "trim", json!("foo"));
+    give(json!("  foo  "), "trim", json!("foo"));
+    give(json!("foo  "), "trim", json!("foo"));
+    give(json!(" اَلْعَرَبِيَّةُ "), "trim", json!("اَلْعَرَبِيَّةُ"));
+}
+
+#[test]
+fn ltrim() {
+    give(json!(""), "ltrim", json!(""));
+    give(json!(" "), "ltrim", json!(""));
+    give(json!("  "), "ltrim", json!(""));
+    give(json!("foo"), "ltrim", json!("foo"));
+    give(json!(" foo  "), "ltrim", json!("foo  "));
+    give(json!("  foo  "), "ltrim", json!("foo  "));
+    give(json!("foo  "), "ltrim", json!("foo  "));
+    give(json!(" اَلْعَرَبِيَّةُ "), "ltrim", json!("اَلْعَرَبِيَّةُ "));
+}
+
+#[test]
+fn rtrim() {
+    give(json!(""), "rtrim", json!(""));
+    give(json!(" "), "rtrim", json!(""));
+    give(json!("  "), "rtrim", json!(""));
+    give(json!("foo"), "rtrim", json!("foo"));
+    give(json!("  foo "), "rtrim", json!("  foo"));
+    give(json!("  foo  "), "rtrim", json!("  foo"));
+    give(json!("  foo"), "rtrim", json!("  foo"));
+    give(json!(" اَلْعَرَبِيَّةُ "), "rtrim", json!(" اَلْعَرَبِيَّةُ"));
+}
