@@ -399,15 +399,9 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("trim", v(0), |_, cv| {
-            ow!(cv.1.trim_with(str::trim))
-        }),
-        ("ltrim", v(0), |_, cv| {
-            ow!(cv.1.trim_with(str::trim_start))
-        }),
-        ("rtrim", v(0), |_, cv| {
-            ow!(cv.1.trim_with(str::trim_end))
-        }),
+        ("trim", v(0), |_, cv| ow!(cv.1.trim_with(str::trim))),
+        ("ltrim", v(0), |_, cv| ow!(cv.1.trim_with(str::trim_start))),
+        ("rtrim", v(0), |_, cv| ow!(cv.1.trim_with(str::trim_end))),
         ("escape_csv", v(0), |_, cv| {
             ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
         }),
