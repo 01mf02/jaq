@@ -133,8 +133,8 @@ impl ColorWhen {
 fn main() -> ExitCode {
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
-        // omit name of module that emitted log message
-        .format_target(false)
+        // format debug messages such as `["DEBUG", [1, 2, 3]]`
+        .format(|buf, record| writeln!(buf, "[\"{}\", {}]", record.level(), record.args()))
         .init();
 
     let cli = Cli::parse();
