@@ -12,7 +12,7 @@ pub fn from_iso8601<V: ValT>(s: &str) -> ValR<V> {
     let dt = DateTime::parse_from_rfc3339(s)
         .map_err(|e| Error::str(format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
     if s.contains('.') {
-        Ok((dt.timestamp_micros() as f64 * 1e-6_f64).into())
+        Ok((dt.timestamp_millis() as f64 / 1000.).into())
     } else {
         let seconds = dt.timestamp();
         isize::try_from(seconds)
@@ -29,7 +29,7 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
         Ok(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
     } else {
         let f = v.as_f64()?;
-        let dt = DateTime::from_timestamp_micros((f * 1e6_f64) as i64).ok_or_else(fail)?;
-        Ok(dt.format("%Y-%m-%dT%H:%M:%S%.fZ").to_string())
+        let dt = DateTime::from_timestamp_millis((f * 1000.) as i64).ok_or_else(fail)?;
+        Ok(dt.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())
     }
 }
