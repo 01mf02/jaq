@@ -75,7 +75,7 @@ pub fn extra_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     [std(), format(), math(), regex(), time()]
         .into_iter()
         .flat_map(|fs| fs.into_vec().into_iter().map(run))
-        .chain([upd(debug())])
+        .chain([debug(), stderr()].map(upd))
 }
 
 /// Values that the core library can operate on.
@@ -620,4 +620,8 @@ macro_rules! id_with {
 fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
     ("debug", v(0), id_with!(|x| log::debug!("{}", x)))
 }
+
+#[cfg(feature = "std")]
+fn stderr<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
+    ("stderr", v(0), id_with!(|x| std::eprint!("{}", x)))
 }
