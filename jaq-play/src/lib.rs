@@ -145,11 +145,11 @@ enum Error {
 
 #[wasm_bindgen]
 pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
-    let _ = console_log::init();
-    log::debug!("Starting run in Rust ...");
+    let _ = console_log::init_with_level(log::Level::Debug);
+    log::trace!("Starting run in Rust ...");
 
     let settings = Settings::try_from(settings).unwrap();
-    log::debug!("{settings:?}");
+    log::trace!("{settings:?}");
 
     let indent = if settings.tab {
         "\t".to_string()
