@@ -588,14 +588,10 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 }
 
 fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
-    (
-        "error",
-        v(0),
-        (
-            |_, cv| ow!(Err(Error::new(cv.1))),
-            |_, cv, _| ow!(Err(Error::new(cv.1))),
-        ),
-    )
+    fn err<V>(cv: Cv<V>) -> ValXs<V> {
+        ow!(Err(Error::new(cv.1)))
+    }
+    ("error", v(0), (|_, cv| err(cv), |_, cv, _| err(cv)))
 }
 
 /// Construct a filter that applies an effect function before returning its input.
