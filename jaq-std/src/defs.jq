@@ -1,7 +1,7 @@
 def empty: {}[] as $x | .;
 def null:  [][0];
 
-def error: error(.);
+def error(msgs): ((msgs | error) as $x | empty), .;
 def halt: halt_error(5);
 
 # Booleans
