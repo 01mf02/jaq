@@ -598,20 +598,26 @@ fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
     )
 }
 
-#[cfg(feature = "log")]
-fn with_debug<T: core::fmt::Display>(x: T) -> T {
-    log::debug!("{}", x);
-    x
+/// Construct a filter that applies an effect function before returning its input.
+macro_rules! id_with {
+    ( $eff:expr ) => {
+        (
+            |_, cv| {
+                ow!({
+                    $eff(&cv.1);
+                    Ok(cv.1)
+                })
+            },
+            |_, cv, f| {
+                $eff(&cv.1);
+                f(cv.1)
+            },
+        )
+    };
 }
 
 #[cfg(feature = "log")]
 fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
-    (
-        "debug",
-        v(0),
-        (
-            |_, cv| ow!(Ok(with_debug(cv.1))),
-            |_, cv, f| f(with_debug(cv.1)),
-        ),
-    )
+    ("debug", v(0), id_with!(|x| log::debug!("{}", x)))
+}
 }
