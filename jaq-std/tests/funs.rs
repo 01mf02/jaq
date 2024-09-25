@@ -41,15 +41,15 @@ yields!(
     86400
 );
 yields!(
-    fromdate_millis,
-    r#""1970-01-02T00:00:00.123Z" | fromdateiso8601"#,
-    86400.123
+    fromdate_mu,
+    r#""1970-01-02T00:00:00.123456Z" | fromdateiso8601"#,
+    86400.123456
 );
 yields!(todate, r#"86400 | todateiso8601"#, "1970-01-02T00:00:00Z");
 yields!(
-    todate_millis,
-    r#"86400.123 | todateiso8601"#,
-    "1970-01-02T00:00:00.123Z"
+    todate_mu,
+    "86400.123456 | todateiso8601",
+    "1970-01-02T00:00:00.123456Z"
 );
 
 #[test]
@@ -57,8 +57,8 @@ fn fromtodate() {
     let fromto = "fromdateiso8601 | todateiso8601";
     let iso = "2000-01-01T00:00:00Z";
     give(json!(iso), fromto, json!(iso));
-    let iso_millis = "2000-01-01T00:00:00.123Z";
-    give(json!(iso_millis), fromto, json!(iso_millis));
+    let iso_mu = "2000-01-01T00:00:00.123456Z";
+    give(json!(iso_mu), fromto, json!(iso_mu));
 }
 
 #[test]
