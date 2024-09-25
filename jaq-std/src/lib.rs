@@ -622,6 +622,13 @@ fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
 }
 
 #[cfg(feature = "std")]
-fn stderr<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
-    ("stderr", v(0), id_with!(|x| std::eprint!("{}", x)))
+fn stderr<V: ValT>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
+    fn eprint_raw<V: ValT>(v: &V) {
+        if let Some(s) = v.as_str() {
+            std::eprint!("{}", s)
+        } else {
+            std::eprint!("{}", v)
+        }
+    }
+    ("stderr", v(0), id_with!(eprint_raw))
 }
