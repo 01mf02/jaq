@@ -134,7 +134,10 @@ fn main() -> ExitCode {
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
         // format debug messages such as `["DEBUG", [1, 2, 3]]`
-        .format(|buf, record| writeln!(buf, "[\"{}:\", {}]", record.level(), record.args()))
+        .format(|buf, record| match record.level() {
+            log::Level::Error => write!(buf, "{}", record.args()),
+            level => writeln!(buf, "[\"{}:\", {}]", level, record.args()),
+        })
         .init();
 
     let cli = Cli::parse();
