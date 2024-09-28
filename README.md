@@ -672,32 +672,6 @@ it requires completely separate logic from `foreach/2` and `reduce`
 in both the parser and the interpreter.
 
 
-## Error handling
-
-In jq, the `try f catch g` expression breaks out of the `f` stream as
-soon as an error occurs, ceding control to `g` after that. This is
-mentioned in its manual as a possible mechanism for breaking out of
-loops
-([here](https://jqlang.github.io/jq/manual/#breaking-out-of-control-structures)). jaq
-however doesn't interrupt the `f` stream, but instead sends _each_
-error value emitted to the `g` filter; the result is a stream of
-values emitted from `f` with values emitted from `g` interspersed
-where errors occurred.
-
-Consider the following example: this expression is `true` in jq,
-because the first `error(2)` interrupts the stream:
-
-```jq
-[try (1, error(2), 3, error(4)) catch .] == [1, 2]
-```
-
-In jaq however, this holds:
-
-```jq
-[try (1, error(2), 3, error(4)) catch .] == [1, 2, 3, 4]
-```
-
-
 ## Miscellaneous
 
 * Slurping: When files are slurped in (via the `-s` / `--slurp` option),

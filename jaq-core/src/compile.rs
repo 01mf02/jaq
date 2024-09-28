@@ -439,10 +439,17 @@ impl<'s, F> Compiler<&'s str, F> {
                 t
             }
             Num(n) => n.parse().map_or_else(|_| Term::Num(n.into()), Term::Int),
-            TryCatch(t, c) => Term::TryCatch(
-                self.iterm(*t),
-                self.iterm_tr(c.map_or_else(|| Call("!empty", Vec::new()), |c| *c)),
-            ),
+            // map `try f catch g` to `label $x | try f catch (g, break $x)`
+            // and `try f` or `f?` to `label $x | try f catch (   break $x)`
+            TryCatch(t, c) => {
+                let (label, break_) = (Local::Label(""), Break(""));
+                let catch = match c {
+                    None => break_,
+                    Some(c) => BinOp(c, parse::BinaryOp::Comma, break_.into()),
+                };
+                let tc = self.with(label, |c| Term::TryCatch(c.iterm(*t), c.iterm(catch)));
+                Term::Label(self.lut.insert_term(tc))
+            }
             Fold(name, xs, x, args) => {
                 let arity = args.len();
                 let fold = match name {

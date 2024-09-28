@@ -88,7 +88,7 @@ fn alt() {
 fn try_() {
     give(json!(0), ".?", json!(0));
     give(json!(0), r#"(-"a")?, 1"#, json!(1));
-    give(json!(0), r#"[(1, -"a", 2)?]"#, json!([1, 2]));
+    give(json!(0), r#"[(1, -"a", 2)?]"#, json!([1]));
 }
 
 #[test]
@@ -235,12 +235,10 @@ yields!(
     [1, 2]
 );
 
-// This behaviour diverges from jq. In jaq, a `try` will propagate all
-// errors in the stream to the `catch` filter.
 yields!(
-    try_catch_does_not_short_circuit,
+    try_catch_short_circuit,
     "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
-    ["1", "2", "cannot index {} with 0", "4"]
+    ["1", "2", "cannot index {} with 0"]
 );
 yields!(
     try_catch_nested,
@@ -252,7 +250,7 @@ yields!(
     "[(try (1,2,3[0]) catch (3,4)) | . - 1]",
     [0, 1, 2, 3]
 );
-yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2, 4]);
+yields!(try_without_catch, "[try (1,2,3[0],4)]", [1, 2]);
 yields!(
     try_catch_prefix_operation,
     r#"(try -[] catch .) | . > "" and . < []"#,
