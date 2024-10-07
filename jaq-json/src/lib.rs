@@ -185,7 +185,8 @@ impl jaq_core::ValT for Val {
                 };
                 match o.entry(Rc::clone(i)) {
                     Occupied(mut e) => {
-                        match f(e.get().clone()).next().transpose()? {
+                        let v = core::mem::replace(e.get_mut(), Self::from(false));
+                        match f(v).next().transpose()? {
                             Some(y) => e.insert(y),
                             // this runs in constant time, at the price of
                             // changing the order of the elements
@@ -210,7 +211,8 @@ impl jaq_core::ValT for Val {
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
 
-                if let Some(y) = f(a[i].clone()).next().transpose()? {
+                let x = core::mem::replace(&mut a[i], Self::from(false));
+                if let Some(y) = f(x).next().transpose()? {
                     a[i] = y;
                 } else {
                     a.remove(i);
