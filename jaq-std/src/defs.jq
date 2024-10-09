@@ -99,6 +99,7 @@ def last:   .[-1];
 def nth(n): .[ n];
 
 def last(g): (reduce g as $item ([]; [$item]))[];
+def skip($n; g): foreach g as $x ([$n]; [.[0] - 1, $x]) | if .[0] < 0 then .[1] else empty end;
 def nth(n; g): last(limit(n + 1; g));
 
 # Predicates
