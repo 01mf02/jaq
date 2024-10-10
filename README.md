@@ -581,8 +581,9 @@ $ jaq -n --arg x 1 --arg y 2 '$x, $y, $ARGS.named'
 ## Folding
 
 jq and jaq provide filters
-`reduce xs as $x (init; f)` and
-`foreach xs as $x (init; f)`.
+`reduce xs as $x (init; update)`,
+`foreach xs as $x (init; update)`, and.
+`foreach xs as $x (init; update; project)`.
 
 In jaq, the output of these filters is defined very simply:
 Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
@@ -604,22 +605,6 @@ init
 | xn as $x | f | (.,
 empty)...)
 ~~~
-
-Additionally, jaq provides the filter `for xs as $x (init; f)` that evaluates to
-
-~~~ text
-init
-| ., (x0 as $x | f
-| ...
-| ., (xn as $x | f
-)...)
-~~~
-
-The difference between `foreach` and `for` is that
-`for` yields the output of `init`, whereas `foreach` omits it.
-For example,
-`foreach (1, 2, 3) as $x (0; .+$x)` yields `1, 3, 6`, whereas
-`for (1, 2, 3) as $x (0; .+$x)` yields `0, 1, 3, 6`.
 
 The interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
 
@@ -647,29 +632,6 @@ The interpretation of `reduce`/`foreach` in jaq has the following advantages ove
   </details>
 * It makes the implementation of `reduce` and `foreach`
   special cases of the same code, reducing the potential for bugs.
-
-Compared to `foreach ...`, the filter `for ...`
-(where `...` refers to `xs as $x (init; f)`)
-has a stronger relationship with `reduce`.
-In particular,
-the values yielded by `reduce ...` are a subset of
-the values yielded by `for ...`.
-This does not hold if you replace `for` by `foreach`.
-<details><summary>Example</summary>
-
-As an example, if we set `...` to `empty as $x (0; .+$x)`, then
-`foreach ...` yields no value, whereas
-`for ...` and `reduce ...` yield `0`.
-
-</details>
-
-Furthermore, jq provides the filter
-`foreach xs as $x (init; f; proj)` (`foreach/3`) and interprets
-`foreach xs as $x (init; f)` (`foreach/2`) as
-`foreach xs as $x (init; f; .)`, whereas
-jaq does *not* provide `foreach/3` because
-it requires completely separate logic from `foreach/2` and `reduce`
-in both the parser and the interpreter.
 
 
 ## Miscellaneous

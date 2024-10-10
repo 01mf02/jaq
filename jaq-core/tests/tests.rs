@@ -378,9 +378,9 @@ yields!(
     [1, 3, 6]
 );
 yields!(
-    for_cumulative_sum,
-    "[1, 2, 3] | [for .[] as $x (0; .+$x)]",
-    [0, 1, 3, 6]
+    foreach_cumulative_sum_proj,
+    "[1, 2, 3] | [foreach .[] as $x (0; .+$x; [$x, .])]",
+    [[1, 1], [2, 3], [3, 6]]
 );
 
 // jq will give only [4, 3, 7, 12] here because
@@ -390,11 +390,6 @@ yields!(
     foreach_many_outputs,
     "[foreach (3,4) as $x (1; .+$x, .*$x)]",
     [4, 8, 16, 3, 7, 12]
-);
-yields!(
-    for_many_outputs,
-    "[for (3,4) as $x (1; .+$x, .*$x)]",
-    [1, 4, 8, 16, 3, 7, 12]
 );
 
 yields!(update_alt, "[[0!=0, 3] | .[] //= (1, 2)]", [[1, 3], [2, 3]]);

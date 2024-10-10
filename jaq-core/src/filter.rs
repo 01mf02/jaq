@@ -1,5 +1,5 @@
 use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::compile::{FoldType, Lut, Tailrec, Term as Ast};
+use crate::compile::{Lut, Tailrec, Term as Ast};
 use crate::results::{fold, then, Fold, Results};
 use crate::val::{ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
@@ -57,16 +57,17 @@ where
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
-fn foreach<'a, T: Clone + 'a, V: Clone + 'a>(
+fn foreach_project<'a, T: Clone + Default + 'a, V: Clone + 'a>(
     xs: impl Iterator<Item = Result<T, Exn<'a, V>>> + Clone + 'a,
-    init: Fold<'a, (T, V), Exn<'a, V>>,
+    init: V,
     update: impl Fn(T, V) -> ValXs<'a, V> + 'a,
     project: impl Fn(T, V) -> ValXs<'a, V> + 'a,
-) -> ValXs<'a, V> {
-    let updated = fold(true, xs, init, move |x, (_, acc)| {
+) -> impl Iterator<Item = ValX<'a, V>> {
+    let init = Fold::Input((T::default(), init));
+    fold(true, xs, init, move |x, (_, acc)| {
         Box::new(update(x.clone(), acc).map(move |y| Ok((x.clone(), y?))))
-    });
-    Box::new(updated.flat_map(move |xa| then(xa, |(x, acc)| project(x, acc))))
+    })
+    .flat_map(move |xa| then(xa, |(x, acc)| project(x, acc)))
 }
 
 fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
@@ -236,30 +237,26 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
-            Ast::Fold(typ, xs, init, f, project) => {
-                use Fold::{Input, Output};
+            Ast::Reduce(xs, init, f) => {
                 let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
                 let init = init.run(lut, cv.clone());
-                let project = project.as_ref().map(|project| {
-                    let ctx = cv.0.clone();
-                    move |x, v| project.run(lut, (ctx.clone().cons_var(x), v))
-                });
                 let f = move |x, v| f.run(lut, (cv.0.clone().cons_var(x), v));
-                match (typ, project) {
-                    (FoldType::Reduce, _) => Box::new(fold(false, xs, Output(init), f)),
-                    (FoldType::For, None) => Box::new(fold(true, xs, Output(init), f)),
-                    (FoldType::Foreach, None) => flat_map_with(init, xs, move |i, xs| {
-                        then(i, |i| Box::new(fold(true, xs, Input(i), f.clone())))
-                    }),
-                    (FoldType::For, Some(proj)) => {
-                        let init = Box::new(init.map(|acc| Ok((Self::V::default(), acc?))));
-                        foreach(xs, Output(init), f, proj)
-                    }
-                    (FoldType::Foreach, Some(proj)) => {
-                        flat_map_with(init, (xs, f, proj), move |i, (xs, f, proj)| {
-                            then(i, |i| foreach(xs, Input((Self::V::default(), i)), f, proj))
-                        })
-                    }
+                Box::new(fold(false, xs, Fold::Output(init), f))
+            }
+            Ast::Foreach(xs, init, update, project) => {
+                let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
+                let init = init.run(lut, cv.clone());
+                let ctx = cv.0.clone();
+                let update = move |x, v| update.run(lut, (ctx.clone().cons_var(x), v));
+                if let Some(proj) = project {
+                    let proj = move |x, v| proj.run(lut, (cv.0.clone().cons_var(x), v));
+                    flat_map_with(init, (xs, update, proj), move |i, (xs, update, proj)| {
+                        then(i, |i| Box::new(foreach_project(xs, i, update, proj)))
+                    })
+                } else {
+                    flat_map_with(init, (xs, update), move |i, (xs, update)| {
+                        then(i, |i| Box::new(fold(true, xs, Fold::Input(i), update)))
+                    })
                 }
             }
 
@@ -318,7 +315,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
 
             // these are up for grabs to implement :)
-            Ast::TryCatch(..) | Ast::Label(_) | Ast::Fold(..) => {
+            Ast::TryCatch(..) | Ast::Label(_) | Ast::Reduce(..) | Ast::Foreach(..) => {
                 unimplemented!("updating with this operator is not supported yet")
             }
 

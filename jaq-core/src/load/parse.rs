@@ -196,7 +196,7 @@ impl<'s, 't> Parser<'s, 't> {
         Self {
             i: i.iter(),
             e: Vec::new(),
-            fold: &["reduce", "foreach", "for"],
+            fold: &["reduce", "foreach"],
         }
     }
 
