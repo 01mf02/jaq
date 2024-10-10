@@ -142,13 +142,13 @@ impl<'a, V> Ctx<'a, V> {
     }
 
     /// Add a new variable binding.
-    pub(crate) fn cons_var(mut self, x: V) -> Self {
+    fn cons_var(mut self, x: V) -> Self {
         self.vars.0 = self.vars.0.cons(Bind::Var(x));
         self
     }
 
     /// Add a new filter binding.
-    pub(crate) fn cons_fun(mut self, (f, ctx): (&'a filter::Id, Self)) -> Self {
+    fn cons_fun(mut self, (f, ctx): (&'a filter::Id, Self)) -> Self {
         self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
         self
     }
