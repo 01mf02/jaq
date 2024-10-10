@@ -54,7 +54,7 @@ impl<V> Error<V> {
     }
 
     /// Create a path expression error.
-    pub(crate) fn path_expr() -> Self {
+    pub fn path_expr() -> Self {
         Self(Part::Str(Vec::from([Part::Str("invalid path expression")])))
     }
 
