@@ -22,8 +22,9 @@ use hifijson::{LexAlloc, Token};
 /// Operations on numbers follow a few principles:
 /// * The sum, difference, product, and remainder of two integers is integer.
 /// * Any other operation between two numbers yields a float.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum Val {
+    #[default]
     /// Null
     Null,
     /// Boolean
@@ -185,7 +186,7 @@ impl jaq_core::ValT for Val {
                 };
                 match o.entry(Rc::clone(i)) {
                     Occupied(mut e) => {
-                        let v = core::mem::replace(e.get_mut(), Self::from(false));
+                        let v = core::mem::replace(e.get_mut(), Self::default());
                         match f(v).next().transpose()? {
                             Some(y) => e.insert(y),
                             // this runs in constant time, at the price of
@@ -211,7 +212,7 @@ impl jaq_core::ValT for Val {
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
 
-                let x = core::mem::replace(&mut a[i], Self::from(false));
+                let x = core::mem::replace(&mut a[i], Self::default());
                 if let Some(y) = f(x).next().transpose()? {
                     a[i] = y;
                 } else {
