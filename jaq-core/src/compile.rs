@@ -175,7 +175,7 @@ pub enum Undefined {
     Var,
     /// label variable
     Label,
-    /// filter
+    /// filter with arity
     Filter(Arity),
 }
 
