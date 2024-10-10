@@ -147,7 +147,7 @@ pub(crate) enum Term<T = TermId> {
     /// | ...
     /// | ., (xn as $x | f)...)
     /// ~~~
-    Fold(FoldType, T, T, T),
+    Fold(FoldType, T, T, T, Option<T>),
 
     Path(T, crate::path::Path<T>),
 }
@@ -459,15 +459,21 @@ impl<'s, F> Compiler<&'s str, F> {
                     name => return self.fail(name, Undefined::Filter(arity)),
                 };
                 let mut args = args.into_iter();
-                let (init, update) = match (args.next(), args.next(), args.next()) {
-                    (Some(init), Some(update), None) => (init, update),
+                let (init, update) = match (args.next(), args.next()) {
+                    (Some(init), Some(update)) => (init, update),
+                    _ => return self.fail(name, Undefined::Filter(arity)),
+                };
+                let project = match (&fold, args.next(), args.next()) {
+                    (FoldType::Reduce, None, None) => None,
+                    (FoldType::Foreach | FoldType::For, project, None) => project,
                     _ => return self.fail(name, Undefined::Filter(arity)),
                 };
                 let xs = self.iterm(*xs);
                 let init = self.iterm(init);
                 let update = self.with(Local::Var(x), |c| c.iterm(update));
+                let project = project.map(|p| self.with(Local::Var(x), |c| c.iterm(p)));
 
-                Term::Fold(fold, xs, init, update)
+                Term::Fold(fold, xs, init, update, project)
             }
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
