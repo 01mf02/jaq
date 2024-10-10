@@ -23,7 +23,7 @@ pub(crate) enum Inner<'a, V> {
 
 impl<V> Exn<'_, V> {
     /// If the exception is an error, yield it, else yield the exception.
-    pub fn get_err(self) -> Result<Error<V>, Self> {
+    pub(crate) fn get_err(self) -> Result<Error<V>, Self> {
         match self.0 {
             Inner::Err(e) => Ok(e),
             _ => Err(self),
@@ -54,7 +54,7 @@ impl<V> Error<V> {
     }
 
     /// Create a path expression error.
-    pub fn path_expr() -> Self {
+    pub(crate) fn path_expr() -> Self {
         Self(Part::Str(Vec::from([Part::Str("invalid path expression")])))
     }
 
