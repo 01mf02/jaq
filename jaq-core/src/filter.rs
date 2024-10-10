@@ -237,11 +237,11 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
-            Ast::Reduce(xs, init, f) => {
+            Ast::Reduce(xs, init, update) => {
                 let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
                 let init = init.run(lut, cv.clone());
-                let f = move |x, v| f.run(lut, (cv.0.clone().cons_var(x), v));
-                Box::new(fold(false, xs, Fold::Output(init), f))
+                let update = move |x, v| update.run(lut, (cv.0.clone().cons_var(x), v));
+                Box::new(fold(false, xs, Fold::Output(init), update))
             }
             Ast::Foreach(xs, init, update, project) => {
                 let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
