@@ -26,7 +26,7 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
-use jaq_core::results::{run_if_ok, then};
+use jaq_core::results::then;
 use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
@@ -39,11 +39,12 @@ pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
 /// Name, arguments, and implementation of a filter.
 pub type Filter<F> = (&'static str, Box<[Bind]>, F);
 
-/// Return those named filters available by default in jaq
+/// Named filters available by default in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
 /// but also `now`, `debug`, `fromdateiso8601`, ...
 ///
-/// Does not return filters from the standard library, such as `map`.
+/// This is the combination of [`base_funs`] and [`extra_funs`].
+/// It does not include filters implemented by definition, such as `map`.
 #[cfg(all(
     feature = "std",
     feature = "format",

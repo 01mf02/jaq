@@ -1,4 +1,7 @@
 //! JSON values with reference-counted sharing.
+#![no_std]
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 extern crate alloc;
 
@@ -346,6 +349,7 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
         .map(move |((i, _), (j, _))| &line[i..j])
 }
 
+/// Functions of the standard library.
 #[cfg(feature = "parse")]
 pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
     let base_run = base_funs().into_vec().into_iter().map(run);

@@ -1,4 +1,7 @@
 //! Values that can be processed by jaq.
+//!
+//! To process your own value type with jaq,
+//! you need to implement the [`ValT`] trait.
 
 use crate::box_iter::BoxIter;
 use crate::path::Opt;
