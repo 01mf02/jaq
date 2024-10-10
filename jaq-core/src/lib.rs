@@ -93,6 +93,9 @@ type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 ///
 /// In the first two cases, we bind the outputs of `f` to a variable `$x`.
 /// In the third case, we bind `f` to a filter `fx`
+///
+/// When writing a native filter, this is used to declare its arguments.
+/// It is passed to [`compile::Compiler::with_funs`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Bind<V = (), F = V> {
     /// binding to a variable
