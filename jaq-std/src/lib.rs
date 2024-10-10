@@ -4,6 +4,11 @@
 //! These filters are either implemented as definitions or as functions.
 //! For example, the standard library provides the `map(f)` filter,
 //! which is defined using the more elementary filter `[.[] | f]`.
+//!
+//! If you want to use the standard library in jaq, then
+//! you'll likely only need [`funs`] and [`defs`].
+//! Most other functions are relevant if you
+//! want to implement your own native filters.
 #![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -175,7 +180,18 @@ fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Fi
 fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<'a, V>> {
     // Some(e) iff an error has previously occurred
     let mut err = None;
-    xs.sort_by_cached_key(|x| run_if_ok(x.clone(), &mut err, &f));
+    xs.sort_by_cached_key(|x| {
+        if err.is_some() {
+            return Vec::new();
+        };
+        match f(x.clone()).collect() {
+            Ok(y) => y,
+            Err(e) => {
+                err = Some(e);
+                Vec::new()
+            }
+        }
+    });
     err.map_or(Ok(()), Err)
 }
 

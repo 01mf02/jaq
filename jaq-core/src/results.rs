@@ -14,24 +14,6 @@ pub fn then<'a, T, U: 'a, E: 'a>(
     x.map_or_else(|e| box_once(Err(e)), f)
 }
 
-/// Apply the function to the value if there is no error,
-/// set error if the function application yielded an error.
-///
-/// This is useful if we have to run a function in a context
-/// where we cannot fail immediately.
-pub fn run_if_ok<'a, T, E>(x: T, e: &mut Option<E>, f: &impl Fn(T) -> Results<'a, T, E>) -> Vec<T> {
-    if e.is_some() {
-        return Vec::new();
-    };
-    match f(x).collect() {
-        Ok(y) => y,
-        Err(err) => {
-            *e = Some(err);
-            Vec::new()
-        }
-    }
-}
-
 pub(crate) enum Fold<'a, U, E> {
     /// things to be processed
     Input(U),
