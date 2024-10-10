@@ -461,7 +461,7 @@ impl<'s, F> Compiler<&'s str, F> {
                         let proj = proj.map(|p| self.with(Local::Var(x), |c| c.iterm(p)));
                         Term::Foreach(xs, init, update, proj)
                     }
-                    _ => return self.fail(name, Undefined::Filter(arity)),
+                    _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
             BinOp(l, op, r) => {
