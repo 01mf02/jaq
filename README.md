@@ -562,28 +562,30 @@ $ jaq -n --arg x 1 --arg y 2 '$x, $y, $ARGS.named'
 
 jq and jaq provide filters
 `reduce xs as $x (init; update)`,
-`foreach xs as $x (init; update)`, and.
-`foreach xs as $x (init; update; project)`.
+`foreach xs as $x (init; update)`, and
+`foreach xs as $x (init; update; project)`, where
+`foreach xs as $x (init; update)` is equivalent to
+`foreach xs as $x (init; update; .)`.
 
 In jaq, the output of these filters is defined very simply:
 Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
-`reduce xs as $x (init; f)` evaluates to
+`reduce xs as $x (init; update)` evaluates to
 
 ~~~
 init
-| x0 as $x | f
+| x0 as $x | update
 | ...
-| xn as $x | f
+| xn as $x | update
 ~~~
 
-and `foreach xs as $x (init; f)` evaluates to
+and `foreach xs as $x (init; update; project)` evaluates to
 
 ~~~ text
-init
-| x0 as $x | f | (.,
-| ...
-| xn as $x | f | (.,
-empty)...)
+init |
+( x0 as $x | update | project,
+( ...
+( xn as $x | update | project,
+( empty )...)
 ~~~
 
 The interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
