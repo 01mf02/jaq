@@ -155,37 +155,41 @@ I then processed the results with a "one-liner" (stretching the term and the lin
 (Of course, you can also use jaq here instead of jq.)
 Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
-[^binaries]: The binaries for jq-1.7.1 and gojq-0.12.15 were retrieved from their GitHub release pages,
+[^binaries]: The binaries for jq-1.7.1 and gojq-0.12.16 were retrieved from their GitHub release pages,
   the binary for jq-1.6 was installed from the standard Ubuntu repository.
 
 Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
 
-| Benchmark      |       n | jaq-1.4 | jq-1.7.1 | gojq-0.12.15 | jq-1.6 |
-| -------------- | ------: | ------: | -------: | -----------: | -----: |
-| `empty`        |     512 | **610** |      660 |          740 |   8310 |
-| `bf-fib`       |      13 | **470** |     1220 |          570 |   1440 |
-| `reverse`      | 1048576 |  **50** |      680 |          270 |    650 |
-| `sort`         | 1048576 | **140** |      550 |          580 |    680 |
-| `group-by`     | 1048576 | **400** |     1890 |         1550 |   2860 |
-| `min-max`      | 1048576 | **210** |      320 |          250 |    350 |
-| `add`          | 1048576 | **520** |      640 |         1310 |    730 |
-| `kv`           |  131072 |     170 |  **140** |          220 |    190 |
-| `kv-update`    |  131072 | **190** |      540 |          440 |    N/A |
-| `kv-entries`   |  131072 | **630** |     1150 |          830 |   1120 |
-| `ex-implode`   | 1048576 | **510** |     1100 |          610 |   1090 |
-| `reduce`       | 1048576 | **820** |      890 |          N/A |    860 |
-| `try-catch`    | 1048576 | **180** |      320 |          370 |    670 |
-| `tree-flatten` |      17 |     730 |      360 |       **10** |    480 |
-| `tree-update`  |      17 | **560** |      970 |         1330 |   1190 |
-| `tree-paths`   |      17 |     470 |  **250** |          880 |    460 |
-| `to-fromjson`  |   65536 |  **30** |      370 |          120 |    390 |
-| `ack`          |       7 | **530** |      700 |         1230 |    620 |
-| `range-prop`   |     128 |     280 |      310 |      **210** |    590 |
+| Benchmark       |       n | jaq-2.0 | jq-1.7.1 | gojq-0.12.16 | jq-1.6 |
+|-----------------|--------:|--------:|---------:|-------------:|-------:|
+| `empty`         |     512 |     280 |      420 |      **250** |   8270 |
+| `bf-fib`        |      13 | **510** |     1230 |          560 |   1450 |
+| `defs`          |  100000 |  **40** |      N/A |         1030 |    N/A |
+| `reverse`       | 1048576 |  **80** |      690 |          270 |    640 |
+| `sort`          | 1048576 | **150** |      550 |          580 |    680 |
+| `group-by`      | 1048576 | **540** |     1900 |         1530 |   2820 |
+| `min-max`       | 1048576 | **250** |      320 |          260 |    340 |
+| `add`           | 1048576 | **520** |      640 |         1290 |    740 |
+| `kv`            |  131072 | **130** |      150 |          220 |    200 |
+| `kv-update`     |  131072 | **150** |      530 |          470 |    N/A |
+| `kv-entries`    |  131072 | **600** |     1170 |          720 |   1120 |
+| `ex-implode`    | 1048576 | **530** |     1110 |          590 |   1090 |
+| `reduce`        | 1048576 | **810** |      900 |          N/A |    850 |
+| `try-catch`     | 1048576 |     330 |  **320** |          370 |    670 |
+| `tree-contains` |      23 |  **70** |      600 |          210 |   1770 |
+| `tree-flatten`  |      17 |     870 |      360 |       **10** |    490 |
+| `tree-update`   |      17 | **700** |      970 |         1370 |   1190 |
+| `tree-paths`    |      17 |     450 |  **280** |          880 |    480 |
+| `to-fromjson`   |   65536 |  **40** |      360 |          100 |    390 |
+| `ack`           |       7 | **540** |      710 |         1270 |    620 |
+| `range-prop`    |     128 |     380 |      320 |      **240** |    590 |
+| `cumsum`        | 1048576 | **320** |      380 |          450 |    360 |
+| `cumsum-xy`     | 1048576 |     490 |  **470** |          720 |    520 |
 
 The results show that
-jaq-1.4 is fastest on 15 benchmarks, whereas
-jq-1.7.1 is fastest on 2 benchmarks and
-gojq-0.12.15 is fastest on 2 benchmarks.
+jaq-1.4 is fastest on 17 benchmarks, whereas
+jq-1.7.1 is fastest on 3 benchmarks and
+gojq-0.12.16 is fastest on 3 benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [gojq]: https://github.com/itchyny/gojq
