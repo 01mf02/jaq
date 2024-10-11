@@ -16,3 +16,5 @@
 {"name": "to-fromjson" , "n":   65536}
 {"name": "ack"         , "n":       7}
 {"name": "range-prop"  , "n":     128}
+{"name": "cumsum"      , "n": 1048576}
+{"name": "cumsum-xy"   , "n": 1048576}
