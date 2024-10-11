@@ -654,8 +654,6 @@ The interpretation of `reduce`/`foreach` in jaq has the following advantages ove
   in jaq, it is `[]`.
   However, this can be emulated in jaq by setting an alias such as
   `alias jaq="jaq -L ~ -L \`which jaq\`/../lib/jq -L \`which jaq\`/../lib"`.
-  Furthermore, jq expands `~` and `$ORIGIN` at the beginning of search paths, whereas
-  jaq does not perform such an expansion.
 
 
 
