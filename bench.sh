@@ -27,7 +27,7 @@ echo '}}'
 echo -n '{"name": "defs", "n": 100000, "time": {'
 for j in $@; do
   t=$($TIME $j -n -f <(for i in `seq 100000`; do echo "def a: 0;"; done; echo empty) 2>&1 > /dev/null)
-  [ $? != 0 ] && t="N/A" # on error
+  [ $? != 0 ] && t="" # on error
   [ $j != $1 ] && echo -n ', '
   echo -n '"'$j'": ['$t']'
 done
