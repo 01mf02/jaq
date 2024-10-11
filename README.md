@@ -19,13 +19,6 @@ jaq focuses on three goals:
   <details><summary>Examples of surprising jq behaviour</summary>
 
   * `nan > nan` is false, while `nan < nan` is true.
-  * `[[]] | implode` crashes jq, and this was not fixed at the time of writing despite
-    [being known since five years](https://github.com/jqlang/jq/issues/1160).
-  * The [jq manual] claims that `limit(n; exp)` "extracts up to `n` outputs from `exp`".
-    This holds for values of `n > 1`, e.g. `jq -n '[limit(2; 1, 2, 3)]'` yields
-    `[1, 2]`, but when `n == 0`, `jq -n '[limit(0; 1, 2, 3)]'` yields `[1]` instead of `[]`.
-    And perhaps even worse, when `n < 0`, then `limit` yields *all* outputs from `exp`,
-    which is not documented.
 
   </details>
 * **Performance**:
