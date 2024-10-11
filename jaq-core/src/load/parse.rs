@@ -540,7 +540,7 @@ impl<'s, 't> Parser<'s, 't> {
                 } else {
                     // TODO: this returns None on things like "@json .",
                     // whereas it should return an error instead
-                    self.maybe(|p| p.key().ok())
+                    self.maybe(|p| p.str_key().ok())
                 };
 
                 if let Some(key) = key {
@@ -596,10 +596,11 @@ impl<'s, 't> Parser<'s, 't> {
                 self.just(":")?;
                 return Ok((k, Some(self.term_with_comma(false)?)));
             }
+            Some(Token(id, Tok::Var)) => Term::Var(*id),
             Some(Token(id, Tok::Word)) if !id.contains("::") => Term::from_str(*id),
             _ => {
                 self.i = i;
-                self.key()?
+                self.str_key()?
             }
         };
         let v = self.char0(':').map(|_| self.term_with_comma(false));
@@ -625,7 +626,7 @@ impl<'s, 't> Parser<'s, 't> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while let Some(key) = self.dot() {
             let key = if key.is_empty() {
-                self.key()?
+                self.str_key()?
             } else {
                 Term::from_str(key)
             };
@@ -667,9 +668,8 @@ impl<'s, 't> Parser<'s, 't> {
         Some((part, self.opt()))
     }
 
-    fn key(&mut self) -> Result<'s, 't, Term<&'s str>> {
+    fn str_key(&mut self) -> Result<'s, 't, Term<&'s str>> {
         match self.i.next() {
-            Some(Token(id, Tok::Var)) => Ok(Term::Var(*id)),
             Some(Token(id, Tok::Fmt)) => match self.i.next() {
                 Some(Token(_, Tok::Str(parts))) => Ok(Term::Str(Some(*id), self.str_parts(parts))),
                 next => Err((Expect::Str, next)),
