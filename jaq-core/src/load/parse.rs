@@ -19,10 +19,14 @@ pub enum Expect<S> {
     /// `if 0` (expected "then"), `reduce .` (expected "as"),
     /// `0 as $x` (expected "|"), `{(.)}` (expected ":")
     Just(S),
-    /// `0 as`, `label`, `break`
+    /// `label`, `break`
     Var,
+    /// `0 as`
+    Pattern,
     /// `if 0 then 0`
     ElseOrEnd,
+    /// `0 as [$x;]`
+    CommaOrRBrack,
     /// `{a;}`
     CommaOrRBrace,
     /// `f(0:)`
@@ -47,7 +51,9 @@ impl<'a> Expect<&'a str> {
         match self {
             Self::Just(s) => s,
             Self::Var => "variable",
+            Self::Pattern => "pattern",
             Self::ElseOrEnd => "else or end",
+            Self::CommaOrRBrack => "comma or right bracket",
             Self::CommaOrRBrace => "comma or right brace",
             Self::SemicolonOrRParen => "semicolon or right parenthesis",
             Self::Term => "term",
@@ -95,7 +101,7 @@ pub enum Term<S> {
     /// Negation
     Neg(Box<Self>),
     /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
-    Pipe(Box<Self>, Option<S>, Box<Self>),
+    Pipe(Box<Self>, Option<Pattern<S>>, Box<Self>),
 
     /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
     BinOp(Box<Self>, BinaryOp, Box<Self>),
@@ -106,7 +112,7 @@ pub enum Term<S> {
     Break(S),
 
     /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
-    Fold(S, Box<Self>, S, Vec<Self>),
+    Fold(S, Box<Self>, Pattern<S>, Vec<Self>),
     /// `try` and optional `catch`
     TryCatch(Box<Self>, Option<Box<Self>>),
     /// If-then-else
@@ -121,6 +127,17 @@ pub enum Term<S> {
 
     /// Path such as `.a`, `.[][]."b"`, `f[0]`
     Path(Box<Self>, Path<Self>),
+}
+
+/// Variable-binding pattern, such as in `.[] as [$x, {$y, (f): $z}]`
+#[derive(Debug)]
+pub enum Pattern<S> {
+    /// Variable
+    Var(S),
+    /// Array
+    Arr(Vec<Self>),
+    /// Object
+    Obj(Vec<(Term<S>, Self)>),
 }
 
 /// Binary operators, such as `|`, `,`, `//`, ...
@@ -284,45 +301,43 @@ impl<'s, 't> Parser<'s, 't> {
         Ok(y)
     }
 
-    /// Parse sequence of shape `f ("," f)* ","? "}"`.
-    fn obj_items<T, F>(&mut self, f: F) -> Result<'s, 't, Vec<T>>
-    where
-        F: Fn(&mut Self) -> Result<'s, 't, T>,
-    {
+    fn many1<T>(
+        &mut self,
+        f: impl Fn(&mut Self) -> Result<'s, 't, T>,
+        sep: &'s str,
+        allow_trailing_sep: bool,
+        last: &'s str,
+        expect: Expect<&'s str>,
+    ) -> Result<'s, 't, Vec<T>> {
         let mut y = Vec::from([f(self)?]);
-        let rbrace = |p: &mut Self| p.i.next().filter(|tk| matches!(tk, Token("}", _)));
+        let get_last = |p: &mut Self| p.i.next().filter(|Token(s, _)| *s == last);
+        let next_last = |p: &mut Self| allow_trailing_sep && p.maybe(get_last).is_some();
         loop {
             match self.i.next() {
-                Some(Token("}", _)) => break,
-                Some(Token(",", _)) if self.maybe(rbrace).is_some() => break,
-                Some(Token(",", _)) => y.push(f(self)?),
-                next => return Err((Expect::CommaOrRBrace, next)),
+                Some(Token(s, _)) if *s == last => break,
+                Some(Token(s, _)) if *s == sep && next_last(self) => break,
+                Some(Token(s, _)) if *s == sep => y.push(f(self)?),
+                next => return Err((expect, next)),
             }
         }
         Ok(y)
     }
 
-    /// Parse sequence of shape `f (";" f)* ")"`.
-    fn arg_items<T, F>(&mut self, f: F) -> Result<'s, 't, Vec<T>>
+    /// Parse sequence of shape `f ("," f)* ","? "}"`.
+    fn obj_items<T, F>(&mut self, f: F) -> Result<'s, 't, Vec<T>>
     where
         F: Fn(&mut Self) -> Result<'s, 't, T>,
     {
-        let mut y = Vec::from([f(self)?]);
-        loop {
-            match self.i.next() {
-                Some(Token(";", _)) => y.push(f(self)?),
-                Some(Token(")", _)) => break,
-                next => return Err((Expect::SemicolonOrRParen, next)),
-            }
-        }
-        Ok(y)
+        self.many1(f, ",", true, "}", Expect::CommaOrRBrace)
     }
 
     /// Parse `("(" arg (";" arg)* ")")?`.
     fn args<T>(&mut self, f: fn(&mut Self) -> Result<'s, 't, T>) -> Vec<T> {
         self.maybe(|p| match p.i.next() {
             Some(Token(full, Tok::Block(tokens))) if full.starts_with('(') => {
-                Some(p.with(tokens, "", |p| p.arg_items(f)))
+                Some(p.with(tokens, "", |p| {
+                    p.many1(f, ";", false, ")", Expect::SemicolonOrRParen)
+                }))
             }
             _ => None,
         })
@@ -406,6 +421,22 @@ impl<'s, 't> Parser<'s, 't> {
         }
     }
 
+    fn pattern(&mut self) -> Result<'s, 't, Pattern<&'s str>> {
+        match self.i.next() {
+            Some(Token(x, Tok::Var)) => Ok(Pattern::Var(*x)),
+            next @ Some(Token(full, Tok::Block(tokens))) => match &full[..1] {
+                "[" => Ok(Pattern::Arr(self.with(tokens, "", |p| {
+                    p.many1(Self::pattern, ",", false, "]", Expect::CommaOrRBrack)
+                }))),
+                "{" => Ok(Pattern::Obj(
+                    self.with(tokens, "", |p| p.obj_items(|_p| todo!())),
+                )),
+                _ => Err((Expect::Pattern, next)),
+            },
+            next => Err((Expect::Pattern, next)),
+        }
+    }
+
     /// Parse a term.
     ///
     /// Only if `with_comma` is true, the parsed term may be of the shape `t, u`.
@@ -421,7 +452,7 @@ impl<'s, 't> Parser<'s, 't> {
         let pipe = self.try_maybe(|p| match p.i.next() {
             Some(Token("|", _)) => Ok(Some(None)),
             Some(Token("as", _)) => {
-                let x = p.var()?;
+                let x = p.pattern()?;
                 p.just("|")?;
                 Ok(Some(Some(x)))
             }
@@ -486,7 +517,7 @@ impl<'s, 't> Parser<'s, 't> {
             Some(Token(fold, Tok::Word)) if self.fold.contains(fold) => {
                 let xs = self.atom()?;
                 self.just("as")?;
-                let x = self.var()?;
+                let x = self.pattern()?;
                 let args = self.args(Self::term);
                 Term::Fold(*fold, Box::new(xs), x, args)
             }

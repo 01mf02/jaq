@@ -398,11 +398,12 @@ impl<'s, F> Compiler<&'s str, F> {
             Recurse => self.term(Call("!recurse", Vec::new())),
             Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
             Neg(t) => Term::Neg(self.iterm(*t)),
-            Pipe(l, Some(x), r) => Term::Pipe(
+            Pipe(l, Some(parse::Pattern::Var(x)), r) => Term::Pipe(
                 self.iterm(*l),
                 true,
                 self.with(Local::Var(x), |c| c.iterm_tr(*r)),
             ),
+            Pipe(_l, Some(_), _r) => todo!("destructuring"),
             Pipe(l, None, r) => Term::Pipe(self.iterm(*l), false, self.iterm_tr(*r)),
             Label(x, t) => Term::Label(self.with(Local::Label(x), |c| c.iterm(*t))),
             Break(x) => self.break_(x),
@@ -444,7 +445,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 let tc = self.with(label, |c| Term::TryCatch(c.iterm(*t), c.iterm(catch)));
                 Term::Label(self.lut.insert_term(tc))
             }
-            Fold(name, xs, x, args) => {
+            Fold(name, xs, parse::Pattern::Var(x), args) => {
                 let arity = args.len();
                 let mut args = args.into_iter();
                 let (init, update) = match (args.next(), args.next()) {
@@ -464,6 +465,7 @@ impl<'s, F> Compiler<&'s str, F> {
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
+            Fold(..) => todo!("destructuring"),
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
                 let (l, r) = match op {
