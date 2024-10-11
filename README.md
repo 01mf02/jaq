@@ -16,18 +16,13 @@ jaq focuses on three goals:
 * **Correctness**:
   jaq aims to provide a more correct and predictable implementation of jq,
   while preserving compatibility with jq in most cases.
-  <details><summary>Examples of surprising jq behaviour</summary>
-
-  * `nan > nan` is false, while `nan < nan` is true.
-
-  </details>
 * **Performance**:
   I created jaq originally because I was bothered by
-  [jq's long start-up time](https://github.com/jqlang/jq/issues/1411),
+  [the long start-up time of jq 1.6](https://github.com/jqlang/jq/issues/1411),
   which amounts to about 50ms on my machine.
   This can be particularly seen when processing a large number of small files.
-  jaq starts up about 30 times faster than jq 1.6 and
-  [outperforms jq also on many other benchmarks](#performance).
+  Although the startup time has been vastly improved in jq 1.7,
+  jaq is still faster than jq on many other [benchmarks](#performance).
 * **Simplicity**:
   jaq aims to have a simple and small implementation, in order to
   reduce the potential for bugs and to
@@ -158,7 +153,7 @@ Finally, I concatenated the table header with the output and piped it through `p
 [^binaries]: The binaries for jq-1.7.1 and gojq-0.12.16 were retrieved from their GitHub release pages,
   the binary for jq-1.6 was installed from the standard Ubuntu repository.
 
-Table: Evaluation results in milliseconds ("N/A" if more than 10 seconds).
+Table: Evaluation results in milliseconds ("N/A" if error or more than 10 seconds).
 
 | Benchmark       |       n | jaq-2.0 | jq-1.7.1 | gojq-0.12.16 | jq-1.6 |
 |-----------------|--------:|--------:|---------:|-------------:|-------:|
@@ -428,39 +423,17 @@ You can convert a floating-point number to an integer by
 
 ### NaN and infinity
 
-In jq, division by 0 has some surprising properties; for example,
-`0 / 0` yields `nan`, whereas
-`0 as $n | $n / 0` yields an error.
+In jq, division by 0 yields an error, whereas
 In jaq, `n / 0` yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
 jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
 
 jaq implements a total ordering on floating-point numbers to allow sorting values.
 Therefore, it unfortunately has to enforce that `nan == nan`.
-(jq gets around this by enforcing `nan < nan`, which breaks basic laws about total orders.)
+(jq gets around this by enforcing that `nan < nan` is true, yet `nan > nan` is false,
+which breaks basic laws about total orders.)
 
 Like jq, jaq prints `nan` and `infinite` as `null` in JSON,
 because JSON does not support encoding these values as numbers.
-
-### Preservation of fractional numbers
-
-jaq preserves fractional numbers coming from JSON data perfectly
-(as long as they are not used in some arithmetic operation),
-whereas jq 1.6 may silently convert to 64-bit floating-point numbers:
-
-    $ echo '1e500' | jq '.'
-    1.7976931348623157e+308
-    $ echo '1e500' | jaq '.'
-    1e500
-
-Therefore, unlike jq 1.6, jaq satisfies the following paragraph in the [jq manual]:
-
-> An important point about the identity filter is that
-> it guarantees to preserve the literal decimal representation of values.
-> This is particularly important when dealing with numbers which can't be
-> losslessly converted to an IEEE754 double precision representation.
-
-Please note that newer versions of jq, e.g. 1.7,
-seem to preserve the literal decimal representation as well.
 
 
 ## Assignments
