@@ -477,25 +477,7 @@ Unlike in jq, assignment does not explicitly construct paths.
 
 jaq's implementation of assignment likely yields higher performance,
 because it does not construct paths.
-Furthermore, this also prevents several bugs in jq "by design".
-For example, given the filter `[0, 1, 2, 3] | .[] |= empty`,
-jq  yields `[1, 3]`, whereas
-jaq yields `[]`.
-What happens here?
-
-jq first constructs the paths corresponding to `.[]`, which are `.0, .1, .2, .3`.
-Then, it removes the element at each of these paths.
-However, each of these removals *changes* the value that the remaining paths refer to.
-That is, after removing `.0` (value 0), `.1` does not refer to value 1, but value 2!
-That is also why value 1 (and in consequence also value 3) is not removed.
-
-There is more weirdness ahead in jq;
-for example, `0 | 0 |= .+1` yields `1` in jq,
-although `0` is not a valid path expression.
-However, `1 | 0 |= .+1` yields an error.
-In jaq, any such assignment yields an error.
-
-jaq attempts to use multiple outputs of the right-hand side, whereas
+Furthermore, this allows jaq to use multiple outputs of the right-hand side, whereas
 jq uses only the first.
 For example, `0 | (., .) |= (., .+1)` yields `0 1 1 2` in jaq,
 whereas it yields only `0` in jq.
