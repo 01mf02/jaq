@@ -429,7 +429,7 @@ impl<'s, 't> Parser<'s, 't> {
                     p.many1(Self::pattern, ",", false, "]", Expect::CommaOrRBrack)
                 }))),
                 "{" => Ok(Pattern::Obj(
-                    self.with(tokens, "", |p| p.obj_items(|_p| todo!())),
+                    self.with(tokens, "", |p| p.obj_items(Self::pat_obj_entry)),
                 )),
                 _ => Err((Expect::Pattern, next)),
             },
@@ -580,6 +580,31 @@ impl<'s, 't> Parser<'s, 't> {
     /// Parse a term such as `.[] | .+1`.
     pub fn term(&mut self) -> Result<'s, 't, Term<&'s str>> {
         self.term_with_comma(true)
+    }
+
+    /// Parse a pattern object entry.
+    ///
+    /// Examples:
+    ///
+    /// * `$x`
+    /// * `(f): pat`
+    /// * ` a : pat`
+    /// * `"a": pat`
+    fn pat_obj_entry(&mut self) -> Result<'s, 't, (Term<&'s str>, Pattern<&'s str>)> {
+        let i = self.i.clone();
+        let key = match self.i.next() {
+            Some(Token(x, Tok::Var)) => return Ok((Term::from_str(&x[1..]), Pattern::Var(x))),
+            Some(Token(full, Tok::Block(tokens))) if full.starts_with('(') => {
+                self.with(tokens, ")", Self::term)
+            }
+            Some(Token(id, Tok::Word)) if !id.contains("::") => Term::from_str(*id),
+            _ => {
+                self.i = i;
+                self.str_key()?
+            }
+        };
+        self.just(":")?;
+        Ok((key, self.pattern()?))
     }
 
     /// Parse an object entry.
