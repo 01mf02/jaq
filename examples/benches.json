@@ -1,3 +1,4 @@
+{"name": "reduce-update","n":   16384}
 {"name": "reverse"     , "n": 1048576}
 {"name": "sort"        , "n": 1048576}
 {"name": "group-by"    , "n": 1048576}
