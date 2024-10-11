@@ -106,7 +106,7 @@ pub enum Bind<V = (), F = V> {
 
 impl<V, F> Bind<V, F> {
     /// Move references inward.
-    pub fn as_ref(&self) -> Bind<&V, &F> {
+    pub(crate) fn as_ref(&self) -> Bind<&V, &F> {
         match self {
             Self::Var(x) => Bind::Var(x),
             Self::Fun(x) => Bind::Fun(x),
@@ -116,7 +116,7 @@ impl<V, F> Bind<V, F> {
 
 impl<T> Bind<T, T> {
     /// Apply a function to both binding types.
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Bind<U, U> {
+    pub(crate) fn map<U>(self, f: impl FnOnce(T) -> U) -> Bind<U, U> {
         match self {
             Self::Var(x) => Bind::Var(f(x)),
             Self::Fun(x) => Bind::Fun(f(x)),
