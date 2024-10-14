@@ -86,7 +86,7 @@ fn run_and_bind<'a, F: FilterT>(
     cv: Cv<'a, F::V>,
     pat: &'a Pattern<Id>,
 ) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
-    let xs = xs.run(lut, cv.clone());
+    let xs = xs.run(lut, (cv.0.clone(), cv.1));
     match pat {
         Pattern::Var => map_with(xs, cv.0, move |y, ctx| Ok(ctx.cons_var(y?))),
         Pattern::Idx(pats) => flat_map_then_with(xs, cv.0, |y, ctx| {
