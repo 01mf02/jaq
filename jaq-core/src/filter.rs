@@ -1,6 +1,8 @@
-use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
 use crate::compile::{Lut, Tailrec, Term as Ast};
-use crate::results::{fold, then, Fold, Results};
+use crate::box_iter::{
+    box_once, flat_map_with, flat_map_then_with, map_with, then, BoxIter, Results,
+};
+use crate::fold::{fold, Fold};
 use crate::val::{ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
 use alloc::boxed::Box;
@@ -29,9 +31,15 @@ fn bind_vars<'a, F: FilterT>(
     cv: Cv<'a, F::V>,
 ) -> Results<'a, Cv<'a, F::V>, Exn<'a, F::V>> {
     match args.split_first() {
+        Some((Bind::Var(arg), [])) => {
+            map_with(arg.run(lut, cv.clone()), (ctx, cv.1), |y, (ctx, v)| {
+                Ok((ctx.cons_var(y?), v))
+            })
+        }
+        Some((Bind::Fun(arg), [])) => box_once(Ok((ctx.cons_fun((arg, cv.0)), cv.1))),
         Some((Bind::Var(arg), rest)) => {
-            flat_map_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
-                then(y, |y| bind_vars(rest, lut, ctx.cons_var(y), cv))
+            flat_map_then_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
+                bind_vars(rest, lut, ctx.cons_var(y), cv)
             })
         }
         Some((Bind::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
@@ -163,8 +171,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
 
             // `l | r`
             Ast::Pipe(l, false, r) => {
-                let l = l.run(lut, (cv.0.clone(), cv.1));
-                flat_map_with(l, cv.0, move |y, ctx| then(y, |y| r.run(lut, (ctx, y))))
+                flat_map_then_with(l.run(lut, (cv.0.clone(), cv.1)), cv.0, move |y, ctx| {
+                    r.run(lut, (ctx, y))
+                })
             }
             // `l as $x | r`
             Ast::Pipe(l, true, r) => {
@@ -189,13 +198,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     let cv = cv.clone();
                     crate::into_iter::collect_if_once(move || i.run(lut, cv))
                 });
-                flat_map_with(f.run(lut, cv), path, |y, path| {
-                    then(y, |y| {
-                        flat_map_with(path.explode(), y, |path, y| {
-                            then(path, |path| {
-                                Box::new(path.run(y).map(|r| r.map_err(Exn::from)))
-                            })
-                        })
+                flat_map_then_with(f.run(lut, cv), path, |y, path| {
+                    flat_map_then_with(path.explode(), y, |path, y| {
+                        Box::new(path.run(y).map(|r| r.map_err(Exn::from)))
                     })
                 })
             }
@@ -250,12 +255,12 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 let update = move |x, v| update.run(lut, (ctx.clone().cons_var(x), v));
                 if let Some(proj) = project {
                     let proj = move |x, v| proj.run(lut, (cv.0.clone().cons_var(x), v));
-                    flat_map_with(init, (xs, update, proj), move |i, (xs, update, proj)| {
-                        then(i, |i| Box::new(foreach_project(xs, i, update, proj)))
+                    flat_map_then_with(init, (xs, update, proj), move |i, (xs, update, proj)| {
+                        Box::new(foreach_project(xs, i, update, proj))
                     })
                 } else {
-                    flat_map_with(init, (xs, update), move |i, (xs, update)| {
-                        then(i, |i| Box::new(fold(true, xs, Fold::Input(i), update)))
+                    flat_map_then_with(init, (xs, update), move |i, (xs, update)| {
+                        Box::new(fold(true, xs, Fold::Input(i), update))
                     })
                 }
             }
@@ -409,9 +414,7 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
         cv: Cv<'a, Self::V>,
         f: impl Fn(Cv<'a, Self::V>, Self::V) -> Results<'a, T, Exn<'a, Self::V>> + 'a,
     ) -> Results<'a, T, Exn<'a, Self::V>> {
-        flat_map_with(self.run(lut, cv.clone()), cv, move |y, cv| {
-            then(y, |y| f(cv, y))
-        })
+        flat_map_then_with(self.run(lut, cv.clone()), cv, move |y, cv| f(cv, y))
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.

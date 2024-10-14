@@ -26,7 +26,7 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
-use jaq_core::results::then;
+use jaq_core::box_iter::then;
 use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
