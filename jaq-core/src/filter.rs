@@ -1,5 +1,5 @@
 use crate::box_iter::{
-    box_once, flat_map_with, flat_map_then_with, map_with, then, BoxIter, Results,
+    box_once, flat_map_then_with, flat_map_with, map_with, then, BoxIter, Results,
 };
 use crate::compile::{Lut, Pattern, Tailrec, Term as Ast};
 use crate::fold::{fold, Fold};
@@ -203,21 +203,19 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| Ok((-v?)?))),
 
             // `l | r`
-            Ast::Pipe(l, false, r) => {
+            Ast::Pipe(l, None, r) => {
                 flat_map_then_with(l.run(lut, (cv.0.clone(), cv.1)), cv.0, move |y, ctx| {
                     r.run(lut, (ctx, y))
                 })
             }
-            // `l as $x | r`
-            Ast::Pipe(l, true, r) => {
-                l.pipe(lut, cv, move |cv, y| r.run(lut, (cv.0.cons_var(y), cv.1)))
-            }
-            // `l as {...} | r` or `l as [...] | r`
-            Ast::Pipe(l, true, r) => l.pipe(lut, cv, move |cv, y| {
-                let cv = (cv.0, y).clone();
-                flat_map_then_with(bind_pat(todo!(), lut, cv.0, cv), y, |ctx, y| {
-                    r.run(lut, (ctx, y))
-                })
+            // `l as $x | r`, `l as [...] | r`, or `l as {...} | r`
+            Ast::Pipe(l, Some(pat), r) => l.pipe(lut, cv, move |(ctx, v), y| match pat {
+                Pattern::Var => r.run(lut, (ctx.cons_var(y), v)),
+                Pattern::Idx(pats) => flat_map_then_with(
+                    bind_pats(pats, lut, ctx.clone(), (ctx, y.clone())),
+                    y,
+                    |ctx, y| r.run(lut, (ctx, y)),
+                ),
             }),
 
             Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(r.run(lut, cv))),
@@ -376,14 +374,17 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 };
                 l.update(lut, cv, Box::new(f))
             }
-            Ast::Pipe(l, false, r) => l.update(
+            Ast::Pipe(l, None, r) => l.update(
                 lut,
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| r.update(lut, (cv.0.clone(), v), f.clone())),
             ),
-            Ast::Pipe(l, true, r) => reduce(l.run(lut, cv.clone()), cv.1, move |x, v| {
-                r.update(lut, (cv.0.clone().cons_var(x), v), f.clone())
-            }),
+            Ast::Pipe(l, Some(Pattern::Var), r) => {
+                reduce(l.run(lut, cv.clone()), cv.1, move |x, v| {
+                    r.update(lut, (cv.0.clone().cons_var(x), v), f.clone())
+                })
+            }
+            Ast::Pipe(_, Some(Pattern::Idx(..)), _) => todo!(),
             Ast::Comma(l, r) => {
                 let l = l.update(lut, (cv.0.clone(), cv.1), f.clone());
                 Box::new(

@@ -206,6 +206,16 @@ impl<S> Term<S> {
     }
 }
 
+impl<S> Pattern<S> {
+    pub(crate) fn vars(&self) -> Box<dyn Iterator<Item = &S> + '_> {
+        match self {
+            Pattern::Var(x) => Box::new(core::iter::once(x)),
+            Pattern::Arr(a) => Box::new(a.iter().flat_map(|p| p.vars())),
+            Pattern::Obj(o) => Box::new(o.iter().flat_map(|(_k, p)| p.vars())),
+        }
+    }
+}
+
 impl<'s, 't> Parser<'s, 't> {
     /// Initialise a new parser on a sequence of [`Token`]s.
     #[must_use]
