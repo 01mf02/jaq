@@ -98,17 +98,17 @@ where
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
-fn foreach_project<'a, T: Clone + Default + 'a, V: Clone + 'a>(
+fn foreach_project<'a, T: Clone + 'a, V: Clone + 'a>(
     xs: impl Iterator<Item = Result<T, Exn<'a, V>>> + Clone + 'a,
     init: V,
     update: impl Fn(T, V) -> ValXs<'a, V> + 'a,
     project: impl Fn(T, V) -> ValXs<'a, V> + 'a,
 ) -> impl Iterator<Item = ValX<'a, V>> {
-    let init = Fold::Input((T::default(), init));
+    let init = Fold::Input((None, init));
     fold(true, xs, init, move |x, (_, acc)| {
-        Box::new(update(x.clone(), acc).map(move |y| Ok((x.clone(), y?))))
+        map_with(update(x.clone(), acc), x, |y, x| Ok((Some(x), y?)))
     })
-    .flat_map(move |xa| then(xa, |(x, acc)| project(x, acc)))
+    .flat_map(move |xa| then(xa, |(x, acc)| project(x.unwrap(), acc)))
 }
 
 fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
