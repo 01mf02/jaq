@@ -159,6 +159,11 @@ impl<T> Default for Term<T> {
     }
 }
 
+pub(crate) enum Pattern<F> {
+    Var,
+    Idx(Vec<(F, Self)>),
+}
+
 /// Compilation error.
 pub type Error<S> = (S, Undefined);
 

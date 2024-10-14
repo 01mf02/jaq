@@ -1,7 +1,7 @@
-use crate::compile::{Lut, Tailrec, Term as Ast};
 use crate::box_iter::{
     box_once, flat_map_with, flat_map_then_with, map_with, then, BoxIter, Results,
 };
+use crate::compile::{Lut, Pattern, Tailrec, Term as Ast};
 use crate::fold::{fold, Fold};
 use crate::val::{ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
@@ -44,6 +44,39 @@ fn bind_vars<'a, F: FilterT>(
         }
         Some((Bind::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
         None => box_once(Ok((ctx, cv.1))),
+    }
+}
+
+fn bind_pat<'a, F: FilterT>(
+    (idxs, pat): &'a (Id, Pattern<Id>),
+    lut: &'a Lut<F>,
+    ctx: Ctx<'a, F::V>,
+    cv: Cv<'a, F::V>,
+) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
+    let (ctx0, v0) = cv.clone();
+    let v1 = map_with(idxs.run(lut, cv), v0, move |i, v0| Ok(v0.index(&i?)?));
+    match pat {
+        Pattern::Var => Box::new(v1.map(move |v| Ok(ctx.clone().cons_var(v?)))),
+        Pattern::Idx(pats) => flat_map_then_with(v1, (ctx, ctx0), move |v, (ctx, ctx0)| {
+            bind_pats(pats, lut, ctx, (ctx0, v))
+        }),
+    }
+}
+
+fn bind_pats<'a, F: FilterT>(
+    pats: &'a [(Id, Pattern<Id>)],
+    lut: &'a Lut<F>,
+    ctx: Ctx<'a, F::V>,
+    cv: Cv<'a, F::V>,
+) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
+    match pats.split_first() {
+        None => box_once(Ok(ctx)),
+        Some((pat, [])) => bind_pat(pat, lut, ctx, cv),
+        Some((pat, rest)) => {
+            flat_map_then_with(bind_pat(pat, lut, ctx, cv.clone()), cv, |ctx, cv| {
+                bind_pats(rest, lut, ctx, cv)
+            })
+        }
     }
 }
 
@@ -179,6 +212,13 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Pipe(l, true, r) => {
                 l.pipe(lut, cv, move |cv, y| r.run(lut, (cv.0.cons_var(y), cv.1)))
             }
+            // `l as {...} | r` or `l as [...] | r`
+            Ast::Pipe(l, true, r) => l.pipe(lut, cv, move |cv, y| {
+                let cv = (cv.0, y).clone();
+                flat_map_then_with(bind_pat(todo!(), lut, cv.0, cv), y, |ctx, y| {
+                    r.run(lut, (ctx, y))
+                })
+            }),
 
             Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(r.run(lut, cv))),
             Ast::Alt(l, r) => {
