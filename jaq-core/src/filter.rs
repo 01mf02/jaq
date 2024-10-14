@@ -113,19 +113,6 @@ where
     Box::new(fold(false, xs, Fold::Input(init), f))
 }
 
-fn foreach_project<'a, T: Clone + 'a, V: Clone + 'a>(
-    xs: impl Iterator<Item = Result<T, Exn<'a, V>>> + Clone + 'a,
-    init: V,
-    update: impl Fn(T, V) -> ValXs<'a, V> + 'a,
-    project: impl Fn(T, V) -> ValXs<'a, V> + 'a,
-) -> impl Iterator<Item = ValX<'a, V>> {
-    let init = Fold::Input((None, init));
-    fold(true, xs, init, move |x, (_, acc)| {
-        map_with(update(x.clone(), acc), x, |y, x| Ok((Some(x), y?)))
-    })
-    .flat_map(move |xa| then(xa, |(x, acc)| project(x.unwrap(), acc)))
-}
-
 fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
     if skip == 0 {
         return ys;
@@ -303,13 +290,17 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Box::new(fold(false, xs, Fold::Output(init), update))
             }
             Ast::Foreach(xs, pat, init, update, project) => {
+                let inputs = cv.0.inputs;
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
                 let init = init.run(lut, cv.clone());
                 let update = |ctx, v| update.run(lut, (ctx, v));
                 match project {
-                    Some(proj) => flat_map_then_with(init, xs, move |i, xs| {
-                        let proj = |ctx, v| proj.run(lut, (ctx, v));
-                        Box::new(foreach_project(xs, i, update, proj))
+                    Some(proj) => flat_map_then_with(init, xs, move |init, xs| {
+                        let init = Fold::Input((Ctx::new([], inputs), init));
+                        let cvs = fold(true, xs, init, move |x, (_, acc)| {
+                            map_with(update(x.clone(), acc), x, |y, x| Ok((x, y?)))
+                        });
+                        Box::new(cvs.flat_map(move |cv| then(cv, |cv| proj.run(lut, cv))))
                     }),
                     None => flat_map_then_with(init, xs, move |i, xs| {
                         Box::new(fold(true, xs, Fold::Input(i), update))
