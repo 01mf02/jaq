@@ -1,10 +1,24 @@
+//! Boxed iterators.
+
 use alloc::boxed::Box;
 
+/// A boxed iterator.
 pub type BoxIter<'a, T> = Box<dyn Iterator<Item = T> + 'a>;
+
+/// A boxed iterator over `Result`s.
+pub type Results<'a, T, E> = BoxIter<'a, Result<T, E>>;
 
 /// Return a boxed iterator that yields a single element.
 pub fn box_once<'a, T: 'a>(x: T) -> BoxIter<'a, T> {
     Box::new(core::iter::once(x))
+}
+
+/// If `x` is an `Err`, return it as iterator, else apply `f` to `x` and return its output.
+pub fn then<'a, T, U: 'a, E: 'a>(
+    x: Result<T, E>,
+    f: impl FnOnce(T) -> Results<'a, U, E>,
+) -> Results<'a, U, E> {
+    x.map_or_else(|e| box_once(Err(e)), f)
 }
 
 /// For every element `y` returned by `l`, return the output of `r(y, x)`.
@@ -47,4 +61,13 @@ pub fn flat_map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
         }
     }
     Box::new(l.flat_map(move |ly| r(ly, x.clone())))
+}
+
+/// Combination of [`flat_map_with`] and [`then`].
+pub fn flat_map_then_with<'a, T: Clone + 'a, U: 'a, V: 'a, E: 'a>(
+    l: impl Iterator<Item = Result<U, E>> + 'a,
+    x: T,
+    r: impl Fn(U, T) -> Results<'a, V, E> + 'a,
+) -> Results<'a, V, E> {
+    flat_map_with(l, x, move |y, x| then(y, |y| r(y, x)))
 }
