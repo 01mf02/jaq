@@ -393,11 +393,11 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| r.update(lut, (cv.0.clone(), v), f.clone())),
             ),
-            Ast::Pipe(l, Some(pat), r) => {
-                reduce(run_and_bind(l, lut, cv.clone(), pat), cv.1, move |ctx, v| {
-                    r.update(lut, (ctx, v), f.clone())
-                })
-            }
+            Ast::Pipe(l, Some(pat), r) => reduce(
+                run_and_bind(l, lut, (cv.0, cv.1.clone()), pat),
+                cv.1,
+                move |ctx, v| r.update(lut, (ctx, v), f.clone()),
+            ),
             Ast::Comma(l, r) => {
                 let l = l.update(lut, (cv.0.clone(), cv.1), f.clone());
                 Box::new(
