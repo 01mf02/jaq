@@ -147,8 +147,8 @@ pub(crate) enum Term<T = TermId> {
     /// | ...
     /// | ., (xn as $x | f)...)
     /// ~~~
-    Reduce(T, T, T),
-    Foreach(T, T, T, Option<T>),
+    Reduce(T, Pattern<T>, T, T),
+    Foreach(T, Pattern<T>, T, T, Option<T>),
 
     Path(T, crate::path::Path<T>),
 }
@@ -339,10 +339,10 @@ impl<'s, F> Compiler<&'s str, F> {
 
     fn with_vars<T, I>(&mut self, vars: I, f: impl FnOnce(&mut Self) -> T) -> T
     where
-        I: Iterator<Item = &'s str>,
+        I: IntoIterator<Item = &'s str>,
     {
         let len = self.local.len();
-        self.local.extend(vars.map(Local::Var));
+        self.local.extend(vars.into_iter().map(Local::Var));
         let y = f(self);
         self.local.truncate(len);
         y
@@ -460,27 +460,28 @@ impl<'s, F> Compiler<&'s str, F> {
                 let tc = self.with(label, |c| Term::TryCatch(c.iterm(*t), c.iterm(catch)));
                 Term::Label(self.lut.insert_term(tc))
             }
-            Fold(name, xs, parse::Pattern::Var(x), args) => {
+            Fold(name, xs, pat, args) => {
                 let arity = args.len();
                 let mut args = args.into_iter();
                 let (init, update) = match (args.next(), args.next()) {
                     (Some(init), Some(update)) => (init, update),
                     _ => return self.fail(name, Undefined::Filter(arity)),
                 };
+                let vars: Vec<_> = pat.vars().copied().collect();
                 let xs = self.iterm(*xs);
+                let pat = self.pattern(pat);
                 let init = self.iterm(init);
-                let update = self.with(Local::Var(x), |c| c.iterm(update));
+                let update = self.with_vars(vars.iter().copied(), |c| c.iterm(update));
 
                 match (name, args.next(), args.next()) {
-                    ("reduce", None, None) => Term::Reduce(xs, init, update),
+                    ("reduce", None, None) => Term::Reduce(xs, pat, init, update),
                     ("foreach", proj, None) => {
-                        let proj = proj.map(|p| self.with(Local::Var(x), |c| c.iterm(p)));
-                        Term::Foreach(xs, init, update, proj)
+                        let proj = proj.map(|p| self.with_vars(vars, |c| c.iterm(p)));
+                        Term::Foreach(xs, pat, init, update, proj)
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
-            Fold(..) => todo!("destructuring"),
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
                 let (l, r) = match op {

@@ -80,6 +80,21 @@ fn bind_pats<'a, F: FilterT>(
     }
 }
 
+fn run_and_bind<'a, F: FilterT>(
+    xs: &'a Id,
+    lut: &'a Lut<F>,
+    cv: Cv<'a, F::V>,
+    pat: &'a Pattern<Id>,
+) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
+    let xs = xs.run(lut, cv.clone());
+    match pat {
+        Pattern::Var => map_with(xs, cv.0, move |y, ctx| Ok(ctx.cons_var(y?))),
+        Pattern::Idx(pats) => flat_map_then_with(xs, cv.0, |y, ctx| {
+            bind_pats(pats, lut, ctx.clone(), (ctx, y))
+        }),
+    }
+}
+
 fn run_cvs<'a, F: FilterT>(
     f: &'a impl FilterT<F, V = F::V>,
     lut: &'a Lut<F>,
@@ -280,26 +295,25 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
-            Ast::Reduce(xs, init, update) => {
-                let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
+            Ast::Reduce(xs, pat, init, update) => {
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
+
                 let init = init.run(lut, cv.clone());
-                let update = move |x, v| update.run(lut, (cv.0.clone().cons_var(x), v));
+                let update = |ctx, v| update.run(lut, (ctx, v));
                 Box::new(fold(false, xs, Fold::Output(init), update))
             }
-            Ast::Foreach(xs, init, update, project) => {
-                let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
+            Ast::Foreach(xs, pat, init, update, project) => {
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
                 let init = init.run(lut, cv.clone());
-                let ctx = cv.0.clone();
-                let update = move |x, v| update.run(lut, (ctx.clone().cons_var(x), v));
-                if let Some(proj) = project {
-                    let proj = move |x, v| proj.run(lut, (cv.0.clone().cons_var(x), v));
-                    flat_map_then_with(init, (xs, update, proj), move |i, (xs, update, proj)| {
+                let update = |ctx, v| update.run(lut, (ctx, v));
+                match project {
+                    Some(proj) => flat_map_then_with(init, xs, move |i, xs| {
+                        let proj = |ctx, v| proj.run(lut, (ctx, v));
                         Box::new(foreach_project(xs, i, update, proj))
-                    })
-                } else {
-                    flat_map_then_with(init, (xs, update), move |i, (xs, update)| {
+                    }),
+                    None => flat_map_then_with(init, xs, move |i, xs| {
                         Box::new(fold(true, xs, Fold::Input(i), update))
-                    })
+                    }),
                 }
             }
 
