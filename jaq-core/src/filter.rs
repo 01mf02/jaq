@@ -284,7 +284,6 @@ impl<F: FilterT<F>> FilterT<F> for Id {
 
             Ast::Reduce(xs, pat, init, update) => {
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
-
                 let init = init.run(lut, cv.clone());
                 let update = |ctx, v| update.run(lut, (ctx, v));
                 Box::new(fold(false, xs, Fold::Output(init), update))
