@@ -101,7 +101,7 @@ pub(crate) enum Term<T = TermId> {
     Neg(T),
     /// Variable binding (`f as $x | g`) if identifier (`x`) is given, otherwise
     /// application (`f | g`)
-    Pipe(T, bool, T),
+    Pipe(T, Option<Pattern<T>>, T),
     /// Concatenation (`f, g`)
     Comma(T, T),
     /// Assignment (`f = g`)
@@ -147,8 +147,8 @@ pub(crate) enum Term<T = TermId> {
     /// | ...
     /// | ., (xn as $x | f)...)
     /// ~~~
-    Reduce(T, T, T),
-    Foreach(T, T, T, Option<T>),
+    Reduce(T, Pattern<T>, T, T),
+    Foreach(T, Pattern<T>, T, T, Option<T>),
 
     Path(T, crate::path::Path<T>),
 }
@@ -157,6 +157,12 @@ impl<T> Default for Term<T> {
     fn default() -> Self {
         Self::Id
     }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Pattern<F> {
+    Var,
+    Idx(Vec<(F, Self)>),
 }
 
 /// Compilation error.
@@ -331,6 +337,17 @@ impl<'s, F> Compiler<&'s str, F> {
         y
     }
 
+    fn with_vars<T, I>(&mut self, vars: I, f: impl FnOnce(&mut Self) -> T) -> T
+    where
+        I: IntoIterator<Item = &'s str>,
+    {
+        let len = self.local.len();
+        self.local.extend(vars.into_iter().map(Local::Var));
+        let y = f(self);
+        self.local.truncate(len);
+        y
+    }
+
     fn module(&mut self, m: load::Module<&'s str>) {
         self.imported_mods.clear();
         self.included_mods.clear();
@@ -398,12 +415,11 @@ impl<'s, F> Compiler<&'s str, F> {
             Recurse => self.term(Call("!recurse", Vec::new())),
             Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
             Neg(t) => Term::Neg(self.iterm(*t)),
-            Pipe(l, Some(x), r) => Term::Pipe(
-                self.iterm(*l),
-                true,
-                self.with(Local::Var(x), |c| c.iterm_tr(*r)),
-            ),
-            Pipe(l, None, r) => Term::Pipe(self.iterm(*l), false, self.iterm_tr(*r)),
+            Pipe(l, None, r) => Term::Pipe(self.iterm(*l), None, self.iterm_tr(*r)),
+            Pipe(l, Some(pat), r) => {
+                let r = self.with_vars(pat.vars().copied(), |c| c.iterm_tr(*r));
+                Term::Pipe(self.iterm(*l), Some(self.pattern(pat)), r)
+            }
             Label(x, t) => Term::Label(self.with(Local::Label(x), |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
@@ -444,22 +460,24 @@ impl<'s, F> Compiler<&'s str, F> {
                 let tc = self.with(label, |c| Term::TryCatch(c.iterm(*t), c.iterm(catch)));
                 Term::Label(self.lut.insert_term(tc))
             }
-            Fold(name, xs, x, args) => {
+            Fold(name, xs, pat, args) => {
                 let arity = args.len();
                 let mut args = args.into_iter();
                 let (init, update) = match (args.next(), args.next()) {
                     (Some(init), Some(update)) => (init, update),
                     _ => return self.fail(name, Undefined::Filter(arity)),
                 };
+                let vars: Vec<_> = pat.vars().copied().collect();
                 let xs = self.iterm(*xs);
+                let pat = self.pattern(pat);
                 let init = self.iterm(init);
-                let update = self.with(Local::Var(x), |c| c.iterm(update));
+                let update = self.with_vars(vars.iter().copied(), |c| c.iterm(update));
 
                 match (name, args.next(), args.next()) {
-                    ("reduce", None, None) => Term::Reduce(xs, init, update),
+                    ("reduce", None, None) => Term::Reduce(xs, pat, init, update),
                     ("foreach", proj, None) => {
-                        let proj = proj.map(|p| self.with(Local::Var(x), |c| c.iterm(p)));
-                        Term::Foreach(xs, init, update, proj)
+                        let proj = proj.map(|p| self.with_vars(vars, |c| c.iterm(p)));
+                        Term::Foreach(xs, pat, init, update, proj)
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
@@ -499,7 +517,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 let parts = parts.into_iter().map(|part| match part {
                     StrPart::Str(s) => Term::Str(s.into()),
                     StrPart::Char(c) => Term::Str(c.into()),
-                    StrPart::Term(f) => Term::Pipe(self.iterm(f), false, fmt),
+                    StrPart::Term(f) => Term::Pipe(self.iterm(f), None, fmt),
                 });
                 let parts = parts.collect();
                 self.sum_or(|| Term::Str(String::new()), parts)
@@ -518,6 +536,23 @@ impl<'s, F> Compiler<&'s str, F> {
     fn iterm_tr(&mut self, t: parse::Term<&'s str>) -> TermId {
         let t = self.term(t);
         self.lut.insert_term(t)
+    }
+
+    fn pattern(&mut self, p: parse::Pattern<&'s str>) -> Pattern<TermId> {
+        match p {
+            parse::Pattern::Var(_) => Pattern::Var,
+            parse::Pattern::Arr(a) => {
+                let iter = a
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, p)| (self.lut.insert_term(Term::Int(i as isize)), self.pattern(p)));
+                Pattern::Idx(iter.collect())
+            }
+            parse::Pattern::Obj(o) => {
+                let iter = o.into_iter().map(|(k, p)| (self.iterm(k), self.pattern(p)));
+                Pattern::Idx(iter.collect())
+            }
+        }
     }
 
     fn fail(&mut self, name: &'s str, undef: Undefined) -> Term {

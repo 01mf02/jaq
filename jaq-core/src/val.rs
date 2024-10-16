@@ -28,7 +28,6 @@ pub type Range<V> = core::ops::Range<Option<V>>;
 pub trait ValT:
     Clone
     + Display
-    + Default
     + From<bool>
     + From<isize>
     + From<alloc::string::String>

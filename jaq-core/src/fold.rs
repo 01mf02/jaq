@@ -1,18 +1,7 @@
 //! Functions on iterators over results.
 
-use crate::box_iter::{box_once, BoxIter};
+use crate::box_iter::Results;
 use alloc::vec::Vec;
-
-/// A boxed iterator over `Result`s.
-pub type Results<'a, T, E> = BoxIter<'a, Result<T, E>>;
-
-/// If `x` is an `Err`, return it as iterator, else apply `f` to `x` and return its output.
-pub fn then<'a, T, U: 'a, E: 'a>(
-    x: Result<T, E>,
-    f: impl FnOnce(T) -> Results<'a, U, E>,
-) -> Results<'a, U, E> {
-    x.map_or_else(|e| box_once(Err(e)), f)
-}
 
 pub(crate) enum Fold<'a, U, E> {
     /// things to be processed

@@ -1,6 +1,8 @@
-use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::compile::{Lut, Tailrec, Term as Ast};
-use crate::results::{fold, then, Fold, Results};
+use crate::box_iter::{
+    box_once, flat_map_then_with, flat_map_with, map_with, then, BoxIter, Results,
+};
+use crate::compile::{Lut, Pattern, Tailrec, Term as Ast};
+use crate::fold::{fold, Fold};
 use crate::val::{ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
 use alloc::boxed::Box;
@@ -29,13 +31,67 @@ fn bind_vars<'a, F: FilterT>(
     cv: Cv<'a, F::V>,
 ) -> Results<'a, Cv<'a, F::V>, Exn<'a, F::V>> {
     match args.split_first() {
+        Some((Bind::Var(arg), [])) => {
+            map_with(arg.run(lut, cv.clone()), (ctx, cv.1), |y, (ctx, v)| {
+                Ok((ctx.cons_var(y?), v))
+            })
+        }
+        Some((Bind::Fun(arg), [])) => box_once(Ok((ctx.cons_fun((arg, cv.0)), cv.1))),
         Some((Bind::Var(arg), rest)) => {
-            flat_map_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
-                then(y, |y| bind_vars(rest, lut, ctx.cons_var(y), cv))
+            flat_map_then_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
+                bind_vars(rest, lut, ctx.cons_var(y), cv)
             })
         }
         Some((Bind::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
         None => box_once(Ok((ctx, cv.1))),
+    }
+}
+
+fn bind_pat<'a, F: FilterT>(
+    (idxs, pat): &'a (Id, Pattern<Id>),
+    lut: &'a Lut<F>,
+    ctx: Ctx<'a, F::V>,
+    cv: Cv<'a, F::V>,
+) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
+    let (ctx0, v0) = cv.clone();
+    let v1 = map_with(idxs.run(lut, cv), v0, move |i, v0| Ok(v0.index(&i?)?));
+    match pat {
+        Pattern::Var => Box::new(v1.map(move |v| Ok(ctx.clone().cons_var(v?)))),
+        Pattern::Idx(pats) => flat_map_then_with(v1, (ctx, ctx0), move |v, (ctx, ctx0)| {
+            bind_pats(pats, lut, ctx, (ctx0, v))
+        }),
+    }
+}
+
+fn bind_pats<'a, F: FilterT>(
+    pats: &'a [(Id, Pattern<Id>)],
+    lut: &'a Lut<F>,
+    ctx: Ctx<'a, F::V>,
+    cv: Cv<'a, F::V>,
+) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
+    match pats.split_first() {
+        None => box_once(Ok(ctx)),
+        Some((pat, [])) => bind_pat(pat, lut, ctx, cv),
+        Some((pat, rest)) => {
+            flat_map_then_with(bind_pat(pat, lut, ctx, cv.clone()), cv, |ctx, cv| {
+                bind_pats(rest, lut, ctx, cv)
+            })
+        }
+    }
+}
+
+fn run_and_bind<'a, F: FilterT>(
+    xs: &'a Id,
+    lut: &'a Lut<F>,
+    cv: Cv<'a, F::V>,
+    pat: &'a Pattern<Id>,
+) -> Results<'a, Ctx<'a, F::V>, Exn<'a, F::V>> {
+    let xs = xs.run(lut, (cv.0.clone(), cv.1));
+    match pat {
+        Pattern::Var => map_with(xs, cv.0, move |y, ctx| Ok(ctx.cons_var(y?))),
+        Pattern::Idx(pats) => flat_map_then_with(xs, cv.0, |y, ctx| {
+            bind_pats(pats, lut, ctx.clone(), (ctx, y))
+        }),
     }
 }
 
@@ -55,19 +111,6 @@ where
 {
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(false, xs, Fold::Input(init), f))
-}
-
-fn foreach_project<'a, T: Clone + Default + 'a, V: Clone + 'a>(
-    xs: impl Iterator<Item = Result<T, Exn<'a, V>>> + Clone + 'a,
-    init: V,
-    update: impl Fn(T, V) -> ValXs<'a, V> + 'a,
-    project: impl Fn(T, V) -> ValXs<'a, V> + 'a,
-) -> impl Iterator<Item = ValX<'a, V>> {
-    let init = Fold::Input((T::default(), init));
-    fold(true, xs, init, move |x, (_, acc)| {
-        Box::new(update(x.clone(), acc).map(move |y| Ok((x.clone(), y?))))
-    })
-    .flat_map(move |xa| then(xa, |(x, acc)| project(x, acc)))
 }
 
 fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
@@ -162,14 +205,20 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| Ok((-v?)?))),
 
             // `l | r`
-            Ast::Pipe(l, false, r) => {
-                let l = l.run(lut, (cv.0.clone(), cv.1));
-                flat_map_with(l, cv.0, move |y, ctx| then(y, |y| r.run(lut, (ctx, y))))
+            Ast::Pipe(l, None, r) => {
+                flat_map_then_with(l.run(lut, (cv.0.clone(), cv.1)), cv.0, move |y, ctx| {
+                    r.run(lut, (ctx, y))
+                })
             }
-            // `l as $x | r`
-            Ast::Pipe(l, true, r) => {
-                l.pipe(lut, cv, move |cv, y| r.run(lut, (cv.0.cons_var(y), cv.1)))
-            }
+            // `l as $x | r`, `l as [...] | r`, or `l as {...} | r`
+            Ast::Pipe(l, Some(pat), r) => l.pipe(lut, cv, move |(ctx, v), y| match pat {
+                Pattern::Var => r.run(lut, (ctx.cons_var(y), v)),
+                Pattern::Idx(pats) => flat_map_then_with(
+                    bind_pats(pats, lut, ctx.clone(), (ctx, y.clone())),
+                    y,
+                    |ctx, y| r.run(lut, (ctx, y)),
+                ),
+            }),
 
             Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(r.run(lut, cv))),
             Ast::Alt(l, r) => {
@@ -189,13 +238,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     let cv = cv.clone();
                     crate::into_iter::collect_if_once(move || i.run(lut, cv))
                 });
-                flat_map_with(f.run(lut, cv), path, |y, path| {
-                    then(y, |y| {
-                        flat_map_with(path.explode(), y, |path, y| {
-                            then(path, |path| {
-                                Box::new(path.run(y).map(|r| r.map_err(Exn::from)))
-                            })
-                        })
+                flat_map_then_with(f.run(lut, cv), path, |y, path| {
+                    flat_map_then_with(path.explode(), y, |path, y| {
+                        Box::new(path.run(y).map(|r| r.map_err(Exn::from)))
                     })
                 })
             }
@@ -237,26 +282,28 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
-            Ast::Reduce(xs, init, update) => {
-                let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
+            Ast::Reduce(xs, pat, init, update) => {
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
                 let init = init.run(lut, cv.clone());
-                let update = move |x, v| update.run(lut, (cv.0.clone().cons_var(x), v));
+                let update = |ctx, v| update.run(lut, (ctx, v));
                 Box::new(fold(false, xs, Fold::Output(init), update))
             }
-            Ast::Foreach(xs, init, update, project) => {
-                let xs = rc_lazy_list::List::from_iter(xs.run(lut, cv.clone()));
+            Ast::Foreach(xs, pat, init, update, project) => {
+                let inputs = cv.0.inputs;
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
                 let init = init.run(lut, cv.clone());
-                let ctx = cv.0.clone();
-                let update = move |x, v| update.run(lut, (ctx.clone().cons_var(x), v));
-                if let Some(proj) = project {
-                    let proj = move |x, v| proj.run(lut, (cv.0.clone().cons_var(x), v));
-                    flat_map_with(init, (xs, update, proj), move |i, (xs, update, proj)| {
-                        then(i, |i| Box::new(foreach_project(xs, i, update, proj)))
-                    })
-                } else {
-                    flat_map_with(init, (xs, update), move |i, (xs, update)| {
-                        then(i, |i| Box::new(fold(true, xs, Fold::Input(i), update)))
-                    })
+                let update = |ctx, v| update.run(lut, (ctx, v));
+                match project {
+                    Some(proj) => flat_map_then_with(init, xs, move |init, xs| {
+                        let init = Fold::Input((Ctx::new([], inputs), init));
+                        let cvs = fold(true, xs, init, move |x, (_, acc)| {
+                            map_with(update(x.clone(), acc), x, |y, x| Ok((x, y?)))
+                        });
+                        Box::new(cvs.flat_map(move |cv| then(cv, |cv| proj.run(lut, cv))))
+                    }),
+                    None => flat_map_then_with(init, xs, move |i, xs| {
+                        Box::new(fold(true, xs, Fold::Input(i), update))
+                    }),
                 }
             }
 
@@ -331,14 +378,16 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 };
                 l.update(lut, cv, Box::new(f))
             }
-            Ast::Pipe(l, false, r) => l.update(
+            Ast::Pipe(l, None, r) => l.update(
                 lut,
                 (cv.0.clone(), cv.1),
                 Box::new(move |v| r.update(lut, (cv.0.clone(), v), f.clone())),
             ),
-            Ast::Pipe(l, true, r) => reduce(l.run(lut, cv.clone()), cv.1, move |x, v| {
-                r.update(lut, (cv.0.clone().cons_var(x), v), f.clone())
-            }),
+            Ast::Pipe(l, Some(pat), r) => reduce(
+                run_and_bind(l, lut, (cv.0, cv.1.clone()), pat),
+                cv.1,
+                move |ctx, v| r.update(lut, (ctx, v), f.clone()),
+            ),
             Ast::Comma(l, r) => {
                 let l = l.update(lut, (cv.0.clone(), cv.1), f.clone());
                 Box::new(
@@ -409,9 +458,7 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
         cv: Cv<'a, Self::V>,
         f: impl Fn(Cv<'a, Self::V>, Self::V) -> Results<'a, T, Exn<'a, Self::V>> + 'a,
     ) -> Results<'a, T, Exn<'a, Self::V>> {
-        flat_map_with(self.run(lut, cv.clone()), cv, move |y, cv| {
-            then(y, |y| f(cv, y))
-        })
+        flat_map_then_with(self.run(lut, cv.clone()), cv, move |y, cv| f(cv, y))
     }
 
     /// Run `self` and `r` and return the cartesian product of their outputs.

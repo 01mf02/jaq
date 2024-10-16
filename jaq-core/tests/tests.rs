@@ -407,3 +407,36 @@ yields!(limit10, &(LIMIT.to_owned() + "[limit(1; {}[])]"), json!([]));
 yields!(limit12, &(LIMIT.to_owned() + "[limit(1; 1, 2)]"), [1]);
 yields!(limit21, &(LIMIT.to_owned() + "[limit(2; 1)]"), [1]);
 yields!(limit22, &(LIMIT.to_owned() + "[limit(2; 1, 2)]"), [1, 2]);
+
+yields!(
+    pat_input,
+    r#"{a: {b: "c", c: 1}} as {a: {(.b): $x}} | $x"#,
+    1
+);
+
+yields!(pat_arr0, "[] as [$x] | $x", json!(null));
+yields!(pat_arr1, "[1, 2, 3] as [$x] | $x", 1);
+yields!(pat_arr2, "[1, 2, 3] as [$x, $y] | [$x, $y]", [1, 2]);
+
+yields!(pat_obj, "{a: 1, b: 2} as {a:  $x, $b } | [$x, $b]", [1, 2]);
+yields!(pat_nest, "{a: [1, 2]} as {a: [$x, $y]} | [$x, $y]", [1, 2]);
+
+const PAT_CART: &str = r#"{a: 1, b: 2, c: 3, d: 4} as {("a", "b"): $x, ("c", "d"): $y}"#;
+
+yields!(
+    pat_cart,
+    &format!("[{} | $x, $y]", PAT_CART),
+    [1, 3, 1, 4, 2, 3, 2, 4]
+);
+
+yields!(
+    reduce_pat_cart,
+    &format!("reduce {} ([]; . + [$x, $y])", PAT_CART),
+    [1, 3, 1, 4, 2, 3, 2, 4]
+);
+
+yields!(
+    update_pat_cart,
+    &format!("[0, 0, 0, 0, 0] | ({} | .[$x], .[$y]) += 1", PAT_CART),
+    [0, 2, 2, 2, 2]
+);

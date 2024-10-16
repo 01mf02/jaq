@@ -1,7 +1,6 @@
 //! Paths and their parts.
 
-use crate::box_iter::{box_once, flat_map_with, map_with, BoxIter};
-use crate::results::then;
+use crate::box_iter::{box_once, flat_map_with, map_with, then, BoxIter};
 use crate::val::{ValR, ValT, ValX, ValXs};
 use alloc::{boxed::Box, vec::Vec};
 

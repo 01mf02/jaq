@@ -53,10 +53,11 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod box_iter;
+pub mod box_iter;
 pub mod compile;
 mod exn;
 mod filter;
+mod fold;
 mod into_iter;
 pub mod load;
 pub mod ops;
@@ -64,7 +65,6 @@ pub mod path;
 mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
-pub mod results;
 mod stack;
 pub mod val;
 
