@@ -418,6 +418,9 @@ yields!(pat_arr0, "[] as [$x] | $x", json!(null));
 yields!(pat_arr1, "[1, 2, 3] as [$x] | $x", 1);
 yields!(pat_arr2, "[1, 2, 3] as [$x, $y] | [$x, $y]", [1, 2]);
 
+yields!(pat_obj, "{a: 1, b: 2} as {a:  $x, $b } | [$x, $b]", [1, 2]);
+yields!(pat_nest, "{a: [1, 2]} as {a: [$x, $y]} | [$x, $y]", [1, 2]);
+
 const PAT_CART: &str = r#"{a: 1, b: 2, c: 3, d: 4} as {("a", "b"): $x, ("c", "d"): $y}"#;
 
 yields!(
