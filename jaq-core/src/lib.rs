@@ -221,6 +221,19 @@ impl<F: FilterT> Filter<F> {
     pub fn yields(&self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
         let inputs = RcIter::new(core::iter::empty());
         let out = self.run((Ctx::new([], &inputs), x));
-        assert!(out.eq(ys));
+        
+        // Wrapper around ValR that implements PartialEq using strict_eq.
+        struct StrictEq<V>(ValR<V>);
+        impl <V: ValT> PartialEq for StrictEq<V> {
+            fn eq(&self, other: &Self) -> bool {
+                match (&self.0, &other.0) {
+                    (Ok(a), Ok(b)) => a.strict_eq(b),
+                    (Err(a), Err(b)) => a == b,
+                    _ => false,
+                }
+            }
+        }
+        
+        assert!(out.map(StrictEq).eq(ys.map(StrictEq)));
     }
 }

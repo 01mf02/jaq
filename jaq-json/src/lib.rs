@@ -268,6 +268,36 @@ impl jaq_core::ValT for Val {
             None
         }
     }
+
+    fn strict_eq(&self, other: &Self) -> bool {
+        struct StrictEq<'a>(&'a Val);
+        impl Eq for StrictEq<'_> {}
+        impl PartialEq for StrictEq<'_> {
+            fn eq(&self, other: &Self) -> bool {
+                match (self.0, other.0) {
+                    (Val::Null, Val::Null) => true,
+                    (Val::Bool(x), Val::Bool(y)) => x == y,
+                    (Val::Int(x), Val::Int(y)) => x == y,
+                    (Val::Float(x), Val::Float(y)) => float_eq(*x, *y),
+                    (Val::Num(x), Val::Num(y)) if Rc::ptr_eq(x, y) => true,
+                    (Val::Num(n), y) => StrictEq(&Val::from_dec_str(n)) == StrictEq(y),
+                    (x, Val::Num(n)) => StrictEq(x) == StrictEq(&Val::from_dec_str(n)),
+                    (Val::Str(x), Val::Str(y)) => x == y,
+                    (Val::Arr(x), Val::Arr(y)) => x.iter().map(StrictEq).eq(y.iter().map(StrictEq)),
+                    (Val::Obj(x), Val::Obj(y)) => {
+                        // Compare map values with StrictEq
+                        // Also compare iterators instead of IndexMaps to enforce field order as
+                        // IndexMap PartialEq does not check field order
+                        x.iter().map(|(k, v)| (k, StrictEq(v))).eq(
+                            y.iter().map(|(k, v)| (k, StrictEq(v)))
+                        )
+                    },
+                    _ => false,
+                }
+            }
+        }
+        StrictEq(self) == StrictEq(other)
+    }
 }
 
 impl jaq_std::ValT for Val {

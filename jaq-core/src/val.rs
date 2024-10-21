@@ -119,4 +119,10 @@ pub trait ValT:
     /// `"\(v)"` yields `s`, otherwise it yields `v.to_string()`
     /// (provided by [`Display`]).
     fn as_str(&self) -> Option<&str>;
+
+    /// Compare against another value while enforcing strict equality.
+    /// We define strict equality as PartialEq with the following additional constraints:
+    /// - Both values must be of the same type.
+    /// - Fields in both values must be in the same order.
+    fn strict_eq(&self, other: &Self) -> bool;
 }

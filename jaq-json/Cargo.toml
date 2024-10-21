@@ -22,4 +22,4 @@ jaq-std  = { version = "2.0.0-beta", path = "../jaq-std" }
 ahash = "0.8.6"
 hifijson = { version = "0.2.0", optional = true }
 indexmap = "2.0"
-serde_json = { version = "1.0.81", optional = true }
+serde_json = { version = "1.0.81", features = ["preserve_order"], optional = true }
