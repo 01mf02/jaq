@@ -227,7 +227,8 @@ impl<F: FilterT> Filter<F> {
         impl <V: ValT> PartialEq for StrictEq<V> {
             fn eq(&self, other: &Self) -> bool {
                 match (&self.0, &other.0) {
-                    (Ok(a), Ok(b)) => a.strict_eq(b),
+                    // Sanity check: invoke both strict_eq and PartialEq
+                    (Ok(a), Ok(b)) => a == b && a.strict_eq(b),
                     (Err(a), Err(b)) => a == b,
                     _ => false,
                 }
