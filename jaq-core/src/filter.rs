@@ -123,6 +123,10 @@ fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
     }))
 }
 
+fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
+    core::iter::once_with(f).flatten()
+}
+
 /// Combination of context and input value.
 pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
@@ -220,7 +224,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 ),
             }),
 
-            Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(r.run(lut, cv))),
+            Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(lazy(|| r.run(lut, cv)))),
             Ast::Alt(l, r) => {
                 let mut l = l
                     .run(lut, cv.clone())
