@@ -182,7 +182,7 @@ Table: Evaluation results in milliseconds ("N/A" if error or more than 10 second
 | `cumsum-xy`     | 1048576 |     490 |  **470** |          720 |    520 |
 
 The results show that
-jaq-1.4 is fastest on 17 benchmarks, whereas
+jaq-2.0 is fastest on 17 benchmarks, whereas
 jq-1.7.1 is fastest on 3 benchmarks and
 gojq-0.12.16 is fastest on 3 benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
