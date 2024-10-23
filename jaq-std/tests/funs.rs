@@ -186,27 +186,20 @@ fn regex() {
     give(json!(s), &f("split_matches", date, ""), out);
 }
 
-#[test]
-fn round() {
-    give(json!(1), "round", json!(1));
-    give(json!(1.0), "round", json!(1));
-    give(json!(-1.0), "round", json!(-1));
-    give(json!(-1), "round", json!(-1));
+yields!(round_int, "[0, 1][1 | round]", 1);
 
-    give(json!(-1.5), "round", json!(-2));
-    give(json!(-1.5), "floor", json!(-2));
-    give(json!(-1.5), "ceil", json!(-1));
+yields!(round_pi, " 1   | round", 1);
+yields!(round_pf, " 1.0 | round", 1);
+yields!(round_ni, "-1   | round", -1);
+yields!(round_nf, "-1.0 | round", -1);
 
-    give(json!(-1.4), "round", json!(-1));
-    give(json!(-1.4), "floor", json!(-2));
-    give(json!(-1.4), "ceil", json!(-1));
+yields!(round_mid, "-1.5 | round", -2);
+yields!(floor_mid, "-1.5 | floor", -2);
+yields!(ceili_mid, "-1.5 | ceil ", -1);
 
-    /* TODO: reenable these tests
-    let err = |v| Error::Type(Val::from(v), Type::Float);
-    fail(json!([]), "round", err(json!([])));
-    fail(json!({}), "round", err(json!({})));
-    */
-}
+yields!(round_floor, "-1.4 | round", -1);
+yields!(floor_floor, "-1.4 | floor", -2);
+yields!(ceili_floor, "-1.4 | ceil ", -1);
 
 #[test]
 fn startswith() {

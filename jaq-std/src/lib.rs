@@ -150,7 +150,7 @@ trait ValTx: ValT + Sized {
         if self.as_isize().is_some() {
             Ok(self)
         } else {
-            Ok(Self::from(f(self.as_f64()?)))
+            Ok(Self::from(f(self.as_f64()?) as isize))
         }
     }
 
