@@ -123,6 +123,10 @@ fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
     }))
 }
 
+fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
+    core::iter::once_with(f).flatten()
+}
+
 /// Combination of context and input value.
 pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
@@ -180,17 +184,17 @@ impl<F: FilterT<F>> FilterT<F> for Id {
 
     fn run<'a>(&'a self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValXs<'a, Self::V> {
         use alloc::string::ToString;
-        use core::iter::{once, once_with};
+        use core::iter::once;
         match &lut.terms[self.0] {
             Ast::Id => box_once(Ok(cv.1)),
-            Ast::ToString => Box::new(once_with(move || match cv.1.as_str() {
+            Ast::ToString => box_once(match cv.1.as_str() {
                 Some(_) => Ok(cv.1),
                 None => Ok(Self::V::from(cv.1.to_string())),
-            })),
+            }),
             Ast::Int(n) => box_once(Ok(Self::V::from(*n))),
             Ast::Num(x) => box_once(Self::V::from_num(x).map_err(Exn::from)),
-            Ast::Str(s) => Box::new(once_with(move || Ok(Self::V::from(s.clone())))),
-            Ast::Arr(f) => Box::new(once_with(move || f.run(lut, cv).collect())),
+            Ast::Str(s) => box_once(Ok(Self::V::from(s.clone()))),
+            Ast::Arr(f) => box_once(f.run(lut, cv).collect()),
             Ast::ObjEmpty => box_once(Self::V::from_map([]).map_err(Exn::from)),
             Ast::ObjSingle(k, v) => Box::new(
                 Self::cartesian(k, v, lut, cv).map(|(k, v)| Ok(Self::V::from_map([(k?, v?)])?)),
@@ -220,7 +224,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 ),
             }),
 
-            Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(r.run(lut, cv))),
+            Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(lazy(|| r.run(lut, cv)))),
             Ast::Alt(l, r) => {
                 let mut l = l
                     .run(lut, cv.clone())
