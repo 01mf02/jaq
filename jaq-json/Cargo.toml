@@ -16,8 +16,8 @@ default = ["parse"]
 parse = ["hifijson"]
 
 [dependencies]
-jaq-core = { version = "2.0.0-beta", path = "../jaq-core" }
-jaq-std  = { version = "2.0.0-beta", path = "../jaq-std" }
+jaq-core = { version = "2.0.0-gamma", path = "../jaq-core" }
+jaq-std  = { version = "2.0.0-gamma", path = "../jaq-std" }
 
 ahash = "0.8.6"
 hifijson = { version = "0.2.0", optional = true }
