@@ -226,7 +226,8 @@ Here is an overview that summarises:
 ## Operators
 
 - [x] Composition (`|`)
-- [x] Binding (`. as $x | $x`)
+- [x] Variable binding (`. as $x | $x`)
+- [x] Pattern  binding (`. as {a: [$x, {("b", "c"): $y, $z}]} | $x, $y, $z`)
 - [x] Concatenation (`,`)
 - [x] Plain assignment (`=`)
 - [x] Update assignment (`|=`)
