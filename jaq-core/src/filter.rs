@@ -119,6 +119,14 @@ fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
     core::iter::once_with(f).flatten()
 }
 
+#[test]
+fn lazy_is_lazy() {
+    let f = || panic!();
+    let mut iter = core::iter::once(0).chain(lazy(|| box_once(f())));
+    assert_eq!(iter.size_hint(), (1, None));
+    assert_eq!(iter.next(), Some(0));
+}
+
 /// Combination of context and input value.
 pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
