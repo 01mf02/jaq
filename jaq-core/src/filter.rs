@@ -392,12 +392,11 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 cv.1,
                 move |ctx, v| r.update(lut, (ctx, v), f.clone()),
             ),
-            Ast::Comma(l, r) => {
-                let l = l.update(lut, (cv.0.clone(), cv.1), f.clone());
-                Box::new(
-                    l.flat_map(move |v| then(v, |v| r.update(lut, (cv.0.clone(), v), f.clone()))),
-                )
-            }
+            Ast::Comma(l, r) => flat_map_then_with(
+                l.update(lut, (cv.0.clone(), cv.1), f.clone()),
+                (cv.0, f),
+                move |v, (ctx, f)| r.update(lut, (ctx, v), f),
+            ),
             Ast::Ite(if_, then_, else_) => reduce(if_.run(lut, cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update(lut, (cv.0.clone(), v), f.clone())
             }),
