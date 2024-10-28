@@ -414,6 +414,12 @@ yields!(
     1
 );
 
+yields!(
+    pat_orig,
+    "[{a:123}] | .[0] as {$a} | [., $a]",
+    json!([[{"a": 123}], 123])
+);
+
 yields!(pat_arr0, "[] as [$x] | $x", json!(null));
 yields!(pat_arr1, "[1, 2, 3] as [$x] | $x", 1);
 yields!(pat_arr2, "[1, 2, 3] as [$x, $y] | [$x, $y]", [1, 2]);
