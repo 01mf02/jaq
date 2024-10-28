@@ -2,7 +2,7 @@
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use regex::{Error, Regex, RegexBuilder};
+use regex_lite::{self as regex, Error, Regex, RegexBuilder};
 
 #[derive(Copy, Clone, Default)]
 pub struct Flags {

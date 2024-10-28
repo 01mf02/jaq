@@ -9,7 +9,7 @@ description = "Just another JSON query tool"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["command-line-utilities", "compilers", "parser-implementations"]
-rust-version = "1.64"
+rust-version = "1.65"
 
 [features]
 default = ["mimalloc"]
