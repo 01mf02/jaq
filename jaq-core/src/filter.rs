@@ -217,11 +217,10 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             // `l as $x | r`, `l as [...] | r`, or `l as {...} | r`
             Ast::Pipe(l, Some(pat), r) => l.pipe(lut, cv, move |(ctx, v), y| match pat {
                 Pattern::Var => r.run(lut, (ctx.cons_var(y), v)),
-                Pattern::Idx(pats) => flat_map_then_with(
-                    bind_pats(pats, lut, ctx.clone(), (ctx, y.clone())),
-                    y,
-                    |ctx, y| r.run(lut, (ctx, y)),
-                ),
+                Pattern::Idx(pats) => {
+                    let r = |ctx, v| r.run(lut, (ctx, v));
+                    flat_map_then_with(bind_pats(pats, lut, ctx.clone(), (ctx, y)), v, r)
+                }
             }),
 
             Ast::Comma(l, r) => Box::new(l.run(lut, cv.clone()).chain(lazy(|| r.run(lut, cv)))),
