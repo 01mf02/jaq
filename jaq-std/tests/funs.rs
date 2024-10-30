@@ -179,6 +179,15 @@ fn regex() {
 
     give(json!(s), &f("matches", date, "g"), json!([d1, d2, d3]));
 
+    give(json!(""), &f("matches", "", ""), json!([[c(0, "")]]));
+    give(json!(""), &f("matches", "^$", ""), json!([[c(0, "")]]));
+    give(
+        json!("  "),
+        &f("matches", "", "g"),
+        json!([[c(0, "")], [c(1, "")], [c(2, "")]]),
+    );
+    give(json!("  "), &f("matches", "", "gn"), json!([]));
+
     let out = json!(["", d1, ", ", d2, " and ", d3, ""]);
     give(json!(s), &f("split_matches", date, "g"), out);
 

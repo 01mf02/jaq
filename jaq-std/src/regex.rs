@@ -93,7 +93,7 @@ impl<'a> ByteChar<'a> {
         assert!(self.prev_byte <= byte_offset);
         if self.prev_byte != byte_offset {
             self.prev_byte = byte_offset;
-            self.prev_char += 1 + self.rest.position(|(p, _)| p == byte_offset).unwrap();
+            self.prev_char += 1 + self.rest.position(|(p, _)| p == byte_offset).unwrap_or(0);
         }
         self.prev_char
     }
@@ -147,7 +147,7 @@ pub fn regex<'a>(s: &'a str, re: &'a Regex, flags: Flags, sm: (bool, bool)) -> V
 
     for c in re.captures_iter(s) {
         let whole = c.get(0).unwrap();
-        if whole.start() >= s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
+        if whole.start() > s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
             continue;
         }
         let match_names = c.iter().zip(re.capture_names());
