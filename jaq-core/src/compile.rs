@@ -198,6 +198,8 @@ impl Undefined {
 }
 
 /// jq program compiler.
+///
+/// This contains strings of type `S` and native functions of type `F`.
 pub struct Compiler<S, F> {
     lut: Lut<(Sig<S>, F)>,
 
