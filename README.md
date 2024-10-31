@@ -313,6 +313,7 @@ Zero-argument filters:
 - [x] `expm1`
 - [x] `fabs`
 - [x] `frexp`, which returns pairs of (float, integer).
+- [x] `gamma`
 - [x] `ilogb`, which returns integers.
 - [x] `j0`
 - [x] `j1`

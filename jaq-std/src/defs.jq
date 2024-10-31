@@ -41,6 +41,7 @@ def pow10:            pow(10.0; .);
 def drem($l; r):      remainder($l; r) | if . == 0 then copysign(.; $l) end;
 def nexttoward(x; y): nextafter(x; y);
 def scalb(x; e):      x * pow(2.0; e);
+def gamma: tgamma;
 
 # Type
 def type:
