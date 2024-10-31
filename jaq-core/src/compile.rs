@@ -321,11 +321,18 @@ impl<'s, F> Compiler<&'s str, F> {
             }
         }
 
+        /*
+        for (i, t) in self.lut.terms.iter().enumerate() {
+            std::println!("{i} -> {t:?}");
+        }
+        */
+
         if errs.is_empty() {
             // the main filter corresponds to the last definition of the last module
             let (main_sig, main_def) = self.mod_map.last().unwrap().last().unwrap();
             assert!(main_sig.matches("main", &[]));
             assert!(!main_def.tailrec);
+            //std::println!("main: {:?}", main_def.id);
             Ok(Filter(main_def.id, self.lut.map_funs(|(_sig, f)| f)))
         } else {
             Err(errs)
