@@ -279,8 +279,8 @@ impl Def {
 enum Local<S> {
     Var(S),
     Label(S),
-    Parent(Sig<S, S>, Def),
-    Sibling(Sig<S>, Def),
+    Parent(Sig<S, Bind<S>>, Def),
+    Sibling(Sig<S, Bind<S>>, Def),
     TailrecObstacle,
 }
 
@@ -369,7 +369,7 @@ impl<'s, F> Compiler<&'s str, F> {
 
         m.body.into_iter().for_each(|def| self.def(def));
         let defs = self.local.drain(..).map(|l| match l {
-            Local::Sibling(sig, def) => (sig, def),
+            Local::Sibling(sig, def) => (sig.map_args(|a| a.map(|_| ())), def),
             _ => panic!(),
         });
         self.mod_map.push(defs.collect());
@@ -380,7 +380,7 @@ impl<'s, F> Compiler<&'s str, F> {
 
         let sig = Sig {
             name: d.name,
-            args: d.args.into(),
+            args: d.args.into_iter().map(|a| bind(a, a)).collect(),
         };
         let def = Def {
             id: tid,
@@ -413,8 +413,7 @@ impl<'s, F> Compiler<&'s str, F> {
         }
 
         // turn the parent into a sibling
-        self.local
-            .push(Local::Sibling(sig.map_args(|a| bind(a, ())), def));
+        self.local.push(Local::Sibling(sig, def));
     }
 
     fn term(&mut self, t: parse::Term<&'s str>) -> Term {
@@ -606,7 +605,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 }
                 Local::Parent(sig, def) => {
                     for arg in sig.args.iter().rev() {
-                        if *arg == name && args.is_empty() {
+                        if *arg.name() == name && args.is_empty() {
                             return Term::Var(i, labels);
                         } else {
                             i += 1;
@@ -616,7 +615,7 @@ impl<'s, F> Compiler<&'s str, F> {
                         def.tailrec = def.tailrec || tailrec;
                         let call = tailrec.then_some(Tailrec::Throw);
                         let args = sig.args.iter().zip(args.to_vec());
-                        let args = args.map(|(x, id)| bind(x, id));
+                        let args = args.map(|(x, id)| x.as_ref().map(|_| id));
                         return Term::CallDef(def.id, args.collect(), i, call);
                     }
                 }
@@ -649,7 +648,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 Local::Var(_) => i += 1,
                 Local::Parent(sig, _def) => {
                     for arg in sig.args.iter().rev() {
-                        if *arg == x {
+                        if *arg.name() == x {
                             return Term::Var(i, 0);
                         } else {
                             i += 1;
