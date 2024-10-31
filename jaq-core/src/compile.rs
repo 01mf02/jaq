@@ -261,7 +261,7 @@ impl<S: Eq, A> Sig<S, A> {
     }
 }
 
-impl<S> Sig<S, Bind> {
+impl<S, A> Sig<S, Bind<A>> {
     fn bind(&self, args: &[TermId]) -> Box<[Bind<TermId>]> {
         let args = self.args.iter().zip(args);
         args.map(|(bind, id)| bind.as_ref().map(|_| *id)).collect()
