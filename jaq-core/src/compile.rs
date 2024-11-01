@@ -341,6 +341,11 @@ impl<'s, F> Compiler<&'s str, F> {
             }
         }
 
+        // only after the end, we know which definitions are actually tail-recursive
+        // before, we assumed that every call is tail-recursive
+        // (that way, we can conveniently record whether a call to a function
+        // happens from inside or outside the function)
+        // therefore, we only have to adapt calls to non-tail-recursive functions here
         for t in self.lut.terms.iter_mut() {
             match t {
                 Term::CallDef(id, _, _, tr) if !self.tailrecs.contains(id) => *tr = None,
@@ -401,20 +406,29 @@ impl<'s, F> Compiler<&'s str, F> {
         self.mod_map.push(defs)
     }
 
+    /// Create a placeholder sibling for a definition.
+    ///
+    /// Once we have processed all places where the sibling can be called from outside,
+    /// we can then call `def_post`.
     fn def_pre(&mut self, d: &parse::Def<&'s str, parse::Term<&'s str>>) {
         let tid = self.lut.insert_term(Term::Id);
         let sig = Sig {
             name: d.name,
             args: d.args.iter().map(|a| bind(a, *a)).collect(),
         };
+        // by default, we assume that the function is not recursive and
+        // that all recursive calls to it are tail-recursive
         let def = Def {
             id: tid,
             rec: false,
             tailrec: true,
         };
+        // furthermore, we initially assume that the function can call
+        // any of its ancestors without breaking their tail-recursiveness
         self.local.push(Local::Sibling(sig, def, Tr::new()));
     }
 
+    /// Compile a placeholder sibling with its corresponding definition.
     fn def_post(&mut self, t: parse::Term<&'s str>) -> (Sig<&'s str, Bind>, Def) {
         let (sig, def, tr) = match self.local.pop() {
             Some(Local::Sibling(sig, def, tr)) => (sig, def, tr),
@@ -427,6 +441,8 @@ impl<'s, F> Compiler<&'s str, F> {
             Some(Local::Parent(sig, def)) => (sig.map_args(|a| a.map(|_| ())), def),
             _ => panic!(),
         };
+        // only if there is at least one recursive call and all calls are tail-recursive,
+        // then the definition is tail-recursive
         if def.rec && def.tailrec {
             self.tailrecs.insert(def.id);
         }
@@ -469,6 +485,11 @@ impl<'s, F> Compiler<&'s str, F> {
             Def(defs, t) => {
                 defs.iter().for_each(|def| self.def_pre(def));
                 let t = self.term(*t, tr);
+                // we have to process the siblings in *reverse*, because that way,
+                // all potential call-sites of a sibling are processed before the sibling itself
+                // (because a sibling can only be called by functions *after* it, not before it)
+                // this is important to establish which functions can be called
+                // tail-recursively from a sibling
                 defs.into_iter().rev().for_each(|def| {
                     self.def_post(def.body);
                 });
@@ -555,7 +576,12 @@ impl<'s, F> Compiler<&'s str, F> {
         }
     }
 
+    /// Compile a term in a context that does *not* permit tail-recursion.
+    ///
+    /// One example of such a term is `t` in `1 + t` or `t | .+1`.
     fn iterm(&mut self, t: parse::Term<&'s str>) -> TermId {
+        // if anything in our term calls an ancestor of our term, then we know that
+        // this ancestor cannot be tail-recursive!
         let tr = self.local.iter().filter_map(Local::parent).collect();
         self.iterm_tr(t, &tr)
     }
@@ -620,8 +646,13 @@ impl<'s, F> Compiler<&'s str, F> {
                 Local::Sibling(sig, def, tr_) => {
                     if sig.matches(name, &args) {
                         assert!(!tr.contains(&def.id));
-                        let parents = locals.filter_map(|l| l.parent()).collect();
-                        tr_.extend(tr.intersection(&parents));
+                        // we are at a position that may not call `tr` tail-recursively and
+                        // we call a sibling that may not call `tr_` tail-recursively,
+                        // so we update the sibling with additional `tr`
+                        // however, `tr` may contain IDs that are not ancestors of this sibling,
+                        // so we take the intersection of `tr` and the ancestors
+                        let ancestors = locals.filter_map(|l| l.parent()).collect();
+                        tr_.extend(tr.intersection(&ancestors));
                         return def.call(sig.bind(&args), i);
                     }
                 }
@@ -634,7 +665,11 @@ impl<'s, F> Compiler<&'s str, F> {
                         }
                     }
                     if sig.matches(name, &args) {
+                        // we have a recursive call!
                         def.rec = true;
+                        // if the current position does not allow for
+                        // a tail-recursive call to this function, then
+                        // we know for sure that the function is not tail-recursive!
                         if tr.contains(&def.id) {
                             def.tailrec = false;
                         }
