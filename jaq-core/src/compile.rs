@@ -396,7 +396,8 @@ impl<'s, F> Compiler<&'s str, F> {
 
         m.body.iter().for_each(|def| self.def_pre(def));
         let defs = m.body.into_iter().rev().map(|def| self.def_post(def.body));
-        let defs = defs.collect();
+        let mut defs: Vec<_> = defs.collect();
+        defs.reverse();
         self.mod_map.push(defs)
     }
 

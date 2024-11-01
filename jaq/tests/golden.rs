@@ -92,7 +92,7 @@ test!(
 
 test!(
     mods,
-    &["-c", "-L", "tests", r#"include "a"; [a, data]"#],
+    &["-c", "-L", "tests", r#"include "a"; [a, data, d]"#],
     "0",
-    r#"["bcddd",[1,2]]"#
+    r#"["bcddd",[1,2],3]"#
 );
