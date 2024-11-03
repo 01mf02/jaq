@@ -527,7 +527,7 @@ impl<'s, F> Compiler<&'s str, F> {
     ///
     /// Once we have processed all places where the sibling can be called from outside,
     /// we can then call `def_post`.
-    fn def_pre(&mut self, d: &parse::Def<&'s str, parse::Term<&'s str>>) {
+    fn def_pre(&mut self, d: &parse::Def<&'s str>) {
         let tid = self.lut.insert_term(Term::Id);
         let sig = Sig {
             name: d.name,
@@ -546,10 +546,7 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     /// Compile a placeholder sibling with its corresponding definition.
-    fn def_post(
-        &mut self,
-        d: parse::Def<&'s str, parse::Term<&'s str>>,
-    ) -> (Sig<&'s str, Bind>, Def) {
+    fn def_post(&mut self, d: parse::Def<&'s str>) -> (Sig<&'s str, Bind>, Def) {
         let (def, tr) = self.locals.pop_sibling(d.name, d.args.len());
         let tid = def.id;
         let sig = Sig {
