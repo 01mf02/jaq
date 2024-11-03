@@ -745,7 +745,7 @@ impl<'s, F> Compiler<&'s str, F> {
             .and_then(|v| v.last_mut())
         {
             Some((Fun::Arg, vala_)) => {
-                return std::dbg!(Term::Var(vala.0 - vala_.0, vala.1 - vala_.1));
+                return Term::Var(vala.0 - vala_.0, vala.1 - vala_.1);
             }
             Some((Fun::Sibling(args_, def, tr_), vala_)) => {
                 assert!(!tr.contains(&def.id));
@@ -863,7 +863,7 @@ impl<'s, F> Compiler<&'s str, F> {
 
     fn break_(&mut self, x: &'s str) -> Term {
         if let Some(l) = self.locals.labels.bound.get(x).and_then(|v| v.last()) {
-            return std::dbg!(Term::Break(self.locals.labels.total - l));
+            return Term::Break(self.locals.labels.total - l);
         }
         self.fail(x, Undefined::Label)
     }
