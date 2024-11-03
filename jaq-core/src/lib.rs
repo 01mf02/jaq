@@ -122,13 +122,6 @@ impl<T> Bind<T, T> {
             Self::Fun(x) => Bind::Fun(f(x)),
         }
     }
-
-    pub(crate) fn name(&self) -> &T {
-        match self {
-            Self::Var(x) => x,
-            Self::Fun(x) => x,
-        }
-    }
 }
 
 impl<'a, V> Vars<'a, V> {
