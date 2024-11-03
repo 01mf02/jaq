@@ -2,7 +2,8 @@
 
 use crate::load::{self, lex, parse};
 use crate::{ops, Bind, Filter};
-use alloc::{boxed::Box, collections::BTreeSet, string::String, vec::Vec};
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 type NativeId = usize;
 type ModId = usize;
@@ -245,9 +246,7 @@ struct Sig<S, A = Bind> {
     args: Box<[A]>,
 }
 
-type Args<A> = Box<[A]>;
-
-fn bindy<T: Copy, U: Copy>(binds: &Args<Bind<T>>, args: &Args<U>) -> Args<Bind<U>> {
+fn bindy<T, U: Copy>(binds: &[Bind<T>], args: &[U]) -> Box<[Bind<U>]> {
     let args = binds.iter().zip(args);
     args.map(|(bind, id)| bind.as_ref().map(|_| *id)).collect()
 }
@@ -261,25 +260,9 @@ struct Def {
     tailrec: bool,
 }
 
-impl<S, A> Sig<S, A> {
-    fn map_args<A2>(self, f: impl FnMut(A) -> A2) -> Sig<S, A2> {
-        Sig {
-            name: self.name,
-            args: self.args.into_vec().into_iter().map(f).collect(),
-        }
-    }
-}
-
 impl<S: Eq, A> Sig<S, A> {
     fn matches(&self, name: S, args: &[TermId]) -> bool {
         name == self.name && args.len() == self.args.len()
-    }
-}
-
-impl<S, A> Sig<S, Bind<A>> {
-    fn bind(&self, args: &[TermId]) -> Box<[Bind<TermId>]> {
-        let args = self.args.iter().zip(args);
-        args.map(|(bind, id)| bind.as_ref().map(|_| *id)).collect()
     }
 }
 
@@ -310,48 +293,43 @@ impl<S: Ord> Bla<S> {
     }
 }
 
-type VaLa = (usize, usize);
-
 enum Fun<S> {
-    Arg,
+    // number of labels
+    Arg(usize),
     Parent(Box<[Bind<S>]>, Def),
     // Tr is for tail-rec forbidden funs
     Sibling(Box<[Bind<S>]>, Def, Tr),
 }
 
-use alloc::collections::BTreeMap;
-
 #[derive(Default)]
 struct Locals<S> {
     labels: Bla<S>,
     vars: Bla<S>,
-    funs: BTreeMap<(S, Arity), Vec<(Fun<S>, VaLa)>>,
+    // usize = number of vars
+    funs: BTreeMap<(S, Arity), Vec<(Fun<S>, usize)>>,
     parents: Tr,
-}
-
-impl<S> Locals<S> {
-    fn vala(&self) -> VaLa {
-        (self.vars.total, self.labels.total)
-    }
 }
 
 impl<S: Copy + Ord> Locals<S> {
     fn push_sibling(&mut self, sig: Sig<S, Bind<S>>, def: Def) {
-        let vala = self.vala();
+        let vars = self.vars.total;
         let entry = self.funs.entry((sig.name, sig.args.len())).or_default();
         let sibling = Fun::Sibling(sig.args, def, Tr::new());
-        entry.push((sibling, vala));
+        entry.push((sibling, vars));
     }
 
     fn pop_sibling(&mut self, name: S, arity: Arity) -> (Def, Tr) {
         match self.funs.get_mut(&(name, arity)).and_then(|v| v.pop()) {
-            Some((Fun::Sibling(_args, def, tr), _vala)) => (def, tr),
+            Some((Fun::Sibling(_args, def, tr), vars)) => {
+                assert_eq!(self.vars.total, vars);
+                (def, tr)
+            }
             _ => panic!(),
         }
     }
 
     fn push_parent(&mut self, sig: Sig<S, Bind<S>>, def: Def) {
-        let vala = self.vala();
+        let vars = self.vars.total;
 
         for arg in &sig.args {
             match arg {
@@ -363,38 +341,72 @@ impl<S: Copy + Ord> Locals<S> {
         self.parents.insert(def.id);
 
         let entry = self.funs.entry((sig.name, sig.args.len())).or_default();
-        entry.push((Fun::Parent(sig.args, def), vala))
+        entry.push((Fun::Parent(sig.args, def), vars));
     }
 
     fn pop_parent(&mut self, name: S, arity: Arity) -> (Box<[Bind<S>]>, Def) {
-        let (args, def) = match self.funs.get_mut(&(name, arity)).and_then(|v| v.pop()) {
-            Some((Fun::Parent(args, def), _vala)) => (args, def),
+        let (args, def, vars) = match self.funs.get_mut(&(name, arity)).and_then(|v| v.pop()) {
+            Some((Fun::Parent(args, def), vars)) => (args, def, vars),
             _ => panic!(),
         };
-        for arg in &args {
+        for arg in args.iter().rev() {
             match arg {
                 Bind::Var(v) => self.vars.pop(v),
                 Bind::Fun(f) => self.pop_arg(*f),
             }
         }
+        assert_eq!(self.vars.total, vars);
         assert!(self.parents.remove(&def.id));
         (args, def)
     }
 
     fn push_arg(&mut self, name: S) {
         self.vars.total += 1;
-        let vala = self.vala();
-        self.funs
-            .entry((name, 0))
-            .or_default()
-            .push((Fun::Arg, vala));
+        let entry = self.funs.entry((name, 0)).or_default();
+        entry.push((Fun::Arg(self.labels.total), self.vars.total));
     }
 
     fn pop_arg(&mut self, name: S) {
         match self.funs.get_mut(&(name, 0)).and_then(|v| v.pop()) {
-            Some((Fun::Arg, _vala)) => self.vars.total -= 1,
+            Some((Fun::Arg(labels), vars)) => {
+                assert_eq!(self.vars.total, vars);
+                assert_eq!(self.labels.total, labels);
+                self.vars.total -= 1;
+            }
             _ => panic!(),
         }
+    }
+
+    fn call(&mut self, name: S, args: &[TermId], tr: &Tr) -> Option<Term> {
+        Some(match self.funs.get_mut(&(name, args.len()))?.last_mut()? {
+            (Fun::Arg(labels), vars) => {
+                Term::Var(self.vars.total - *vars, self.labels.total - *labels)
+            }
+            (Fun::Sibling(args_, def, tr_), vars) => {
+                assert!(!tr.contains(&def.id));
+                let ancestors = self.parents.iter().copied();
+                let ancestors = ancestors.filter(|id| *id < def.id).collect();
+                // we are at a position that may not call `tr` tail-recursively and
+                // we call a sibling that may not call `tr_` tail-recursively,
+                // so we update the sibling with additional `tr`
+                // however, `tr` may contain IDs that are not ancestors of this sibling,
+                // so we take the intersection of `tr` and the ancestors
+                tr_.extend(tr.intersection(&ancestors));
+                def.call(bindy(args_, &args), self.vars.total - *vars)
+            }
+            (Fun::Parent(args_, def), vars) => {
+                // we have a recursive call!
+                def.rec = true;
+                // if the current position does not allow for
+                // a tail-recursive call to this function, then
+                // we know for sure that the function is not tail-recursive!
+                if tr.contains(&def.id) {
+                    def.tailrec = false;
+                }
+                let call = Some(Tailrec::Throw);
+                Term::CallDef(def.id, bindy(args_, &args), self.vars.total - *vars, call)
+            }
+        })
     }
 }
 
@@ -450,6 +462,9 @@ impl<'s, F> Compiler<&'s str, F> {
                 _ => (),
             }
         }
+
+        assert_eq!(self.locals.vars.total, 0);
+        assert_eq!(self.locals.labels.total, 0);
 
         /*
         for (i, t) in self.lut.terms.iter().enumerate() {
@@ -586,7 +601,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 if let Some((module, name)) = name.split_once("::") {
                     self.call_mod(module, name, &args)
                 } else {
-                    self.call(name, args, tr)
+                    self.call(name, &args, tr)
                 }
             }
             Def(defs, t) => {
@@ -729,109 +744,28 @@ impl<'s, F> Compiler<&'s str, F> {
         };
         for (sig, def) in self.mod_map[*mid].iter().rev() {
             if sig.matches(name, args) {
-                return def.call(sig.bind(args), vars);
+                return def.call(bindy(&sig.args, args), vars);
             }
         }
         self.fail(name, Undefined::Filter(args.len()))
     }
 
     /// Resolve call to `filter(a1, ..., an)`.
-    fn call(&mut self, name: &'s str, args: Box<[TermId]>, tr: &Tr) -> Term {
-        let vala = self.locals.vala();
-        match self
-            .locals
-            .funs
-            .get_mut(&(name, args.len()))
-            .and_then(|v| v.last_mut())
-        {
-            Some((Fun::Arg, vala_)) => {
-                return Term::Var(vala.0 - vala_.0, vala.1 - vala_.1);
-            }
-            Some((Fun::Sibling(args_, def, tr_), vala_)) => {
-                assert!(!tr.contains(&def.id));
-                let ancestors = self.locals.parents.iter().copied();
-                let ancestors = ancestors.filter(|id| *id < def.id).collect();
-                // we are at a position that may not call `tr` tail-recursively and
-                // we call a sibling that may not call `tr_` tail-recursively,
-                // so we update the sibling with additional `tr`
-                // however, `tr` may contain IDs that are not ancestors of this sibling,
-                // so we take the intersection of `tr` and the ancestors
-                tr_.extend(tr.intersection(&ancestors));
-                return def.call(bindy(args_, &args), vala.0 - vala_.0);
-            }
-            Some((Fun::Parent(args_, def), vala_)) => {
-                // we have a recursive call!
-                def.rec = true;
-                // if the current position does not allow for
-                // a tail-recursive call to this function, then
-                // we know for sure that the function is not tail-recursive!
-                if tr.contains(&def.id) {
-                    def.tailrec = false;
-                }
-                let call = Some(Tailrec::Throw);
-                let args = bindy(args_, &args);
-                return Term::CallDef(def.id, args, vala.0 - vala_.0, call);
-            }
-            None => (),
+    fn call(&mut self, name: &'s str, args: &[TermId], tr: &Tr) -> Term {
+        if let Some(t) = self.locals.call(name, args, tr) {
+            return t;
         }
-        /*
-        let mut i = 0;
-        let mut labels = 0;
-        let mut locals = self.local.iter_mut().rev();
-        while let Some(l) = locals.next() {
-            match l {
-                Local::Var(_) => i += 1,
-                Local::Label(_) => labels += 1,
-                Local::Sibling(sig, def, tr_) => {
-                    if sig.matches(name, &args) {
-                        assert!(!tr.contains(&def.id));
-                        // we are at a position that may not call `tr` tail-recursively and
-                        // we call a sibling that may not call `tr_` tail-recursively,
-                        // so we update the sibling with additional `tr`
-                        // however, `tr` may contain IDs that are not ancestors of this sibling,
-                        // so we take the intersection of `tr` and the ancestors
-                        let ancestors = locals.filter_map(|l| l.parent()).collect();
-                        tr_.extend(tr.intersection(&ancestors));
-                        return def.call(sig.bind(&args), i);
-                    }
-                }
-                Local::Parent(sig, def) => {
-                    for arg in sig.args.iter().rev() {
-                        if *arg.name() == name && args.is_empty() {
-                            return Term::Var(i, labels);
-                        } else {
-                            i += 1;
-                        }
-                    }
-                    if sig.matches(name, &args) {
-                        // we have a recursive call!
-                        def.rec = true;
-                        // if the current position does not allow for
-                        // a tail-recursive call to this function, then
-                        // we know for sure that the function is not tail-recursive!
-                        if tr.contains(&def.id) {
-                            def.tailrec = false;
-                        }
-                        let call = Some(Tailrec::Throw);
-                        let args = sig.args.iter().zip(args.to_vec());
-                        let args = args.map(|(x, id)| x.as_ref().map(|_| id));
-                        return Term::CallDef(def.id, args.collect(), i, call);
-                    }
-                }
-            }
-        }
-        */
         for mid in self.included_mods.iter().rev() {
             for (sig, def) in self.mod_map[*mid].iter().rev() {
                 if sig.matches(name, &args) {
-                    return def.call(sig.bind(&args), vala.0);
+                    return def.call(bindy(&sig.args, args), self.locals.vars.total);
                 }
             }
         }
 
         for (nid, (sig, _f)) in self.lut.funs.iter().enumerate() {
             if sig.matches(name, &args) {
-                return Term::Native(nid, sig.bind(&args));
+                return Term::Native(nid, bindy(&sig.args, &args));
             }
         }
 
