@@ -360,6 +360,8 @@ impl<S: Copy + Ord> Locals<S> {
             }
         }
 
+        self.parents.insert(def.id);
+
         let entry = self.funs.entry((sig.name, sig.args.len())).or_default();
         entry.push((Fun::Parent(sig.args, def), vala))
     }
@@ -375,7 +377,7 @@ impl<S: Copy + Ord> Locals<S> {
                 Bind::Fun(f) => self.pop_arg(*f),
             }
         }
-        self.parents.remove(&def.id);
+        assert!(self.parents.remove(&def.id));
         (args, def)
     }
 
