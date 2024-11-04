@@ -65,14 +65,6 @@ pub(crate) enum Tailrec {
     Catch,
 }
 
-fn bind<T>(s: &str, x: T) -> Bind<T> {
-    if s.starts_with('$') {
-        Bind::Var(x)
-    } else {
-        Bind::Fun(x)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum Term<T = TermId> {
     /// Identity (`.`)
@@ -246,7 +238,16 @@ struct Sig<S, A = Bind> {
     args: Box<[A]>,
 }
 
-fn bindy<T, U: Copy>(binds: &[Bind<T>], args: &[U]) -> Box<[Bind<U>]> {
+fn bind_from<T>(s: &str, x: T) -> Bind<T> {
+    if s.starts_with('$') {
+        Bind::Var(x)
+    } else {
+        Bind::Fun(x)
+    }
+}
+
+fn binds<T, U: Copy>(binds: &[Bind<T>], args: &[U]) -> Box<[Bind<U>]> {
+    assert!(binds.len() == args.len());
     let args = binds.iter().zip(args);
     args.map(|(bind, id)| bind.as_ref().map(|_| *id)).collect()
 }
@@ -310,42 +311,48 @@ struct Locals<S> {
     parents: Tr,
 }
 
+fn map_vec_push<K: Ord, V>(map: &mut BTreeMap<K, Vec<V>>, k: K, v: V) {
+    map.entry(k).or_default().push(v)
+}
+
+fn map_vec_pop<K: Ord, V>(map: &mut BTreeMap<K, Vec<V>>, k: &K) -> Option<V> {
+    map.get_mut(k).and_then(|v| v.pop())
+}
+
 impl<S: Copy + Ord> Locals<S> {
-    fn push_sibling(&mut self, sig: Sig<S, Bind<S>>, def: Def) {
-        let vars = self.vars.total;
-        let entry = self.funs.entry((sig.name, sig.args.len())).or_default();
-        let sibling = Fun::Sibling(sig.args, def, Tr::new());
-        entry.push((sibling, vars));
+    fn push_sibling(&mut self, name: S, args: Box<[Bind<S>]>, def: Def) {
+        let k = (name, args.len());
+        let v = (Fun::Sibling(args, def, Tr::new()), self.vars.total);
+        map_vec_push(&mut self.funs, k, v);
     }
 
-    fn pop_sibling(&mut self, name: S, arity: Arity) -> (Def, Tr) {
-        match self.funs.get_mut(&(name, arity)).and_then(|v| v.pop()) {
-            Some((Fun::Sibling(_args, def, tr), vars)) => {
-                assert_eq!(self.vars.total, vars);
-                (def, tr)
-            }
+    fn pop_sibling(&mut self, name: S, arity: Arity) -> (Box<[Bind<S>]>, Def, Tr) {
+        let (y, vars) = match map_vec_pop(&mut self.funs, &(name, arity)) {
+            Some((Fun::Sibling(args, def, tr), vars)) => ((args, def, tr), vars),
             _ => panic!(),
-        }
+        };
+        assert_eq!(self.vars.total, vars);
+        y
     }
 
-    fn push_parent(&mut self, sig: Sig<S, Bind<S>>, def: Def) {
+    fn push_parent(&mut self, name: S, args: Box<[Bind<S>]>, def: Def) {
+        self.parents.insert(def.id);
+
         let vars = self.vars.total;
 
-        for arg in &sig.args {
+        for arg in &args {
             match arg {
                 Bind::Var(v) => self.vars.push(*v),
                 Bind::Fun(f) => self.push_arg(*f),
             }
         }
 
-        self.parents.insert(def.id);
-
-        let entry = self.funs.entry((sig.name, sig.args.len())).or_default();
-        entry.push((Fun::Parent(sig.args, def), vars));
+        let sig = (name, args.len());
+        map_vec_push(&mut self.funs, sig, (Fun::Parent(args, def), vars));
     }
 
-    fn pop_parent(&mut self, name: S, arity: Arity) -> (Box<[Bind<S>]>, Def) {
-        let (args, def, vars) = match self.funs.get_mut(&(name, arity)).and_then(|v| v.pop()) {
+    fn pop_parent(&mut self, name: S, arity: Arity) -> Def {
+        let (args, def, vars) = match map_vec_pop(&mut self.funs, &(name, arity)) {
             Some((Fun::Parent(args, def), vars)) => (args, def, vars),
             _ => panic!(),
         };
@@ -357,24 +364,23 @@ impl<S: Copy + Ord> Locals<S> {
         }
         assert_eq!(self.vars.total, vars);
         assert!(self.parents.remove(&def.id));
-        (args, def)
+        def
     }
 
     fn push_arg(&mut self, name: S) {
         self.vars.total += 1;
-        let entry = self.funs.entry((name, 0)).or_default();
-        entry.push((Fun::Arg(self.labels.total), self.vars.total));
+        let arg = (Fun::Arg(self.labels.total), self.vars.total);
+        map_vec_push(&mut self.funs, (name, 0), arg);
     }
 
     fn pop_arg(&mut self, name: S) {
-        match self.funs.get_mut(&(name, 0)).and_then(|v| v.pop()) {
-            Some((Fun::Arg(labels), vars)) => {
-                assert_eq!(self.vars.total, vars);
-                assert_eq!(self.labels.total, labels);
-                self.vars.total -= 1;
-            }
+        let (labels, vars) = match map_vec_pop(&mut self.funs, &(name, 0)) {
+            Some((Fun::Arg(labels), vars)) => (labels, vars),
             _ => panic!(),
-        }
+        };
+        assert_eq!(self.labels.total, labels);
+        assert_eq!(self.vars.total, vars);
+        self.vars.total -= 1;
     }
 
     fn call(&mut self, name: S, args: &[TermId], tr: &Tr) -> Option<Term> {
@@ -392,7 +398,7 @@ impl<S: Copy + Ord> Locals<S> {
                 // however, `tr` may contain IDs that are not ancestors of this sibling,
                 // so we take the intersection of `tr` and the ancestors
                 tr_.extend(tr.intersection(&ancestors));
-                def.call(bindy(args_, &args), self.vars.total - *vars)
+                def.call(binds(args_, &args), self.vars.total - *vars)
             }
             (Fun::Parent(args_, def), vars) => {
                 // we have a recursive call!
@@ -404,7 +410,7 @@ impl<S: Copy + Ord> Locals<S> {
                     def.tailrec = false;
                 }
                 let call = Some(Tailrec::Throw);
-                Term::CallDef(def.id, bindy(args_, &args), self.vars.total - *vars, call)
+                Term::CallDef(def.id, binds(args_, &args), self.vars.total - *vars, call)
             }
         })
     }
@@ -458,7 +464,7 @@ impl<'s, F> Compiler<&'s str, F> {
         // therefore, we only have to adapt calls to non-tail-recursive functions here
         for t in self.lut.terms.iter_mut() {
             match t {
-                Term::CallDef(id, _, _, tr) if !self.tailrecs.contains(id) => *tr = None,
+                Term::CallDef(id, .., tr) if !self.tailrecs.contains(id) => *tr = None,
                 _ => (),
             }
         }
@@ -491,18 +497,10 @@ impl<'s, F> Compiler<&'s str, F> {
         y
     }
 
-    fn with_vars<T, I>(&mut self, vars: I, f: impl FnOnce(&mut Self) -> T) -> T
-    where
-        I: IntoIterator<Item = &'s str>,
-    {
-        let vars: Vec<_> = vars.into_iter().collect();
-        for v in &vars {
-            self.locals.vars.push(v);
-        }
+    fn with_vars<T>(&mut self, vars: &[&'s str], f: impl FnOnce(&mut Self) -> T) -> T {
+        vars.iter().for_each(|v| self.locals.vars.push(v));
         let y = f(self);
-        for v in &vars {
-            self.locals.vars.pop(v);
-        }
+        vars.iter().for_each(|v| self.locals.vars.pop(v));
         y
     }
 
@@ -529,10 +527,7 @@ impl<'s, F> Compiler<&'s str, F> {
     /// we can then call `def_post`.
     fn def_pre(&mut self, d: &parse::Def<&'s str>) {
         let tid = self.lut.insert_term(Term::Id);
-        let sig = Sig {
-            name: d.name,
-            args: d.args.iter().map(|a| bind(a, *a)).collect(),
-        };
+        let args = d.args.iter().map(|a| bind_from(a, *a)).collect();
         // by default, we assume that the function is not recursive and
         // that all recursive calls to it are tail-recursive
         let def = Def {
@@ -542,20 +537,16 @@ impl<'s, F> Compiler<&'s str, F> {
         };
         // furthermore, we initially assume that the function can call
         // any of its ancestors without breaking their tail-recursiveness
-        self.locals.push_sibling(sig, def)
+        self.locals.push_sibling(d.name, args, def)
     }
 
     /// Compile a placeholder sibling with its corresponding definition.
     fn def_post(&mut self, d: parse::Def<&'s str>) -> (Sig<&'s str, Bind>, Def) {
-        let (def, tr) = self.locals.pop_sibling(d.name, d.args.len());
+        let (args, def, tr) = self.locals.pop_sibling(d.name, d.args.len());
         let tid = def.id;
-        let sig = Sig {
-            name: d.name,
-            args: d.args.iter().map(|a| bind(a, *a)).collect(),
-        };
-        self.locals.push_parent(sig, def);
+        self.locals.push_parent(d.name, args, def);
         self.lut.terms[tid.0] = self.term(d.body, &tr);
-        let (_sig, def) = self.locals.pop_parent(d.name, d.args.len());
+        let def = self.locals.pop_parent(d.name, d.args.len());
         // only if there is at least one recursive call and all calls are tail-recursive,
         // then the definition is tail-recursive
         if def.rec && def.tailrec {
@@ -563,7 +554,7 @@ impl<'s, F> Compiler<&'s str, F> {
         }
         let sig = Sig {
             name: d.name,
-            args: d.args.iter().map(|a| bind(a, ())).collect(),
+            args: d.args.iter().map(|a| bind_from(a, ())).collect(),
         };
         (sig, def)
     }
@@ -577,7 +568,8 @@ impl<'s, F> Compiler<&'s str, F> {
             Neg(t) => Term::Neg(self.iterm(*t)),
             Pipe(l, None, r) => Term::Pipe(self.iterm(*l), None, self.iterm_tr(*r, tr)),
             Pipe(l, Some(pat), r) => {
-                let r = self.with_vars(pat.vars().copied(), |c| c.iterm_tr(*r, tr));
+                let vars: Vec<_> = pat.vars().copied().collect();
+                let r = self.with_vars(&vars, |c| c.iterm_tr(*r, tr));
                 Term::Pipe(self.iterm(*l), Some(self.pattern(pat)), r)
             }
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
@@ -637,12 +629,12 @@ impl<'s, F> Compiler<&'s str, F> {
                 let xs = self.iterm(*xs);
                 let pat = self.pattern(pat);
                 let init = self.iterm(init);
-                let update = self.with_vars(vars.iter().copied(), |c| c.iterm(update));
+                let update = self.with_vars(&vars, |c| c.iterm(update));
 
                 match (name, args.next(), args.next()) {
                     ("reduce", None, None) => Term::Reduce(xs, pat, init, update),
                     ("foreach", proj, None) => {
-                        let proj = proj.map(|p| self.with_vars(vars, |c| c.iterm(p)));
+                        let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm(p)));
                         Term::Foreach(xs, pat, init, update, proj)
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),
@@ -741,7 +733,7 @@ impl<'s, F> Compiler<&'s str, F> {
         };
         for (sig, def) in self.mod_map[*mid].iter().rev() {
             if sig.matches(name, args) {
-                return def.call(bindy(&sig.args, args), vars);
+                return def.call(binds(&sig.args, args), vars);
             }
         }
         self.fail(name, Undefined::Filter(args.len()))
@@ -755,14 +747,14 @@ impl<'s, F> Compiler<&'s str, F> {
         for mid in self.included_mods.iter().rev() {
             for (sig, def) in self.mod_map[*mid].iter().rev() {
                 if sig.matches(name, &args) {
-                    return def.call(bindy(&sig.args, args), self.locals.vars.total);
+                    return def.call(binds(&sig.args, args), self.locals.vars.total);
                 }
             }
         }
 
         for (nid, (sig, _f)) in self.lut.funs.iter().enumerate() {
             if sig.matches(name, &args) {
-                return Term::Native(nid, bindy(&sig.args, &args));
+                return Term::Native(nid, binds(&sig.args, &args));
             }
         }
 
