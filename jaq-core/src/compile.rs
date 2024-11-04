@@ -279,18 +279,18 @@ impl Def {
 /// Store a map of vectors plus the sum of the lengths of all vectors.
 #[derive(Default)]
 struct MapVecLen<S> {
-    bound: BTreeMap<S, Vec<usize>>,
+    bound: MapVec<S, usize>,
     total: usize,
 }
 
 impl<S: Ord> MapVecLen<S> {
     fn push(&mut self, name: S) {
         self.total += 1;
-        self.bound.entry(name).or_default().push(self.total);
+        self.bound.push(name, self.total)
     }
 
     fn pop(&mut self, name: &S) {
-        self.bound.get_mut(name).and_then(|v| v.pop());
+        assert_eq!(self.bound.pop(name), Some(self.total));
         self.total -= 1;
     }
 }
@@ -312,25 +312,42 @@ struct Locals<S> {
     parents: Tr,
 }
 
-type MapVec<K, V> = BTreeMap<K, Vec<V>>;
+struct MapVec<K, V>(BTreeMap<K, Vec<V>>);
 
-fn map_vec_push<K: Ord, V>(map: &mut BTreeMap<K, Vec<V>>, k: K, v: V) {
-    map.entry(k).or_default().push(v)
+impl<K, V> Default for MapVec<K, V> {
+    fn default() -> Self {
+        Self(BTreeMap::new())
+    }
 }
 
-fn map_vec_pop<K: Ord, V>(map: &mut BTreeMap<K, Vec<V>>, k: &K) -> Option<V> {
-    map.get_mut(k).and_then(|v| v.pop())
+impl<K: Ord, V> MapVec<K, V> {
+    fn push(&mut self, k: K, v: V) {
+        self.0.entry(k).or_default().push(v)
+    }
+
+    fn pop(&mut self, k: &K) -> Option<V> {
+        self.0.get_mut(k).and_then(|v| v.pop())
+    }
+
+    fn get_last(&self, k: &K) -> Option<&V> {
+        self.0.get(k)?.last()
+    }
+
+    fn get_last_mut(&mut self, k: &K) -> Option<&mut V> {
+        self.0.get_mut(k)?.last_mut()
+    }
 }
 
 impl<S: Copy + Ord> Locals<S> {
     fn push_sibling(&mut self, name: S, args: Box<[Bind<S>]>, def: Def) {
-        let k = (name, args.len());
-        let v = (Fun::Sibling(args, def, Tr::new()), self.vars.total);
-        map_vec_push(&mut self.funs, k, v);
+        self.funs.push(
+            (name, args.len()),
+            (Fun::Sibling(args, def, Tr::new()), self.vars.total),
+        );
     }
 
     fn pop_sibling(&mut self, name: S, arity: Arity) -> (Box<[Bind<S>]>, Def, Tr) {
-        let (y, vars) = match map_vec_pop(&mut self.funs, &(name, arity)) {
+        let (y, vars) = match self.funs.pop(&(name, arity)) {
             Some((Fun::Sibling(args, def, tr), vars)) => ((args, def, tr), vars),
             _ => panic!(),
         };
@@ -350,12 +367,12 @@ impl<S: Copy + Ord> Locals<S> {
             }
         }
 
-        let sig = (name, args.len());
-        map_vec_push(&mut self.funs, sig, (Fun::Parent(args, def), vars));
+        self.funs
+            .push((name, args.len()), (Fun::Parent(args, def), vars));
     }
 
     fn pop_parent(&mut self, name: S, arity: Arity) -> Def {
-        let (args, def, vars) = match map_vec_pop(&mut self.funs, &(name, arity)) {
+        let (args, def, vars) = match self.funs.pop(&(name, arity)) {
             Some((Fun::Parent(args, def), vars)) => (args, def, vars),
             _ => panic!(),
         };
@@ -372,12 +389,12 @@ impl<S: Copy + Ord> Locals<S> {
 
     fn push_arg(&mut self, name: S) {
         self.vars.total += 1;
-        let arg = (Fun::Arg(self.labels.total), self.vars.total);
-        map_vec_push(&mut self.funs, (name, 0), arg);
+        self.funs
+            .push((name, 0), (Fun::Arg(self.labels.total), self.vars.total));
     }
 
     fn pop_arg(&mut self, name: S) {
-        let (labels, vars) = match map_vec_pop(&mut self.funs, &(name, 0)) {
+        let (labels, vars) = match self.funs.pop(&(name, 0)) {
             Some((Fun::Arg(labels), vars)) => (labels, vars),
             _ => panic!(),
         };
@@ -387,7 +404,7 @@ impl<S: Copy + Ord> Locals<S> {
     }
 
     fn call(&mut self, name: S, args: &[TermId], tr: &Tr) -> Option<Term> {
-        Some(match self.funs.get_mut(&(name, args.len()))?.last_mut()? {
+        Some(match self.funs.get_last_mut(&(name, args.len()))? {
             (Fun::Arg(labels), vars) => {
                 Term::Var(self.vars.total - *vars, self.labels.total - *labels)
             }
@@ -503,7 +520,7 @@ impl<'s, F> Compiler<&'s str, F> {
     fn with_vars<T>(&mut self, vars: &[&'s str], f: impl FnOnce(&mut Self) -> T) -> T {
         vars.iter().for_each(|v| self.locals.vars.push(v));
         let y = f(self);
-        vars.iter().for_each(|v| self.locals.vars.pop(v));
+        vars.iter().rev().for_each(|v| self.locals.vars.pop(v));
         y
     }
 
@@ -766,7 +783,7 @@ impl<'s, F> Compiler<&'s str, F> {
     fn var(&mut self, x: &'s str) -> Term {
         let mut i = self.locals.vars.total;
 
-        if let Some(v) = self.locals.vars.bound.get(x).and_then(|v| v.last()) {
+        if let Some(v) = self.locals.vars.bound.get_last(&x) {
             return Term::Var(i - v, 0);
         }
         for (x_, mid) in self.imported_vars.iter().rev() {
@@ -787,7 +804,7 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn break_(&mut self, x: &'s str) -> Term {
-        if let Some(l) = self.locals.labels.bound.get(x).and_then(|v| v.last()) {
+        if let Some(l) = self.locals.labels.bound.get_last(&x) {
             return Term::Break(self.locals.labels.total - l);
         }
         self.fail(x, Undefined::Label)
