@@ -67,35 +67,30 @@ impl Flags {
     }
 }
 
+type CharIndices<'a> =
+    core::iter::Chain<core::str::CharIndices<'a>, core::iter::Once<(usize, char)>>;
+
 /// Mapping between byte and character indices.
-pub struct ByteChar<'a> {
-    prev_byte: usize,
-    prev_char: usize,
-    rest: core::str::CharIndices<'a>,
-}
+pub struct ByteChar<'a>(core::iter::Peekable<core::iter::Enumerate<CharIndices<'a>>>);
 
 impl<'a> ByteChar<'a> {
     pub fn new(s: &'a str) -> Self {
-        let mut ci = s.char_indices();
-        // skip the first one, because it is already taken into account
-        ci.next();
-        Self {
-            prev_byte: 0,
-            prev_char: 0,
-            rest: ci,
-        }
+        let last = core::iter::once((s.len(), '\0'));
+        Self(s.char_indices().chain(last).enumerate().peekable())
     }
 
     /// Convert byte offset to UTF-8 character offset.
     ///
     /// This needs to be called with monotonically increasing values of `byte_offset`.
-    fn char_of_byte(&mut self, byte_offset: usize) -> usize {
-        assert!(self.prev_byte <= byte_offset);
-        if self.prev_byte != byte_offset {
-            self.prev_byte = byte_offset;
-            self.prev_char += 1 + self.rest.position(|(p, _)| p == byte_offset).unwrap();
+    fn char_of_byte(&mut self, byte_offset: usize) -> Option<usize> {
+        loop {
+            let (char_i, (byte_i, _char)) = self.0.peek()?;
+            if byte_offset == *byte_i {
+                return Some(*char_i);
+            } else {
+                self.0.next();
+            }
         }
-        self.prev_char
     }
 }
 
@@ -109,7 +104,7 @@ pub struct Match<S> {
 impl<'a> Match<&'a str> {
     pub fn new(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
         Self {
-            offset: bc.char_of_byte(m.start()),
+            offset: bc.char_of_byte(m.start()).unwrap(),
             length: m.as_str().chars().count(),
             string: m.as_str(),
             name,
@@ -139,6 +134,7 @@ pub enum Part<S> {
 /// 1. output strings that do *not* match the regex, and
 /// 2. output the matches.
 pub fn regex<'a>(s: &'a str, re: &'a Regex, flags: Flags, sm: (bool, bool)) -> Vec<Part<&'a str>> {
+    // mismatches & matches
     let (mi, ma) = sm;
 
     let mut last_byte = 0;
@@ -147,7 +143,7 @@ pub fn regex<'a>(s: &'a str, re: &'a Regex, flags: Flags, sm: (bool, bool)) -> V
 
     for c in re.captures_iter(s) {
         let whole = c.get(0).unwrap();
-        if whole.start() >= s.len() || (flags.ignore_empty() && whole.as_str().is_empty()) {
+        if flags.ignore_empty() && whole.as_str().is_empty() {
             continue;
         }
         let match_names = c.iter().zip(re.capture_names());
