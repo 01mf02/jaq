@@ -446,3 +446,12 @@ yields!(
     &format!("[0, 0, 0, 0, 0] | ({} | .[$x], .[$y]) += 1", PAT_CART),
     [0, 2, 2, 2, 2]
 );
+
+// to see that `f` is not tail-recursive, we have to realise that:
+// 1. we cannot call ancestors of `g` tail-recursively (because we call `g + g`), and
+// 2. because `g` calls `f`, `f` cannot be tail-recursive
+yields!(
+    jqjq_tailrec,
+    "def f: if . then . else def g: f; 2 | g + g end; f",
+    4
+);
