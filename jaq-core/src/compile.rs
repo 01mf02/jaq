@@ -308,9 +308,11 @@ struct Locals<S> {
     labels: MapVecLen<S>,
     vars: MapVecLen<S>,
     // usize = number of vars
-    funs: BTreeMap<(S, Arity), Vec<(Fun<S>, usize)>>,
+    funs: MapVec<(S, Arity), (Fun<S>, usize)>,
     parents: Tr,
 }
+
+type MapVec<K, V> = BTreeMap<K, Vec<V>>;
 
 fn map_vec_push<K: Ord, V>(map: &mut BTreeMap<K, Vec<V>>, k: K, v: V) {
     map.entry(k).or_default().push(v)
@@ -399,7 +401,7 @@ impl<S: Copy + Ord> Locals<S> {
                 // however, `tr` may contain IDs that are not ancestors of this sibling,
                 // so we take the intersection of `tr` and the ancestors
                 tr_.extend(tr.intersection(&ancestors));
-                def.call(binds(args_, &args), self.vars.total - *vars)
+                def.call(binds(args_, args), self.vars.total - *vars)
             }
             (Fun::Parent(args_, def), vars) => {
                 // we have a recursive call!
@@ -411,7 +413,7 @@ impl<S: Copy + Ord> Locals<S> {
                     def.tailrec = false;
                 }
                 let call = Some(Tailrec::Throw);
-                Term::CallDef(def.id, binds(args_, &args), self.vars.total - *vars, call)
+                Term::CallDef(def.id, binds(args_, args), self.vars.total - *vars, call)
             }
         })
     }
@@ -746,15 +748,15 @@ impl<'s, F> Compiler<&'s str, F> {
         }
         for mid in self.included_mods.iter().rev() {
             for (sig, def) in self.mod_map[*mid].iter().rev() {
-                if sig.matches(name, &args) {
+                if sig.matches(name, args) {
                     return def.call(binds(&sig.args, args), self.locals.vars.total);
                 }
             }
         }
 
         for (nid, (sig, _f)) in self.lut.funs.iter().enumerate() {
-            if sig.matches(name, &args) {
-                return Term::Native(nid, binds(&sig.args, &args));
+            if sig.matches(name, args) {
+                return Term::Native(nid, binds(&sig.args, args));
             }
         }
 
