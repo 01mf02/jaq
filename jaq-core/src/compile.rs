@@ -276,13 +276,14 @@ impl Def {
     }
 }
 
+/// Store a map of vectors plus the sum of the lengths of all vectors.
 #[derive(Default)]
-struct Bla<S> {
+struct MapVecLen<S> {
     bound: BTreeMap<S, Vec<usize>>,
     total: usize,
 }
 
-impl<S: Ord> Bla<S> {
+impl<S: Ord> MapVecLen<S> {
     fn push(&mut self, name: S) {
         self.total += 1;
         self.bound.entry(name).or_default().push(self.total);
@@ -304,8 +305,8 @@ enum Fun<S> {
 
 #[derive(Default)]
 struct Locals<S> {
-    labels: Bla<S>,
-    vars: Bla<S>,
+    labels: MapVecLen<S>,
+    vars: MapVecLen<S>,
     // usize = number of vars
     funs: BTreeMap<(S, Arity), Vec<(Fun<S>, usize)>>,
     parents: Tr,
