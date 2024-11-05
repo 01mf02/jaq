@@ -565,7 +565,7 @@ impl<'s, F> Compiler<&'s str, F> {
         let tid = def.id;
         self.locals.push_parent(d.name, args, def);
         // at the beginning, we assume that any function can call itself tail-recursively
-        assert_eq!(tr.insert(tid), true);
+        assert!(tr.insert(tid));
         self.lut.terms[tid.0] = self.term(d.body, &tr);
         let def = self.locals.pop_parent(d.name, d.args.len());
         // only if there is at least one recursive call and all calls are tail-recursive,
