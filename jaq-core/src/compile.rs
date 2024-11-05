@@ -761,18 +761,21 @@ impl<'s, F> Compiler<&'s str, F> {
         Term::default()
     }
 
+    fn call_mod_id(&self, mid: ModId, name: &'s str, args: &[TermId]) -> Option<Term> {
+        let mut sig_defs = self.mod_map[mid].iter().rev();
+        let (sig, def) = sig_defs.find(|(sig, _)| sig.matches(name, args))?;
+        Some(def.call(binds(&sig.args, args), self.locals.vars.total))
+    }
+
     /// Resolve call to `mod::filter(a1, ..., an)`.
     fn call_mod(&mut self, module: &'s str, name: &'s str, args: &[TermId]) -> Term {
-        let vars = self.locals.vars.total;
         let mut imported_mods = self.imported_mods.iter().rev();
         let mid = match imported_mods.find(|(_mid, module_)| module == *module_) {
             Some((mid, _module)) => mid,
             None => return self.fail(module, Undefined::Mod),
         };
-        for (sig, def) in self.mod_map[*mid].iter().rev() {
-            if sig.matches(name, args) {
-                return def.call(binds(&sig.args, args), vars);
-            }
+        if let Some(call) = self.call_mod_id(*mid, name, args) {
+            return call;
         }
         self.fail(name, Undefined::Filter(args.len()))
     }
@@ -783,13 +786,10 @@ impl<'s, F> Compiler<&'s str, F> {
             return t;
         }
         for mid in self.included_mods.iter().rev() {
-            for (sig, def) in self.mod_map[*mid].iter().rev() {
-                if sig.matches(name, args) {
-                    return def.call(binds(&sig.args, args), self.locals.vars.total);
-                }
+            if let Some(call) = self.call_mod_id(*mid, name, args) {
+                return call;
             }
         }
-
         for (nid, (sig, _f)) in self.lut.funs.iter().enumerate() {
             if sig.matches(name, args) {
                 return Term::Native(nid, binds(&sig.args, args));
