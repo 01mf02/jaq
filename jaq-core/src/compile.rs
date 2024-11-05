@@ -473,6 +473,9 @@ impl<'s, F> Compiler<&'s str, F> {
             }
         }
 
+        // uncomment the following line to disable tail-call optimisation (TCO)
+        //self.tailrecs.clear();
+
         // only after the end, we know which definitions are actually tail-recursive
         // before, we assumed that every call is tail-recursive
         // (that way, we can conveniently record whether a call to a function
