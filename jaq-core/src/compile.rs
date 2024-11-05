@@ -293,6 +293,10 @@ impl<S: Ord> MapVecLen<S> {
         assert_eq!(self.bound.pop(name), Some(self.total));
         self.total -= 1;
     }
+
+    fn is_empty(&self) -> bool {
+        self.bound.is_empty() && self.total == 0
+    }
 }
 
 enum Fun<S> {
@@ -326,7 +330,12 @@ impl<K: Ord, V> MapVec<K, V> {
     }
 
     fn pop(&mut self, k: &K) -> Option<V> {
-        self.0.get_mut(k).and_then(|v| v.pop())
+        let vs = self.0.get_mut(k)?;
+        let v = vs.pop()?;
+        if vs.is_empty() {
+            self.0.remove(k);
+        }
+        Some(v)
     }
 
     fn get_last(&self, k: &K) -> Option<&V> {
@@ -335,6 +344,10 @@ impl<K: Ord, V> MapVec<K, V> {
 
     fn get_last_mut(&mut self, k: &K) -> Option<&mut V> {
         self.0.get_mut(k)?.last_mut()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -430,6 +443,13 @@ impl<S: Copy + Ord> Locals<S> {
             }
         })
     }
+
+    fn is_empty(&self) -> bool {
+        self.funs.is_empty()
+            && self.vars.is_empty()
+            && self.labels.is_empty()
+            && self.parents.is_empty()
+    }
 }
 
 // any ID in Tr is an ID of a function f, and
@@ -471,6 +491,7 @@ impl<'s, F> Compiler<&'s str, F> {
             if !self.errs.is_empty() {
                 errs.push((file, core::mem::take(&mut self.errs)));
             }
+            assert!(self.locals.is_empty());
         }
 
         // uncomment the following line to disable tail-call optimisation (TCO)
@@ -487,9 +508,6 @@ impl<'s, F> Compiler<&'s str, F> {
                 _ => (),
             }
         }
-
-        assert_eq!(self.locals.vars.total, 0);
-        assert_eq!(self.locals.labels.total, 0);
 
         /*
         for (i, t) in self.lut.terms.iter().enumerate() {
