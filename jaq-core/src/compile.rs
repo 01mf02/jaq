@@ -305,10 +305,10 @@ enum Fun<S> {
 
 #[derive(Default)]
 struct Locals<S> {
-    labels: MapVecLen<S>,
-    vars: MapVecLen<S>,
     // usize = number of vars
     funs: MapVec<(S, Arity), (Fun<S>, usize)>,
+    vars: MapVecLen<S>,
+    labels: MapVecLen<S>,
     parents: Tr,
 }
 
