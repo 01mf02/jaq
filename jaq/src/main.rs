@@ -286,6 +286,7 @@ fn parse(
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read(paths);
+    //let loader = Loader::new([]).with_std_read(paths);
     let path = path.into();
     let modules = loader
         .load(&arena, File { path, code })

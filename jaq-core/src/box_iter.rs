@@ -63,7 +63,7 @@ pub fn flat_map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
     Box::new(l.flat_map(move |ly| r(ly, x.clone())))
 }
 
-/// Combination of [`flat_map`] and [`then`].
+/// Combination of [`Iterator::flat_map`] and [`then`].
 pub fn flat_map_then<'a, T: 'a, U: 'a, E: 'a>(
     l: impl Iterator<Item = Result<T, E>> + 'a,
     r: impl Fn(T) -> Results<'a, U, E> + 'a,
