@@ -299,7 +299,7 @@ enum Fun<S> {
     // number of labels
     Arg(usize),
     Parent(Box<[Bind<S>]>, Def),
-    // Tr is for tail-rec forbidden funs
+    // Tr is for tail-rec allowed funs
     Sibling(Box<[Bind<S>]>, Def, Tr),
 }
 
@@ -340,9 +340,10 @@ impl<K: Ord, V> MapVec<K, V> {
 
 impl<S: Copy + Ord> Locals<S> {
     fn push_sibling(&mut self, name: S, args: Box<[Bind<S>]>, def: Def) {
+        let tr = self.parents.clone();
         self.funs.push(
             (name, args.len()),
-            (Fun::Sibling(args, def, Tr::new()), self.vars.total),
+            (Fun::Sibling(args, def, tr), self.vars.total),
         );
     }
 
@@ -409,15 +410,10 @@ impl<S: Copy + Ord> Locals<S> {
                 Term::Var(self.vars.total - *vars, self.labels.total - *labels)
             }
             (Fun::Sibling(args_, def, tr_), vars) => {
-                assert!(!tr.contains(&def.id));
-                let ancestors = self.parents.iter().copied();
-                let ancestors = ancestors.filter(|id| *id < def.id).collect();
-                // we are at a position that may not call `tr` tail-recursively and
-                // we call a sibling that may not call `tr_` tail-recursively,
+                // we are at a position that may only call `tr` tail-recursively and
+                // we call a sibling that may only call `tr_` tail-recursively,
                 // so we update the sibling with additional `tr`
-                // however, `tr` may contain IDs that are not ancestors of this sibling,
-                // so we take the intersection of `tr` and the ancestors
-                tr_.extend(tr.intersection(&ancestors));
+                tr_.retain(|id| tr.contains(id));
                 def.call(binds(args_, args), self.vars.total - *vars)
             }
             (Fun::Parent(args_, def), vars) => {
@@ -426,7 +422,7 @@ impl<S: Copy + Ord> Locals<S> {
                 // if the current position does not allow for
                 // a tail-recursive call to this function, then
                 // we know for sure that the function is not tail-recursive!
-                if tr.contains(&def.id) {
+                if !tr.contains(&def.id) {
                     def.tailrec = false;
                 }
                 let call = Some(Tailrec::Throw);
@@ -562,9 +558,11 @@ impl<'s, F> Compiler<&'s str, F> {
 
     /// Compile a placeholder sibling with its corresponding definition.
     fn def_post(&mut self, d: parse::Def<&'s str>) -> (Sig<&'s str, Bind>, Def) {
-        let (args, def, tr) = self.locals.pop_sibling(d.name, d.args.len());
+        let (args, def, mut tr) = self.locals.pop_sibling(d.name, d.args.len());
         let tid = def.id;
         self.locals.push_parent(d.name, args, def);
+        // at the beginning, we assume that any function can call itself tail-recursively
+        assert_eq!(tr.insert(tid), true);
         self.lut.terms[tid.0] = self.term(d.body, &tr);
         let def = self.locals.pop_parent(d.name, d.args.len());
         // only if there is at least one recursive call and all calls are tail-recursive,
@@ -712,7 +710,7 @@ impl<'s, F> Compiler<&'s str, F> {
     fn iterm(&mut self, t: parse::Term<&'s str>) -> TermId {
         // if anything in our term calls an ancestor of our term, then we know that
         // this ancestor cannot be tail-recursive!
-        self.iterm_tr(t, &self.locals.parents.clone())
+        self.iterm_tr(t, &Tr::new())
     }
 
     fn iterm_tr(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> TermId {
