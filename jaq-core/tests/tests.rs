@@ -455,3 +455,5 @@ yields!(
     "def f: if . then . else def g: f; 2 | g + g end; f",
     4
 );
+
+yields!(tailrec, "def f: if . > 0 then .-1 | f end; 100000 | f", 0);
