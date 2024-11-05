@@ -3,8 +3,7 @@ jaq playground
 
 The [jaq playground](https://gedenkt.at/jaq/)
 allows executing jq programs with the jq interpreter _jaq_.
-Unlike the [jq playground](https://jqplay.org/),
-the jaq playground processes all data on the machine of its user.
+The jaq playground processes all data on the machine of its user.
 This has a few advantages:
 
 - *Privacy*: The jaq playground sends no data to the Internet.
