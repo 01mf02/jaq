@@ -457,3 +457,26 @@ yields!(
 );
 
 yields!(tailrec, "def f: if . > 0 then .-1 | f end; 100000 | f", 0);
+
+yields!(
+    comments,
+    r#"
+[
+  1,
+  # foo \
+  2,
+  # bar \\
+  3,
+  4, # baz \\\
+  5, \
+  6,
+  # once
+  # more \
+
+  7
+  # comment \
+    comment \
+    comment
+]"#,
+    [1, 3, 4, 7]
+);

@@ -141,9 +141,21 @@ impl<'a> Lexer<&'a str> {
 
     /// Whitespace and comments.
     fn space(&mut self) {
+        // did the previous line contain a comment ending with an odd number of backslashes?
+        let mut backslash = false;
         self.i = self.i.trim_start();
-        while let Some(comment) = self.i.strip_prefix('#') {
-            self.i = comment.trim_start_matches(|c| c != '\n').trim_start();
+        while let Some(comment) = core::mem::take(&mut backslash)
+            .then_some(self.i)
+            .or_else(|| self.i.strip_prefix('#'))
+        {
+            let (before, after) = comment.split_once('\n').unwrap_or((comment, ""));
+            let before = before.strip_suffix('\r').unwrap_or(before);
+            self.i = after;
+            if before.chars().rev().take_while(|c| *c == '\\').count() % 2 == 1 {
+                backslash = true;
+            } else {
+                self.i = self.i.trim_start()
+            }
         }
     }
 
