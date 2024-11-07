@@ -374,7 +374,7 @@ impl<S: Copy + Ord> Locals<S> {
 
         let vars = self.vars.total;
 
-        for arg in &args {
+        for arg in args.iter() {
             match arg {
                 Bind::Var(v) => self.vars.push(*v),
                 Bind::Fun(f) => self.push_arg(*f),
