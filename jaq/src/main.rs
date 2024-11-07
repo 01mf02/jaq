@@ -264,8 +264,10 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         json_array(path).map_err(|e| Error::Io(Some(path.to_string()), e))
     })?;
 
-    let positional = cli.args.iter().filter(|arg| *arg != "--").cloned();
-    let positional: Vec<_> = positional.map(Val::from).collect();
+    let mut first = true;
+    let positional = cli.args.iter();
+    let positional = positional.filter(|arg| *arg != "--" || !core::mem::take(&mut first));
+    let positional: Vec<_> = positional.cloned().map(Val::from).collect();
 
     var_val.push(("ARGS".to_string(), args(&positional, &var_val)));
     let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
