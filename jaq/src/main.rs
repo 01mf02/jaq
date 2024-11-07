@@ -109,8 +109,12 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     run_tests: Option<PathBuf>,
 
-    /// Filter to execute, followed by list of input files
+    /// Consume remaining arguments as positional string values
+    #[arg(long, allow_hyphen_values = true, num_args = 0..)]
     args: Vec<String>,
+
+    /// Filter to execute, followed by list of input files
+    rest: Vec<String>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -171,15 +175,16 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let (vars, mut ctx): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
 
-    let mut args = cli.args.iter();
+    let mut rest = cli.rest.iter();
+
     let file = match &cli.from_file {
         Some(path) => Some((
             path.as_path().display().to_string(),
             std::fs::read_to_string(path)?,
         )),
-        None => args.next().cloned().map(|code| ("<inline>".into(), code)),
+        None => rest.next().cloned().map(|code| ("<inline>".into(), code)),
     };
-    let files: Vec<_> = args.collect();
+    let files: Vec<_> = rest.collect();
 
     let (vals, filter) = match file {
         None => (Vec::new(), Filter::default()),
@@ -259,19 +264,25 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         json_array(path).map_err(|e| Error::Io(Some(path.to_string()), e))
     })?;
 
-    var_val.push(("ARGS".to_string(), args_named(&var_val)));
+    let positional = cli.args.iter().filter(|arg| *arg != "--").cloned();
+    let positional: Vec<_> = positional.map(Val::from).collect();
+
+    var_val.push(("ARGS".to_string(), args(&positional, &var_val)));
     let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
     var_val.push(("ENV".to_string(), Val::obj(env.collect())));
 
     Ok(var_val)
 }
 
-fn args_named(var_val: &[(String, Val)]) -> Val {
-    let named = var_val
-        .iter()
-        .map(|(var, val)| (var.clone().into(), val.clone()));
-    let args = std::iter::once(("named".to_string().into(), Val::obj(named.collect())));
-    Val::obj(args.collect())
+fn args(positional: &[Val], named: &[(String, Val)]) -> Val {
+    let key = |k: &str| k.to_string().into();
+    let positional = positional.iter().cloned();
+    let named = named.iter().map(|(var, val)| (key(var), val.clone()));
+    let obj = [
+        (key("positional"), positional.collect()),
+        (key("named"), Val::obj(named.collect())),
+    ];
+    Val::obj(obj.into_iter().collect())
 }
 
 fn parse(
