@@ -110,6 +110,8 @@ struct Cli {
     run_tests: Option<PathBuf>,
 
     /// Consume remaining arguments as positional string values
+    ///
+    /// This ignores the first occurrence of `--` after `--args`.
     #[arg(long, allow_hyphen_values = true, num_args = 0..)]
     args: Vec<String>,
 
