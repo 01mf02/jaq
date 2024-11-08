@@ -21,6 +21,19 @@ pub fn then<'a, T, U: 'a, E: 'a>(
     x.map_or_else(|e| box_once(Err(e)), f)
 }
 
+/// Return first element if iterator returns at most one element, else `None`.
+fn first_if_one<T>(iter: &mut impl Iterator<Item = T>) -> Option<T> {
+    if iter.size_hint().1 == Some(1) {
+        let ly = iter.next()?;
+        // the Rust documentation states that
+        // "a buggy iterator may yield [..] more than the upper bound of elements",
+        // but so far, it seems that all iterators here are not buggy :)
+        debug_assert!(iter.next().is_none());
+        return Some(ly);
+    }
+    None
+}
+
 /// For every element `y` returned by `l`, return the output of `r(y, x)`.
 ///
 /// In case that `l` returns only a single element, this does not clone `x`.
@@ -29,17 +42,10 @@ pub fn map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
     x: T,
     r: impl Fn(U, T) -> V + 'a,
 ) -> BoxIter<'a, V> {
-    // this special case is to avoid cloning `x`
-    if l.size_hint().1 == Some(1) {
-        if let Some(ly) = l.next() {
-            // the Rust documentation states that
-            // "a buggy iterator may yield [..] more than the upper bound of elements",
-            // but so far, it seems that all iterators here are not buggy :)
-            assert!(l.next().is_none());
-            return box_once(r(ly, x));
-        }
+    match first_if_one(&mut l) {
+        Some(ly) => box_once(r(ly, x)),
+        None => Box::new(l.map(move |ly| r(ly, x.clone()))),
     }
-    Box::new(l.map(move |ly| r(ly, x.clone())))
 }
 
 /// For every element `y` returned by `l`, return the outputs of `r(y, x)`.
@@ -50,25 +56,21 @@ pub fn flat_map_with<'a, T: Clone + 'a, U: 'a, V: 'a>(
     x: T,
     r: impl Fn(U, T) -> BoxIter<'a, V> + 'a,
 ) -> BoxIter<'a, V> {
-    // this special case is to avoid cloning `x`
-    if l.size_hint().1 == Some(1) {
-        if let Some(ly) = l.next() {
-            // the Rust documentation states that
-            // "a buggy iterator may yield [..] more than the upper bound of elements",
-            // but so far, it seems that all iterators here are not buggy :)
-            assert!(l.next().is_none());
-            return Box::new(r(ly, x));
-        }
+    match first_if_one(&mut l) {
+        Some(ly) => Box::new(r(ly, x)),
+        None => Box::new(l.flat_map(move |ly| r(ly, x.clone()))),
     }
-    Box::new(l.flat_map(move |ly| r(ly, x.clone())))
 }
 
 /// Combination of [`Iterator::flat_map`] and [`then`].
 pub fn flat_map_then<'a, T: 'a, U: 'a, E: 'a>(
-    l: impl Iterator<Item = Result<T, E>> + 'a,
+    mut l: impl Iterator<Item = Result<T, E>> + 'a,
     r: impl Fn(T) -> Results<'a, U, E> + 'a,
 ) -> Results<'a, U, E> {
-    Box::new(l.flat_map(move |y| then(y, |y| r(y))))
+    match first_if_one(&mut l) {
+        Some(ly) => then(ly, r),
+        None => Box::new(l.flat_map(move |y| then(y, |y| r(y)))),
+    }
 }
 
 /// Combination of [`flat_map_with`] and [`then`].
