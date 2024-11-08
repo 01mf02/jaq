@@ -382,8 +382,9 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             let (f, fc) = cv.0.pop_fun();
             let n = cv.0.pop_var();
             let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            then(n.try_as_isize().map_err(Exn::from), |n| {
-                Box::new(f.run(lut, (fc, cv.1)).take(pos(n)))
+            then(n.try_as_isize().map_err(Exn::from), |n| match pos(n) {
+                0 => Box::new(core::iter::empty()),
+                n => Box::new(f.run(lut, (fc, cv.1)).take(n)),
             })
         }),
         ("range", v(3), |_, mut cv| {
