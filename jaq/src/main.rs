@@ -81,11 +81,9 @@ struct Cli {
     #[arg(long, value_name = "WHEN", default_value = "auto")]
     color: ColorWhen,
 
-    /// Read filter from a file
-    ///
-    /// In this case, all arguments are interpreted as input files.
-    #[arg(short, long, value_name = "FILE")]
-    from_file: Option<PathBuf>,
+    /// Read filter from a file given by first positional argument
+    #[arg(short, long)]
+    from_file: bool,
 
     /// Search for modules and data in given directory
     ///
@@ -115,8 +113,13 @@ struct Cli {
     #[arg(long, allow_hyphen_values = true, num_args = 0..)]
     args: Vec<String>,
 
-    /// Filter to execute, followed by list of input files
-    rest: Vec<String>,
+    /// Filter to execute
+    ///
+    /// If this argument is not given, it is assumed to be `.`, the identity filter.
+    filter: Option<String>,
+
+    /// Input file(s)
+    file: Vec<String>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -177,32 +180,27 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let (vars, mut ctx): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
 
-    let mut rest = cli.rest.iter();
-
-    let file = match &cli.from_file {
-        Some(path) => Some((
-            path.as_path().display().to_string(),
-            std::fs::read_to_string(path)?,
-        )),
-        None => rest.next().cloned().map(|code| ("<inline>".into(), code)),
-    };
-    let files: Vec<_> = rest.collect();
-
-    let (vals, filter) = match file {
+    let (vals, filter) = match &cli.filter {
         None => (Vec::new(), Filter::default()),
-        Some((path, code)) => {
+        Some(filter) => {
+            let (path, code) = if cli.from_file {
+                (filter.clone(), std::fs::read_to_string(filter)?)
+            } else {
+                ("<inline>".into(), filter.clone())
+            };
+
             parse(&path, &code, &vars, &cli.search_paths).map_err(Error::Report)?
         }
     };
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
-    let last = if files.is_empty() {
+    let last = if cli.file.is_empty() {
         let inputs = read_buffered(cli, io::stdin().lock());
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
-        for file in files {
+        for file in &cli.file {
             let path = Path::new(file);
             let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let inputs = read_slice(cli, &file);
