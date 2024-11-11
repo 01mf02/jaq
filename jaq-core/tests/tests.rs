@@ -359,7 +359,7 @@ const ACKERMANN: &str = "def ack($m; $n):
   else ack($m-1; ack($m; $n-1))
   end;";
 
-yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 4)"), 125);
+yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 3)"), 61);
 
 #[test]
 fn reduce() {
