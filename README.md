@@ -623,12 +623,6 @@ The interpretation of `reduce`/`foreach` in jaq has the following advantages ove
   in jq, `join(x)` converts all elements of the input array to strings and intersperses them with `x`, whereas
   in jaq, `join(x)` simply calculates `x0 + x + x1 + x + ... + xn`.
   When all elements of the input array and `x` are strings, jq and jaq yield the same output.
-* Modules:
-  If the `-L` command-line option is not given, the search path for modules and data files
-  in jq is `["~/.jq", "$ORIGIN/../lib/jq", "$ORIGIN/../lib"]`, whereas
-  in jaq, it is `[]`.
-  However, this can be emulated in jaq by setting an alias such as
-  `alias jaq="jaq -L ~ -L \`which jaq\`/../lib/jq -L \`which jaq\`/../lib"`.
 
 
 
