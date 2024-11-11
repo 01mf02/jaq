@@ -88,8 +88,8 @@ struct Cli {
     /// Search for modules and data in given directory
     ///
     /// If this option is given multiple times, all given directories are searched.
-    #[arg(short = 'L', value_name = "DIR")]
-    search_paths: Vec<PathBuf>,
+    #[arg(short, long, value_name = "DIR")]
+    library_path: Vec<PathBuf>,
 
     /// Set variable `$<a>` to string `<v>`
     #[arg(long, value_names = &["a", "v"])]
@@ -189,7 +189,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 ("<inline>".into(), filter.clone())
             };
 
-            parse(&path, &code, &vars, &cli.search_paths).map_err(Error::Report)?
+            parse(&path, &code, &vars, &cli.library_path).map_err(Error::Report)?
         }
     };
     ctx.extend(vals);
