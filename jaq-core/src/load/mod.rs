@@ -223,7 +223,7 @@ fn expand_prefix(path: &Path, pre: &str, f: impl FnOnce() -> Option<PathBuf>) ->
 
 #[cfg(feature = "std")]
 impl<'a> Import<'a, &'a str> {
-    fn meta_paths(&self) -> Vec<PathBuf> {
+    fn meta_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
         let paths = self.meta.as_ref().and_then(|meta| {
             let v = meta.obj_key("search")?;
             let iter = if let Term::Arr(Some(a)) = v {
@@ -235,7 +235,7 @@ impl<'a> Import<'a, &'a str> {
             };
             Some(iter.map(|s| Path::new(*s).to_path_buf()))
         });
-        paths.into_iter().flatten().collect()
+        paths.into_iter().flatten()
     }
 
     /// Try to find a file with given extension in the given search paths.
@@ -256,16 +256,17 @@ impl<'a> Import<'a, &'a str> {
         use std::env;
         let home = || env::var_os(home).map(PathBuf::from);
         let origin = || env::current_exe().ok()?.parent().map(PathBuf::from);
+        let expand = |path: &PathBuf| {
+            let home = expand_prefix(path, "~", home);
+            let orig = expand_prefix(path, "$ORIGIN", origin);
+            home.or(orig).unwrap_or_else(|| path.clone())
+        };
 
-        self.meta_paths()
-            .iter()
-            .chain(paths)
-            .map(|path| {
-                let home = expand_prefix(path, "~", home);
-                let orig = expand_prefix(path, "$ORIGIN", origin);
-                let path = home.as_ref().or(orig.as_ref()).unwrap_or(path);
-                parent.join(path).join(&rel)
-            })
+        // search paths given in the metadata are relative to the parent file, whereas
+        // search paths given on the command-line (`paths`, via `-L`) are not
+        let meta = self.meta_paths().map(|p| parent.join(expand(&p)));
+        meta.chain(paths.iter().map(expand))
+            .map(|path| path.join(&rel))
             .filter_map(|path| path.canonicalize().ok())
             .find(|path| path.is_file())
             .ok_or_else(|| "file not found".into())
