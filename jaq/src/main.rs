@@ -299,6 +299,12 @@ fn parse(
     use compile::Compiler;
     use load::{import, Arena, File, Loader};
 
+    let paths = if paths.is_empty() {
+        &["~/.jq", "$ORIGIN/../lib/jq", "$ORIGIN/../lib"].map(|x| x.into())
+    } else {
+        paths
+    };
+
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read(paths);
