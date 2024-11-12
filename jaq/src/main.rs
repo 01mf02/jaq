@@ -88,7 +88,7 @@ struct Cli {
     /// Search for modules and data in given directory
     ///
     /// If this option is given multiple times, all given directories are searched.
-    #[arg(short, long, value_name = "DIR")]
+    #[arg(short = 'L', long, value_name = "DIR")]
     library_path: Vec<PathBuf>,
 
     /// Set variable `$<a>` to string `<v>`
