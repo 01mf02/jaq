@@ -1,3 +1,8 @@
+#![no_std]
+extern crate alloc;
+
+use alloc::{borrow::ToOwned, format, string::ToString};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::{fmt_str, Val};
@@ -214,7 +219,7 @@ fn read_str<'a>(
 
 fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     if slurp {
-        Box::new(std::iter::once(input))
+        Box::new(core::iter::once(input))
     } else {
         Box::new(input.lines()) as Box<dyn Iterator<Item = _>>
     }
