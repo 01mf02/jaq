@@ -319,9 +319,9 @@ impl<S, P, R> Loader<S, P, R> {
     }
 }
 
+#[cfg(feature = "std")]
 impl<S, R> Loader<S, PathBuf, R> {
     /// Read the contents of included/imported module files by performing file I/O.
-    #[cfg(feature = "std")]
     pub fn with_std_read(
         self,
         paths: &[PathBuf],
