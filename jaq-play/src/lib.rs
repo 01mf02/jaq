@@ -1,3 +1,8 @@
+#![no_std]
+extern crate alloc;
+
+use alloc::{borrow::ToOwned, format, string::ToString};
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::{fmt_str, Val};
@@ -135,7 +140,7 @@ impl Settings {
 
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
-type FileReports = (load::File<String>, Vec<Report>);
+type FileReports = (load::File<String, ()>, Vec<Report>);
 
 enum Error {
     Report(Vec<FileReports>),
@@ -214,7 +219,7 @@ fn read_str<'a>(
 
 fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     if slurp {
-        Box::new(std::iter::once(input))
+        Box::new(core::iter::once(input))
     } else {
         Box::new(input.lines()) as Box<dyn Iterator<Item = _>>
     }
@@ -240,7 +245,7 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let (_vals, filter) = parse("", filter, &[]).map_err(Error::Report)?;
+    let (_vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);
 
@@ -259,16 +264,15 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     Ok(())
 }
 
-fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
+fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
     use jaq_core::load::{import, Arena, File, Loader};
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
-    let path = path.into();
     let modules = loader
-        .load(&arena, File { path, code })
+        .load(&arena, File { path: (), code })
         .map_err(load_errors)?;
 
     let vals = Vec::new();
@@ -281,7 +285,7 @@ fn parse(path: &str, code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), 
     Ok((vals, filter))
 }
 
-fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
+fn load_errors(errs: load::Errors<&str, ()>) -> Vec<FileReports> {
     use load::Error;
 
     let errs = errs.into_iter().map(|(file, err)| {
@@ -296,7 +300,7 @@ fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
     errs.collect()
 }
 
-fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
+fn compile_errors(errs: compile::Errors<&str, ()>) -> Vec<FileReports> {
     let errs = errs.into_iter().map(|(file, errs)| {
         let code = file.code;
         let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();

@@ -15,10 +15,7 @@
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
-//! let program = File {
-//!     path: "".into(),
-//!     code: ".[]",
-//! };
+//! let program = File { code: ".[]", path: () };
 //!
 //! use load::{Arena, File, Loader};
 //!
