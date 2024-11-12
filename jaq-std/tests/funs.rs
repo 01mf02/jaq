@@ -121,6 +121,8 @@ fn limit() {
     give(json!(null), "[limit(-1; 0, 1)]", json!([]));
 }
 
+yields!(limit_overflow, "[limit(0; def f: f | .; f)]", json!([]));
+
 yields!(
     math_0_argument_scalar_filters,
     "[-2.2, -1.1, 0, 1.1, 2.2 | sin as $s | cos as $c | $s * $s + $c * $c]",

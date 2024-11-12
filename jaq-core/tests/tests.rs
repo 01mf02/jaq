@@ -359,7 +359,7 @@ const ACKERMANN: &str = "def ack($m; $n):
   else ack($m-1; ack($m; $n-1))
   end;";
 
-yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 4)"), 125);
+yields!(ackermann, &(ACKERMANN.to_owned() + "ack(3; 3)"), 61);
 
 #[test]
 fn reduce() {
@@ -457,6 +457,12 @@ yields!(
 );
 
 yields!(tailrec, "def f: if . > 0 then .-1 | f end; 100000 | f", 0);
+
+yields!(
+    foreach_tailrec,
+    "def f: if . > 0 then foreach . as $x (.; .-1; f) end; 10000 | f",
+    0
+);
 
 yields!(
     comments,

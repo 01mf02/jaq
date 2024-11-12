@@ -2,6 +2,7 @@ use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::Val;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -81,42 +82,46 @@ struct Cli {
     #[arg(long, value_name = "WHEN", default_value = "auto")]
     color: ColorWhen,
 
-    /// Read filter from a file
-    ///
-    /// In this case, all arguments are interpreted as input files.
-    #[arg(short, long, value_name = "FILE")]
-    from_file: Option<PathBuf>,
+    /// Read filter from a file given by filter argument
+    #[arg(short, long)]
+    from_file: bool,
 
     /// Search for modules and data in given directory
     ///
     /// If this option is given multiple times, all given directories are searched.
-    #[arg(short = 'L', value_name = "DIR")]
-    search_paths: Vec<PathBuf>,
+    #[arg(short = 'L', long, value_name = "DIR")]
+    library_path: Vec<PathBuf>,
 
     /// Set variable `$<a>` to string `<v>`
     #[arg(long, value_names = &["a", "v"])]
-    arg: Vec<String>,
+    arg: Vec<OsString>,
 
     /// Set variable `$<a>` to string containing the contents of file `f`
     #[arg(long, value_names = &["a", "f"])]
-    rawfile: Vec<String>,
+    rawfile: Vec<OsString>,
 
     /// Set variable `$<a>` to array containing the JSON values in file `f`
     #[arg(long, value_names = &["a", "f"])]
-    slurpfile: Vec<String>,
+    slurpfile: Vec<OsString>,
 
     /// Run tests from a file
     #[arg(long, value_name = "FILE")]
     run_tests: Option<PathBuf>,
 
-    /// Consume remaining arguments as positional string values
+    /// Collect positional arguments into `$ARGS.positional`
     ///
-    /// This ignores the first occurrence of `--` after `--args`.
-    #[arg(long, allow_hyphen_values = true, num_args = 0..)]
-    args: Vec<String>,
+    /// When using this flag, positional arguments are not used as input files.
+    #[arg(long)]
+    args: bool,
 
-    /// Filter to execute, followed by list of input files
-    rest: Vec<String>,
+    /// Filter to execute
+    ///
+    /// If this argument is not given, it is assumed to be `.`, the identity filter.
+    filter: Option<OsString>,
+
+    /// Positional arguments, by default used as input files
+    #[arg(name = "ARG")]
+    posargs: Vec<OsString>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -177,26 +182,22 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let (vars, mut ctx): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
 
-    let mut rest = cli.rest.iter();
-
-    let file = match &cli.from_file {
-        Some(path) => Some((
-            path.as_path().display().to_string(),
-            std::fs::read_to_string(path)?,
-        )),
-        None => rest.next().cloned().map(|code| ("<inline>".into(), code)),
-    };
-    let files: Vec<_> = rest.collect();
-
-    let (vals, filter) = match file {
+    let (vals, filter) = match &cli.filter {
         None => (Vec::new(), Filter::default()),
-        Some((path, code)) => {
-            parse(&path, &code, &vars, &cli.search_paths).map_err(Error::Report)?
+        Some(filter) => {
+            let (path, code) = if cli.from_file {
+                (filter.into(), std::fs::read_to_string(filter)?)
+            } else {
+                ("<inline>".into(), filter.clone().into_string().unwrap())
+            };
+
+            parse(&path, &code, &vars, &cli.library_path).map_err(Error::Report)?
         }
     };
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
+    let files = if cli.args { &[] } else { &*cli.posargs };
     let last = if files.is_empty() {
         let inputs = read_buffered(cli, io::stdin().lock());
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
@@ -204,7 +205,8 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         let mut last = None;
         for file in files {
             let path = Path::new(file);
-            let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
+            let file =
+                load_file(path).map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
             let inputs = read_slice(cli, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
@@ -240,13 +242,13 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     }
 }
 
-fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[String], f: F) -> Result<(), Error>
+fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[OsString], f: F) -> Result<(), Error>
 where
-    F: Fn(&str) -> Result<Val, Error>,
+    F: Fn(&OsStr) -> Result<Val, Error>,
 {
     for arg_val in args.chunks(2) {
         if let [arg, val] = arg_val {
-            var_val.push((arg.clone(), f(val)?));
+            var_val.push((arg.to_str().unwrap().to_owned(), f(val)?));
         }
     }
     Ok(())
@@ -256,20 +258,19 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let mut var_val = Vec::new();
 
     bind(&mut var_val, &cli.arg, |v| {
-        Ok(Val::Str(v.to_string().into()))
+        Ok(Val::Str(v.to_str().unwrap().to_owned().into()))
     })?;
     bind(&mut var_val, &cli.rawfile, |path| {
-        let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(path.to_string()), e));
+        let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
         Ok(Val::Str(s?.into()))
     })?;
     bind(&mut var_val, &cli.slurpfile, |path| {
-        json_array(path).map_err(|e| Error::Io(Some(path.to_string()), e))
+        json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e))
     })?;
 
-    let mut first = true;
-    let positional = cli.args.iter();
-    let positional = positional.filter(|arg| *arg != "--" || !core::mem::take(&mut first));
-    let positional: Vec<_> = positional.cloned().map(Val::from).collect();
+    let positional = if cli.args { &*cli.posargs } else { &[] };
+    let positional = positional.iter().cloned().map(|s| s.into_string().unwrap());
+    let positional: Vec<_> = positional.map(Val::from).collect();
 
     var_val.push(("ARGS".to_string(), args(&positional, &var_val)));
     let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
@@ -290,7 +291,7 @@ fn args(positional: &[Val], named: &[(String, Val)]) -> Val {
 }
 
 fn parse(
-    path: &str,
+    path: &PathBuf,
     code: &str,
     vars: &[String],
     paths: &[PathBuf],
@@ -328,7 +329,7 @@ fn parse(
     Ok((vals, filter))
 }
 
-fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
+fn load_errors(errs: load::Errors<&str, PathBuf>) -> Vec<FileReports> {
     use load::Error;
 
     let errs = errs.into_iter().map(|(file, err)| {
@@ -343,7 +344,7 @@ fn load_errors(errs: load::Errors<&str>) -> Vec<FileReports> {
     errs.collect()
 }
 
-fn compile_errors(errs: compile::Errors<&str>) -> Vec<FileReports> {
+fn compile_errors(errs: compile::Errors<&str, PathBuf>) -> Vec<FileReports> {
     let errs = errs.into_iter().map(|(file, errs)| {
         let code = file.code;
         let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
@@ -430,7 +431,7 @@ fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     }
 }
 
-type FileReports = (load::File<String>, Vec<Report>);
+type FileReports = (load::File<String, PathBuf>, Vec<Report>);
 
 #[derive(Debug)]
 enum Error {
@@ -465,7 +466,7 @@ impl Termination for Error {
                     for e in reports {
                         eprintln!("Error: {}", e.message);
                         let block = e.into_block(&idx);
-                        eprintln!("{}[{}]", block.prologue(), file.path);
+                        eprintln!("{}[{}]", block.prologue(), file.path.display());
                         eprintln!("{}{}", block, block.epilogue())
                     }
                 }
@@ -746,7 +747,7 @@ impl Report {
 }
 
 fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
-    let (ctx, filter) = parse("", &test.filter, &[], &[]).map_err(Error::Report)?;
+    let (ctx, filter) = parse(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
 
     let inputs = RcIter::new(Box::new(core::iter::empty()));
     let ctx = Ctx::new(ctx, &inputs);

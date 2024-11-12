@@ -162,7 +162,7 @@ pub(crate) enum Pattern<F> {
 pub type Error<S> = (S, Undefined);
 
 /// Compilation errors.
-pub type Errors<S> = load::Errors<S, Vec<Error<S>>>;
+pub type Errors<S, P> = load::Errors<S, P, Vec<Error<S>>>;
 
 /// Type of an undefined symbol.
 #[derive(Debug)]
@@ -478,7 +478,10 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     /// Compile the given modules.
-    pub fn compile(mut self, mods: load::Modules<&'s str>) -> Result<Filter<F>, Errors<&'s str>> {
+    pub fn compile<P>(
+        mut self,
+        mods: load::Modules<&'s str, P>,
+    ) -> Result<Filter<F>, Errors<&'s str, P>> {
         self.imported_vars = mods
             .iter()
             .enumerate()
@@ -672,7 +675,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 match (name, args.next(), args.next()) {
                     ("reduce", None, None) => Term::Reduce(xs, pat, init, update),
                     ("foreach", proj, None) => {
-                        let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm(p)));
+                        let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm_tr(p, tr)));
                         Term::Foreach(xs, pat, init, update, proj)
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),

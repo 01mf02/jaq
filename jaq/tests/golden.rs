@@ -45,7 +45,7 @@ test!(
 
 test!(
     args,
-    &["-c", "$ARGS", "--arg", "x", "y", "--args", "a", "--", "--test", "--"],
+    &["-c", "--args", "--arg", "x", "y", "$ARGS", "a", "--", "--test", "--"],
     "0",
     r#"{"positional":["a","--test","--"],"named":{"x":"y"}}"#
 );
