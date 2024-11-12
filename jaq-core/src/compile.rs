@@ -672,7 +672,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 match (name, args.next(), args.next()) {
                     ("reduce", None, None) => Term::Reduce(xs, pat, init, update),
                     ("foreach", proj, None) => {
-                        let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm(p)));
+                        let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm_tr(p, tr)));
                         Term::Foreach(xs, pat, init, update, proj)
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),

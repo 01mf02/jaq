@@ -459,6 +459,12 @@ yields!(
 yields!(tailrec, "def f: if . > 0 then .-1 | f end; 100000 | f", 0);
 
 yields!(
+    foreach_tailrec,
+    "def f: if . > 0 then foreach . as $x (.; .-1; f) end; 10000 | f",
+    0
+);
+
+yields!(
     comments,
     r#"
 [
