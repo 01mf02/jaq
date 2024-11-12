@@ -2,7 +2,7 @@ use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::Val;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -94,15 +94,15 @@ struct Cli {
 
     /// Set variable `$<a>` to string `<v>`
     #[arg(long, value_names = &["a", "v"])]
-    arg: Vec<String>,
+    arg: Vec<OsString>,
 
     /// Set variable `$<a>` to string containing the contents of file `f`
     #[arg(long, value_names = &["a", "f"])]
-    rawfile: Vec<String>,
+    rawfile: Vec<OsString>,
 
     /// Set variable `$<a>` to array containing the JSON values in file `f`
     #[arg(long, value_names = &["a", "f"])]
-    slurpfile: Vec<String>,
+    slurpfile: Vec<OsString>,
 
     /// Run tests from a file
     #[arg(long, value_name = "FILE")]
@@ -242,13 +242,13 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     }
 }
 
-fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[String], f: F) -> Result<(), Error>
+fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[OsString], f: F) -> Result<(), Error>
 where
-    F: Fn(&str) -> Result<Val, Error>,
+    F: Fn(&OsStr) -> Result<Val, Error>,
 {
     for arg_val in args.chunks(2) {
         if let [arg, val] = arg_val {
-            var_val.push((arg.clone(), f(val)?));
+            var_val.push((arg.to_str().unwrap().to_owned(), f(val)?));
         }
     }
     Ok(())
@@ -258,14 +258,14 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let mut var_val = Vec::new();
 
     bind(&mut var_val, &cli.arg, |v| {
-        Ok(Val::Str(v.to_string().into()))
+        Ok(Val::Str(v.to_str().unwrap().to_owned().into()))
     })?;
     bind(&mut var_val, &cli.rawfile, |path| {
-        let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(path.to_string()), e));
+        let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
         Ok(Val::Str(s?.into()))
     })?;
     bind(&mut var_val, &cli.slurpfile, |path| {
-        json_array(path).map_err(|e| Error::Io(Some(path.to_string()), e))
+        json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e))
     })?;
 
     let positional = if cli.args { &*cli.posargs } else { &[] };
