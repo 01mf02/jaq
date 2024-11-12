@@ -271,9 +271,8 @@ fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileRepo
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
-    let path = ();
     let modules = loader
-        .load(&arena, File { path, code })
+        .load(&arena, File { path: (), code })
         .map_err(load_errors)?;
 
     let vals = Vec::new();
