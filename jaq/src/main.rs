@@ -81,7 +81,7 @@ struct Cli {
     #[arg(long, value_name = "WHEN", default_value = "auto")]
     color: ColorWhen,
 
-    /// Read filter from a file given by first positional argument
+    /// Read filter from a file given by filter argument
     #[arg(short, long)]
     from_file: bool,
 
@@ -107,19 +107,20 @@ struct Cli {
     #[arg(long, value_name = "FILE")]
     run_tests: Option<PathBuf>,
 
-    /// Consume remaining arguments as positional string values
+    /// Collect positional arguments into `$ARGS.positional`
     ///
-    /// This ignores the first occurrence of `--` after `--args`.
-    #[arg(long, allow_hyphen_values = true, num_args = 0..)]
-    args: Vec<String>,
+    /// When using this flag, positional arguments are not used as input files.
+    #[arg(long)]
+    args: bool,
 
     /// Filter to execute
     ///
     /// If this argument is not given, it is assumed to be `.`, the identity filter.
     filter: Option<String>,
 
-    /// Input file(s)
-    file: Vec<String>,
+    /// Positional arguments, by default used as input files
+    #[arg(name = "ARG")]
+    posargs: Vec<String>,
 }
 
 #[derive(Clone, ValueEnum)]
@@ -195,12 +196,13 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
-    let last = if cli.file.is_empty() {
+    let files = if cli.args { &[] } else { &*cli.posargs };
+    let last = if files.is_empty() {
         let inputs = read_buffered(cli, io::stdin().lock());
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
-        for file in &cli.file {
+        for file in files {
             let path = Path::new(file);
             let file = load_file(path).map_err(|e| Error::Io(Some(file.to_string()), e))?;
             let inputs = read_slice(cli, &file);
@@ -264,10 +266,8 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         json_array(path).map_err(|e| Error::Io(Some(path.to_string()), e))
     })?;
 
-    let mut first = true;
-    let positional = cli.args.iter();
-    let positional = positional.filter(|arg| *arg != "--" || !core::mem::take(&mut first));
-    let positional: Vec<_> = positional.cloned().map(Val::from).collect();
+    let positional = if cli.args { &*cli.posargs } else { &[] };
+    let positional: Vec<_> = positional.iter().cloned().map(Val::from).collect();
 
     var_val.push(("ARGS".to_string(), args(&positional, &var_val)));
     let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
