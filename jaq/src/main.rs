@@ -188,7 +188,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
             let (path, code) = if cli.from_file {
                 (filter.into(), std::fs::read_to_string(filter)?)
             } else {
-                ("<inline>".into(), filter.clone().into_string().unwrap())
+                ("<inline>".into(), filter.clone().into_string()?)
             };
 
             parse(&path, &code, &vars, &cli.library_path).map_err(Error::Report)?
@@ -248,7 +248,7 @@ where
 {
     for arg_val in args.chunks(2) {
         if let [arg, val] = arg_val {
-            var_val.push((arg.to_str().unwrap().to_owned(), f(val)?));
+            var_val.push((arg.to_os_string().into_string()?, f(val)?));
         }
     }
     Ok(())
@@ -258,7 +258,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let mut var_val = Vec::new();
 
     bind(&mut var_val, &cli.arg, |v| {
-        Ok(Val::Str(v.to_str().unwrap().to_owned().into()))
+        Ok(Val::Str(v.to_os_string().into_string()?.into()))
     })?;
     bind(&mut var_val, &cli.rawfile, |path| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
@@ -269,8 +269,9 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     })?;
 
     let positional = if cli.args { &*cli.posargs } else { &[] };
-    let positional = positional.iter().cloned().map(|s| s.into_string().unwrap());
-    let positional: Vec<_> = positional.map(Val::from).collect();
+    let positional = positional.iter().cloned();
+    let positional = positional.map(|s| Ok(Val::from(s.into_string()?)));
+    let positional = positional.collect::<Result<Vec<_>, Error>>()?;
 
     var_val.push(("ARGS".to_string(), args(&positional, &var_val)));
     let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
@@ -437,6 +438,7 @@ type FileReports = (load::File<String, PathBuf>, Vec<Report>);
 enum Error {
     Io(Option<String>, io::Error),
     Report(Vec<FileReports>),
+    Utf8(OsString),
     Parse(String),
     Jaq(jaq_core::Error<Val>),
     Persist(tempfile::PersistError),
@@ -473,6 +475,10 @@ impl Termination for Error {
                 3
             }
             Self::NoOutput => 4,
+            Self::Utf8(s) => {
+                eprintln!("Error: failed to interpret as UTF-8: {s:?}");
+                5
+            }
             Self::Parse(e) => {
                 eprintln!("Error: failed to parse: {e}");
                 5
@@ -489,6 +495,13 @@ impl Termination for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(None, e)
+    }
+}
+
+/// Conversion of errors from [`OsString::into_string`].
+impl From<OsString> for Error {
+    fn from(e: OsString) -> Self {
+        Self::Utf8(e)
     }
 }
 
