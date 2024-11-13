@@ -150,8 +150,7 @@ I then processed the results with a "one-liner" (stretching the term and the lin
 (Of course, you can also use jaq here instead of jq.)
 Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
-[^binaries]: The binaries for jq-1.7.1 and gojq-0.12.16 were retrieved from their GitHub release pages,
-  the binary for jq-1.6 was installed from the standard Ubuntu repository.
+[^binaries]: The binaries for jq-1.7.1 and gojq-0.12.16 were retrieved from their GitHub release pages.
 
 Table: Evaluation results in milliseconds ("N/A" if error or more than 10 seconds).
 
