@@ -1,0 +1,1 @@
+def upto($max): if . < $max then ., (.+1 | upto($max)) end; . as $max | 0 | [upto($max)]

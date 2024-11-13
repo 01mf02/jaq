@@ -1,3 +1,4 @@
+{"name": "upto"         ,"n":    8192}
 {"name": "reduce-update","n":   16384}
 {"name": "reverse"     , "n": 1048576}
 {"name": "sort"        , "n": 1048576}
@@ -10,6 +11,9 @@
 {"name": "ex-implode"  , "n": 1048576}
 {"name": "reduce"      , "n": 1048576}
 {"name": "try-catch"   , "n": 1048576}
+{"name": "repeat"      , "n": 1048576}
+{"name": "from"        , "n": 1048576}
+{"name": "pyramid"     , "n":  524288}
 {"name": "tree-contains","n":      23}
 {"name": "tree-flatten", "n":      17}
 {"name": "tree-update" , "n":      17}
