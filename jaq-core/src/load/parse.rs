@@ -73,8 +73,6 @@ pub type Result<'s, 't, T> = core::result::Result<T, TError<'t, &'s str>>;
 pub struct Parser<'s, 't> {
     i: core::slice::Iter<'t, Token<&'s str>>,
     e: Vec<TError<'t, &'s str>>,
-    /// names of fold-like filters, e.g. "reduce" and "foreach"
-    fold: &'s [&'s str],
 }
 
 /// Function from value to stream of values, such as `.[] | add / length`.
@@ -223,7 +221,6 @@ impl<'s, 't> Parser<'s, 't> {
         Self {
             i: i.iter(),
             e: Vec::new(),
-            fold: &["reduce", "foreach"],
         }
     }
 
@@ -524,7 +521,7 @@ impl<'s, 't> Parser<'s, 't> {
                 Term::Label(x, Box::new(tm))
             }
             Some(Token("break", _)) => Term::Break(self.var()?),
-            Some(Token(fold, Tok::Word)) if self.fold.contains(fold) => {
+            Some(Token(fold @ ("reduce" | "foreach"), _)) => {
                 let xs = self.atom()?;
                 self.just("as")?;
                 let x = self.pattern()?;
