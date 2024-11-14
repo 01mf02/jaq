@@ -375,7 +375,7 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
         }),
         ("first", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
-            Box::new(f.run(lut, (fc, cv.1)).take(1))
+            Box::new(f.run(lut, (fc, cv.1)).next().into_iter())
         }),
         ("last", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
