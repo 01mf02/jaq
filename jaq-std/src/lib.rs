@@ -294,7 +294,7 @@ fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<
 }
 
 /// Return a boxed iterator that lazily evaluates the given function.
-pub fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
+fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
     Box::new(core::iter::once_with(f))
 }
 
@@ -303,7 +303,6 @@ fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Resul
 }
 
 /// Convenience macro for `once_with` which creates a closure and maps errors to exceptions.
-#[macro_export]
 macro_rules! ow {
     ( $f:expr ) => {
         once_with(move || $f.map_err(|e: jaq_core::Error<_>| Exn::from(e)))
