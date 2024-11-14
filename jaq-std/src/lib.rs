@@ -26,7 +26,7 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
-use jaq_core::box_iter::then;
+use jaq_core::box_iter::{then, BoxIter};
 use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
@@ -298,8 +298,8 @@ pub fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T
     Box::new(core::iter::once_with(f))
 }
 
-fn once_or_empty<'a, T>(f: impl FnOnce() -> Option<T> + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
-    Box::new(core::iter::once_with(f).flatten())
+fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Result<T, E>> {
+    Box::new(r.transpose().into_iter())
 }
 
 /// Convenience macro for `once_with` which creates a closure and maps errors to exceptions.
@@ -367,12 +367,12 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
         ("min_by_or_empty", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y < my);
-            once_or_empty(|| cv.1.into_vec().map_err(Exn::from).and_then(f).transpose())
+            once_or_empty(cv.1.into_vec().map_err(Exn::from).and_then(f))
         }),
         ("max_by_or_empty", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y >= my);
-            once_or_empty(|| cv.1.into_vec().map_err(Exn::from).and_then(f).transpose())
+            once_or_empty(cv.1.into_vec().map_err(Exn::from).and_then(f))
         }),
         ("first", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
@@ -380,8 +380,7 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
         }),
         ("last", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
-            let fold = |_acc, x: Result<_, _>| x.map(Some);
-            once_or_empty(move || f.run(lut, (fc, cv.1)).try_fold(None, fold).transpose())
+            once_or_empty(f.run(lut, (fc, cv.1)).try_fold(None, |_acc, x| x.map(Some)))
         }),
         ("limit", vf, |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
