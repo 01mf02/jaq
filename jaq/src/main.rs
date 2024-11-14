@@ -726,8 +726,14 @@ fn report_parse(code: &str, (expected, found): load::parse::Error<&str>) -> Repo
 }
 
 fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
+    use compile::Undefined::Filter;
     let found_range = load::span(code, found);
-    let message = format!("undefined {}", undefined.as_str());
+    let wnoa = |exp, got| format!("wrong number of arguments (expected {exp}, found {got})");
+    let message = match (found, undefined) {
+        ("reduce", Filter(arity)) => wnoa("2", arity),
+        ("foreach", Filter(arity)) => wnoa("2 or 3", arity),
+        (_, undefined) => format!("undefined {}", undefined.as_str()),
+    };
     let found = [(message.clone(), None)].into();
 
     Report {
