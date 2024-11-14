@@ -378,6 +378,11 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             let (f, fc) = cv.0.pop_fun();
             Box::new(f.run(lut, (fc, cv.1)).take(1))
         }),
+        ("last", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let fold = |_acc, x: Result<_, _>| x.map(Some);
+            once_or_empty(move || f.run(lut, (fc, cv.1)).try_fold(None, fold).transpose())
+        }),
         ("limit", vf, |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let n = cv.0.pop_var();
