@@ -3,23 +3,23 @@ macro_rules! math {
     ($f: ident, $domain: expr, $codomain: expr) => {
         #[allow(clippy::redundant_closure_call)]
         (stringify!($f), v(0), |_, cv| {
-            once_with(move || Ok($codomain(libm::$f($domain(&cv.1)?))))
+            bome((|| Ok($codomain(libm::$f($domain(&cv.1)?))))())
         })
     };
     // Build a 2-ary filter that ignores '.' from a 2-ary math function.
     ($f: ident, $domain1: expr, $domain2: expr, $codomain: expr) => {
         (stringify!($f), v(2), |_, mut cv| {
-            once_with(move || {
+            bome((|| {
                 let y = cv.0.pop_var();
                 let x = cv.0.pop_var();
                 Ok($codomain(libm::$f($domain1(&x)?, $domain2(&y)?)))
-            })
+            })())
         })
     };
     // Build a 3-ary filter that ignores '.' from a 3-ary math function.
     ($f: ident, $domain1: expr, $domain2: expr, $domain3: expr, $codomain: expr) => {
         (stringify!($f), v(3), |_, mut cv| {
-            once_with(move || {
+            bome((|| {
                 let z = cv.0.pop_var();
                 let y = cv.0.pop_var();
                 let x = cv.0.pop_var();
@@ -28,7 +28,7 @@ macro_rules! math {
                     $domain2(&y)?,
                     $domain3(&z)?,
                 )))
-            })
+            })())
         })
     };
 }

@@ -26,7 +26,7 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
-use jaq_core::box_iter::{then, BoxIter};
+use jaq_core::box_iter::{box_once, then, BoxIter};
 use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
@@ -293,26 +293,19 @@ fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<
     })
 }
 
-/// Return a boxed iterator that lazily evaluates the given function.
-fn once_with<'a, T>(f: impl FnOnce() -> T + 'a) -> Box<dyn Iterator<Item = T> + 'a> {
-    Box::new(core::iter::once_with(f))
-}
-
 fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Result<T, E>> {
     Box::new(r.transpose().into_iter())
 }
 
-/// Convenience macro for `once_with` which creates a closure and maps errors to exceptions.
-macro_rules! ow {
-    ( $f:expr ) => {
-        once_with(move || $f.map_err(|e: jaq_core::Error<_>| Exn::from(e)))
-    };
+/// Box Once and Map Errors to exceptions.
+fn bome<'a, V: 'a>(r: ValR<V>) -> ValXs<'a, V> {
+    box_once(r.map_err(Exn::from))
 }
 
 /// Create a filter that takes a single variable argument and whose output is given by
 /// the function `f` that takes the input value and the value of the variable.
 pub fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(V, V) -> ValR<V> + 'a) -> ValXs<'a, V> {
-    ow!(f(cv.1, cv.0.pop_var()))
+    bome(f(cv.1, cv.0.pop_var()))
 }
 
 /// Creates `n` variable arguments.
@@ -331,37 +324,37 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                     .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
             )
         }),
-        ("floor", v(0), |_, cv| ow!(cv.1.round(f64::floor))),
-        ("round", v(0), |_, cv| ow!(cv.1.round(f64::round))),
-        ("ceil", v(0), |_, cv| ow!(cv.1.round(f64::ceil))),
+        ("floor", v(0), |_, cv| bome(cv.1.round(f64::floor))),
+        ("round", v(0), |_, cv| bome(cv.1.round(f64::round))),
+        ("ceil", v(0), |_, cv| bome(cv.1.round(f64::ceil))),
         ("utf8bytelength", v(0), |_, cv| {
-            ow!(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
+            bome(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
         }),
         ("explode", v(0), |_, cv| {
-            ow!(cv.1.try_as_str().and_then(|s| explode(s).collect()))
+            bome(cv.1.try_as_str().and_then(|s| explode(s).collect()))
         }),
         ("implode", v(0), |_, cv| {
-            ow!(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
+            bome(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
         }),
         ("ascii_downcase", v(0), |_, cv| {
-            ow!(cv.1.mutate_str(str::make_ascii_lowercase))
+            bome(cv.1.mutate_str(str::make_ascii_lowercase))
         }),
         ("ascii_upcase", v(0), |_, cv| {
-            ow!(cv.1.mutate_str(str::make_ascii_uppercase))
+            bome(cv.1.mutate_str(str::make_ascii_uppercase))
         }),
         ("reverse", v(0), |_, cv| {
-            ow!(cv.1.mutate_arr(|a| a.reverse()))
+            bome(cv.1.mutate_arr(|a| a.reverse()))
         }),
-        ("sort", v(0), |_, cv| ow!(cv.1.mutate_arr(|a| a.sort()))),
+        ("sort", v(0), |_, cv| bome(cv.1.mutate_arr(|a| a.sort()))),
         ("sort_by", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |v| f.run(lut, (fc.clone(), v));
-            once_with(|| cv.1.try_mutate_arr(|a| sort_by(a, f)))
+            box_once(cv.1.try_mutate_arr(|a| sort_by(a, f)))
         }),
         ("group_by", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let f = move |v| f.run(lut, (fc.clone(), v));
-            once_with(|| group_by(cv.1.into_vec()?, f))
+            box_once((|| group_by(cv.1.into_vec()?, f))())
         }),
         ("min_by_or_empty", f(), |lut, mut cv| {
             let (f, fc) = cv.0.pop_fun();
@@ -420,14 +413,14 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("trim", v(0), |_, cv| ow!(cv.1.trim_with(str::trim))),
-        ("ltrim", v(0), |_, cv| ow!(cv.1.trim_with(str::trim_start))),
-        ("rtrim", v(0), |_, cv| ow!(cv.1.trim_with(str::trim_end))),
+        ("trim", v(0), |_, cv| bome(cv.1.trim_with(str::trim))),
+        ("ltrim", v(0), |_, cv| bome(cv.1.trim_with(str::trim_start))),
+        ("rtrim", v(0), |_, cv| bome(cv.1.trim_with(str::trim_end))),
         ("escape_csv", v(0), |_, cv| {
-            ow!(Ok(cv.1.try_as_str()?.replace('"', "\"\"").into()))
+            bome(cv.1.try_as_str().map(|s| s.replace('"', "\"\"").into()))
         }),
         ("escape_sh", v(0), |_, cv| {
-            ow!(Ok(cv.1.try_as_str()?.replace('\'', r"'\''").into()))
+            bome(cv.1.try_as_str().map(|s| s.replace('\'', r"'\''").into()))
         }),
     ])
 }
@@ -446,20 +439,19 @@ fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     use std::env::vars;
     Box::new([
         ("env", v(0), |_, _| {
-            ow!(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
+            bome(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
         }),
-        ("now", v(0), |_, _| ow!(now().map(V::from))),
-        ("halt", v(0), |_, _| once_with(|| std::process::exit(0))),
+        ("now", v(0), |_, _| bome(now().map(V::from))),
+        ("halt", v(0), |_, _| std::process::exit(0)),
         ("halt_error", v(1), |_, mut cv| {
-            once_with(move || {
-                let exit_code = cv.0.pop_var().try_as_isize()?;
+            bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
                 if let Some(s) = cv.1.as_str() {
                     std::print!("{}", s);
                 } else {
                     std::println!("{}", cv.1);
                 }
                 std::process::exit(exit_code as i32)
-            })
+            }))
         }),
     ])
 }
@@ -476,28 +468,28 @@ fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         ("escape_html", v(0), |_, cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-            ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
+            bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
         }),
         ("escape_tsv", v(0), |_, cv| {
             let pats = ["\n", "\r", "\t", "\\"];
             let reps = ["\\n", "\\r", "\\t", "\\\\"];
-            ow!(Ok(replace(cv.1.try_as_str()?, &pats, &reps).into()))
+            bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
         }),
         ("encode_uri", v(0), |_, cv| {
             use urlencoding::encode;
-            ow!(Ok(encode(cv.1.try_as_str()?).into_owned().into()))
+            bome(cv.1.try_as_str().map(|s| encode(s).into_owned().into()))
         }),
         ("encode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            ow!(Ok(STANDARD.encode(cv.1.try_as_str()?).into()))
+            bome(cv.1.try_as_str().map(|s| STANDARD.encode(s).into()))
         }),
         ("decode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             use core::str::from_utf8;
-            ow!({
-                let d = STANDARD.decode(cv.1.try_as_str()?).map_err(Error::str)?;
+            bome(cv.1.try_as_str().and_then(|s| {
+                let d = STANDARD.decode(s).map_err(Error::str)?;
                 Ok(from_utf8(&d).map_err(Error::str)?.to_owned().into())
-            })
+            }))
         }),
     ])
 }
@@ -590,9 +582,9 @@ fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {
 fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     let vv = || [Bind::Var(()), Bind::Var(())].into();
     Box::new([
-        ("matches", vv(), |_, cv| ow!(re(false, true, cv))),
-        ("split_matches", vv(), |_, cv| ow!(re(true, true, cv))),
-        ("split_", vv(), |_, cv| ow!(re(true, false, cv))),
+        ("matches", vv(), |_, cv| bome(re(false, true, cv))),
+        ("split_matches", vv(), |_, cv| bome(re(true, true, cv))),
+        ("split_", vv(), |_, cv| bome(re(true, false, cv))),
     ])
 }
 
@@ -600,17 +592,17 @@ fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     Box::new([
         ("fromdateiso8601", v(0), |_, cv| {
-            ow!(time::from_iso8601(cv.1.try_as_str()?))
+            bome(cv.1.try_as_str().and_then(time::from_iso8601))
         }),
         ("todateiso8601", v(0), |_, cv| {
-            ow!(Ok(time::to_iso8601(&cv.1)?.into()))
+            bome(time::to_iso8601(&cv.1).map(V::from))
         }),
     ])
 }
 
 fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
     fn err<V>(cv: Cv<V>) -> ValXs<V> {
-        ow!(Err(Error::new(cv.1)))
+        bome(Err(Error::new(cv.1)))
     }
     ("error", v(0), (|_, cv| err(cv), |_, cv, _| err(cv)))
 }
@@ -620,10 +612,8 @@ macro_rules! id_with {
     ( $eff:expr ) => {
         (
             |_, cv| {
-                ow!({
-                    $eff(&cv.1);
-                    Ok(cv.1)
-                })
+                $eff(&cv.1);
+                box_once(Ok(cv.1))
             },
             |_, cv, f| {
                 $eff(&cv.1);
