@@ -9,8 +9,9 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
+use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, Exn, Native, RunPtr};
-use jaq_std::{once_with, ow, run, unary, v, Filter};
+use jaq_std::{run, unary, v, Filter};
 
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
@@ -356,12 +357,18 @@ pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
     base_run.chain([run(parse_fun())])
 }
 
+fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX<'a>> {
+    box_once(r.map_err(Exn::from))
+}
+
 fn base_funs() -> Box<[Filter<RunPtr<Val>>]> {
     Box::new([
-        ("tojson", v(0), |_, cv| ow!(Ok(cv.1.to_string().into()))),
-        ("length", v(0), |_, cv| ow!(cv.1.length())),
+        ("tojson", v(0), |_, cv| {
+            box_once(Ok(cv.1.to_string().into()))
+        }),
+        ("length", v(0), |_, cv| box_once_err(cv.1.length())),
         ("keys_unsorted", v(0), |_, cv| {
-            ow!(cv.1.keys_unsorted().map(|v| Val::Arr(v.into())))
+            box_once_err(cv.1.keys_unsorted().map(|v| Val::Arr(v.into())))
         }),
         ("contains", v(1), |_, cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
@@ -391,7 +398,7 @@ fn from_json(s: &str) -> ValR {
 #[cfg(feature = "parse")]
 fn parse_fun() -> Filter<RunPtr<Val>> {
     ("fromjson", v(0), |_, cv| {
-        ow!(cv.1.as_str().and_then(|s| from_json(s)))
+        box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
     })
 }
 
