@@ -1,6 +1,6 @@
 [package]
 name = "jaq-json"
-version = "1.0.0-delta"
+version = "1.0.0-epsilon"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -16,8 +16,8 @@ default = ["parse"]
 parse = ["hifijson"]
 
 [dependencies]
-jaq-core = { version = "2.0.0-delta", path = "../jaq-core" }
-jaq-std  = { version = "2.0.0-delta", path = "../jaq-std" }
+jaq-core = { version = "2.0.0-epsilon", path = "../jaq-core" }
+jaq-std  = { version = "2.0.0-epsilon", path = "../jaq-std" }
 
 ahash = "0.8.6"
 hifijson = { version = "0.2.0", optional = true }
