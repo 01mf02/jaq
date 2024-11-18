@@ -300,11 +300,8 @@ fn parse(
     use compile::Compiler;
     use load::{import, Arena, File, Loader};
 
-    let paths = if paths.is_empty() {
-        &["~/.jq", "$ORIGIN/../lib/jq", "$ORIGIN/../lib"].map(|x| x.into())
-    } else {
-        paths
-    };
+    let default = ["~/.jq", "$ORIGIN/../lib/jq", "$ORIGIN/../lib"].map(|x| x.into());
+    let paths = if paths.is_empty() { &default } else { paths };
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
