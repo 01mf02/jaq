@@ -81,10 +81,10 @@ impl Cli {
     }
 
     fn long(&mut self, mode: &mut Mode, arg: &str, args: &mut ArgsOs) -> Result<(), Error> {
-        let int = |s: OsString| Some(s.into_string().ok()?.parse().ok()?);
+        let int = |s: OsString| s.into_string().ok()?.parse().ok();
         match arg {
             // handle all arguments after "--"
-            "" => args.try_for_each(|arg| self.positional(&mode, arg))?,
+            "" => args.try_for_each(|arg| self.positional(mode, arg))?,
 
             "null-input" => self.short('N', args)?,
             "raw-input" => self.short('R', args)?,
@@ -146,8 +146,10 @@ impl Cli {
     }
 
     pub fn parse() -> Result<Self, Error> {
-        let mut cli = Self::default();
-        cli.indent = 2;
+        let mut cli = Self {
+            indent: 2,
+            ..Self::default()
+        };
         let mut mode = Mode::Files;
         let mut args = std::env::args_os();
         args.next();
