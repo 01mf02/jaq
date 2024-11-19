@@ -1,8 +1,9 @@
-use clap::{Parser, ValueEnum};
+mod cli;
+
+use cli::Cli;
 use core::fmt::{self, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter};
 use jaq_json::Val;
-use std::ffi::{OsStr, OsString};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -12,134 +13,6 @@ type Filter = jaq_core::Filter<Native<Val>>;
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
-
-/// Just Another Query Tool
-#[derive(Parser)]
-#[command(version)]
-struct Cli {
-    /// Use null as single input value
-    #[arg(short, long)]
-    null_input: bool,
-
-    /// Use the last output value as exit status code
-    ///
-    /// If there is some last output value `v`,
-    /// then the exit status code is
-    /// 1 if `v < true` (that is, if `v` is `false` or `null`) and
-    /// 0 otherwise.
-    /// If there is no output value, then the exit status code is 4.
-    ///
-    /// If any error occurs, then this option has no effect.
-    #[arg(short, long)]
-    exit_status: bool,
-
-    /// Read (slurp) all input values into one array
-    ///
-    /// When input is read from files,
-    /// jaq yields an array for each file, whereas
-    /// jq produces only a single array.
-    #[arg(short, long)]
-    slurp: bool,
-
-    /// Overwrite input file with its output
-    #[arg(short, long)]
-    in_place: bool,
-
-    /// Write strings without escaping them with quotes
-    #[arg(short, long)]
-    raw_output: bool,
-
-    /// Read lines of the input as sequence of strings
-    ///
-    /// When the option `--slurp` is used additionally,
-    /// then the whole input is read into a single string.
-    #[arg(short = 'R', long)]
-    raw_input: bool,
-
-    /// Print JSON compactly, omitting whitespace
-    #[arg(short, long)]
-    compact_output: bool,
-
-    /// Use n spaces for indentation
-    #[arg(long, value_name = "n", default_value_t = 2)]
-    indent: usize,
-
-    /// Use tabs for indentation rather than spaces
-    #[arg(long)]
-    tab: bool,
-
-    /// Do not print a newline after each value
-    ///
-    /// This flag enables `--raw-output`.
-    #[arg(short, long)]
-    join_output: bool,
-
-    /// Color output
-    ///
-    /// When this is set to `auto`, colors are enabled if
-    /// output is written to a terminal and
-    /// the `NO_COLOR` environment variable is not set.
-    #[arg(long, value_name = "WHEN", default_value = "auto")]
-    color: ColorWhen,
-
-    /// Read filter from a file given by filter argument
-    #[arg(short, long)]
-    from_file: bool,
-
-    /// Search for modules and data in given directory
-    ///
-    /// If this option is given multiple times, all given directories are searched.
-    #[arg(short = 'L', long, value_name = "DIR")]
-    library_path: Vec<PathBuf>,
-
-    /// Set variable `$<a>` to string `<v>`
-    #[arg(long, value_names = &["a", "v"])]
-    arg: Vec<OsString>,
-
-    /// Set variable `$<a>` to string containing the contents of file `f`
-    #[arg(long, value_names = &["a", "f"])]
-    rawfile: Vec<OsString>,
-
-    /// Set variable `$<a>` to array containing the JSON values in file `f`
-    #[arg(long, value_names = &["a", "f"])]
-    slurpfile: Vec<OsString>,
-
-    /// Run tests from a file
-    #[arg(long, value_name = "FILE")]
-    run_tests: Option<PathBuf>,
-
-    /// Collect positional arguments into `$ARGS.positional`
-    ///
-    /// When using this flag, positional arguments are not used as input files.
-    #[arg(long)]
-    args: bool,
-
-    /// Filter to execute
-    ///
-    /// If this argument is not given, it is assumed to be `.`, the identity filter.
-    filter: Option<OsString>,
-
-    /// Positional arguments, by default used as input files
-    #[arg(name = "ARG")]
-    posargs: Vec<OsString>,
-}
-
-#[derive(Clone, ValueEnum)]
-enum ColorWhen {
-    Always,
-    Auto,
-    Never,
-}
-
-impl ColorWhen {
-    fn use_if(&self, f: impl Fn() -> bool) -> bool {
-        match self {
-            Self::Always => true,
-            Self::Auto => f(),
-            Self::Never => false,
-        }
-    }
-}
 
 fn main() -> ExitCode {
     use env_logger::Env;
@@ -152,7 +25,21 @@ fn main() -> ExitCode {
         })
         .init();
 
-    let cli = Cli::parse();
+    let cli = match Cli::parse() {
+        Ok(cli) => cli,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+
+    if cli.version {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    } else if cli.help {
+        println!("{}", include_str!("help.txt"));
+        return ExitCode::SUCCESS;
+    }
 
     let no_color = std::env::var("NO_COLOR").map_or(false, |v| !v.is_empty());
     let detect_color = |stream| atty::is(stream) && !no_color;
@@ -164,12 +51,12 @@ fn main() -> ExitCode {
         }
     };
 
-    set_color(!cli.in_place && cli.color.use_if(|| detect_color(atty::Stream::Stdout)));
+    set_color(!cli.in_place && cli.color_if(|| detect_color(atty::Stream::Stdout)));
 
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            set_color(cli.color.use_if(|| detect_color(atty::Stream::Stderr)));
+            set_color(cli.color_if(|| detect_color(atty::Stream::Stderr)));
             e.report()
         }
     }
@@ -185,25 +72,22 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     let (vals, filter) = match &cli.filter {
         None => (Vec::new(), Filter::default()),
         Some(filter) => {
-            let (path, code) = if cli.from_file {
-                (filter.into(), std::fs::read_to_string(filter)?)
-            } else {
-                ("<inline>".into(), filter.clone().into_string()?)
+            let (path, code) = match filter {
+                cli::Filter::FromFile(path) => (path.into(), std::fs::read_to_string(path)?),
+                cli::Filter::Inline(filter) => ("<inline>".into(), filter.clone()),
             };
-
             parse(&path, &code, &vars, &cli.library_path).map_err(Error::Report)?
         }
     };
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
-    let files = if cli.args { &[] } else { &*cli.posargs };
-    let last = if files.is_empty() {
+    let last = if cli.files.is_empty() {
         let inputs = read_buffered(cli, io::stdin().lock());
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
-        for file in files {
+        for file in &cli.files {
             let path = Path::new(file);
             let file =
                 load_file(path).map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
@@ -242,36 +126,25 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     }
 }
 
-fn bind<F>(var_val: &mut Vec<(String, Val)>, args: &[OsString], f: F) -> Result<(), Error>
-where
-    F: Fn(&OsStr) -> Result<Val, Error>,
-{
-    for arg_val in args.chunks(2) {
-        if let [arg, val] = arg_val {
-            var_val.push((arg.to_os_string().into_string()?, f(val)?));
-        }
-    }
-    Ok(())
-}
-
 fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
-    let mut var_val = Vec::new();
-
-    bind(&mut var_val, &cli.arg, |v| {
-        Ok(Val::Str(v.to_os_string().into_string()?.into()))
-    })?;
-    bind(&mut var_val, &cli.rawfile, |path| {
+    let arg = cli.arg.iter().map(|(k, s)| {
+        let s = s.to_owned();
+        Ok((k.to_owned(), Val::Str(s.into())))
+    });
+    let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
-        Ok(Val::Str(s?.into()))
-    })?;
-    bind(&mut var_val, &cli.slurpfile, |path| {
-        json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e))
-    })?;
+        Ok((k.to_owned(), Val::Str(s?.into())))
+    });
+    let slurpfile = cli.rawfile.iter().map(|(k, path)| {
+        let a = json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
+        Ok((k.to_owned(), a?))
+    });
 
-    let positional = if cli.args { &*cli.posargs } else { &[] };
-    let positional = positional.iter().cloned();
-    let positional = positional.map(|s| Ok(Val::from(s.into_string()?)));
+    let positional = cli.args.iter().cloned().map(|s| Ok(Val::from(s)));
     let positional = positional.collect::<Result<Vec<_>, Error>>()?;
+
+    let var_val = arg.chain(rawfile).chain(slurpfile);
+    let mut var_val = var_val.collect::<Result<Vec<_>, Error>>()?;
 
     var_val.push(("ARGS".to_string(), args(&positional, &var_val)));
     let env = std::env::vars().map(|(k, v)| (k.into(), Val::from(v)));
@@ -435,7 +308,6 @@ type FileReports = (load::File<String, PathBuf>, Vec<Report>);
 enum Error {
     Io(Option<String>, io::Error),
     Report(Vec<FileReports>),
-    Utf8(OsString),
     Parse(String),
     Jaq(jaq_core::Error<Val>),
     Persist(tempfile::PersistError),
@@ -472,10 +344,6 @@ impl Termination for Error {
                 3
             }
             Self::NoOutput => 4,
-            Self::Utf8(s) => {
-                eprintln!("Error: failed to interpret as UTF-8: {s:?}");
-                5
-            }
             Self::Parse(e) => {
                 eprintln!("Error: failed to parse: {e}");
                 5
@@ -492,13 +360,6 @@ impl Termination for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(None, e)
-    }
-}
-
-/// Conversion of errors from [`OsString::into_string`].
-impl From<OsString> for Error {
-    fn from(e: OsString) -> Self {
-        Self::Utf8(e)
     }
 }
 

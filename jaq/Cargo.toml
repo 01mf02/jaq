@@ -21,7 +21,6 @@ jaq-json = { version = "1.0.0-epsilon", path = "../jaq-json" }
 
 atty = "0.2"
 codesnake = { version = "0.2" }
-clap = { version = "4.0.0", features = ["derive"] }
 env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
 log = { version = "0.4.17" }
