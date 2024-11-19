@@ -193,7 +193,7 @@ impl fmt::Display for Error {
             Self::Utf8(s) => write!(f, "invalid UTF-8: {s:?}"),
             Self::KeyValue(o) => write!(f, "{o} expects a key and a value"),
             Self::Int(o) => write!(f, "{o} expects an integer"),
-            Self::Path(o) => write!(f, "{o} expects an integer"),
+            Self::Path(o) => write!(f, "{o} expects a path"),
         }
     }
 }

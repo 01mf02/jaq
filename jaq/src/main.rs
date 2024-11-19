@@ -28,7 +28,7 @@ fn main() -> ExitCode {
     let cli = match Cli::parse() {
         Ok(cli) => cli,
         Err(e) => {
-            eprintln!("{e}");
+            eprintln!("Error: {e}");
             return ExitCode::from(2);
         }
     };
