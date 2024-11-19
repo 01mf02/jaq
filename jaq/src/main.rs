@@ -70,7 +70,7 @@ struct Cli {
 
     /// Do not print a newline after each value
     ///
-    /// Unlike jq, this does not enable `--raw-output`.
+    /// This flag enables `--raw-output`.
     #[arg(short, long)]
     join_output: bool,
 
@@ -619,7 +619,7 @@ fn print(writer: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
 
 fn fmt_val_root(f: &mut Formatter, cli: &Cli, val: &Val) -> fmt::Result {
     match val {
-        Val::Str(s) if cli.raw_output => write!(f, "{s}")?,
+        Val::Str(s) if cli.raw_output || cli.join_output => write!(f, "{s}")?,
         _ => {
             let opts = PpOpts {
                 compact: cli.compact_output,
