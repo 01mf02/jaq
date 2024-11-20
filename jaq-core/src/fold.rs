@@ -3,45 +3,51 @@
 use crate::box_iter::Results;
 use alloc::vec::Vec;
 
-pub(crate) enum Fold<'a, U, E> {
+enum Fold<'a, T, U, E> {
     /// things to be processed
     Input(U),
     /// things to be output, then to be input
-    Output(Results<'a, U, E>),
+    Output(T, Results<'a, U, E>),
 }
 
 // if `inner` is true, output intermediate results
-pub(crate) fn fold<'a, T: Clone + 'a, U: Clone + 'a, E: Clone + 'a>(
-    inner: bool,
+pub(crate) fn fold<'a, T: 'a, TC: Clone + 'a, U: 'a, UC: 'a, E: 'a>(
     xs: impl Iterator<Item = Result<T, E>> + Clone + 'a,
-    init: Fold<'a, U, E>,
+    init: U,
     f: impl Fn(T, U) -> Results<'a, U, E> + 'a,
-) -> impl Iterator<Item = Result<U, E>> + 'a {
-    let mut stack = Vec::from([(xs, init)]);
+    tc: impl Fn(&T) -> TC + 'a,
+    inner: impl Fn(TC, &U) -> Option<UC> + 'a,
+    outer: impl Fn(U) -> Option<UC> + 'a,
+) -> impl Iterator<Item = Result<UC, E>> + 'a {
+    let mut stack = Vec::from([(xs, Fold::<TC, U, E>::Input(init))]);
     core::iter::from_fn(move || loop {
         let (mut xs, fold) = stack.pop()?;
         match fold {
-            Fold::Output(mut ys) => match ys.next() {
+            Fold::Output(x, mut ys) => match ys.next() {
                 None => continue,
                 Some(y) => {
                     // do not grow the stack if the output is empty
                     if ys.size_hint() != (0, Some(0)) {
-                        stack.push((xs.clone(), Fold::Output(ys)));
+                        stack.push((xs.clone(), Fold::Output(x.clone(), ys)));
                     }
                     match y {
-                        Ok(y) if inner => {
-                            stack.push((xs, Fold::Input(y.clone())));
-                            return Some(Ok(y));
+                        Ok(y) => {
+                            let inner = inner(x, &y);
+                            stack.push((xs, Fold::Input(y)));
+                            if let Some(inner) = inner {
+                                return Some(Ok(inner));
+                            }
                         }
-                        Ok(y) => stack.push((xs, Fold::Input(y))),
                         Err(e) => return Some(Err(e)),
                     }
                 }
             },
             Fold::Input(y) => match xs.next() {
-                None if inner => continue,
-                None => return Some(Ok(y)),
-                Some(Ok(x)) => stack.push((xs, Fold::Output(f(x, y)))),
+                None => match outer(y) {
+                    Some(outer) => return Some(Ok(outer)),
+                    None => (),
+                },
+                Some(Ok(x)) => stack.push((xs, Fold::Output(tc(&x), f(x, y)))),
                 Some(Err(e)) => return Some(Err(e)),
             },
         }
