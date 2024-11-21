@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use core::fmt::{self, Display, Formatter};
-use jaq_core::{compile, load, Ctx, Native, RcIter};
+use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
 use jaq_json::Val;
 use std::ffi::{OsStr, OsString};
 use std::io::{self, BufRead, Write};
@@ -528,7 +528,6 @@ fn run(
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
         for output in filter.run((ctx.clone(), input)) {
-            use jaq_core::ValT;
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
@@ -612,30 +611,31 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
     }
 }
 
-fn print(writer: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
-    let f = |f: &mut Formatter| fmt_val_root(f, cli, val);
-    write!(writer, "{}", FormatterFn(f))
-}
-
-fn fmt_val_root(f: &mut Formatter, cli: &Cli, val: &Val) -> fmt::Result {
-    match val {
-        Val::Str(s) if cli.raw_output || cli.join_output => write!(f, "{s}")?,
-        _ => {
-            let opts = PpOpts {
-                compact: cli.compact_output,
-                indent: if cli.tab {
-                    String::from("\t")
-                } else {
-                    " ".repeat(cli.indent)
-                },
-            };
-            fmt_val(f, &opts, 0, val)?;
-        }
+fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
+    let f = |f: &mut Formatter| {
+        let opts = PpOpts {
+            compact: cli.compact_output,
+            indent: if cli.tab {
+                String::from("\t")
+            } else {
+                " ".repeat(cli.indent)
+            },
+        };
+        fmt_val(f, &opts, 0, val)
     };
-    if !cli.join_output {
-        writeln!(f)?;
+
+    match val {
+        Val::Str(s) if cli.raw_output || cli.join_output => write!(w, "{s}")?,
+        _ => write!(w, "{}", FormatterFn(f))?,
+    };
+
+    if cli.join_output {
+        // when running `jaq -jn '"prompt> " | (., input)'`,
+        // this flush is necessary to make "prompt> " appear first
+        w.flush()
+    } else {
+        writeln!(w)
     }
-    Ok(())
 }
 
 fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Result<T, Error> {
