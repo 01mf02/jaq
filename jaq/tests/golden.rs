@@ -53,8 +53,19 @@ test!(
 test!(
     join_output,
     &["-j", "."],
-    r#"[] "foo" "bar" 1 {} "#,
-    "[]foobar1{}"
+    r#"[] "foo" "bar" 1 2 {}"#,
+    "[]foobar12{}"
+);
+
+test!(
+    raw_output,
+    &["-r", "."],
+    r#""foo" "bar" ["baz"]"#,
+    r#"foo
+bar
+[
+  "baz"
+]"#
 );
 
 test!(
