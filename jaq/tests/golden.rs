@@ -51,6 +51,13 @@ test!(
 );
 
 test!(
+    join_output,
+    &["-j", "."],
+    r#"[] "foo" "bar" 1 {} "#,
+    "[]foobar1{}"
+);
+
+test!(
     compact,
     &["-c", "."],
     r#"[2,3]
