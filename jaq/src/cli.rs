@@ -155,6 +155,7 @@ impl Cli {
         args.next();
         while let Some(arg) = args.next() {
             match arg.to_str() {
+                // we've got a valid UTF-8 argument here
                 Some(s) => match s.strip_prefix("--") {
                     Some(rest) => cli.long(&mut mode, rest, &mut args)?,
                     None => match s.strip_prefix("-") {
@@ -162,6 +163,9 @@ impl Cli {
                         None => cli.positional(&mode, arg)?,
                     },
                 },
+                // we've got invalid UTF-8, so it is no valid flag
+                // note that we do not check here whether arg starts with `-`,
+                // because this seems to be quite difficult to do in a portable way
                 None => cli.positional(&mode, arg)?,
             }
         }
@@ -214,6 +218,7 @@ fn parse_key_val(arg: &'static str, args: &mut ArgsOs) -> Result<(String, OsStri
     Ok((key, val))
 }
 
+/// Interpretation of positional arguments.
 enum Mode {
     Args,
     //JsonArgs,
