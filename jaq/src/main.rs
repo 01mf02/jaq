@@ -634,15 +634,13 @@ fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
         // this flush is necessary to make "prompt> " appear first
         w.flush()
     } else {
+        // this also flushes output, because stdout is line-buffered in Rust
         writeln!(w)
     }
 }
 
-fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> Result<T, Error>) -> Result<T, Error> {
-    let mut stdout = io::stdout().lock();
-    let y = f(&mut stdout)?;
-    stdout.flush()?;
-    Ok(y)
+fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> T) -> T {
+    f(&mut io::stdout().lock())
 }
 
 type StringColors = Vec<(String, Option<Color>)>;
