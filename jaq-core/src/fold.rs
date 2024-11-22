@@ -10,7 +10,6 @@ enum Fold<'a, X, Y, E> {
     Output(X, Results<'a, Y, E>),
 }
 
-// if `inner` is true, output intermediate results
 pub(crate) fn fold<'a, T: 'a, TC: Clone + 'a, U: 'a, UC: 'a, E: 'a>(
     xs: impl Iterator<Item = Result<T, E>> + Clone + 'a,
     init: U,
