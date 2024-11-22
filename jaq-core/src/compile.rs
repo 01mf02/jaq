@@ -117,10 +117,7 @@ pub(crate) enum Term<T = TermId> {
     TryCatch(T, T),
     /// If-then-else (`if f then g else h end`)
     Ite(T, T, T),
-    /// `reduce`, `for`, and `foreach`
-    ///
-    /// The first field indicates whether to yield intermediate results
-    /// (`false` for `reduce` and `true` for `foreach`).
+    /// `reduce` and `foreach`
     ///
     ///  Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
     /// `reduce xs as $x (init; f)` evaluates to
@@ -132,18 +129,23 @@ pub(crate) enum Term<T = TermId> {
     /// | xn as $x | f
     /// ~~~
     ///
-    /// and `for xs as $x (init; f)` evaluates to
+    /// and `foreach xs as $x (init; f; project)` evaluates to
     ///
     /// ~~~ text
-    /// init
-    /// | ., (x0 as $x | f
-    /// | ...
-    /// | ., (xn as $x | f)...)
+    /// init |
+    /// x0 as $x | f | project,
+    /// ...
+    /// xn as $x | f | project,
+    /// empty
     /// ~~~
-    Reduce(T, Pattern<T>, T, T),
-    Foreach(T, Pattern<T>, T, T, Option<T>),
-
+    Fold(T, Pattern<T>, T, T, Fold<T>),
     Path(T, crate::path::Path<T>),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Fold<T> {
+    Reduce,
+    Foreach(Option<T>),
 }
 
 impl<T> Default for Term<T> {
@@ -660,6 +662,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 Term::Label(self.lut.insert_term(tc))
             }
             Fold(name, xs, pat, args) => {
+                use self::Fold::{Foreach, Reduce};
                 let arity = args.len();
                 let mut args = args.into_iter();
                 let (init, update) = match (args.next(), args.next()) {
@@ -673,10 +676,10 @@ impl<'s, F> Compiler<&'s str, F> {
                 let update = self.with_vars(&vars, |c| c.iterm(update));
 
                 match (name, args.next(), args.next()) {
-                    ("reduce", None, None) => Term::Reduce(xs, pat, init, update),
+                    ("reduce", None, None) => Term::Fold(xs, pat, init, update, Reduce),
                     ("foreach", proj, None) => {
                         let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm_tr(p, tr)));
-                        Term::Foreach(xs, pat, init, update, proj)
+                        Term::Fold(xs, pat, init, update, Foreach(proj))
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
