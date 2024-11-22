@@ -3,11 +3,11 @@
 use crate::box_iter::Results;
 use alloc::vec::Vec;
 
-enum Fold<'a, T, U, E> {
+enum Fold<'a, X, Y, E> {
     /// things to be processed
-    Input(U),
+    Input(Y),
     /// things to be output, then to be input
-    Output(T, Results<'a, U, E>),
+    Output(X, Results<'a, Y, E>),
 }
 
 // if `inner` is true, output intermediate results
@@ -43,10 +43,11 @@ pub(crate) fn fold<'a, T: 'a, TC: Clone + 'a, U: 'a, UC: 'a, E: 'a>(
                 }
             },
             Fold::Input(y) => match xs.next() {
-                None => match outer(y) {
-                    Some(outer) => return Some(Ok(outer)),
-                    None => (),
-                },
+                None => {
+                    if let Some(outer) = outer(y) {
+                        return Some(Ok(outer));
+                    }
+                }
                 Some(Ok(x)) => stack.push((xs, Fold::Output(tc(&x), f(x, y)))),
                 Some(Err(e)) => return Some(Err(e)),
             },
