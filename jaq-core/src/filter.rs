@@ -1,6 +1,6 @@
 use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_map_with, map_with};
-use crate::compile::{Lut, Pattern, Tailrec, Term as Ast};
-use crate::fold::{fold, Fold};
+use crate::compile::{Fold, Lut, Pattern, Tailrec, Term as Ast};
+use crate::fold::fold;
 use crate::val::{ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
 use alloc::boxed::Box;
@@ -102,7 +102,7 @@ where
     F: Fn(T, V) -> ValXs<'a, V> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
-    Box::new(fold(false, xs, Fold::Input(init), f))
+    Box::new(fold(xs, init, f, |_| (), |_, _| None, Some))
 }
 
 fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
@@ -285,29 +285,20 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Self::cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))),
             ),
 
-            Ast::Reduce(xs, pat, init, update) => {
+            Ast::Fold(xs, pat, init, update, fold_type) => {
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
                 let init = init.run(lut, cv.clone());
                 let update = |ctx, v| update.run(lut, (ctx, v));
-                Box::new(fold(false, xs, Fold::Output(init), update))
-            }
-            Ast::Foreach(xs, pat, init, update, project) => {
-                let inputs = cv.0.inputs;
-                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
-                let init = init.run(lut, cv.clone());
-                let update = |ctx, v| update.run(lut, (ctx, v));
-                match project {
-                    Some(proj) => flat_map_then_with(init, xs, move |init, xs| {
-                        let init = Fold::Input((Ctx::new([], inputs), init));
-                        let cvs = fold(true, xs, init, move |x, (_, acc)| {
-                            map_with(update(x.clone(), acc), x, |y, x| Ok((x, y?)))
-                        });
-                        flat_map_then(cvs, |cv| proj.run(lut, cv))
-                    }),
-                    None => flat_map_then_with(init, xs, move |i, xs| {
-                        Box::new(fold(true, xs, Fold::Input(i), update))
-                    }),
-                }
+                let inner = |_, y: &Self::V| Some(y.clone());
+                let inner_proj = |ctx, y: &Self::V| Some((ctx, y.clone()));
+                flat_map_then_with(init, xs, move |i, xs| match fold_type {
+                    Fold::Reduce => Box::new(fold(xs, i, update, |_| (), |_, _| None, Some)),
+                    Fold::Foreach(None) => Box::new(fold(xs, i, update, |_| (), inner, |_| None)),
+                    Fold::Foreach(Some(proj)) => flat_map_then(
+                        fold(xs, i, update, |ctx| ctx.clone(), inner_proj, |_| None),
+                        |(ctx, y)| proj.run(lut, (ctx, y)),
+                    ),
+                })
             }
 
             Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
@@ -363,11 +354,10 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err,
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
-
-            // these are up for grabs to implement :)
-            Ast::TryCatch(..) | Ast::Label(_) | Ast::Reduce(..) | Ast::Foreach(..) => {
-                unimplemented!("updating with this operator is not supported yet")
-            }
+            // jq implements updates on `try ... catch` and `label`, but
+            // I do not see how to implement this in jaq
+            // folding, however, could be done, even if jq does not support it
+            Ast::TryCatch(..) | Ast::Label(_) | Ast::Fold(..) => err,
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
