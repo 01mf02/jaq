@@ -408,6 +408,7 @@ impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
 struct PpOpts {
     compact: bool,
     indent: String,
+    sort_keys: bool,
 }
 
 impl PpOpts {
@@ -458,14 +459,21 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         }
         Val::Obj(o) => {
             '{'.bold().fmt(f)?;
+            let kv = |f: &mut Formatter, (k, val): (&std::rc::Rc<String>, &Val)| {
+                write!(f, "{:?}:", k.bold())?;
+                if !opts.compact {
+                    write!(f, " ")?;
+                }
+                fmt_val(f, opts, level + 1, val)
+            };
             if !o.is_empty() {
-                fmt_seq(f, opts, level, &**o, |f, (k, val)| {
-                    write!(f, "{:?}:", k.bold())?;
-                    if !opts.compact {
-                        write!(f, " ")?;
-                    }
-                    fmt_val(f, opts, level + 1, val)
-                })?;
+                if opts.sort_keys {
+                    let mut o: Vec<_> = o.iter().collect();
+                    o.sort_by_key(|(k, _v)| *k);
+                    fmt_seq(f, opts, level, o, kv)
+                } else {
+                    fmt_seq(f, opts, level, &**o, kv)
+                }?
             }
             '}'.bold().fmt(f)
         }
@@ -481,6 +489,7 @@ fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
             } else {
                 " ".repeat(cli.indent)
             },
+            sort_keys: cli.sort_keys,
         };
         fmt_val(f, &opts, 0, val)
     };

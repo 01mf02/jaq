@@ -16,6 +16,7 @@ Output options:
   -r, --raw-output          Write strings without escaping them with quotes
   -j, --join-output         Do not print a newline after each value
   -i, --in-place            Overwrite input file with its output
+  -S, --sort-keys           Print objects sorted by their keys
   -C, --color-output        Always color output
   -M, --monochrome-output   Do not color output
       --tab                 Use tabs for indentation rather than spaces

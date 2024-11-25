@@ -22,6 +22,7 @@ pub struct Cli {
     /// This flag enables `--raw-output`.
     pub join_output: bool,
     pub in_place: bool,
+    pub sort_keys: bool,
     pub color_output: bool,
     pub monochrome_output: bool,
     pub tab: bool,
@@ -94,6 +95,7 @@ impl Cli {
             "raw-output" => self.short('r', args)?,
             "join-output" => self.short('j', args)?,
             "in-place" => self.short('i', args)?,
+            "sort-keys" => self.short('S', args)?,
             "color-output" => self.short('C', args)?,
             "monochrome-output" => self.short('M', args)?,
             "tab" => self.tab = true,
@@ -130,6 +132,7 @@ impl Cli {
             'r' => self.raw_output = true,
             'j' => self.join_output = true,
             'i' => self.in_place = true,
+            'S' => self.sort_keys = true,
             'C' => self.color_output = true,
             'M' => self.monochrome_output = true,
 

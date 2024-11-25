@@ -78,6 +78,13 @@ test!(
 );
 
 test!(
+    sort_keys,
+    &["-Sc", "."],
+    r#"{"b": 1, "a": 2}"#,
+    r#"{"a":2,"b":1}"#
+);
+
+test!(
     inputs,
     &["-c", r#"{".": .}, {input: input}"#],
     "0\n1\n2\n3",
