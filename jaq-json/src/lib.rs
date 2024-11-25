@@ -772,9 +772,14 @@ impl core::ops::Div for Val {
 impl core::ops::Rem for Val {
     type Output = ValR;
     fn rem(self, rhs: Self) -> Self::Output {
-        use Val::Int;
+        use Val::{Float, Int, Num};
         match (self, rhs) {
             (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
+            (Float(f), Int(i)) => Ok(Float(f % i as f64)),
+            (Int(i), Float(f)) => Ok(Float(i as f64 % f)),
+            (Float(x), Float(y)) => Ok(Float(x % y)),
+            (Num(n), r) => Self::from_dec_str(&n) % r,
+            (l, Num(n)) => l % Self::from_dec_str(&n),
             (l, r) => Err(Error::math(l, ops::Math::Rem, r)),
         }
     }

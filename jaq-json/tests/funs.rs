@@ -77,3 +77,50 @@ fn tojson() {
     give(json!(0), "0.0 / 0.0 | tojson", json!("null"));
     give(json!(0), "1.0 / 0.0 | tojson", json!("null"));
 }
+
+#[test]
+fn math_rem() {
+    // generated with this command with modification for errors and float rounding
+    // cargo run -- -rn 'def f: -2, -1, 0, 2.1, 3, 4000000001; f as $a | f as $b | "give!(json!(null), \"\($a) / \($b)\", \(try ($a % $b) catch tojson));"'
+    // TODO: use fail!()?
+    give(json!(null), "-2 % -2", json!(0));
+    give(json!(null), "-2 % -1", json!(0));
+    give(json!(null), "try (-2 % 0) catch .", json!("cannot calculate -2 % 0"));
+    give(json!(null), "-2 % 2.1", json!(-2.0));
+    give(json!(null), "-2 % 3", json!(-2));
+    give(json!(null), "-2 % 4000000001", json!(-2));
+    give(json!(null), "-1 % -2", json!(-1));
+    give(json!(null), "-1 % -1", json!(0));
+    give(json!(null), "try (-1 % 0) catch .", json!("cannot calculate -1 % 0"));
+    give(json!(null), "-1 % 2.1", json!(-1.0));
+    give(json!(null), "-1 % 3", json!(-1));
+    give(json!(null), "-1 % 4000000001", json!(-1));
+    give(json!(null), "0 % -2", json!(0));
+    give(json!(null), "0 % -1", json!(0));
+    give(json!(null), "try (0 % 0) catch .", json!("cannot calculate 0 % 0"));
+    give(json!(null), "0 % 2.1", json!(0.0));
+    give(json!(null), "0 % 3", json!(0));
+    give(json!(null), "0 % 4000000001", json!(0));
+    give(json!(null), "2.1 % -2 | . * 1000 | round", json!(100));
+    give(json!(null), "2.1 % -1 | . * 1000 | round", json!(100));
+    give(json!(null), "2.1 % 0 | isnan", json!(true));
+    give(json!(null), "2.1 % 2.1", json!(0.0));
+    give(json!(null), "2.1 % 3", json!(2.1));
+    give(json!(null), "2.1 % 4000000001", json!(2.1));
+    give(json!(null), "3 % -2", json!(1));
+    give(json!(null), "3 % -1", json!(0));
+    give(json!(null), "try (3 % 0) catch .", json!("cannot calculate 3 % 0"));
+    give(json!(null), "3 % 2.1 | . * 1000 | round", json!(900));
+    give(json!(null), "3 % 3", json!(0));
+    give(json!(null), "3 % 4000000001", json!(3));
+    give(json!(null), "4000000001 % -2", json!(1));
+    give(json!(null), "4000000001 % -1", json!(0));
+    give(
+        json!(null),
+        "try (4000000001 % 0) catch .",
+        json!("cannot calculate 4000000001 % 0"),
+    );
+    give(json!(null), "4000000001 % 2.1 | . * 1000 | round", json!(500));
+    give(json!(null), "4000000001 % 3", json!(2));
+    give(json!(null), "4000000001 % 4000000001", json!(0));
+}
