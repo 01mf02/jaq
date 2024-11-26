@@ -474,69 +474,6 @@ yields `[0, 1, 3]` in jq, but is invalid in jaq.
 (Inconsequentially, jq also does not allow for `last`.)
 
 
-## Definitions
-
-Like jq, jaq allows for the definition of filters, such as:
-
-    def map(f): [.[] | f];
-
-Arguments can also be passed *by value*, such as:
-
-    def cartesian($f; $g): [$f, $g];
-
-Filter definitions can be nested and recursive, i.e. refer to themselves.
-That is, a filter such as `recurse` can be defined in jaq:
-
-    def recurse(f): def r: ., (f | r); r;
-
-Since jaq 1.2, jaq optimises tail calls, like jq.
-Since jaq 1.1, recursive filters can also have non-variable arguments, like in jq.
-For example:
-
-    def f(a): a, f(1+a);
-
-Recursive filters with non-variable arguments can yield surprising effects;
-for example, a call `f(0)` builds up calls of the shape `f(1+(..(1+0)...))`,
-which leads to exponential execution times.
-
-Recursive filters with non-variable arguments can
-very frequently be alternatively implemented by either:
-
-* A nested filter: for example, instead of
-  `def walk(f): (.[]? |= walk(f)) | f;`, you can use
-  `def walk(f): def rec: (.[]? |= rec) | f; rec;`.
-* A filter with variable arguments: for example, instead of
-  `def f(a): a, f(1+a);`, you can equally well write
-  `def f($a): $a, f(1+$a);`.
-* A filter with `recurse`: for example, you may write
-  `def f(a): a | recurse(1+.);`.
-  If you expect your filter to recurse deeply,
-  it is advised to implement it using `recurse`,
-  because jaq has an optimised implementation of `recurse`.
-
-All of these options are supported by jaq.
-
-
-## Arguments
-
-Like jq, jaq allows to define arguments via the command line,
-in particular by the options `--arg`, `--rawfile`, `--slurpfile`.
-This binds variables to values, and
-for every variable `$x` bound to `v` this way,
-`$ARGS.named` contains an entry with key `x` and value `v`.
-For example:
-
-~~~
-$ jaq -n --arg x 1 --arg y 2 '$x, $y, $ARGS.named'
-"1"
-"2"
-{
-  "x": "1",
-  "y": "2"
-}
-~~~
-
-
 ## Folding
 
 jq and jaq provide filters
