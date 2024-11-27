@@ -63,8 +63,11 @@ fn main() -> ExitCode {
 }
 
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
-    if let Some(test_file) = &cli.run_tests {
-        return Ok(run_tests(std::fs::File::open(test_file)?));
+    if let Some(test_files) = &cli.run_tests {
+        return Ok(match test_files.last() {
+            Some(file) => run_tests(io::BufReader::new(std::fs::File::open(file)?)),
+            None => run_tests(io::stdin().lock()),
+        });
     }
 
     let (vars, mut ctx): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
@@ -648,8 +651,8 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     Ok((expect?, obtain.map_err(Error::Jaq)?))
 }
 
-fn run_tests(file: std::fs::File) -> ExitCode {
-    let lines = io::BufReader::new(file).lines().map(Result::unwrap);
+fn run_tests(read: impl BufRead) -> ExitCode {
+    let lines = read.lines().map(Result::unwrap);
     let tests = load::test::Parser::new(lines);
 
     let (mut passed, mut total) = (0, 0);

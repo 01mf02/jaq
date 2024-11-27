@@ -44,7 +44,7 @@ pub struct Cli {
     pub files: Vec<PathBuf>,
     pub args: Vec<String>,
     //pub jsonargs: Vec<String>,
-    pub run_tests: Option<PathBuf>,
+    pub run_tests: Option<Vec<PathBuf>>,
     /// If there is some last output value `v`,
     /// then the exit status code is
     /// 1 if `v < true` (that is, if `v` is `false` or `null`) and
@@ -110,9 +110,7 @@ impl Cli {
 
             "args" => *mode = Mode::Args,
             //"jsonargs" => *mode = Mode::JsonArgs,
-            "run-tests" => {
-                self.run_tests = Some(args.next().ok_or(Error::Path("--run-tests"))?.into())
-            }
+            "run-tests" => self.run_tests = Some(args.map(PathBuf::from).collect()),
             "exit-status" => self.short('e', args)?,
             "version" => self.short('V', args)?,
             "help" => self.short('h', args)?,
