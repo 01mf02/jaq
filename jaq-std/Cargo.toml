@@ -1,6 +1,6 @@
 [package]
 name = "jaq-std"
-version = "2.0.0-epsilon"
+version = "2.0.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -19,7 +19,7 @@ math = ["libm"]
 time = ["chrono"]
 
 [dependencies]
-jaq-core = { version = "2.0.0-epsilon", path = "../jaq-core" }
+jaq-core = { version = "2.0.0", path = "../jaq-core" }
 
 hifijson = { version = "0.2.0", optional = true }
 chrono = { version = "0.4.38", default-features = false, features = ["alloc"], optional = true }

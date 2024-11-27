@@ -1,6 +1,6 @@
 [package]
 name = "jaq"
-version = "2.0.0-epsilon"
+version = "2.0.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -15,9 +15,9 @@ rust-version = "1.65"
 default = ["mimalloc"]
 
 [dependencies]
-jaq-core = { version = "2.0.0-epsilon", path = "../jaq-core" }
-jaq-std  = { version = "2.0.0-epsilon", path = "../jaq-std" }
-jaq-json = { version = "1.0.0-epsilon", path = "../jaq-json" }
+jaq-core = { version = "2.0.0", path = "../jaq-core" }
+jaq-std  = { version = "2.0.0", path = "../jaq-std" }
+jaq-json = { version = "1.0.0", path = "../jaq-json" }
 
 atty = "0.2"
 codesnake = { version = "0.2" }
