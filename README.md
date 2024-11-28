@@ -48,6 +48,10 @@ This should allow users proficient in jq to easily use jaq.
 ## Binaries
 
 You can download binaries for Linux, Mac, and Windows on the [releases page](https://github.com/01mf02/jaq/releases).
+On a Linux system, you can download it using the following commands:
+
+    $ curl -fsSL https://github.com/01mf02/jaq/releases/latest/download/jaq-$(uname -m)-unknown-linux-musl -o jaq && chmod +x jaq
+    $ upx -d jaq # decompress binary for shorter startup time (optional step)
 
 You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) on macOS or Linux:
 
