@@ -138,7 +138,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
         Ok((k.to_owned(), Val::Str(s?.into())))
     });
-    let slurpfile = cli.rawfile.iter().map(|(k, path)| {
+    let slurpfile = cli.slurpfile.iter().map(|(k, path)| {
         let a = json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
         Ok((k.to_owned(), a?))
     });
