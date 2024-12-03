@@ -87,7 +87,7 @@ impl Cli {
             // handle all arguments after "--"
             "" => args.try_for_each(|arg| self.positional(mode, arg))?,
 
-            "null-input" => self.short('N', args)?,
+            "null-input" => self.short('n', args)?,
             "raw-input" => self.short('R', args)?,
             "slurp" => self.short('s', args)?,
 
