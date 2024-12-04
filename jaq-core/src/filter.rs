@@ -95,7 +95,7 @@ fn run_and_bind<'a, F: FilterT>(
     }
 }
 
-fn reduce<'a, T, V, F>(xs: Results<'a, T, V>, init: V, f: F) -> ValXs<V>
+fn reduce<'a, T, V, F>(xs: Results<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
 where
     T: Clone + 'a,
     V: Clone + 'a,
