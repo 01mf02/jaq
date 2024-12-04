@@ -100,6 +100,7 @@ impl Cli {
             "monochrome-output" => self.short('M', args)?,
             "tab" => self.tab = true,
             "indent" => self.indent = args.next().and_then(int).ok_or(Error::Int("--indent"))?,
+            "from-file" => self.short('f', args)?,
             "library-path" => self.short('L', args)?,
             "arg" => {
                 let (name, value) = parse_key_val("--arg", args)?;
