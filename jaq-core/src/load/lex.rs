@@ -58,7 +58,7 @@ pub enum Expect<S> {
     Token,
 }
 
-impl<'a> Expect<&'a str> {
+impl Expect<&str> {
     /// Return human-readable description of what we expected.
     pub fn as_str(&self) -> &'static str {
         match self {

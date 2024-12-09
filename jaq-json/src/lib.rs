@@ -403,7 +403,7 @@ fn parse_fun() -> Filter<RunPtr<Val>> {
 }
 
 fn skip_take(from: usize, until: usize) -> (usize, usize) {
-    (from, if until > from { until - from } else { 0 })
+    (from, until.saturating_sub(from))
 }
 
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
