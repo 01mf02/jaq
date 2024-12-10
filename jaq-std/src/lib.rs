@@ -471,8 +471,8 @@ fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
             bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
         }),
         ("escape_tsv", v(0), |_, cv| {
-            let pats = ["\n", "\r", "\t", "\\"];
-            let reps = ["\\n", "\\r", "\\t", "\\\\"];
+            let pats = ["\n", "\r", "\t", "\\", "\0"];
+            let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
             bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
         }),
         ("encode_uri", v(0), |_, cv| {
