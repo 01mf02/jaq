@@ -14,21 +14,46 @@ env:
 
 jobs:
   build:
+    name: build ${{ matrix.target }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { target: i686-unknown-linux-gnu, use-cross: true }
+        - { target: x86_64-unknown-linux-gnu                }
+    env:
+      BUILD_CMD: cargo
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    - name: Install cross
+      if: matrix.use-cross
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cross
+    - name: Use cross as build tool
+      if: matrix.use-cross
+      run: echo "BUILD_CMD=cross" >> $GITHUB_ENV
     - name: Build
-      run: cargo build --verbose
+      run: $BUILD_CMD build --verbose --target=${{ matrix.target }}
     - name: Check jaq-core without default features
+      if: ( ! matrix.use-cross )
       working-directory: jaq-core
-      run: cargo check --no-default-features
+      run: $BUILD_CMD check --no-default-features --target=${{ matrix.target }}
     - name: Check jaq-std without default features
+      if: ( ! matrix.use-cross )
       working-directory: jaq-std
-      run: cargo check --no-default-features
+      run: $BUILD_CMD check --no-default-features --target=${{ matrix.target }}
     - name: Check jaq-json without default features
+      if: ( ! matrix.use-cross )
       working-directory: jaq-json
-      run: cargo check --no-default-features
+      run: $BUILD_CMD check --no-default-features --target=${{ matrix.target }}
     - name: Clippy
-      run: cargo clippy -- -Dwarnings
+      if: ( ! matrix.use-cross )
+      run: $BUILD_CMD clippy -- -Dwarnings --target=${{ matrix.target }}
     - name: Run tests
-      run: cargo test --verbose
+      run: $BUILD_CMD test --verbose --target=${{ matrix.target }}
