@@ -1,0 +1,40 @@
+name: Build and run tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '**.rs'
+      - '**/Cargo.*'
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { target: i686-unknown-linux-gnu   }
+        - { target: x86_64-unknown-linux-gnu }
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        target: ${{ matrix.target }}
+
+    - name: Install cross-compilation tools
+      if: matrix.target != 'x86_64-unknown-linux-gnu'
+      uses: taiki-e/setup-cross-toolchain-action@v1
+      with:
+        target: ${{ matrix.target }}
+
+    - name: Run tests
+      run: cargo test --verbose
