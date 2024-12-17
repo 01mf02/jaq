@@ -353,15 +353,19 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
 pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
-    let base_run = base_funs().into_vec().into_iter().map(run);
-    base_run.chain([run(parse_fun())])
+    base_funs().chain([run(parse_fun())])
+}
+
+/// Minimal set of filters for JSON values.
+pub fn base_funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+    base().into_vec().into_iter().map(run)
 }
 
 fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX<'a>> {
     box_once(r.map_err(Exn::from))
 }
 
-fn base_funs() -> Box<[Filter<RunPtr<Val>>]> {
+fn base() -> Box<[Filter<RunPtr<Val>>]> {
     Box::new([
         ("tojson", v(0), |_, cv| {
             box_once(Ok(cv.1.to_string().into()))
@@ -472,6 +476,7 @@ impl Val {
         }
     }
 
+    #[cfg(feature = "parse")]
     /// If the value is a string, return it, else fail.
     fn as_str(&self) -> Result<&Rc<String>, Error> {
         match self {

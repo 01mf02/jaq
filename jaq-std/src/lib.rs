@@ -118,6 +118,7 @@ trait ValTx: ValT + Sized {
             .ok_or_else(|| Error::typ(self.clone(), "integer"))
     }
 
+    #[cfg(feature = "math")]
     /// Use as an i32 to be given as an argument to a libm function.
     fn try_as_i32(&self) -> Result<i32, Error<Self>> {
         self.try_as_isize()?.try_into().map_err(Error::str)
@@ -607,6 +608,7 @@ fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
     ("error", v(0), (|_, cv| err(cv), |_, cv, _| err(cv)))
 }
 
+#[cfg(feature = "log")]
 /// Construct a filter that applies an effect function before returning its input.
 macro_rules! id_with {
     ( $eff:expr ) => {

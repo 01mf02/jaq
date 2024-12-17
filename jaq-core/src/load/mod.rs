@@ -6,11 +6,13 @@ mod prec_climb;
 pub mod test;
 
 use crate::{ops, path};
-use alloc::{boxed::Box, string::String, vec::Vec};
+#[cfg(feature = "std")]
+use alloc::boxed::Box;
+use alloc::{string::String, vec::Vec};
 pub use lex::Lexer;
 use lex::Token;
 pub use parse::Parser;
-use parse::{BinaryOp, Def, Term};
+use parse::{Def, Term};
 #[cfg(feature = "std")]
 use std::path::{Path, PathBuf};
 
@@ -208,7 +210,7 @@ impl<S: PartialEq> Term<S> {
 
     fn unconcat(&self) -> Box<dyn Iterator<Item = &Self> + '_> {
         match self {
-            Self::BinOp(l, BinaryOp::Comma, r) => Box::new(l.unconcat().chain(r.unconcat())),
+            Self::BinOp(l, parse::BinaryOp::Comma, r) => Box::new(l.unconcat().chain(r.unconcat())),
             _ => Box::new(core::iter::once(self)),
         }
     }

@@ -165,6 +165,7 @@ pub enum BinaryOp {
 }
 
 impl<S> Term<S> {
+    #[cfg(feature = "std")]
     pub(crate) fn as_str(&self) -> Option<&S> {
         if let Term::Str(None, s) = self {
             if let [StrPart::Str(s)] = &s[..] {
