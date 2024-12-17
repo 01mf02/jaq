@@ -42,48 +42,36 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - { target: aarch64-unknown-linux-gnu   , os: ubuntu-20.04, use-cross: true }
-#       - { target: arm-unknown-linux-gnueabihf , os: ubuntu-20.04, use-cross: true }
-#       - { target: arm-unknown-linux-musleabihf, os: ubuntu-20.04, use-cross: true }
-        - { target: i686-pc-windows-msvc        , os: windows-2019                  }
-        - { target: i686-unknown-linux-gnu      , os: ubuntu-20.04, use-cross: true }
-        - { target: i686-unknown-linux-musl     , os: ubuntu-20.04, use-cross: true }
-        - { target: x86_64-apple-darwin         , os: macos-13                      }
-        - { target: aarch64-apple-darwin        , os: macos-13                      }
-#       - { target: x86_64-pc-windows-gnu       , os: windows-2019                  }
-        - { target: x86_64-pc-windows-msvc      , os: windows-2019                  }
-        - { target: x86_64-unknown-linux-gnu    , os: ubuntu-20.04, use-cross: true }
-        - { target: x86_64-unknown-linux-musl   , os: ubuntu-20.04, use-cross: true }
-    env:
-      BUILD_CMD: cargo
+        - { target: aarch64-unknown-linux-gnu    , os: ubuntu-20.04 }
+        - { target: armv7-unknown-linux-gnueabihf, os: ubuntu-20.04 }
+        - { target: arm-unknown-linux-gnueabi    , os: ubuntu-20.04 }
+        - { target: arm-unknown-linux-musleabihf , os: ubuntu-20.04 }
+        - { target: i686-pc-windows-msvc         , os: windows-2019 }
+        - { target: i686-unknown-linux-gnu       , os: ubuntu-20.04 }
+        - { target: i686-unknown-linux-musl      , os: ubuntu-20.04 }
+        - { target: x86_64-apple-darwin          , os: macos-13     }
+        - { target: aarch64-apple-darwin         , os: macos-13     }
+# fails in mimalloc, possibly mingw related, see:
+# https://github.com/purpleprotocol/mimalloc_rust/issues/125
+#       - { target: x86_64-pc-windows-gnu        , os: windows-2019 }
+        - { target: x86_64-pc-windows-msvc       , os: windows-2019 }
+        - { target: x86_64-unknown-linux-gnu     , os: ubuntu-20.04 }
+        - { target: x86_64-unknown-linux-musl    , os: ubuntu-20.04 }
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install ARM/Linux prerequisites
-      if: startsWith(matrix.target, 'arm-unknown-linux-')
-      run: sudo apt-get -y install gcc-arm-linux-gnueabihf
-
-    - name: Install AArch64/Linux prerequisites
-      if: matrix.target == 'aarch64-unknown-linux-gnu'
-      run: sudo apt-get -y install gcc-aarch64-linux-gnu
-
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+      uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        targets: ${{ matrix.target }}
+        target: ${{ matrix.target }}
 
-    - name: Install cross
-      if: matrix.use-cross
-      uses: taiki-e/install-action@v2
+    - name: Install cross-compilation tools
+      uses: taiki-e/setup-cross-toolchain-action@v1
       with:
-        tool: cross
-
-    - name: Use cross as build tool
-      if: matrix.use-cross
-      run: echo "BUILD_CMD=cross" >> $GITHUB_ENV
+        target: ${{ matrix.target }}
 
     - name: Build
-      run: $BUILD_CMD build --release --target=${{ matrix.target }}
+      run: cargo build --release
 
     - name: Determine paths
       id: paths
@@ -95,7 +83,7 @@ jobs:
         echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
     - name: Compress binary
-      if: matrix.use-cross
+      if: startsWith( matrix.os, 'ubuntu' )
       run: upx ${{ steps.paths.outputs.PKG_NAME }}
 
     - name: Upload release archive
