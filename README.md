@@ -438,14 +438,6 @@ In jq, division by 0 yields an error, whereas
 in jaq, `n / 0` yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
 jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
 
-jaq implements a total ordering on floating-point numbers to allow sorting values.
-Therefore, it unfortunately has to enforce that `nan == nan`.
-(jq gets around this by enforcing that `nan < nan` is true, yet `nan > nan` is false,
-which breaks basic laws about total orders.)
-
-Like jq, jaq prints `nan` and `infinite` as `null` in JSON,
-because JSON does not support encoding these values as numbers.
-
 
 ## Assignments
 
