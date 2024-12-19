@@ -889,7 +889,14 @@ fn float_eq(left: f64, right: f64) -> bool {
 
 fn float_cmp(left: f64, right: f64) -> Ordering {
     if left == 0. && right == 0. {
+        // consider negative and positive 0 as equal
         Ordering::Equal
+    } else if left.is_nan() && right.is_nan() {
+        // there are more than 50 shades of NaN, and which of these
+        // you strike when you perform a calculation is not deterministic (!),
+        // therefore `total_cmp` may yield different results for the same calculation
+        // so we bite the bullet and handle this like in jq
+        Ordering::Less
     } else {
         f64::total_cmp(&left, &right)
     }

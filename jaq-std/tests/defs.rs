@@ -32,7 +32,7 @@ yields!(tofromdate, "946684800 | todate | fromdate", 946684800);
 
 yields!(
     drem_nan,
-    "[drem(nan, 1; nan, 1)] == [nan, nan, nan, 0.0]",
+    "[drem(nan, 1; nan, 1)] | (.[0:-1] | all(isnan)) and .[-1] == 0.0",
     true
 );
 yields!(
@@ -237,7 +237,7 @@ yields!(
 );
 yields!(
     scalb_nan,
-    "[scalb(nan, 1; nan, 1)] == [nan, nan, nan, 2.0]",
+    "[scalb(nan, 1; nan, 1)] | (.[0:-1] | all(isnan)) and .[-1] == 2.0",
     true
 );
 yields!(
