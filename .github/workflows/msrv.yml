@@ -18,6 +18,7 @@ jobs:
           ~/.cargo/registry/index/
           ~/.cargo/registry/cache/
         key: cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: cargo-
 
     - uses: dtolnay/rust-toolchain@1.63
     - name: Check jaq-core
