@@ -61,6 +61,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Cache Cargo registry
+      if: ${{ !contains(matrix.target, '-pc-windows-') }}
       uses: actions/cache@v4
       with:
         path: |
