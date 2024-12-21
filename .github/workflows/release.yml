@@ -60,8 +60,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: actions/cache@v4
+    - name: Cache Cargo registry
       if: !contains(matrix.target, '-pc-windows-')
+      uses: actions/cache@v4
       with:
         path: |
           ~/.cargo/registry/index/
