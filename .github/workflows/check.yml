@@ -18,6 +18,13 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - uses: actions/cache/restore@v4
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Build
       run: cargo build --verbose
 
