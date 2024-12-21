@@ -60,6 +60,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - uses: actions/cache@v4
+      if: !contains(matrix.target, '-pc-windows-')
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+        key: cargo-${{ hashFiles('**/Cargo.lock') }}
+
     - name: Install Rust toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
