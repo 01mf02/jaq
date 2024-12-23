@@ -207,6 +207,7 @@ version = "2.0.0"
 dependencies = [
  "dyn-clone",
  "jaq-json",
+ "jaq-std",
  "once_cell",
  "serde_json",
  "typed-arena",

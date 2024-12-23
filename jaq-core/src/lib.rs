@@ -10,7 +10,7 @@
 //! * handle errors etc.
 //!
 //! ~~~
-//! use jaq_core::{load, Compiler, Ctx, Error, FilterT, Native, RcIter};
+//! use jaq_core::{load, Compiler, Ctx, Error, FilterT, RcIter};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
 //!
@@ -19,17 +19,15 @@
 //!
 //! use load::{Arena, File, Loader};
 //!
-//! // start out only from core filters,
-//! // which do not include filters in the standard library
-//! // such as `map`, `select` etc.
-//! let loader = Loader::new([]);
+//! let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
 //! let arena = Arena::default();
 //!
 //! // parse the filter
 //! let modules = loader.load(&arena, program).unwrap();
 //!
 //! // compile the filter
-//! let filter = jaq_core::Compiler::<_, Native<_>>::default()
+//! let filter = jaq_core::Compiler::default()
+//!     .with_funs(jaq_std::funs().chain(jaq_json::funs()))
 //!     .compile(modules)
 //!     .unwrap();
 //!
