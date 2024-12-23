@@ -899,7 +899,7 @@ fn float_cmp(left: f64, right: f64) -> Ordering {
         Ordering::Less
     } else if right.is_nan() {
         Ordering::Greater
-    } else
+    } else {
         f64::total_cmp(&left, &right)
     }
 }
