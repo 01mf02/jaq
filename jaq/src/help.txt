@@ -28,6 +28,7 @@ Compilation options:
 
 Variable options:
       --arg       <A> <V>   Set variable `$A` to string `V`
+      --argjson   <A> <V>   Set variable `$A` to JSON value `V`
       --slurpfile <A> <F>   Set variable `$A` to array containing the JSON values in file `F`
       --rawfile   <A> <F>   Set variable `$A` to string containing the contents of file `F`
       --args                Collect remaining positional arguments into `$ARGS.positional`

@@ -134,6 +134,15 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         let s = s.to_owned();
         Ok((k.to_owned(), Val::Str(s.into())))
     });
+    let argjson = cli.argjson.iter().map(|(k, s)| {
+        let s = s.to_owned();
+        use hifijson::token::Lex;
+        let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
+        let v = lexer
+            .exactly_one(Val::parse)
+            .map_err(|e| Error::Parse(format!("cannot parse {s} as JSON: {e}")));
+        Ok::<(std::string::String, Val), Error>((k.to_owned(), v?))
+    });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
         Ok((k.to_owned(), Val::Str(s?.into())))
@@ -146,7 +155,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let positional = cli.args.iter().cloned().map(|s| Ok(Val::from(s)));
     let positional = positional.collect::<Result<Vec<_>, Error>>()?;
 
-    let var_val = arg.chain(rawfile).chain(slurpfile);
+    let var_val = arg.chain(rawfile).chain(slurpfile).chain(argjson);
     let mut var_val = var_val.collect::<Result<Vec<_>, Error>>()?;
 
     var_val.push(("ARGS".to_string(), args(&positional, &var_val)));

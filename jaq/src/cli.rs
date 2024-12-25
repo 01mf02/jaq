@@ -35,6 +35,7 @@ pub struct Cli {
 
     // Key-value options
     pub arg: Vec<(String, String)>,
+    pub argjson: Vec<(String, String)>,
     pub slurpfile: Vec<(String, OsString)>,
     pub rawfile: Vec<(String, OsString)>,
 
@@ -105,6 +106,10 @@ impl Cli {
             "arg" => {
                 let (name, value) = parse_key_val("--arg", args)?;
                 self.arg.push((name, value.into_string()?));
+            }
+            "argjson" => {
+                let (name, value) = parse_key_val("--argjson", args)?;
+                self.argjson.push((name, value.into_string()?));
             }
             "slurpfile" => self.slurpfile.push(parse_key_val("--slurpfile", args)?),
             "rawfile" => self.rawfile.push(parse_key_val("--rawfile", args)?),
