@@ -331,7 +331,7 @@ impl<S, R> Loader<S, PathBuf, R> {
     }
 }
 
-impl<'s, P: Clone + Eq, R: FnMut(Import<&str, P>) -> ReadResult<P>> Loader<&'s str, P, R> {
+impl<'s, P: Clone + Eq, R: FnMut(Import<&'s str, P>) -> ReadResult<P>> Loader<&'s str, P, R> {
     /// Load a set of modules, starting from a given file.
     pub fn load(
         mut self,
