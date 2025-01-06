@@ -9,6 +9,8 @@
 //! * load JSON files lazily,
 //! * handle errors etc.
 //!
+//! (This example requires enabling the `serde_json` feature for `jaq-json`.)
+//!
 //! ~~~
 //! use jaq_core::{load, Compiler, Ctx, Error, FilterT, RcIter};
 //! use jaq_json::Val;
