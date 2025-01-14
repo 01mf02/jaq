@@ -16,6 +16,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() -> ExitCode {
     use env_logger::Env;
+    use is_terminal::IsTerminal;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
         .format(|buf, record| match record.level() {
             // format error messages (yielded by `stderr`) without newline
@@ -42,7 +43,6 @@ fn main() -> ExitCode {
     }
 
     let no_color = std::env::var("NO_COLOR").map_or(false, |v| !v.is_empty());
-    let detect_color = |stream| atty::is(stream) && !no_color;
     let set_color = |on| {
         if on {
             yansi::enable();
@@ -51,12 +51,12 @@ fn main() -> ExitCode {
         }
     };
 
-    set_color(!cli.in_place && cli.color_if(|| detect_color(atty::Stream::Stdout)));
+    set_color(!cli.in_place && cli.color_if(|| std::io::stdout().is_terminal() && !no_color));
 
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            set_color(cli.color_if(|| detect_color(atty::Stream::Stderr)));
+            set_color(cli.color_if(|| std::io::stderr().is_terminal() && !no_color));
             e.report()
         }
     }

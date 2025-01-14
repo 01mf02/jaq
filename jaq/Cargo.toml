@@ -19,10 +19,10 @@ jaq-core = { version = "2.0.0", path = "../jaq-core" }
 jaq-std  = { version = "2.0.0", path = "../jaq-std" }
 jaq-json = { version = "1.0.0", path = "../jaq-json" }
 
-atty = "0.2"
 codesnake = { version = "0.2" }
 env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
+is-terminal = "0.4.13"
 log = { version = "0.4.17" }
 memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
