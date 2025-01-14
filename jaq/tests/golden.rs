@@ -45,7 +45,15 @@ test!(
 
 test!(
     argjson,
-    &["--argjson", "a", "[1,2,3]", "--argjson", "b", r#""abc""#, "$a,$b"],
+    &[
+        "--argjson",
+        "a",
+        "[1,2,3]",
+        "--argjson",
+        "b",
+        r#""abc""#,
+        "$a,$b"
+    ],
     "0",
     r#"[
   1,
