@@ -137,10 +137,8 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let argjson = cli.argjson.iter().map(|(k, s)| {
         use hifijson::token::Lex;
         let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
-        let v = lexer
-            .exactly_one(Val::parse)
-            .map_err(|e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)")));
-        Ok((k.to_owned(), v?))
+        let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
+        Ok((k.to_owned(), lexer.exactly_one(Val::parse).map_err(err)?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
