@@ -140,7 +140,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         let v = lexer
             .exactly_one(Val::parse)
             .map_err(|e| Error::Parse(format!("cannot parse {s} as JSON: {e}")));
-        Ok::<(std::string::String, Val), Error>((k.to_owned(), v?))
+        Ok((k.to_owned(), v?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
