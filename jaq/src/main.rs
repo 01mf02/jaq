@@ -139,7 +139,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
         let v = lexer
             .exactly_one(Val::parse)
-            .map_err(|e| Error::Parse(format!("cannot parse {s} as JSON: {e}")));
+            .map_err(|e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)")));
         Ok((k.to_owned(), v?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
