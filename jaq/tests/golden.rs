@@ -44,6 +44,18 @@ test!(
 );
 
 test!(
+    argjson,
+    &["--argjson", "a", "[1,2,3]", "--argjson", "b", r#""abc""#, "$a,$b"],
+    "0",
+    r#"[
+  1,
+  2,
+  3
+]
+"abc""#
+);
+
+test!(
     args,
     &["-c", "--args", "--arg", "x", "y", "$ARGS", "a", "--", "--test", "--"],
     "0",
