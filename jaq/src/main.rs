@@ -135,7 +135,6 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         Ok((k.to_owned(), Val::Str(s.into())))
     });
     let argjson = cli.argjson.iter().map(|(k, s)| {
-        let s = s.to_owned();
         use hifijson::token::Lex;
         let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
         let v = lexer
