@@ -62,6 +62,8 @@ Or using [scoop](https://scoop.sh/#/apps?q=jaq&id=59dbaf2bb778402cd8ec50d0ad4cda
 
     $ scoop install main/jaq
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/jaq.svg)](https://repology.org/project/jaq/versions)
+
 
 ## From Source
 
