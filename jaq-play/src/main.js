@@ -1,7 +1,28 @@
 // currently active jaq thread
 let worker = initWorker();
 
+const param_ids = Object.entries({'q': 'filter', 'j': 'input'});
+
+function getParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    for (const [param, id] of param_ids) {
+        const value = urlParams.get(param);
+        if (value !== null) {
+            document.getElementById(id).value = value;
+        }
+    }
+}
+
+function setParams() {
+    const url = new URL(window.location)
+    for (const [param, id] of param_ids) {
+        url.searchParams.set(param, document.getElementById(id).value);
+    }
+    history.pushState(null, '', url);
+}
+
 function startWorker() {
+    setParams();
     showRunButton(false);
 
     // remove previous output
@@ -60,3 +81,5 @@ document.addEventListener('keydown', event => {
     // CTRL + Enter
     if (event.ctrlKey && event.key == 'Enter') { startWorker() }
 });
+
+getParams();
