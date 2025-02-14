@@ -188,6 +188,7 @@ dependencies = [
  "jaq-core",
  "jaq-json",
  "jaq-std",
+ "jaq-xml",
  "log",
  "memmap2",
  "mimalloc",
@@ -260,6 +261,8 @@ dependencies = [
 name = "jaq-xml"
 version = "0.1.0"
 dependencies = [
+ "jaq-core",
+ "jaq-json",
  "quick-xml",
 ]
 
