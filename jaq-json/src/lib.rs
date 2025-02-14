@@ -945,11 +945,11 @@ impl fmt::Display for Val {
             }
             Self::Obj(o) => {
                 write!(f, "{{")?;
-                let mut iter = o.iter();
+                let mut iter = o.iter().map(|(k, v)| (Val::Str(k.clone()), v));
                 if let Some((k, v)) = iter.next() {
-                    write!(f, "{k:?}:{v}")?;
+                    write!(f, "{k}:{v}")?;
                 }
-                iter.try_for_each(|(k, v)| write!(f, ",{k:?}:{v}"))?;
+                iter.try_for_each(|(k, v)| write!(f, ",{k}:{v}"))?;
                 write!(f, "}}")
             }
         }
