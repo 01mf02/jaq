@@ -18,10 +18,11 @@ pub enum StrPart<S, T> {
 
 /// Token (tree) generic over string type `S`.
 #[derive(Debug)]
-pub struct Token<S>(pub(crate) S, pub(crate) Tok<S>);
+pub struct Token<S>(pub S, pub Tok<S>);
 
+/// Tok generic over string over string type `S`.
 #[derive(Debug)]
-pub(crate) enum Tok<S> {
+pub enum Tok<S> {
     /// keywords such as `def`, but also identifiers such as `map`, `f::g`
     Word,
     /// variables such as `$x`
