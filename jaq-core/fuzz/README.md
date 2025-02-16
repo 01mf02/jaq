@@ -23,3 +23,8 @@ The data target just pipes input into an extremely simple jaq program. This targ
 ### load_and_compile
 
 This target loads and compiles fuzzer generated jaq programs but does not execute the programs. The target is interested in if the program compiles not whether it is correct when it runs. The target becomes slower as it gets deeper into jaq. This has been productive for finding shallower bugs.
+
+
+### parser_direct_term
+
+This target bypassess the lexer by directly creating tokens to be parsed. Skipping the lexer makes this target releativly fast. Thart target filteres the input from the fuzzer in order to avoid fixation on some shallow bugs found when fuzzing without these filters.

@@ -9,6 +9,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
 
 [dependencies.jaq-core]
 path = ".."
@@ -36,5 +38,11 @@ doc = false
 [[bin]]
 name = "data"
 path = "fuzz_targets/data.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parser_direct_term"
+path = "fuzz_targets/parser_direct_term.rs"
 test = false
 doc = false
