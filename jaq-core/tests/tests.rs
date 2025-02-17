@@ -237,8 +237,8 @@ yields!(
 
 yields!(
     label_break_common,
-    "label $x | (def x: break $x; (label $y | x), 0)",
-    []
+    "[label $x | (def x: break $x; (label $y | x), 0)]",
+    json!([])
 );
 
 yields!(
