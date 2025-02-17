@@ -1,7 +1,7 @@
 //! Program compilation.
 
 use crate::load::{self, lex, parse};
-use crate::{ops, Bind, Filter};
+use crate::{ops, Bind, Bind2, Filter};
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
@@ -9,7 +9,6 @@ type NativeId = usize;
 type ModId = usize;
 type VarId = usize;
 type VarSkip = usize;
-type LabelSkip = usize;
 type Arity = usize;
 
 /// Index of a term in the look-up table.
@@ -82,14 +81,13 @@ pub(crate) enum Term<T = TermId> {
     ObjSingle(T, T),
 
     /// Bound variable (`$x`) or filter argument (`a`)
-    Var(VarId, LabelSkip),
+    Var(VarId),
     /// Call to a filter (`filter`, `filter(…)`)
     CallDef(TermId, Box<[Bind<T>]>, VarSkip, Option<Tailrec>),
     Native(NativeId, Box<[Bind<T>]>),
 
+    /// Binding of a break label (`label $x | f`)
     Label(T),
-    Break(usize),
-
     /// Negation operation (`-f`)
     Neg(T),
     /// Variable binding (`f as $x | g`) if identifier (`x`) is given, otherwise
@@ -279,10 +277,18 @@ impl Def {
 }
 
 /// Store a map of vectors plus the sum of the lengths of all vectors.
-#[derive(Default)]
 struct MapVecLen<S> {
     bound: MapVec<S, usize>,
     total: usize,
+}
+
+impl<S> Default for MapVecLen<S> {
+    fn default() -> Self {
+        Self {
+            bound: MapVec::default(),
+            total: 0,
+        }
+    }
 }
 
 impl<S: Ord> MapVecLen<S> {
@@ -302,20 +308,27 @@ impl<S: Ord> MapVecLen<S> {
 }
 
 enum Fun<S> {
-    // number of labels
-    Arg(usize),
+    Arg,
     Parent(Box<[Bind<S>]>, Def),
     // Tr is for tail-rec allowed funs
     Sibling(Box<[Bind<S>]>, Def, Tr),
 }
 
-#[derive(Default)]
 struct Locals<S> {
     // usize = number of vars
     funs: MapVec<(S, Arity), (Fun<S>, usize)>,
-    vars: MapVecLen<S>,
-    labels: MapVecLen<S>,
+    vars: MapVecLen<Bind2<S>>,
     parents: Tr,
+}
+
+impl<S> Default for Locals<S> {
+    fn default() -> Self {
+        Self {
+            funs: MapVec::default(),
+            vars: MapVecLen::default(),
+            parents: Tr::default(),
+        }
+    }
 }
 
 struct MapVec<K, V>(BTreeMap<K, Vec<V>>);
@@ -378,7 +391,7 @@ impl<S: Copy + Ord> Locals<S> {
 
         for arg in args.iter() {
             match arg {
-                Bind::Var(v) => self.vars.push(*v),
+                Bind::Var(v) => self.vars.push(Bind2::Var(*v)),
                 Bind::Fun(f) => self.push_arg(*f),
             }
         }
@@ -394,7 +407,7 @@ impl<S: Copy + Ord> Locals<S> {
         };
         for arg in args.iter().rev() {
             match arg {
-                Bind::Var(v) => self.vars.pop(v),
+                Bind::Var(v) => self.vars.pop(&Bind2::Var(*v)),
                 Bind::Fun(f) => self.pop_arg(*f),
             }
         }
@@ -405,25 +418,21 @@ impl<S: Copy + Ord> Locals<S> {
 
     fn push_arg(&mut self, name: S) {
         self.vars.total += 1;
-        self.funs
-            .push((name, 0), (Fun::Arg(self.labels.total), self.vars.total));
+        self.funs.push((name, 0), (Fun::Arg, self.vars.total));
     }
 
     fn pop_arg(&mut self, name: S) {
-        let (labels, vars) = match self.funs.pop(&(name, 0)) {
-            Some((Fun::Arg(labels), vars)) => (labels, vars),
+        let vars = match self.funs.pop(&(name, 0)) {
+            Some((Fun::Arg, vars)) => vars,
             _ => panic!(),
         };
-        assert_eq!(self.labels.total, labels);
         assert_eq!(self.vars.total, vars);
         self.vars.total -= 1;
     }
 
     fn call(&mut self, name: S, args: &[TermId], tr: &Tr) -> Option<Term> {
         Some(match self.funs.get_last_mut(&(name, args.len()))? {
-            (Fun::Arg(labels), vars) => {
-                Term::Var(self.vars.total - *vars, self.labels.total - *labels)
-            }
+            (Fun::Arg, vars) => Term::Var(self.vars.total - *vars),
             (Fun::Sibling(args_, def, tr_), vars) => {
                 // we are at a position that may only call `tr` tail-recursively and
                 // we call a sibling that may only call `tr_` tail-recursively,
@@ -447,10 +456,7 @@ impl<S: Copy + Ord> Locals<S> {
     }
 
     fn is_empty(&self) -> bool {
-        self.funs.is_empty()
-            && self.vars.is_empty()
-            && self.labels.is_empty()
-            && self.parents.is_empty()
+        self.funs.is_empty() && self.vars.is_empty() && self.parents.is_empty()
     }
 }
 
@@ -533,16 +539,19 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn with_label<T>(&mut self, label: &'s str, f: impl FnOnce(&mut Self) -> T) -> T {
-        self.locals.labels.push(label);
+        self.locals.vars.push(Bind2::Label(label));
         let y = f(self);
-        self.locals.labels.pop(&label);
+        self.locals.vars.pop(&Bind2::Label(label));
         y
     }
 
     fn with_vars<T>(&mut self, vars: &[&'s str], f: impl FnOnce(&mut Self) -> T) -> T {
-        vars.iter().for_each(|v| self.locals.vars.push(v));
+        vars.iter()
+            .for_each(|v| self.locals.vars.push(Bind2::Var(v)));
         let y = f(self);
-        vars.iter().rev().for_each(|v| self.locals.vars.pop(v));
+        vars.iter()
+            .rev()
+            .for_each(|v| self.locals.vars.pop(&Bind2::Var(v)));
         y
     }
 
@@ -808,19 +817,19 @@ impl<'s, F> Compiler<&'s str, F> {
     fn var(&mut self, x: &'s str) -> Term {
         let mut i = self.locals.vars.total;
 
-        if let Some(v) = self.locals.vars.bound.get_last(&x) {
-            return Term::Var(i - v, 0);
+        if let Some(v) = self.locals.vars.bound.get_last(&Bind2::Var(x)) {
+            return Term::Var(i - v);
         }
         for (x_, mid) in self.imported_vars.iter().rev() {
             if x == *x_ && *mid == self.mod_map.len() {
-                return Term::Var(i, 0);
+                return Term::Var(i);
             } else {
                 i += 1;
             }
         }
         for x_ in self.global_vars.iter().rev() {
             if x == *x_ {
-                return Term::Var(i, 0);
+                return Term::Var(i);
             } else {
                 i += 1;
             }
@@ -829,8 +838,8 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn break_(&mut self, x: &'s str) -> Term {
-        if let Some(l) = self.locals.labels.bound.get_last(&x) {
-            return Term::Break(self.locals.labels.total - l);
+        if let Some(l) = self.locals.vars.bound.get_last(&Bind2::Label(x)) {
+            return Term::Var(self.locals.vars.total - l);
         }
         self.fail(x, Undefined::Label)
     }

@@ -2,7 +2,7 @@ use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_ma
 use crate::compile::{Fold, Lut, Pattern, Tailrec, Term as Ast};
 use crate::fold::fold;
 use crate::val::{ValT, ValX, ValXs};
-use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
+use crate::{exn, rc_lazy_list, Bind, Bind2, Ctx, Error, Exn};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
@@ -103,16 +103,6 @@ where
 {
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(xs, init, f, |_| (), |_, _| None, Some))
-}
-
-fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
-    if skip == 0 {
-        return ys;
-    }
-    Box::new(ys.map(move |y| match y {
-        Err(Exn(exn::Inner::Break(n))) => Err(Exn(exn::Inner::Break(n + skip))),
-        y => y,
-    }))
 }
 
 fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
@@ -301,15 +291,18 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 })
             }
 
-            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
-                Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun((id, vars)) => {
-                    label_skip(id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)), *skip)
-                }
+            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
+                Bind2::Var(v) => box_once(Ok(v.clone())),
+                Bind2::Fun((id, vars)) => id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)),
+                Bind2::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 use core::ops::ControlFlow;
-                let inputs = cv.0.inputs;
+                let with_vars = move |vars| Ctx {
+                    vars,
+                    labels: cv.0.labels,
+                    inputs: cv.0.inputs,
+                };
                 let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv);
                 match tailrec {
                     None => flat_map_then(cvs, |cv| id.run(lut, cv)),
@@ -317,7 +310,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                         [flat_map_then(cvs, |cv| id.run(lut, cv))].into(),
                         move |r| match r {
                             Err(Exn(exn::Inner::TailCall(id_, vars, v))) if id == id_ => {
-                                ControlFlow::Continue(id.run(lut, (Ctx { vars, inputs }, v)))
+                                ControlFlow::Continue(id.run(lut, (with_vars(vars), v)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
@@ -331,13 +324,14 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
                 flat_map_then(cvs, |cv| lut.funs[*id].run(lut, cv))
             }
-            Ast::Label(id) => Box::new(id.run(lut, cv).map_while(|y| match y {
-                Err(Exn(exn::Inner::Break(n))) => {
-                    n.checked_sub(1).map(|m| Err(Exn(exn::Inner::Break(m))))
-                }
-                y => Some(y),
-            })),
-            Ast::Break(skip) => box_once(Err(Exn(exn::Inner::Break(*skip)))),
+            Ast::Label(id) => {
+                let ctx = cv.0.cons_label();
+                let labels = ctx.labels;
+                Box::new(id.run(lut, (ctx, cv.1)).map_while(move |y| match y {
+                    Err(Exn(exn::Inner::Break(b))) if b == labels => None,
+                    y => Some(y),
+                }))
+            }
         }
     }
 
@@ -357,7 +351,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             // jq implements updates on `try ... catch` and `label`, but
             // I do not see how to implement this in jaq
             // folding, however, could be done, even if jq does not support it
-            Ast::TryCatch(..) | Ast::Label(_) | Ast::Fold(..) => err,
+            Ast::TryCatch(..) | Ast::Label(..) | Ast::Fold(..) => err,
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
@@ -396,12 +390,10 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 if some_true { l } else { r }.update(lut, cv, f)
             }
 
-            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
-                Bind::Var(_) => err,
-                Bind::Fun(l) => label_skip(
-                    l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
-                    *skip,
-                ),
+            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
+                Bind2::Var(_) => err,
+                Bind2::Fun(l) => l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
+                Bind2::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, _tailrec) => {
                 let init = cv.1.clone();
@@ -415,7 +407,6 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     lut.funs[*id].update(lut, (cv.0, v), f.clone())
                 })
             }
-            Ast::Break(skip) => box_once(Err(Exn(exn::Inner::Break(*skip)))),
         }
     }
 }
