@@ -80,7 +80,7 @@ pub(crate) enum Term<T = TermId> {
     /// Singleton object (`{f: g}`)
     ObjSingle(T, T),
 
-    /// Bound variable (`$x`) or filter argument (`a`)
+    /// Bound variable (`$x`), label (`label $x`), or filter argument (`a`)
     Var(VarId),
     /// Call to a filter (`filter`, `filter(…)`)
     CallDef(TermId, Box<[Bind<T>]>, VarSkip, Option<Tailrec>),
