@@ -469,7 +469,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) => {
             '{'.bold().fmt(f)?;
             let kv = |f: &mut Formatter, (k, val): (&std::rc::Rc<String>, &Val)| {
-                write!(f, "{:?}:", k.bold())?;
+                write!(f, "{}:", Val::Str(k.clone()).bold())?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
