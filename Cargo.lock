@@ -179,7 +179,7 @@ checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
 
 [[package]]
 name = "jaq"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "codesnake",
  "env_logger",
@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "dyn-clone",
  "jaq-json",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-json"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "foldhash",
  "hifijson",
