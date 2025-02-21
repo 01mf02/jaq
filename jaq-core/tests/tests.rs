@@ -236,6 +236,12 @@ yields!(
 );
 
 yields!(
+    label_break_common,
+    "[label $x | (def x: break $x; (label $y | x), 0)]",
+    json!([])
+);
+
+yields!(
     try_catch_short_circuit,
     "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
     ["1", "2", "cannot index {} with 0"]
