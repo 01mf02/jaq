@@ -1,12 +1,12 @@
+//! Filter execution.
+
 use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_map_with, map_with};
-use crate::compile::{Fold, Lut, Pattern, Tailrec, Term as Ast};
+use crate::compile::{Bind, Fold, Lut, Pattern, Tailrec, Term as Ast, TermId as Id};
 use crate::fold::fold;
 use crate::val::{ValT, ValX, ValXs};
-use crate::{exn, rc_lazy_list, Bind, Bind2, Ctx, Error, Exn};
+use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
-
-pub(crate) use crate::compile::TermId as Id;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
@@ -18,31 +18,129 @@ dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 
 type BoxUpdate<'a, V> = Box<dyn Update<'a, V> + 'a>;
 
-type Results<'a, T, V> = crate::box_iter::Results<'a, T, Exn<'a, V>>;
+type Results<'a, T, V> = box_iter::Results<'a, T, Exn<'a, V>>;
+
+/// List of bindings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Vars<'a, V>(RcList<Bind<V, usize, (&'a Id, Self)>>);
+
+impl<'a, V> Vars<'a, V> {
+    fn get(&self, i: usize) -> Option<&Bind<V, usize, (&'a Id, Self)>> {
+        self.0.get(i)
+    }
+}
+
+/// Filter execution context.
+#[derive(Clone)]
+pub struct Ctx<'a, V> {
+    vars: Vars<'a, V>,
+    /// Number of bound labels at the current path
+    ///
+    /// This is used to create fresh break IDs.
+    labels: usize,
+    inputs: &'a Inputs<'a, V>,
+}
+
+impl<'a, V> Ctx<'a, V> {
+    /// Construct a context.
+    pub fn new(vars: impl IntoIterator<Item = V>, inputs: &'a Inputs<'a, V>) -> Self {
+        Self {
+            vars: Vars(RcList::new().extend(vars.into_iter().map(Bind::Var))),
+            labels: 0,
+            inputs,
+        }
+    }
+
+    /// Add a new variable binding.
+    fn cons_var(mut self, x: V) -> Self {
+        self.vars.0 = self.vars.0.cons(Bind::Var(x));
+        self
+    }
+
+    /// Add a new filter binding.
+    fn cons_fun(mut self, (f, ctx): (&'a Id, Self)) -> Self {
+        self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
+        self
+    }
+
+    fn cons_label(mut self) -> Self {
+        self.labels += 1;
+        self.vars.0 = self.vars.0.cons(Bind::Label(self.labels));
+        self
+    }
+
+    /// Remove the `skip` most recent variable bindings.
+    fn skip_vars(mut self, skip: usize) -> Self {
+        if skip > 0 {
+            self.vars.0 = self.vars.0.skip(skip).clone();
+        }
+        self
+    }
+
+    /// Replace variables in context with given ones.
+    fn with_vars(&self, vars: Vars<'a, V>) -> Self {
+        Self {
+            vars,
+            labels: self.labels,
+            inputs: self.inputs,
+        }
+    }
+
+    /// Return remaining input values.
+    pub fn inputs(&self) -> &'a Inputs<'a, V> {
+        self.inputs
+    }
+}
+
+impl<'a, V: Clone> Ctx<'a, V> {
+    /// Remove the latest bound variable from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
+    pub fn pop_var(&mut self) -> V {
+        let (head, tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Var(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        self.vars.0 = tail;
+        head
+    }
+
+    /// Remove the latest bound function from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
+    pub fn pop_fun(&mut self) -> (&'a Id, Self) {
+        let ((id, vars), tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Fun(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        self.vars.0 = tail;
+        (id, self.with_vars(vars))
+    }
+}
 
 /// Enhance the context `ctx` with variables bound to the outputs of `args` executed on `cv`,
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
 fn bind_vars<'a, F: FilterT>(
-    args: &'a [Bind<Id>],
+    args: &'a [Arg<Id>],
     lut: &'a Lut<F>,
     ctx: Ctx<'a, F::V>,
     cv: Cv<'a, F::V>,
 ) -> Results<'a, Cv<'a, F::V>, F::V> {
     match args.split_first() {
-        Some((Bind::Var(arg), [])) => {
+        Some((Arg::Var(arg), [])) => {
             map_with(arg.run(lut, cv.clone()), (ctx, cv.1), |y, (ctx, v)| {
                 Ok((ctx.cons_var(y?), v))
             })
         }
-        Some((Bind::Fun(arg), [])) => box_once(Ok((ctx.cons_fun((arg, cv.0)), cv.1))),
-        Some((Bind::Var(arg), rest)) => {
+        Some((Arg::Fun(arg), [])) => box_once(Ok((ctx.cons_fun((arg, cv.0)), cv.1))),
+        Some((Arg::Var(arg), rest)) => {
             flat_map_then_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
                 bind_vars(rest, lut, ctx.cons_var(y), cv)
             })
         }
-        Some((Bind::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
+        Some((Arg::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
         None => box_once(Ok((ctx, cv.1))),
     }
 }
@@ -292,9 +390,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             }
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
-                Bind2::Var(v) => box_once(Ok(v.clone())),
-                Bind2::Fun((id, vars)) => id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)),
-                Bind2::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
+                Bind::Var(v) => box_once(Ok(v.clone())),
+                Bind::Fun((id, vars)) => id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)),
+                Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 use core::ops::ControlFlow;
@@ -391,9 +489,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             }
 
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
-                Bind2::Var(_) => err,
-                Bind2::Fun(l) => l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
-                Bind2::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
+                Bind::Var(_) => err,
+                Bind::Fun(l) => l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
+                Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, _tailrec) => {
                 let init = cv.1.clone();

@@ -17,7 +17,7 @@ pub(crate) enum Inner<'a, V> {
     ///
     /// This is used internally to execute tail-recursive filters.
     /// If this can be observed by users, then this is a bug.
-    TailCall(&'a crate::compile::TermId, crate::Vars<'a, V>, V),
+    TailCall(&'a crate::compile::TermId, crate::filter::Vars<'a, V>, V),
     Break(usize),
 }
 

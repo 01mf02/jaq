@@ -1,7 +1,7 @@
 //! Program compilation.
 
 use crate::load::{self, lex, parse};
-use crate::{ops, Bind, Bind2, Filter};
+use crate::{ops, Bind as Arg, Filter};
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
@@ -83,8 +83,8 @@ pub(crate) enum Term<T = TermId> {
     /// Bound variable (`$x`), label (`label $x`), or filter argument (`a`)
     Var(VarId),
     /// Call to a filter (`filter`, `filter(…)`)
-    CallDef(TermId, Box<[Bind<T>]>, VarSkip, Option<Tailrec>),
-    Native(NativeId, Box<[Bind<T>]>),
+    CallDef(TermId, Box<[Arg<T>]>, VarSkip, Option<Tailrec>),
+    Native(NativeId, Box<[Arg<T>]>),
 
     /// Binding of a break label (`label $x | f`)
     Label(T),
@@ -231,22 +231,22 @@ impl<S: Default, F> Default for Compiler<S, F> {
 }
 
 #[derive(Clone, Debug)]
-struct Sig<S, A = Bind> {
+struct Sig<S, A = Arg> {
     name: S,
     // TODO: we could analyse for each argument whether it is TR, and
     // use this when converting args at callsite
     args: Box<[A]>,
 }
 
-fn bind_from<T>(s: &str, x: T) -> Bind<T> {
+fn bind_from<T>(s: &str, x: T) -> Arg<T> {
     if s.starts_with('$') {
-        Bind::Var(x)
+        Arg::Var(x)
     } else {
-        Bind::Fun(x)
+        Arg::Fun(x)
     }
 }
 
-fn binds<T, U: Copy>(binds: &[Bind<T>], args: &[U]) -> Box<[Bind<U>]> {
+fn binds<T, U: Copy>(binds: &[Arg<T>], args: &[U]) -> Box<[Arg<U>]> {
     assert!(binds.len() == args.len());
     let args = binds.iter().zip(args);
     args.map(|(bind, id)| bind.as_ref().map(|_| *id)).collect()
@@ -268,7 +268,7 @@ impl<S: Eq, A> Sig<S, A> {
 }
 
 impl Def {
-    fn call(&self, args: Box<[Bind<TermId>]>, vars: usize) -> Term {
+    fn call(&self, args: Box<[Arg<TermId>]>, vars: usize) -> Term {
         // we pretend that the function call is tail-recursive,
         // and at the very end of compilation, we will correct calls
         // to non-tail-recursive functions
@@ -309,15 +309,26 @@ impl<S: Ord> MapVecLen<S> {
 
 enum Fun<S> {
     Arg,
-    Parent(Box<[Bind<S>]>, Def),
+    Parent(Box<[Arg<S>]>, Def),
     // Tr is for tail-rec allowed funs
-    Sibling(Box<[Bind<S>]>, Def, Tr),
+    Sibling(Box<[Arg<S>]>, Def, Tr),
+}
+
+/// Single binding.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Bind<V, L = V, F = V> {
+    /// binding to a variable
+    Var(V),
+    /// binding to a break label
+    Label(L),
+    /// binding to a filter
+    Fun(F),
 }
 
 struct Locals<S> {
     // usize = number of vars
     funs: MapVec<(S, Arity), (Fun<S>, usize)>,
-    vars: MapVecLen<Bind2<S>>,
+    vars: MapVecLen<Bind<S>>,
     parents: Tr,
 }
 
@@ -367,7 +378,7 @@ impl<K: Ord, V> MapVec<K, V> {
 }
 
 impl<S: Copy + Ord> Locals<S> {
-    fn push_sibling(&mut self, name: S, args: Box<[Bind<S>]>, def: Def) {
+    fn push_sibling(&mut self, name: S, args: Box<[Arg<S>]>, def: Def) {
         let tr = self.parents.clone();
         self.funs.push(
             (name, args.len()),
@@ -375,7 +386,7 @@ impl<S: Copy + Ord> Locals<S> {
         );
     }
 
-    fn pop_sibling(&mut self, name: S, arity: Arity) -> (Box<[Bind<S>]>, Def, Tr) {
+    fn pop_sibling(&mut self, name: S, arity: Arity) -> (Box<[Arg<S>]>, Def, Tr) {
         let (y, vars) = match self.funs.pop(&(name, arity)) {
             Some((Fun::Sibling(args, def, tr), vars)) => ((args, def, tr), vars),
             _ => panic!(),
@@ -384,15 +395,15 @@ impl<S: Copy + Ord> Locals<S> {
         y
     }
 
-    fn push_parent(&mut self, name: S, args: Box<[Bind<S>]>, def: Def) {
+    fn push_parent(&mut self, name: S, args: Box<[Arg<S>]>, def: Def) {
         self.parents.insert(def.id);
 
         let vars = self.vars.total;
 
         for arg in args.iter() {
             match arg {
-                Bind::Var(v) => self.vars.push(Bind2::Var(*v)),
-                Bind::Fun(f) => self.push_arg(*f),
+                Arg::Var(v) => self.vars.push(Bind::Var(*v)),
+                Arg::Fun(f) => self.push_arg(*f),
             }
         }
 
@@ -407,8 +418,8 @@ impl<S: Copy + Ord> Locals<S> {
         };
         for arg in args.iter().rev() {
             match arg {
-                Bind::Var(v) => self.vars.pop(&Bind2::Var(*v)),
-                Bind::Fun(f) => self.pop_arg(*f),
+                Arg::Var(v) => self.vars.pop(&Bind::Var(*v)),
+                Arg::Fun(f) => self.pop_arg(*f),
             }
         }
         assert_eq!(self.vars.total, vars);
@@ -417,7 +428,7 @@ impl<S: Copy + Ord> Locals<S> {
     }
 
     fn push_arg(&mut self, name: S) {
-        self.vars.total += 1;
+        self.vars.push(Bind::Fun(name));
         self.funs.push((name, 0), (Fun::Arg, self.vars.total));
     }
 
@@ -427,7 +438,7 @@ impl<S: Copy + Ord> Locals<S> {
             _ => panic!(),
         };
         assert_eq!(self.vars.total, vars);
-        self.vars.total -= 1;
+        self.vars.pop(&Bind::Fun(name));
     }
 
     fn call(&mut self, name: S, args: &[TermId], tr: &Tr) -> Option<Term> {
@@ -466,7 +477,7 @@ type Tr = BTreeSet<TermId>;
 
 impl<'s, F> Compiler<&'s str, F> {
     /// Supply functions with given signatures.
-    pub fn with_funs(mut self, funs: impl IntoIterator<Item = (&'s str, Box<[Bind]>, F)>) -> Self {
+    pub fn with_funs(mut self, funs: impl IntoIterator<Item = (&'s str, Box<[Arg]>, F)>) -> Self {
         self.lut.funs = funs
             .into_iter()
             .map(|(name, args, f)| (Sig { name, args }, f))
@@ -539,19 +550,19 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn with_label<T>(&mut self, label: &'s str, f: impl FnOnce(&mut Self) -> T) -> T {
-        self.locals.vars.push(Bind2::Label(label));
+        self.locals.vars.push(Bind::Label(label));
         let y = f(self);
-        self.locals.vars.pop(&Bind2::Label(label));
+        self.locals.vars.pop(&Bind::Label(label));
         y
     }
 
     fn with_vars<T>(&mut self, vars: &[&'s str], f: impl FnOnce(&mut Self) -> T) -> T {
         vars.iter()
-            .for_each(|v| self.locals.vars.push(Bind2::Var(v)));
+            .for_each(|v| self.locals.vars.push(Bind::Var(v)));
         let y = f(self);
         vars.iter()
             .rev()
-            .for_each(|v| self.locals.vars.pop(&Bind2::Var(v)));
+            .for_each(|v| self.locals.vars.pop(&Bind::Var(v)));
         y
     }
 
@@ -592,7 +603,7 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     /// Compile a placeholder sibling with its corresponding definition.
-    fn def_post(&mut self, d: parse::Def<&'s str>) -> (Sig<&'s str, Bind>, Def) {
+    fn def_post(&mut self, d: parse::Def<&'s str>) -> (Sig<&'s str, Arg>, Def) {
         let (args, def, mut tr) = self.locals.pop_sibling(d.name, d.args.len());
         let tid = def.id;
         self.locals.push_parent(d.name, args, def);
@@ -817,7 +828,7 @@ impl<'s, F> Compiler<&'s str, F> {
     fn var(&mut self, x: &'s str) -> Term {
         let mut i = self.locals.vars.total;
 
-        if let Some(v) = self.locals.vars.bound.get_last(&Bind2::Var(x)) {
+        if let Some(v) = self.locals.vars.bound.get_last(&Bind::Var(x)) {
             return Term::Var(i - v);
         }
         for (x_, mid) in self.imported_vars.iter().rev() {
@@ -838,7 +849,7 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn break_(&mut self, x: &'s str) -> Term {
-        if let Some(l) = self.locals.vars.bound.get_last(&Bind2::Label(x)) {
+        if let Some(l) = self.locals.vars.bound.get_last(&Bind::Label(x)) {
             return Term::Var(self.locals.vars.total - l);
         }
         self.fail(x, Undefined::Label)

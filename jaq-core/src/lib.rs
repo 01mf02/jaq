@@ -67,7 +67,7 @@ pub mod val;
 
 pub use compile::Compiler;
 pub use exn::{Error, Exn};
-pub use filter::{Cv, FilterT, Native, RunPtr, UpdatePtr};
+pub use filter::{Ctx, Cv, FilterT, Native, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};
 
@@ -75,9 +75,6 @@ use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
 
-/// Variable bindings.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Vars<'a, V>(RcList<Bind2<V, usize, (&'a filter::Id, Self)>>);
 type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
@@ -101,16 +98,6 @@ pub enum Bind<V = (), F = V> {
     Fun(F),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-enum Bind2<V, L = V, F = V> {
-    /// binding to a variable
-    Var(V),
-    /// binding to a break label
-    Label(L),
-    /// binding to a filter
-    Fun(F),
-}
-
 impl<V, F> Bind<V, F> {
     /// Move references inward.
     pub(crate) fn as_ref(&self) -> Bind<&V, &F> {
@@ -128,100 +115,6 @@ impl<T> Bind<T, T> {
             Self::Var(x) => Bind::Var(f(x)),
             Self::Fun(x) => Bind::Fun(f(x)),
         }
-    }
-}
-
-impl<'a, V> Vars<'a, V> {
-    fn get(&self, i: usize) -> Option<&Bind2<V, usize, (&'a filter::Id, Self)>> {
-        self.0.get(i)
-    }
-}
-
-/// Filter execution context.
-#[derive(Clone)]
-pub struct Ctx<'a, V> {
-    vars: Vars<'a, V>,
-    /// Number of bound labels at the current path
-    ///
-    /// This is used to create fresh break IDs.
-    labels: usize,
-    inputs: &'a Inputs<'a, V>,
-}
-
-impl<'a, V> Ctx<'a, V> {
-    /// Construct a context.
-    pub fn new(vars: impl IntoIterator<Item = V>, inputs: &'a Inputs<'a, V>) -> Self {
-        Self {
-            vars: Vars(RcList::new().extend(vars.into_iter().map(Bind2::Var))),
-            labels: 0,
-            inputs,
-        }
-    }
-
-    /// Add a new variable binding.
-    fn cons_var(mut self, x: V) -> Self {
-        self.vars.0 = self.vars.0.cons(Bind2::Var(x));
-        self
-    }
-
-    /// Add a new filter binding.
-    fn cons_fun(mut self, (f, ctx): (&'a filter::Id, Self)) -> Self {
-        self.vars.0 = self.vars.0.cons(Bind2::Fun((f, ctx.vars)));
-        self
-    }
-
-    fn cons_label(mut self) -> Self {
-        self.labels += 1;
-        self.vars.0 = self.vars.0.cons(Bind2::Label(self.labels));
-        self
-    }
-
-    /// Remove the `skip` most recent variable bindings.
-    fn skip_vars(mut self, skip: usize) -> Self {
-        if skip > 0 {
-            self.vars.0 = self.vars.0.skip(skip).clone();
-        }
-        self
-    }
-
-    /// Replace variables in context with given ones.
-    fn with_vars(&self, vars: Vars<'a, V>) -> Self {
-        Self {
-            vars,
-            labels: self.labels,
-            inputs: self.inputs,
-        }
-    }
-
-    /// Return remaining input values.
-    pub fn inputs(&self) -> &'a Inputs<'a, V> {
-        self.inputs
-    }
-}
-
-impl<'a, V: Clone> Ctx<'a, V> {
-    /// Remove the latest bound variable from the context.
-    ///
-    /// This is useful for writing [`Native`] filters.
-    pub fn pop_var(&mut self) -> V {
-        let (head, tail) = match core::mem::take(&mut self.vars.0).pop() {
-            Some((Bind2::Var(head), tail)) => (head, tail),
-            _ => panic!(),
-        };
-        self.vars.0 = tail;
-        head
-    }
-
-    /// Remove the latest bound function from the context.
-    ///
-    /// This is useful for writing [`Native`] filters.
-    pub fn pop_fun(&mut self) -> (&'a filter::Id, Self) {
-        let ((id, vars), tail) = match core::mem::take(&mut self.vars.0).pop() {
-            Some((Bind2::Fun(head), tail)) => (head, tail),
-            _ => panic!(),
-        };
-        self.vars.0 = tail;
-        (id, self.with_vars(vars))
     }
 }
 
