@@ -27,4 +27,9 @@ This target loads and compiles fuzzer generated jaq programs but does not execut
 
 ### parser_direct_term
 
-This target bypassess the lexer by directly creating tokens to be parsed. Skipping the lexer makes this target releativly fast. Thart target filteres the input from the fuzzer in order to avoid fixation on some shallow bugs found when fuzzing without these filters.
+This target bypassess the lexer by directly creating tokens to be parsed as terms. Skipping the lexer makes this target releativly fast. Thart target filteres the input from the fuzzer in order to avoid fixation on some shallow bugs found when fuzzing without these filters.
+
+
+### parser_direct_defs
+
+This target bypassess the lexer by directly creating tokens to be parsed as definitions. Skipping the lexer makes this target releativly fast. Thart target filteres the input from the fuzzer in order to avoid fixation on some shallow bugs found when fuzzing without these filters.
