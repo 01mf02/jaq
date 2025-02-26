@@ -9,9 +9,9 @@ This directory contains fuzz targets laid out for easy use with cargo-fuzz. Thes
 2. `cargo +nightly install cargo-fuzz`
 3. `cargo +nightly fuzz run load_and_compile`
 
-Congratulations you are now fuzzing jaq's core with libFuzzer!
+Congratulations, you are now fuzzing jaq's core with libFuzzer!
 
-This fuzzing process will keep going until it hits a bug, runs out of memory, or the process is terminated. The challenge is now to figure out ways to get to bugs quicker and define more buggy conditions for the fuzzer to find. In the `corpus` directory you will find interesting inputs the fuzzer has generated, and saved as useful because they reach a new part of the program, you can add your own inputs here (e.g. valid jaq programs) as a starting corpus to bootstrap your fuzzing efforts deeper in jaq's core.
+This fuzzing process will keep going until it hits a bug, runs out of memory, or the process is terminated. The challenge is now to figure out ways to get to bugs quicker and define more buggy conditions for the fuzzer to find. In the `corpus` directory you will find interesting inputs the fuzzer has generated, and saved as useful, because they reach a new part of the program, you can add your own inputs here (e.g. valid jaq programs) as a starting corpus to bootstrap your fuzzing efforts deeper in jaq's core.
 
 
 ## Targets
