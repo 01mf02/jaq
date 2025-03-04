@@ -21,8 +21,9 @@ pub enum StrPart<S, T> {
 
 /// Token (tree) generic over string type `S`.
 ///
-/// If the contained `Tok` is of the shape `Tok::Block(...)`,
-/// then the contained `S` must start with `'('`, `'['`, or `'{'`.
+/// If the contained `Tok` is of the shape:
+/// * `Tok::Block(...)`, then `S` must start with `'('`, `'['`, or `'{'`.
+/// * `Tok::Var`, then `S` must start with `'$'`.
 #[derive(Debug)]
 pub struct Token<S>(pub S, pub Tok<S>);
 
