@@ -4,6 +4,7 @@ use serde_json::Value;
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     use jaq_core::load::{Arena, File, Loader};
     use jaq_core::{Compiler, Native};
+    eprintln!("{}", code.replace('\n', " "));
 
     let arena = Arena::default();
     let loader = Loader::new([]);

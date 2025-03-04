@@ -3,6 +3,7 @@ use serde_json::Value;
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     use jaq_core::load::{Arena, File, Loader};
+    eprintln!("{}", code.replace('\n', " "));
 
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs());
