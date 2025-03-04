@@ -11,16 +11,25 @@ pub enum StrPart<S, T> {
     /// string without escape sequences
     Str(S),
     /// interpolated term (`\(...)`)
+    ///
+    /// Here, the contained term `T` must be of the shape
+    /// `Token(s, Tok::Block(...))` such that the first character of `s` is '('.
     Term(T),
     /// escaped character (e.g. `\n`, `t`, `\u0041`)
     Char(char),
 }
 
 /// Token (tree) generic over string type `S`.
+///
+/// If the contained `Tok` is of the shape `Tok::Block(...)`,
+/// then the contained `S` must start with `'('`, `'['`, or `'{'`.
 #[derive(Debug)]
 pub struct Token<S>(pub S, pub Tok<S>);
 
-/// Tok generic over string over string type `S`.
+/// Type of token, generic over string type `S`.
+///
+/// This data structure should normally not be constructed manually.
+/// It is exposed mostly for fuzzing.
 #[derive(Debug)]
 pub enum Tok<S> {
     /// keywords such as `def`, but also identifiers such as `map`, `f::g`
