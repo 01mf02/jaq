@@ -40,13 +40,7 @@ test = false
 doc = false
 
 [[bin]]
-name = "parser_direct_term"
-path = "fuzz_targets/parser_direct_term.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "parser_direct_defs"
-path = "fuzz_targets/parser_direct_defs.rs"
+name = "parse_tokens"
+path = "fuzz_targets/parse_tokens.rs"
 test = false
 doc = false
