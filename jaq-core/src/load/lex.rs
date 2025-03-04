@@ -52,7 +52,7 @@ pub enum Expect<S> {
     Delim(S),
     /// `"\a"`
     Escape,
-    /// `"\ux"`
+    /// `"\ux"`, `"\uD800"`
     Unicode,
     /// `&`, `§`, `💣`
     Token,
@@ -216,18 +216,25 @@ impl<'a> Lexer<&'a str> {
             Some('r') => StrPart::Char('\r'),
             Some('t') => StrPart::Char('\t'),
             Some('u') => {
+                let err_at = |lex: &mut Self, pos| {
+                    lex.i = pos;
+                    lex.e.push((Expect::Unicode, lex.i));
+                    None
+                };
                 let mut hex = 0;
+                let start_i = chars.as_str();
                 for _ in 0..4 {
-                    let i = chars.as_str();
+                    let cur_i = chars.as_str();
                     if let Some(digit) = chars.next().and_then(|c| c.to_digit(16)) {
                         hex = (hex << 4) + digit;
                     } else {
-                        self.i = i;
-                        self.e.push((Expect::Unicode, self.i));
-                        return None;
+                        return err_at(self, cur_i);
                     }
                 }
-                StrPart::Char(char::from_u32(hex).unwrap())
+                match char::from_u32(hex) {
+                    None => return err_at(self, start_i),
+                    Some(c) => StrPart::Char(c),
+                }
             }
             Some('(') => {
                 let (full, block) = self.with_consumed(Self::block);
