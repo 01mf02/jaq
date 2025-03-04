@@ -1,9 +1,7 @@
 #![no_main]
 
-use jaq_core::{
-    load::{Arena, File, Loader},
-    Compiler, Ctx, RcIter,
-};
+use jaq_core::load::{Arena, File, Loader};
+use jaq_core::{Compiler, Ctx, Native, RcIter};
 
 use jaq_json::Val;
 
@@ -15,13 +13,12 @@ fuzz_target!(|data: String| {
         path: (),
     };
 
-    let loader = Loader::new(jaq_std::defs());
+    let loader = Loader::new([]);
     let arena = Arena::default();
 
     let modules = loader.load(&arena, program).unwrap();
 
-    let filter = Compiler::default()
-        .with_funs(jaq_std::funs::<jaq_json::Val>())
+    let filter = Compiler::<_, Native<_>>::default()
         .compile(modules)
         .unwrap();
 
