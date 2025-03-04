@@ -19,18 +19,16 @@ impl<'a> Arbitrary<'a> for Token<&'a str> {
         // however, sometimes u.arbitrary() kept giving me an empty string,
         // so the loop did not terminate.
         let s: &str = u.arbitrary::<&str>()?.trim();
-        if s.is_empty() {
-            return Err(arbitrary::Error::IncorrectFormat);
-        };
         let mut chars = s.chars();
-        let tok = match chars.next().unwrap() {
-            'a'..='z' | 'A'..='Z' | '_' => Tok::Word,
-            '$' => Tok::Var,
-            '0'..='9' => Tok::Num,
-            '-' if matches!(chars.next(), Some('0'..='9')) => Tok::Num,
-            '"' => Tok::Str(u.arbitrary()?),
-            '(' | '[' | '{' => Tok::Block(u.arbitrary()?),
-            _ => Tok::Sym,
+        let tok = match chars.next() {
+            Some('a'..='z' | 'A'..='Z' | '_') => Tok::Word,
+            Some('$') => Tok::Var,
+            Some('0'..='9') => Tok::Num,
+            Some('-') if matches!(chars.next(), Some('0'..='9')) => Tok::Num,
+            Some('"') => Tok::Str(u.arbitrary()?),
+            Some('(' | '[' | '{') => Tok::Block(u.arbitrary()?),
+            Some(_) => Tok::Sym,
+            None => u.choose_iter([Tok::Word, Tok::Num])?,
         };
         Ok(Self(s, tok))
     }
