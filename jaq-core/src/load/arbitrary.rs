@@ -1,3 +1,5 @@
+//! Generate arbitrary instances of central lexer types.
+
 use super::lex::{Token, Tok, StrPart};
 use arbitrary::{Arbitrary, Unstructured};
 
