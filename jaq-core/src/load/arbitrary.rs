@@ -15,9 +15,6 @@ impl<'a> Arbitrary<'a> for StrPart<&'a str, Token<&'a str>> {
 
 impl<'a> Arbitrary<'a> for Token<&'a str> {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        // I tried to loop here to get a non-empty string;
-        // however, sometimes u.arbitrary() kept giving me an empty string,
-        // so the loop did not terminate.
         let s: &str = u.arbitrary::<&str>()?.trim();
         let mut chars = s.chars();
         let tok = match chars.next() {
