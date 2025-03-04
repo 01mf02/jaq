@@ -11,9 +11,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
-
-[dependencies.jaq-core]
-path = ".."
+jaq-core = { path = "..", features = ["arbitrary"] }
 
 [dependencies.jaq-std]
 path = "../../jaq-std"
