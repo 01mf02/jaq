@@ -1,6 +1,6 @@
 //! Generate arbitrary instances of central lexer types.
 
-use super::lex::{Token, Tok, StrPart};
+use super::lex::{StrPart, Tok, Token};
 use arbitrary::{Arbitrary, Unstructured};
 
 impl<'a> Arbitrary<'a> for StrPart<&'a str, Token<&'a str>> {
