@@ -16,6 +16,7 @@ default = ["std"]
 std = []
 
 [dependencies]
+arbitrary = { version = "1.4", optional = true }
 dyn-clone = "1.0"
 once_cell = "1.16.0"
 typed-arena = "2.0.2"

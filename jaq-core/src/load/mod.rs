@@ -1,5 +1,7 @@
 //! Combined file loading, lexing, and parsing for multiple modules.
 
+#[cfg(feature = "arbitrary")]
+mod arbitrary;
 pub mod lex;
 pub mod parse;
 mod prec_climb;
