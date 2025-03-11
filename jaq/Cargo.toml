@@ -29,3 +29,9 @@ mimalloc = { version = "0.1.29", default-features = false, optional = true }
 tempfile = "3.3.0"
 unicode-width = "0.1.13"
 yansi = "1.0.1"
+
+base64 = "0.22.1"
+viuer = { version = "0.9.1", features = ["print-file", "sixel"] }
+
+# Use the same version as viuer to avoid conflicting `image` versions
+image = { version = "0.25.5", features = [] }

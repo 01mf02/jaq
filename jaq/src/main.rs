@@ -1,4 +1,5 @@
 mod cli;
+mod image_sixel;
 
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
@@ -7,6 +8,7 @@ use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
+use image_sixel::{is_image, print_image_with_sixel};
 
 type Filter = jaq_core::Filter<Native<Val>>;
 
@@ -418,6 +420,7 @@ struct PpOpts {
     compact: bool,
     indent: String,
     sort_keys: bool,
+    img_auto: bool,
 }
 
 impl PpOpts {
@@ -456,6 +459,11 @@ where
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     use yansi::Paint;
+    if opts.img_auto && matches!(v, Val::Str(_)) && is_image(v) {
+        writeln!(f, "key:")?;
+        print_image_with_sixel(v);
+        return Ok(());
+    }
     match v {
         Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => v.fmt(f),
         Val::Str(_) => write!(f, "{}", v.green()),
@@ -499,6 +507,7 @@ fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
                 " ".repeat(cli.indent)
             },
             sort_keys: cli.sort_keys,
+            img_auto: cli.img_auto,
         };
         fmt_val(f, &opts, 0, val)
     };
