@@ -1,4 +1,5 @@
 mod cli;
+mod image_sixel;
 
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
@@ -7,6 +8,7 @@ use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
+use image_sixel::{decode_image, print_image_with_sixel};
 
 type Filter = jaq_core::Filter<Native<Val>>;
 
@@ -188,7 +190,6 @@ fn parse(
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
     let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs())).with_std_read(paths);
-    //let loader = Loader::new([]).with_std_read(paths);
     let path = path.into();
     let modules = loader
         .load(&arena, File { path, code })
@@ -396,7 +397,6 @@ fn run(
 
     for item in if cli.null_input { &null } else { &iter } {
         let input = item.map_err(Error::Parse)?;
-        //println!("Got {:?}", input);
         for output in filter.run((ctx.clone(), input)) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
@@ -418,6 +418,7 @@ struct PpOpts {
     compact: bool,
     indent: String,
     sort_keys: bool,
+    img_auto: bool,
 }
 
 impl PpOpts {
@@ -456,6 +457,24 @@ where
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     use yansi::Paint;
+    // Attempt to decode the value as an image.
+    if opts.img_auto {
+        if let Some(img) = decode_image(v) {
+            // Ensure we start on a new line before printing the image
+            writeln!(f)?;
+            let indent_length = opts.indent.len();
+            let total_indent_chars = (level * indent_length) as u16;
+            print_image_with_sixel(&img, total_indent_chars);
+
+            // Now re-apply indentation at the same level,
+            // so that if fmt_seq prints a comma after this,
+            // it appears at the same indentation as the image line.
+            opts.indent(f, level)?;
+
+            return Ok(());
+        }
+    }
+
     match v {
         Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => v.fmt(f),
         Val::Str(_) => write!(f, "{}", v.green()),
@@ -499,6 +518,7 @@ fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
                 " ".repeat(cli.indent)
             },
             sort_keys: cli.sort_keys,
+            img_auto: cli.img_auto,
         };
         fmt_val(f, &opts, 0, val)
     };

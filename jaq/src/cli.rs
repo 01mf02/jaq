@@ -56,6 +56,7 @@ pub struct Cli {
     pub exit_status: bool,
     pub version: bool,
     pub help: bool,
+    pub img_auto: bool,
 }
 
 #[derive(Debug)]
@@ -121,6 +122,14 @@ impl Cli {
             "version" => self.short('V', args)?,
             "help" => self.short('h', args)?,
 
+            "img" => {
+                let value = args.next().ok_or(Error::Flag("--img".to_string()))?;
+                if value == "auto" {
+                    self.img_auto = true;
+                } else {
+                    return Err(Error::Flag(format!("--img {}", value.to_string_lossy())));
+                }
+            },
             arg => Err(Error::Flag(format!("--{arg}")))?,
         }
         Ok(())
