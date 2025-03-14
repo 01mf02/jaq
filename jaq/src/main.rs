@@ -465,6 +465,12 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
             let indent_length = opts.indent.len();
             let total_indent_chars = (level * indent_length) as u16;
             print_image_with_sixel(&img, total_indent_chars);
+
+            // Now re-apply indentation at the same level,
+            // so that if fmt_seq prints a comma after this,
+            // it appears at the same indentation as the image line.
+            opts.indent(f, level)?;
+
             return Ok(());
         }
     }

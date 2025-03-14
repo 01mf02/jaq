@@ -38,7 +38,4 @@ pub fn print_image_with_sixel(img: &DynamicImage, x: u16) {
     if let Err(e) = print(img, &config) {
         eprintln!("Failed to print image: {:?}", e);
     }
-
-    // Ensure we continue on a new line after printing the image
-    println!();
 }
