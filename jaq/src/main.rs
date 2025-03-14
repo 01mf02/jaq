@@ -460,8 +460,11 @@ where
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     use yansi::Paint;
     if opts.img_auto && matches!(v, Val::Str(_)) && is_image(v) {
-        writeln!(f, "key:")?;
-        print_image_with_sixel(v);
+        writeln!(f)?; // ensure we start on a new line before printing the image
+        // Calculate the total number of characters for indentation
+        let indent_length = opts.indent.len();
+        let total_indent_chars = (level * indent_length) as u16;
+        print_image_with_sixel(v, total_indent_chars);
         return Ok(());
     }
     match v {

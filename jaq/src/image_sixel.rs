@@ -33,7 +33,7 @@ pub fn is_image(value: &Val) -> bool {
 /// # Future Directions / TODO:
 /// - Allow user configuration of the printing backend (Sixel, Kitty, etc.).
 /// - Possibly rename this function if more backends or configuration options become available.
-pub fn print_image_with_sixel(value: &Val) {
+pub fn print_image_with_sixel(value: &Val, x: u16) {
     if let Val::Str(s) = value {
         // Attempt to decode from base64
         match general_purpose::STANDARD.decode(s.as_bytes()) {
@@ -65,6 +65,7 @@ pub fn print_image_with_sixel(value: &Val) {
                 let config = Config {
                     use_sixel: true,
                     absolute_offset: false,
+                    x: x,
                     ..Default::default()
                 };
 
