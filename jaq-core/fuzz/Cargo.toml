@@ -1,0 +1,41 @@
+[package]
+name = "jaq-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+jaq-core = { path = "..", features = ["arbitrary"] }
+jaq-std  = { path = "../../jaq-std" }
+jaq-json = { path = "../../jaq-json" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "load_and_compile"
+path = "fuzz_targets/load_and_compile.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "data"
+path = "fuzz_targets/data.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parse_tokens"
+path = "fuzz_targets/parse_tokens.rs"
+test = false
+doc = false
