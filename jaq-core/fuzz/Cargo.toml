@@ -12,13 +12,8 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
 jaq-core = { path = "..", features = ["arbitrary"] }
-
-[dependencies.jaq-std]
-path = "../../jaq-std"
-
-
-[dependencies.jaq-json]
-path = "../../jaq-json"
+jaq-std  = { path = "../../jaq-std" }
+jaq-json = { path = "../../jaq-json" }
 
 # Prevent this from interfering with workspaces
 [workspace]
