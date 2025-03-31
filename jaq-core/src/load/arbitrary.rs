@@ -15,7 +15,7 @@
 //! such that the parser and the compiler do not panic.
 
 use super::lex::{StrPart, Tok, Token};
-use arbitrary::{Arbitrary, Unstructured, Result};
+use arbitrary::{Arbitrary, Result, Unstructured};
 
 impl<'a> Arbitrary<'a> for StrPart<&'a str, Token<&'a str>> {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
