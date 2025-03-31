@@ -518,7 +518,7 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
     }
 }
 
-fn with_stdout<T>(f: impl FnOnce(&mut dyn io::Write) -> T) -> T {
+fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {
     let stdout = io::stdout();
     if stdout.is_terminal() {
         f(&mut stdout.lock())
