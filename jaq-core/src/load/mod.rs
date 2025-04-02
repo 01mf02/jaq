@@ -2,6 +2,7 @@
 
 #[cfg(feature = "arbitrary")]
 mod arbitrary;
+mod debug;
 pub mod lex;
 pub mod parse;
 mod prec_climb;
