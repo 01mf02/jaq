@@ -296,9 +296,11 @@ impl jaq_std::ValT for Val {
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
-    load::parse(include_str!("defs.jq"), |p| p.defs())
-        .unwrap()
-        .into_iter()
+    use jaq_core::ops::Math::*;
+    use jaq_core::path::{self, Opt::*, Part::*};
+    use load::lex::StrPart;
+    use load::parse::{self, BinaryOp::*, Pattern, Term::*};
+    include!(concat!(env!("OUT_DIR"), "/defs.rs")).into_iter()
 }
 
 impl Val {

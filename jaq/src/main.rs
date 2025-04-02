@@ -2,12 +2,12 @@ mod cli;
 
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
+use is_terminal::IsTerminal;
 use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
 use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
-use is_terminal::IsTerminal;
 
 type Filter = jaq_core::Filter<Native<Val>>;
 
