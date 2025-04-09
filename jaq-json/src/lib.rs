@@ -375,6 +375,9 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
             let pair = |(p, v)| Ok([p, v].into_iter().collect());
             Box::new(cv.1.path_values(Vec::new()).skip(1).map(pair))
         }),
+        ("paths", v(0), |_, cv| {
+            Box::new(cv.1.path_values(Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
+        }),
         ("keys_unsorted", v(0), |_, cv| {
             let keys = cv.1.key_values().map(|kvs| kvs.map(|(k, _v)| k).collect());
             let err = || Error::typ(cv.1.clone(), Type::Iter.as_str());
