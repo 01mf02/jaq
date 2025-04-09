@@ -11,9 +11,8 @@ def from_entries: map({ (.key): .value }) | add + {};
 def with_entries(f): to_entries | map(f) | from_entries;
 
 # Paths
-def paths:
-  def rec($p): $p, ((keys_unsorted?)[] as $k | .[$k] | rec($p + [$k]));
-  (keys_unsorted?)[] as $k | .[$k] | rec([$k]);
+def paths(f): path_values | if .[1] | f then .[0] else empty end;
+def getpath($p): if $p != [] then .[$p[0]] | getpath($p[1:]) end;
 
 # Indexing
 def in(xs)    : . as $x | xs | has     ($x);
