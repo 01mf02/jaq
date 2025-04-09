@@ -529,11 +529,10 @@ impl Val {
 
     fn path_values<'a>(self, path: Vec<Val>) -> BoxIter<'a, (Val, Val)> {
         let head = (path.iter().cloned().collect(), self.clone());
+        let f = move |k| path.iter().cloned().chain([k]).collect();
         let kvs = self.key_values().into_iter().flatten();
         let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
-        let tail = kvs
-            .into_iter()
-            .flat_map(move |(k, v)| v.path_values(path.iter().cloned().chain([k]).collect()));
+        let tail = kvs.into_iter().flat_map(move |(k, v)| v.path_values(f(k)));
         Box::new(core::iter::once(head).chain(tail))
     }
 
