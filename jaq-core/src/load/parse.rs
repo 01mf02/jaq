@@ -76,7 +76,7 @@ pub struct Parser<'s, 't> {
 }
 
 /// Function from value to stream of values, such as `.[] | add / length`.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub enum Term<S> {
     /// Identity, i.e. `.`
     #[default]
@@ -128,7 +128,6 @@ pub enum Term<S> {
 }
 
 /// Variable-binding pattern, such as in `.[] as [$x, {$y, (f): $z}]`
-#[derive(Debug)]
 pub enum Pattern<S> {
     /// Variable
     Var(S),
@@ -828,7 +827,6 @@ pub(crate) struct Module<S, B> {
 /// def map(f): [.[] | f];
 /// def recurse(f; cond): recurse(f | select(cond));
 /// ~~~
-#[derive(Debug)]
 pub struct Def<S, F = Term<S>> {
     /// name, e.g. `"double"` or `"map"`
     pub name: S,

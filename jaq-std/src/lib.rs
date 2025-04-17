@@ -31,9 +31,11 @@ use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, V
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
-    load::parse(include_str!("defs.jq"), |p| p.defs())
-        .unwrap()
-        .into_iter()
+    use jaq_core::ops::{Cmp::*, Math::*};
+    use jaq_core::path::{self, Opt::*, Part::*};
+    use load::lex::StrPart;
+    use load::parse::{self, BinaryOp::*, Pattern, Term::*};
+    include!(concat!(env!("OUT_DIR"), "/defs.rs")).into_iter()
 }
 
 /// Name, arguments, and implementation of a filter.
