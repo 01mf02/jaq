@@ -174,8 +174,8 @@ pub fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
 }
 
 /// Convert a filter with a run and an update pointer to a native filter.
-fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
-    (name, arity, Native::new(run).with_update(update))
+pub fn upd<V>((name, arity, (run, upd)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
+    (name, arity, Native::new(run).with_update(upd))
 }
 
 /// Sort array by the given function.

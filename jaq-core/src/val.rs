@@ -93,7 +93,7 @@ pub trait ValT:
         self,
         index: &Self,
         opt: Opt,
-        f: impl Fn(Self) -> I,
+        f: impl FnOnce(Self) -> I,
     ) -> ValX<'a, Self>;
 
     /// Map a function over the slice of the value with the given range.
