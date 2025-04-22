@@ -378,11 +378,6 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
         ("paths", v(0), |_, cv| {
             Box::new(cv.1.path_values(Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
         }),
-        // about 5x faster than:
-        // def getpath($p): if $p != [] then .[$p[0]] | getpath($p[1:]) end;
-        ("getpath", v(1), |_, cv| {
-            unary(cv, |x, p| p.as_arr().and_then(|p| x.getpath(p)))
-        }),
         ("keys_unsorted", v(0), |_, cv| {
             let keys = cv.1.key_values().map(|kvs| kvs.map(|(k, _v)| k).collect());
             let err = || Error::typ(cv.1.clone(), Type::Iter.as_str());
@@ -507,13 +502,6 @@ impl Val {
         }
     }
 
-    fn as_arr(&self) -> Result<&Rc<Vec<Self>>, Error> {
-        match self {
-            Self::Arr(a) => Ok(a),
-            _ => Err(Error::typ(self.clone(), Type::Arr.as_str())),
-        }
-    }
-
     /// Try to parse a string to a [`Self::Float`], else return [`Self::Null`].
     fn from_dec_str(n: &str) -> Self {
         n.parse().map_or(Self::Null, Self::Float)
@@ -549,11 +537,6 @@ impl Val {
         let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
         let tail = kvs.into_iter().flat_map(move |(k, v)| v.path_values(f(k)));
         Box::new(core::iter::once(head).chain(tail))
-    }
-
-    fn getpath(self, path: &[Val]) -> ValR {
-        use jaq_core::ValT;
-        path.iter().try_fold(self, |acc, x| acc.index(x))
     }
 
     /// `a` contains `b` iff either
