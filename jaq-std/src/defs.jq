@@ -92,6 +92,7 @@ def max: max_by(.);
 def unique_by(f): [group_by(f)[] | .[0]];
 def unique: unique_by(.);
 
+def getpath($path): reduce $path[] as $p (.; .[$p]);
 def del(f): f |= empty;
 
 # Arrays
