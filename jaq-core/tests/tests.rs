@@ -492,3 +492,21 @@ yields!(
 ]"#,
     [1, 3, 4, 7]
 );
+
+yields!(
+    reduce_update,
+    "[[1, 2]] | reduce (0, 1) as $p (.; .[$p]) += 1",
+    [[1, 3]]
+);
+
+yields!(
+    foreach_update,
+    "[[1, [2]]] | foreach (0, 1) as $p (.; .[$p]) += [3]",
+    json!([[1, [2, 3], 3]])
+);
+
+yields!(
+    foreach_update_proj,
+    "[[1, [[2]]]] | foreach (0, 1, 0) as $p (.; .[$p]; if $p == 0 then .[0] else {}[] as $x | . end) += 1",
+    json!([[2, [[3]]]])
+);
