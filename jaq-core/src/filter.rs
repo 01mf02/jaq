@@ -487,7 +487,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Fold(xs, pat, init, update, fold_type) => {
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
                 let rec = move |v| fold_update(lut, fold_type, update, v, xs.clone(), f.clone());
-                init.update(lut, cv.clone(), Box::new(rec))
+                init.update(lut, cv, Box::new(rec))
             }
 
             Ast::Id => f(cv.1),
