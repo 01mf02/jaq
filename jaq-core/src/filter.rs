@@ -193,6 +193,40 @@ fn run_and_bind<'a, F: FilterT>(
     }
 }
 
+fn fold_update<'a, F: FilterT>(
+    lut: &'a Lut<F>,
+    fold_type: &'a Fold<Id>,
+    path: &'a Id,
+    v: F::V,
+    mut xs: impl Iterator<Item = Result<Ctx<'a, F::V>, Exn<'a, F::V>>> + Clone + 'a,
+    f: BoxUpdate<'a, F::V>,
+) -> ValXs<'a, F::V> {
+    let ctx = match xs.next() {
+        Some(Ok(ctx)) => ctx,
+        Some(Err(e)) => return box_once(Err(e)),
+        None => match fold_type {
+            Fold::Reduce => return f(v),
+            Fold::Foreach(_) => return box_once(Ok(v)),
+        },
+    };
+
+    let rec = |v, (xs, f)| fold_update(lut, fold_type, path, v, xs, f);
+    let update: BoxUpdate<_> = match fold_type {
+        Fold::Reduce => Box::new(move |v| rec(v, (xs.clone(), f.clone()))),
+        Fold::Foreach(None) => {
+            Box::new(move |v| flat_map_then_with(f(v), (xs.clone(), f.clone()), rec))
+        }
+        Fold::Foreach(Some(proj)) => {
+            let ctx_ = ctx.clone();
+            Box::new(move |v| {
+                let proj = proj.update(lut, (ctx_.clone(), v), f.clone());
+                flat_map_then_with(proj, (xs.clone(), f.clone()), rec)
+            })
+        }
+    };
+    path.update(lut, (ctx, v), update)
+}
+
 fn reduce<'a, T, V, F>(xs: Results<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
 where
     T: Clone + 'a,
@@ -448,8 +482,13 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
             // jq implements updates on `try ... catch` and `label`, but
             // I do not see how to implement this in jaq
-            // folding, however, could be done, even if jq does not support it
-            Ast::TryCatch(..) | Ast::Label(..) | Ast::Fold(..) => err,
+            Ast::TryCatch(..) | Ast::Label(..) => err,
+
+            Ast::Fold(xs, pat, init, update, fold_type) => {
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
+                let rec = move |v| fold_update(lut, fold_type, update, v, xs.clone(), f.clone());
+                init.update(lut, cv.clone(), Box::new(rec))
+            }
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
