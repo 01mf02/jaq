@@ -9,9 +9,9 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
-use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{load, ops, path, Exn, Native, RunPtr, UpdatePtr};
-use jaq_std::{run, unary, upd, v, Filter};
+use jaq_core::box_iter::{box_once, BoxIter};
+use jaq_core::{load, ops, path, Exn, Native, RunPtr};
+use jaq_std::{run, unary, v, Filter};
 
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
@@ -89,7 +89,6 @@ pub type Error = jaq_core::Error<Val>;
 pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
 pub type ValX<'a> = jaq_core::ValX<'a, Val>;
-type ValXs<'a> = jaq_core::ValXs<'a, Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -179,7 +178,7 @@ impl jaq_core::ValT for Val {
         mut self,
         index: &Self,
         opt: path::Opt,
-        f: impl FnOnce(Self) -> I,
+        f: impl Fn(Self) -> I,
     ) -> ValX<'a> {
         match self {
             Val::Obj(ref mut o) => {
@@ -359,8 +358,7 @@ pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
 
 /// Minimal set of filters for JSON values.
 pub fn base_funs() -> impl Iterator<Item = Filter<Native<Val>>> {
-    let base_run = base().into_vec().into_iter().map(run);
-    base_run.chain([upd(getpath())])
+    base().into_vec().into_iter().map(run)
 }
 
 fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX<'a>> {
@@ -380,6 +378,11 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
         ("paths", v(0), |_, cv| {
             Box::new(cv.1.path_values(Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
         }),
+        // about 5x faster than:
+        // def getpath($p): if $p != [] then .[$p[0]] | getpath($p[1:]) end;
+        ("getpath", v(1), |_, cv| {
+            unary(cv, |x, p| p.as_arr().and_then(|p| x.getpath(p)))
+        }),
         ("keys_unsorted", v(0), |_, cv| {
             let keys = cv.1.key_values().map(|kvs| kvs.map(|(k, _v)| k).collect());
             let err = || Error::typ(cv.1.clone(), Type::Iter.as_str());
@@ -398,23 +401,6 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
             })
         }),
     ])
-}
-
-// about 5x faster than:
-// def getpath($p): if $p != [] then .[$p[0]] | getpath($p[1:]) end;
-fn getpath<F>() -> Filter<(RunPtr<Val, F>, UpdatePtr<Val, F>)> {
-    (
-        "getpath",
-        v(1),
-        (
-            |_, cv| unary(cv, |x, p| p.as_arr().and_then(|p| x.getpath(p))),
-            |_, mut cv, f| {
-                then(cv.0.pop_var().as_arr().map_err(Exn::from), |path| {
-                    cv.1.setpath(path, f)
-                })
-            },
-        ),
-    )
 }
 
 #[cfg(feature = "parse")]
@@ -568,14 +554,6 @@ impl Val {
     fn getpath(self, path: &[Val]) -> ValR {
         use jaq_core::ValT;
         path.iter().try_fold(self, |acc, x| acc.index(x))
-    }
-
-    fn setpath<'a>(self, path: &[Val], f: impl FnOnce(Val) -> ValXs<'a>) -> ValXs<'a> {
-        use jaq_core::{path::Opt, ValT};
-        match path.split_first() {
-            Some((hd, tl)) => box_once(self.map_index(hd, Opt::Essential, |v| v.setpath(tl, f))),
-            None => f(self),
-        }
     }
 
     /// `a` contains `b` iff either
