@@ -484,12 +484,6 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             // I do not see how to implement this in jaq
             Ast::TryCatch(..) | Ast::Label(..) => err,
 
-            Ast::Fold(xs, pat, init, update, fold_type) => {
-                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
-                let rec = move |v| fold_update(lut, fold_type, update, v, xs.clone(), f.clone());
-                init.update(lut, cv, Box::new(rec))
-            }
-
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
                 let path = path.map_ref(|i| {
@@ -526,7 +520,11 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     .any(|y| y.map_or(true, |y| y.as_bool()));
                 if some_true { l } else { r }.update(lut, cv, f)
             }
-
+            Ast::Fold(xs, pat, init, update, fold_type) => {
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
+                let rec = move |v| fold_update(lut, fold_type, update, v, xs.clone(), f.clone());
+                init.update(lut, cv, Box::new(rec))
+            }
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
                 Bind::Fun(l) => l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
