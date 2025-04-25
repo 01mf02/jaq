@@ -58,10 +58,6 @@ You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) 
     $ brew install jaq
     $ brew install --HEAD jaq # latest development version
 
-Or using [scoop](https://scoop.sh/#/apps?q=jaq&id=59dbaf2bb778402cd8ec50d0ad4cdae8a6814fc3) on Windows:
-
-    $ scoop install main/jaq
-
 [![Packaging status](https://repology.org/badge/vertical-allrepos/jaq.svg)](https://repology.org/project/jaq/versions)
 
 
