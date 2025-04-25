@@ -57,6 +57,12 @@ yields!(
     json!([["a"], ["a", 0], ["a", 1], ["a", 1, 0], ["b"], ["b", "c"]])
 );
 
+yields!(
+    paths_filter,
+    "[{a: 1, b: [2, 3]} | paths(. < [])]",
+    json!([["a"], ["b", 0], ["b", 1]])
+);
+
 const RECURSE_PATHS: &str = "def paths:
   { x: ., p: [] } |
   recurse((.x | keys_unsorted?)[] as $k | .x |= .[$k] | .p += [$k]) |
