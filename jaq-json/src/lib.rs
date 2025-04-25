@@ -518,7 +518,7 @@ impl Val {
         }
     }
 
-    /// Return any `key` for which `value | .[key]` is defined.
+    /// Return any `key` for which `value | .[key]` is defined, as well as its output.
     ///
     /// Return `None` for values that are neither arrays nor objects.
     fn key_values(&self) -> Option<BoxIter<(Val, &Val)>> {
@@ -530,6 +530,7 @@ impl Val {
         })
     }
 
+    /// Return all path-value pairs `($p, $v)`, such that `getpath($p) = $v`.
     fn path_values<'a>(self, path: Vec<Val>) -> BoxIter<'a, (Val, Val)> {
         let head = (path.iter().cloned().collect(), self.clone());
         let f = move |k| path.iter().cloned().chain([k]).collect();
