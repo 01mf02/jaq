@@ -91,9 +91,9 @@ jobs:
         cp ${BIN_PATH} ${PKG_NAME}
         echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_OUTPUT
 
-    - name: Compress binary
-      if: startsWith( matrix.os, 'ubuntu' )
-      run: upx ${{ steps.paths.outputs.PKG_NAME }}
+#   - name: Compress binary
+#     if: startsWith( matrix.os, 'ubuntu' )
+#     run: upx ${{ steps.paths.outputs.PKG_NAME }}
 
     - name: Upload release archive
       env:
