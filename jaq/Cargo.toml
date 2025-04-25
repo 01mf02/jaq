@@ -1,6 +1,6 @@
 [package]
 name = "jaq"
-version = "2.1.1"
+version = "2.2.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
