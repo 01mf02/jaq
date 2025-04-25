@@ -42,21 +42,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - { target: aarch64-unknown-linux-gnu    , os: ubuntu-20.04 }
-        - { target: armv7-unknown-linux-gnueabihf, os: ubuntu-20.04 }
-        - { target: arm-unknown-linux-gnueabi    , os: ubuntu-20.04 }
-        - { target: arm-unknown-linux-musleabihf , os: ubuntu-20.04 }
+        - { target: aarch64-unknown-linux-gnu    , os: ubuntu-22.04 }
+        - { target: armv7-unknown-linux-gnueabihf, os: ubuntu-22.04 }
+        - { target: arm-unknown-linux-gnueabi    , os: ubuntu-22.04 }
+        - { target: arm-unknown-linux-musleabihf , os: ubuntu-22.04 }
         - { target: i686-pc-windows-msvc         , os: windows-2019 }
-        - { target: i686-unknown-linux-gnu       , os: ubuntu-20.04 }
-        - { target: i686-unknown-linux-musl      , os: ubuntu-20.04 }
+        - { target: i686-unknown-linux-gnu       , os: ubuntu-22.04 }
+        - { target: i686-unknown-linux-musl      , os: ubuntu-22.04 }
         - { target: x86_64-apple-darwin          , os: macos-13     }
         - { target: aarch64-apple-darwin         , os: macos-13     }
 # fails in mimalloc, possibly mingw related, see:
 # https://github.com/purpleprotocol/mimalloc_rust/issues/125
 #       - { target: x86_64-pc-windows-gnu        , os: windows-2019 }
         - { target: x86_64-pc-windows-msvc       , os: windows-2019 }
-        - { target: x86_64-unknown-linux-gnu     , os: ubuntu-20.04 }
-        - { target: x86_64-unknown-linux-musl    , os: ubuntu-20.04 }
+        - { target: x86_64-unknown-linux-gnu     , os: ubuntu-22.04 }
+        - { target: x86_64-unknown-linux-musl    , os: ubuntu-22.04 }
     steps:
     - uses: actions/checkout@v4
 
