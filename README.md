@@ -202,7 +202,7 @@ jaq's core has been audited by
 [Radically Open Security](https://www.radicallyopensecurity.com/)
 as part of an [NLnet](https://nlnet.nl/) grant ---
 thanks to both organisations for their support!
-The [security audit](https://git.radicallyopensecurity.com/nlnet/ngie-jaq) found
+The [security audit](https://github.com/01mf02/jaq/releases/download/v2.2.0/jaq.penetration.test.report.2025.1.0.pdf) found
 one low severity issue and three issues that are likely not exploitable at all.
 As a result of this security audit, all issues were addressed and
 several fuzzing targets for jaq were added at `jaq-core/fuzz`.
