@@ -598,6 +598,16 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         ("todateiso8601", v(0), |_, cv| {
             bome(time::to_iso8601(&cv.1).map(V::from))
         }),
+        ("strftime", v(1), |_, cv| {
+            unary(cv, |v, fmt| {
+                time::strftime(&v, fmt.try_as_str()?)
+            })
+        }),
+        ("strflocaltime", v(1), |_, cv| {
+            unary(cv, |v, fmt| {
+                time::strflocaltime(&v, fmt.try_as_str()?)
+            })
+        }),
     ])
 }
 

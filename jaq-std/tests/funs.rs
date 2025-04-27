@@ -51,6 +51,16 @@ yields!(
     "86400.123456 | todateiso8601",
     "1970-01-02T00:00:00.123456Z"
 );
+yields!(
+    strftime,
+    r#"86400 | strftime("%F %T")"#,
+    "1970-01-02 00:00:00"
+);
+yields!(
+    strftime_mu,
+    r#"86400.123456 | strftime("%F %T.%6f")"#,
+    "1970-01-02 00:00:00.123456"
+);
 
 #[test]
 fn fromtodate() {

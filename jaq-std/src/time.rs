@@ -1,6 +1,6 @@
 use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
-use chrono::DateTime;
+use chrono::{DateTime, Local};
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).
@@ -32,4 +32,30 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
         let dt = DateTime::from_timestamp_micros((f * 1e6) as i64).ok_or_else(fail)?;
         Ok(dt.format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string())
     }
+}
+
+/// Format a number using strftime
+pub fn strftime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
+    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
+    let val = if let Some(i) = v.as_isize() {
+        (i * 1000000) as i64
+    } else {
+        (v.as_f64()? * 1000000.0) as i64
+    };
+
+    let dt = DateTime::from_timestamp_micros(val).ok_or_else(fail)?;
+    Ok(dt.format(fmt).to_string().into())
+}
+
+/// Format a number using strftime in the local timezone
+pub fn strflocaltime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
+    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
+    let val = if let Some(i) = v.as_isize() {
+        (i * 1000000) as i64
+    } else {
+        (v.as_f64()? * 1000000.0) as i64
+    };
+
+    let dt: DateTime<Local> = DateTime::from_timestamp_micros(val).ok_or_else(fail)?.into();
+    Ok(dt.format(fmt).to_string().into())
 }
