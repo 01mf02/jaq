@@ -608,6 +608,9 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
                 time::strflocaltime(&v, fmt.try_as_str()?)
             })
         }),
+        ("gmtime", v(0), |_, cv| {
+            bome(time::gmtime(&cv.1))
+        }),
     ])
 }
 

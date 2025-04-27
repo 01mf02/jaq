@@ -61,6 +61,11 @@ yields!(
     r#"86400.123456 | strftime("%F %T.%6f")"#,
     "1970-01-02 00:00:00.123456"
 );
+yields!(
+    gmtime,
+    r"86400 | gmtime",
+    [ 1970, 0, 2, 0, 0, 0, 5, 1 ]
+);
 
 #[test]
 fn fromtodate() {

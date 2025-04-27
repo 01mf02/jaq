@@ -1,6 +1,7 @@
 use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
-use chrono::{DateTime, Local};
+use alloc::vec;
+use chrono::{DateTime, Local, Datelike, Timelike};
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).
@@ -58,4 +59,31 @@ pub fn strflocaltime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
 
     let dt: DateTime<Local> = DateTime::from_timestamp_micros(val).ok_or_else(fail)?.into();
     Ok(dt.format(fmt).to_string().into())
+}
+
+
+/// Convert an epoch timestamp to a "broken down time" array
+pub fn gmtime<V: ValT>(v: &V) -> ValR<V> {
+    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
+    let val = if let Some(i) = v.as_isize() {
+        (i * 1000000) as i64
+    } else {
+        (v.as_f64()? * 1000000.0) as i64
+    };
+    let dt = DateTime::from_timestamp_micros(val).ok_or_else(fail)?;
+
+    let rv:Vec<isize> = vec!(
+    	dt.year() as isize,
+    	dt.month0() as isize,
+    	dt.day() as isize,
+    	dt.hour() as isize,
+    	dt.minute() as isize,
+    	dt.second() as isize,
+    	dt.weekday().num_days_from_sunday() as isize,
+    	dt.ordinal0() as isize,
+    );
+    // convert from isize to ValR<V>, and also somehow convert the Vec<isize>
+    // into a ValR<V> ?
+    let rv:ValR<V> = rv.iter().map( |&v|->ValR<V> { Ok(v.into()) } ).collect();
+    rv
 }
