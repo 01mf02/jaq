@@ -61,8 +61,14 @@ pub fn strftime<V: ValT>(v: &V, fmt: &str, local: bool) -> ValR<V> {
 
 
 /// Convert an epoch timestamp to a "broken down time" array
-pub fn gmtime<V: ValT>(v: &V) -> ValR<V> {
+pub fn gmtime<V: ValT>(v: &V, local: bool) -> ValR<V> {
     let dt = epoch_to_datetime(v)?;
+
+    let dt = if local {
+        dt.with_timezone(&Local).fixed_offset()
+    } else {
+        dt.with_timezone(&Utc).fixed_offset()
+    };
 
     let mut rv:Vec<ValR<V>> = Vec::new();
     rv.push(Ok(V::from(dt.year() as isize)));

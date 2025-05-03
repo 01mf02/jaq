@@ -609,7 +609,10 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
             })
         }),
         ("gmtime", v(0), |_, cv| {
-            bome(time::gmtime(&cv.1))
+            bome(time::gmtime(&cv.1, false))
+        }),
+        ("localtime", v(0), |_, cv| {
+            bome(time::gmtime(&cv.1, true))
         }),
     ])
 }
