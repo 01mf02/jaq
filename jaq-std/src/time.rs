@@ -1,7 +1,7 @@
 use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use chrono::{DateTime, Local, Datelike, Timelike, Utc, FixedOffset};
+use chrono::{DateTime, Local, Datelike, Timelike, Utc, FixedOffset, NaiveDateTime};
 
 /// Convert a unix epoch timestamp with optional fractions into a
 /// DateTime<Utc> .
@@ -95,4 +95,12 @@ pub fn gmtime<V: ValT>(v: &V, local: bool) -> ValR<V> {
     };
 
     datetime_to_array(dt)
+}
+
+/// Parse a string into a "broken down time" array
+pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
+    let dt = NaiveDateTime::parse_from_str(s, fmt)
+        .map_err(|e| Error::str(format_args!("cannot parse {s} using {fmt}: {e}")))?;
+
+    datetime_to_array(dt.and_utc().fixed_offset())
 }

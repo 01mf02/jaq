@@ -71,6 +71,11 @@ yields!(
     r"86400.123456 | gmtime",
     json!([ 1970, 0, 2, 0, 0, 0.123456, 5, 1 ])
 );
+yields!(
+    strptime,
+    r#""1970-01-02T00:00:00Z" | strptime("%Y-%m-%dT%H:%M:%SZ")"#,
+    [ 1970, 0, 2, 0, 0, 0, 5, 1 ]
+);
 
 #[test]
 fn fromtodate() {
