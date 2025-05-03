@@ -1,6 +1,6 @@
 use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
-use alloc::vec;
+use alloc::vec::Vec;
 use chrono::{DateTime, Local, Datelike, Timelike};
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
@@ -72,18 +72,24 @@ pub fn gmtime<V: ValT>(v: &V) -> ValR<V> {
     };
     let dt = DateTime::from_timestamp_micros(val).ok_or_else(fail)?;
 
-    let rv:Vec<isize> = vec!(
-    	dt.year() as isize,
-    	dt.month0() as isize,
-    	dt.day() as isize,
-    	dt.hour() as isize,
-    	dt.minute() as isize,
-    	dt.second() as isize,
-    	dt.weekday().num_days_from_sunday() as isize,
-    	dt.ordinal0() as isize,
-    );
-    // convert from isize to ValR<V>, and also somehow convert the Vec<isize>
-    // into a ValR<V> ?
-    let rv:ValR<V> = rv.iter().map( |&v|->ValR<V> { Ok(v.into()) } ).collect();
+    let mut rv:Vec<ValR<V>> = Vec::new();
+    rv.push(Ok(V::from(dt.year() as isize)));
+    rv.push(Ok(V::from(dt.month0() as isize)));
+    rv.push(Ok(V::from(dt.day() as isize)));
+    rv.push(Ok(V::from(dt.hour() as isize)));
+    rv.push(Ok(V::from(dt.minute() as isize)));
+    if dt.nanosecond() > 0
+    {
+        rv.push(Ok(V::from((dt.second() as f64 * 1e6+dt.timestamp_subsec_micros() as f64)/1e6)));
+    } else
+    {
+        rv.push(Ok(V::from(dt.second() as isize)));
+    }
+    rv.push(Ok(V::from(dt.weekday().num_days_from_sunday() as isize)));
+    rv.push(Ok(V::from(dt.ordinal0() as isize)));
+    // somehow this converts from Vec<ValR<V>> to ValR<V> ?
+    let rv:ValR<V> = rv.into_iter().collect();
+
+    // std::println!("{}", std::any::type_name_of_val(&rv));
     rv
 }
