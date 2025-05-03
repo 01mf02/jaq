@@ -76,6 +76,11 @@ yields!(
     r#""1970-01-02T00:00:00Z" | strptime("%Y-%m-%dT%H:%M:%SZ")"#,
     [ 1970, 0, 2, 0, 0, 0, 5, 1 ]
 );
+yields!(
+    mktime,
+    "[ 1970, 0, 2, 0, 0, 0, 5, 1 ] | mktime",
+    86400
+);
 
 #[test]
 fn fromtodate() {

@@ -1,7 +1,7 @@
-use crate::{Error, ValR, ValT};
+use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use chrono::{DateTime, Local, Datelike, Timelike, Utc, FixedOffset, NaiveDateTime};
+use chrono::prelude::*;
 
 /// Convert a unix epoch timestamp with optional fractions into a
 /// DateTime<Utc> .
@@ -14,6 +14,30 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     };
 
     DateTime::from_timestamp_micros(val).ok_or_else(fail)
+}
+
+/// Convert a "broken down time" array into a DateTime<Utc> .
+fn array_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
+    let arg = v.clone().into_vec()?;
+
+    if arg.len() < 6 {
+        return Err(Error::str(format_args!("\"broken down time\" array {} must have at least 6 elements", v)));
+    }
+
+    let dt = Utc.with_ymd_and_hms(
+        arg[0].try_as_isize()? as i32,
+        arg[1].try_as_isize()? as u32 + 1,
+        arg[2].try_as_isize()? as u32,
+        arg[3].try_as_isize()? as u32,
+        arg[4].try_as_isize()? as u32,
+        arg[5].try_as_isize()? as u32,
+    );
+    let dt = match dt {
+        chrono::LocalResult::Single(dt) => dt,
+        _ => return Err(Error::str(format_args!("Cannot convert {} to time", v))),
+    };
+
+    Ok(dt)
 }
 
 /// Convert a DateTime<FixedOffset> to a "broken down time" array
@@ -103,4 +127,14 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
         .map_err(|e| Error::str(format_args!("cannot parse {s} using {fmt}: {e}")))?;
 
     datetime_to_array(dt.and_utc().fixed_offset())
+}
+
+/// Parse an array into a unix epoch timestamp
+pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
+    let dt = array_to_datetime(v);
+
+    let seconds = dt?.timestamp();
+    isize::try_from(seconds)
+        .map(V::from)
+        .or_else(|_| V::from_num(&seconds.to_string()))
 }

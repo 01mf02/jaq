@@ -619,6 +619,9 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
                 time::strptime(&v.try_as_str()?, fmt.try_as_str()?)
             })
         }),
+        ("mktime", v(0), |_, cv| {
+            bome(time::mktime(&cv.1))
+        }),
     ])
 }
 
