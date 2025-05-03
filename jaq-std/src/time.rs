@@ -1,7 +1,18 @@
 use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use chrono::{DateTime, Local, Datelike, Timelike};
+use chrono::{DateTime, Local, Datelike, Timelike, Utc};
+
+fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
+    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
+    let val = if let Some(i) = v.as_isize() {
+        (i * 1000000) as i64
+    } else {
+        (v.as_f64()? * 1000000.0) as i64
+    };
+
+    DateTime::from_timestamp_micros(val).ok_or_else(fail)
+}
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
 /// (seconds elapsed since 1970/01/01).
@@ -37,40 +48,23 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
 
 /// Format a number using strftime
 pub fn strftime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
-    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
-    let val = if let Some(i) = v.as_isize() {
-        (i * 1000000) as i64
-    } else {
-        (v.as_f64()? * 1000000.0) as i64
-    };
+    let dt = epoch_to_datetime(v)?;
 
-    let dt = DateTime::from_timestamp_micros(val).ok_or_else(fail)?;
     Ok(dt.format(fmt).to_string().into())
 }
 
 /// Format a number using strftime in the local timezone
 pub fn strflocaltime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
-    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
-    let val = if let Some(i) = v.as_isize() {
-        (i * 1000000) as i64
-    } else {
-        (v.as_f64()? * 1000000.0) as i64
-    };
+    let dt = epoch_to_datetime(v)?;
 
-    let dt: DateTime<Local> = DateTime::from_timestamp_micros(val).ok_or_else(fail)?.into();
+    let dt = dt.with_timezone(&Local);
     Ok(dt.format(fmt).to_string().into())
 }
 
 
 /// Convert an epoch timestamp to a "broken down time" array
 pub fn gmtime<V: ValT>(v: &V) -> ValR<V> {
-    let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
-    let val = if let Some(i) = v.as_isize() {
-        (i * 1000000) as i64
-    } else {
-        (v.as_f64()? * 1000000.0) as i64
-    };
-    let dt = DateTime::from_timestamp_micros(val).ok_or_else(fail)?;
+    let dt = epoch_to_datetime(v)?;
 
     let mut rv:Vec<ValR<V>> = Vec::new();
     rv.push(Ok(V::from(dt.year() as isize)));
