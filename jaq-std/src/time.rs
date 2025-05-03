@@ -46,18 +46,16 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
     }
 }
 
-/// Format a number using strftime
-pub fn strftime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
+/// Format a number using strftime, possibly using the local timezone
+pub fn strftime<V: ValT>(v: &V, fmt: &str, local: bool) -> ValR<V> {
     let dt = epoch_to_datetime(v)?;
 
-    Ok(dt.format(fmt).to_string().into())
-}
+    let dt = if local {
+        dt.with_timezone(&Local).fixed_offset()
+    } else {
+        dt.with_timezone(&Utc).fixed_offset()
+    };
 
-/// Format a number using strftime in the local timezone
-pub fn strflocaltime<V: ValT>(v: &V, fmt: &str) -> ValR<V> {
-    let dt = epoch_to_datetime(v)?;
-
-    let dt = dt.with_timezone(&Local);
     Ok(dt.format(fmt).to_string().into())
 }
 

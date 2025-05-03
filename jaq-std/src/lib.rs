@@ -600,12 +600,12 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         }),
         ("strftime", v(1), |_, cv| {
             unary(cv, |v, fmt| {
-                time::strftime(&v, fmt.try_as_str()?)
+                time::strftime(&v, fmt.try_as_str()?, false)
             })
         }),
         ("strflocaltime", v(1), |_, cv| {
             unary(cv, |v, fmt| {
-                time::strflocaltime(&v, fmt.try_as_str()?)
+                time::strftime(&v, fmt.try_as_str()?, true)
             })
         }),
         ("gmtime", v(0), |_, cv| {
