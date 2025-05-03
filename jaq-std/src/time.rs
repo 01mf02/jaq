@@ -1,8 +1,10 @@
 use crate::{Error, ValR, ValT};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use chrono::{DateTime, Local, Datelike, Timelike, Utc};
+use chrono::{DateTime, Local, Datelike, Timelike, Utc, FixedOffset};
 
+/// Convert a unix epoch timestamp with optional fractions into a
+/// DateTime<Utc> .
 fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
     let val = if let Some(i) = v.as_isize() {
@@ -12,6 +14,28 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     };
 
     DateTime::from_timestamp_micros(val).ok_or_else(fail)
+}
+
+/// Convert a DateTime<FixedOffset> to a "broken down time" array
+fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> ValR<V> {
+    let mut rv: Vec<ValR<V>> = Vec::new();
+    rv.push(Ok(V::from(dt.year() as isize)));
+    rv.push(Ok(V::from(dt.month0() as isize)));
+    rv.push(Ok(V::from(dt.day() as isize)));
+    rv.push(Ok(V::from(dt.hour() as isize)));
+    rv.push(Ok(V::from(dt.minute() as isize)));
+    if dt.nanosecond() > 0 {
+        rv.push(Ok(V::from((dt.second() as f64 * 1e6+dt.timestamp_subsec_micros() as f64)/1e6)));
+    } else {
+        rv.push(Ok(V::from(dt.second() as isize)));
+    }
+    rv.push(Ok(V::from(dt.weekday().num_days_from_sunday() as isize)));
+    rv.push(Ok(V::from(dt.ordinal0() as isize)));
+    // somehow this converts from Vec<ValR<V>> to ValR<V> ?
+    let rv: ValR<V> = rv.into_iter().collect();
+
+    // std::println!("{}", std::any::type_name_of_val(&rv));
+    rv
 }
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
@@ -70,24 +94,5 @@ pub fn gmtime<V: ValT>(v: &V, local: bool) -> ValR<V> {
         dt.with_timezone(&Utc).fixed_offset()
     };
 
-    let mut rv:Vec<ValR<V>> = Vec::new();
-    rv.push(Ok(V::from(dt.year() as isize)));
-    rv.push(Ok(V::from(dt.month0() as isize)));
-    rv.push(Ok(V::from(dt.day() as isize)));
-    rv.push(Ok(V::from(dt.hour() as isize)));
-    rv.push(Ok(V::from(dt.minute() as isize)));
-    if dt.nanosecond() > 0
-    {
-        rv.push(Ok(V::from((dt.second() as f64 * 1e6+dt.timestamp_subsec_micros() as f64)/1e6)));
-    } else
-    {
-        rv.push(Ok(V::from(dt.second() as isize)));
-    }
-    rv.push(Ok(V::from(dt.weekday().num_days_from_sunday() as isize)));
-    rv.push(Ok(V::from(dt.ordinal0() as isize)));
-    // somehow this converts from Vec<ValR<V>> to ValR<V> ?
-    let rv:ValR<V> = rv.into_iter().collect();
-
-    // std::println!("{}", std::any::type_name_of_val(&rv));
-    rv
+    datetime_to_array(dt)
 }
