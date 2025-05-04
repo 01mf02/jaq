@@ -285,7 +285,7 @@ Here is an overview that summarises:
 - [x] Stream generators (`range`, `recurse`)
 - [x] Time (`now`, `fromdateiso8601`, `todateiso8601`)
 - [x] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...) ([list of numeric filters](#numeric-filters))
-- [ ] More time filters (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
+- [x] More time filters (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
 
 ## Standard filters
 
