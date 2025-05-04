@@ -94,9 +94,10 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
     }
 }
 
-/// Format a number using strftime, possibly using the local timezone
+/// Format a date (either number or array) using strftime, possibly using
+/// the local timezone
 pub fn strftime<V: ValT>(v: &V, fmt: &str, local: bool) -> ValR<V> {
-    let dt = epoch_to_datetime(v)?;
+    let dt = epoch_to_datetime(v).or(array_to_datetime(v))?;
 
     let dt = if local {
         dt.with_timezone(&Local).fixed_offset()
