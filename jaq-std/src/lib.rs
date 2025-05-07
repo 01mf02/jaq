@@ -599,29 +599,19 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
             bome(time::to_iso8601(&cv.1).map(V::from))
         }),
         ("strftime", v(1), |_, cv| {
-            unary(cv, |v, fmt| {
-                time::strftime(&v, fmt.try_as_str()?, false)
-            })
+            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, false))
         }),
         ("strflocaltime", v(1), |_, cv| {
-            unary(cv, |v, fmt| {
-                time::strftime(&v, fmt.try_as_str()?, true)
-            })
+            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, true))
         }),
-        ("gmtime", v(0), |_, cv| {
-            bome(time::gmtime(&cv.1, false))
-        }),
-        ("localtime", v(0), |_, cv| {
-            bome(time::gmtime(&cv.1, true))
-        }),
+        ("gmtime", v(0), |_, cv| bome(time::gmtime(&cv.1, false))),
+        ("localtime", v(0), |_, cv| bome(time::gmtime(&cv.1, true))),
         ("strptime", v(1), |_, cv| {
             unary(cv, |v, fmt| {
                 time::strptime(&v.try_as_str()?, fmt.try_as_str()?)
             })
         }),
-        ("mktime", v(0), |_, cv| {
-            bome(time::mktime(&cv.1))
-        }),
+        ("mktime", v(0), |_, cv| bome(time::mktime(&cv.1))),
     ])
 }
 

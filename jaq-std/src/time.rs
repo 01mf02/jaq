@@ -21,7 +21,10 @@ fn array_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let arg = v.clone().into_vec()?;
 
     if arg.len() < 6 {
-        return Err(Error::str(format_args!("\"broken down time\" array {} must have at least 6 elements", v)));
+        return Err(Error::str(format_args!(
+            "\"broken down time\" array {} must have at least 6 elements",
+            v
+        )));
     }
 
     let dt = Utc.with_ymd_and_hms(
@@ -49,7 +52,9 @@ fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> ValR<V> {
     rv.push(Ok(V::from(dt.hour() as isize)));
     rv.push(Ok(V::from(dt.minute() as isize)));
     if dt.nanosecond() > 0 {
-        rv.push(Ok(V::from((dt.second() as f64 * 1e6+dt.timestamp_subsec_micros() as f64)/1e6)));
+        rv.push(Ok(V::from(
+            (dt.second() as f64 * 1e6 + dt.timestamp_subsec_micros() as f64) / 1e6,
+        )));
     } else {
         rv.push(Ok(V::from(dt.second() as isize)));
     }
@@ -107,7 +112,6 @@ pub fn strftime<V: ValT>(v: &V, fmt: &str, local: bool) -> ValR<V> {
 
     Ok(dt.format(fmt).to_string().into())
 }
-
 
 /// Convert an epoch timestamp to a "broken down time" array
 pub fn gmtime<V: ValT>(v: &V, local: bool) -> ValR<V> {
