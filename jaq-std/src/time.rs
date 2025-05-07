@@ -1,7 +1,7 @@
 use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use chrono::prelude::*;
+use chrono::{DateTime, Datelike, FixedOffset, Local, NaiveDateTime, TimeZone, Timelike, Utc};
 
 /// Convert a unix epoch timestamp with optional fractions into a
 /// DateTime<Utc> .
