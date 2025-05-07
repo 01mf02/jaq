@@ -23,9 +23,12 @@ fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
         day.as_isize()? as u32,
         hour.as_isize()? as u32,
         min.as_isize()? as u32,
-        sec.as_isize()? as u32,
+        sec.as_f64().ok()? as u32,
     )
-    .single()
+    .single()?
+    .with_nanosecond(
+        (sec.as_f64().ok()?.fract() * 1e9) as u32,
+    )
 }
 
 /// Convert a DateTime<FixedOffset> to a "broken down time" array
@@ -108,8 +111,13 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
     let fail = || Error::str(format_args!("cannot convert {v} to time"));
     let dt = array_to_datetime(&v.clone().into_vec()?).ok_or_else(fail)?;
-    let seconds = dt.timestamp();
-    isize::try_from(seconds)
-        .map(V::from)
-        .or_else(|_| V::from_num(&seconds.to_string()))
+
+    if dt.timestamp_subsec_micros() > 0 {
+        Ok((dt.timestamp_micros() as f64 / 1e6).into())
+    } else {
+        let seconds = dt.timestamp();
+        isize::try_from(seconds)
+            .map(V::from)
+            .or_else(|_| V::from_num(&seconds.to_string()))
+    }
 }
