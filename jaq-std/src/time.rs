@@ -80,7 +80,7 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
 
 /// Format a date (either number or array) in a given timezone.
 pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: impl TimeZone) -> ValR<V> {
-    let fail = || Error::str(format_args!("cannot convert {} to time", v));
+    let fail = || Error::str(format_args!("cannot convert {v} to time"));
     let dt = match v.clone().into_vec() {
         Ok(v) => array_to_datetime(&v).ok_or_else(fail),
         Err(_) => epoch_to_datetime(v),
@@ -106,7 +106,7 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
 
 /// Parse an array into a Unix epoch timestamp.
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
-    let fail = || Error::str(format_args!("cannot convert {} to time", v));
+    let fail = || Error::str(format_args!("cannot convert {v} to time"));
     let dt = array_to_datetime(&v.clone().into_vec()?).ok_or_else(fail)?;
     let seconds = dt.timestamp();
     isize::try_from(seconds)
