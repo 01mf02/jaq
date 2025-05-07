@@ -15,20 +15,17 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
 }
 
 /// Parse a "broken down time" array.
-fn array_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
-    let fail = || Error::str(format_args!("cannot convert {} to time", v));
-    let mut arr = v.clone().into_vec()?;
-    arr.truncate(6);
-    let [year, month, day, hour, min, sec] = arr.try_into().map_err(|_| fail())?;
-    let dt = Utc.with_ymd_and_hms(
-        year.try_as_isize()? as i32,
-        month.try_as_isize()? as u32 + 1,
-        day.try_as_isize()? as u32,
-        hour.try_as_isize()? as u32,
-        min.try_as_isize()? as u32,
-        sec.try_as_isize()? as u32,
-    );
-    dt.single().ok_or_else(fail)
+fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
+    let [year, month, day, hour, min, sec]: &_ = v.get(..6).and_then(|v| v.try_into().ok())?;
+    Utc.with_ymd_and_hms(
+        year.as_isize()? as i32,
+        month.as_isize()? as u32 + 1,
+        day.as_isize()? as u32,
+        hour.as_isize()? as u32,
+        min.as_isize()? as u32,
+        sec.as_isize()? as u32,
+    )
+    .single()
 }
 
 /// Convert a DateTime<FixedOffset> to a "broken down time" array
@@ -83,7 +80,11 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
 
 /// Format a date (either number or array) in a given timezone.
 pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: impl TimeZone) -> ValR<V> {
-    let dt = epoch_to_datetime(v).or(array_to_datetime(v))?;
+    let fail = || Error::str(format_args!("cannot convert {} to time", v));
+    let dt = match v.clone().into_vec() {
+        Ok(v) => array_to_datetime(&v).ok_or_else(fail),
+        Err(_) => epoch_to_datetime(v),
+    }?;
     let dt = dt.with_timezone(&tz).fixed_offset();
     Ok(dt.format(fmt).to_string().into())
 }
@@ -105,7 +106,9 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
 
 /// Parse an array into a Unix epoch timestamp.
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
-    let seconds = array_to_datetime(v)?.timestamp();
+    let fail = || Error::str(format_args!("cannot convert {} to time", v));
+    let dt = array_to_datetime(&v.clone().into_vec()?).ok_or_else(fail)?;
+    let seconds = dt.timestamp();
     isize::try_from(seconds)
         .map(V::from)
         .or_else(|_| V::from_num(&seconds.to_string()))
