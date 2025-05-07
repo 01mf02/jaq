@@ -2,8 +2,7 @@ use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike, Utc};
 
-/// Convert a unix epoch timestamp with optional fractions into a
-/// DateTime<Utc> .
+/// Convert a Unix epoch timestamp with optional fractions.
 fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
     let val = if let Some(i) = v.as_isize() {
@@ -15,7 +14,7 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     DateTime::from_timestamp_micros(val).ok_or_else(fail)
 }
 
-/// Convert a "broken down time" array into a DateTime<Utc> .
+/// Parse a "broken down time" array.
 fn array_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let fail = || Error::str(format_args!("cannot convert {} to time", v));
     let mut arr = v.clone().into_vec()?;
@@ -82,22 +81,21 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
     }
 }
 
-/// Format a date (either number or array) using strftime, possibly using
-/// the local timezone
+/// Format a date (either number or array) in a given timezone.
 pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: impl TimeZone) -> ValR<V> {
     let dt = epoch_to_datetime(v).or(array_to_datetime(v))?;
     let dt = dt.with_timezone(&tz).fixed_offset();
     Ok(dt.format(fmt).to_string().into())
 }
 
-/// Convert an epoch timestamp to a "broken down time" array
+/// Convert an epoch timestamp to a "broken down time" array.
 pub fn gmtime<V: ValT>(v: &V, tz: impl TimeZone) -> ValR<V> {
     let dt = epoch_to_datetime(v)?;
     let dt = dt.with_timezone(&tz).fixed_offset();
     datetime_to_array(dt).into_iter().map(Ok).collect()
 }
 
-/// Parse a string into a "broken down time" array
+/// Parse a string into a "broken down time" array.
 pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
     let dt = NaiveDateTime::parse_from_str(s, fmt)
         .map_err(|e| Error::str(format_args!("cannot parse {s} using {fmt}: {e}")))?;
@@ -105,11 +103,9 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
     datetime_to_array(dt).into_iter().map(Ok).collect()
 }
 
-/// Parse an array into a unix epoch timestamp
+/// Parse an array into a Unix epoch timestamp.
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
-    let dt = array_to_datetime(v);
-
-    let seconds = dt?.timestamp();
+    let seconds = array_to_datetime(v)?.timestamp();
     isize::try_from(seconds)
         .map(V::from)
         .or_else(|_| V::from_num(&seconds.to_string()))
