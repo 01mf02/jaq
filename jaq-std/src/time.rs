@@ -1,6 +1,5 @@
 use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike, Utc};
 
 /// Convert a unix epoch timestamp with optional fractions into a
@@ -44,27 +43,21 @@ fn array_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
 }
 
 /// Convert a DateTime<FixedOffset> to a "broken down time" array
-fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> ValR<V> {
-    let mut rv: Vec<ValR<V>> = Vec::new();
-    rv.push(Ok(V::from(dt.year() as isize)));
-    rv.push(Ok(V::from(dt.month0() as isize)));
-    rv.push(Ok(V::from(dt.day() as isize)));
-    rv.push(Ok(V::from(dt.hour() as isize)));
-    rv.push(Ok(V::from(dt.minute() as isize)));
-    if dt.nanosecond() > 0 {
-        rv.push(Ok(V::from(
-            (dt.second() as f64 * 1e6 + dt.timestamp_subsec_micros() as f64) / 1e6,
-        )));
-    } else {
-        rv.push(Ok(V::from(dt.second() as isize)));
-    }
-    rv.push(Ok(V::from(dt.weekday().num_days_from_sunday() as isize)));
-    rv.push(Ok(V::from(dt.ordinal0() as isize)));
-    // somehow this converts from Vec<ValR<V>> to ValR<V> ?
-    let rv: ValR<V> = rv.into_iter().collect();
-
-    // std::println!("{}", std::any::type_name_of_val(&rv));
-    rv
+fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> [V; 8] {
+    [
+        V::from(dt.year() as isize),
+        V::from(dt.month0() as isize),
+        V::from(dt.day() as isize),
+        V::from(dt.hour() as isize),
+        V::from(dt.minute() as isize),
+        if dt.nanosecond() > 0 {
+            V::from((dt.second() as f64 * 1e6 + dt.timestamp_subsec_micros() as f64) / 1e6)
+        } else {
+            V::from(dt.second() as isize)
+        },
+        V::from(dt.weekday().num_days_from_sunday() as isize),
+        V::from(dt.ordinal0() as isize),
+    ]
 }
 
 /// Parse an ISO 8601 timestamp string to a number holding the equivalent UNIX timestamp
@@ -111,15 +104,15 @@ pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: impl TimeZone) -> ValR<V> {
 pub fn gmtime<V: ValT>(v: &V, tz: impl TimeZone) -> ValR<V> {
     let dt = epoch_to_datetime(v)?;
     let dt = dt.with_timezone(&tz).fixed_offset();
-    datetime_to_array(dt)
+    datetime_to_array(dt).into_iter().map(Ok).collect()
 }
 
 /// Parse a string into a "broken down time" array
 pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
     let dt = NaiveDateTime::parse_from_str(s, fmt)
         .map_err(|e| Error::str(format_args!("cannot parse {s} using {fmt}: {e}")))?;
-
-    datetime_to_array(dt.and_utc().fixed_offset())
+    let dt = dt.and_utc().fixed_offset();
+    datetime_to_array(dt).into_iter().map(Ok).collect()
 }
 
 /// Parse an array into a unix epoch timestamp
