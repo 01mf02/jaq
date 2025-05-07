@@ -17,29 +17,19 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
 
 /// Convert a "broken down time" array into a DateTime<Utc> .
 fn array_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
-    let arg = v.clone().into_vec()?;
-
-    if arg.len() < 6 {
-        return Err(Error::str(format_args!(
-            "\"broken down time\" array {} must have at least 6 elements",
-            v
-        )));
-    }
-
+    let fail = || Error::str(format_args!("cannot convert {} to time", v));
+    let mut arr = v.clone().into_vec()?;
+    arr.truncate(6);
+    let [year, month, day, hour, min, sec] = arr.try_into().map_err(|_| fail())?;
     let dt = Utc.with_ymd_and_hms(
-        arg[0].try_as_isize()? as i32,
-        arg[1].try_as_isize()? as u32 + 1,
-        arg[2].try_as_isize()? as u32,
-        arg[3].try_as_isize()? as u32,
-        arg[4].try_as_isize()? as u32,
-        arg[5].try_as_isize()? as u32,
+        year.try_as_isize()? as i32,
+        month.try_as_isize()? as u32 + 1,
+        day.try_as_isize()? as u32,
+        hour.try_as_isize()? as u32,
+        min.try_as_isize()? as u32,
+        sec.try_as_isize()? as u32,
     );
-    let dt = match dt {
-        chrono::LocalResult::Single(dt) => dt,
-        _ => return Err(Error::str(format_args!("Cannot convert {} to time", v))),
-    };
-
-    Ok(dt)
+    dt.single().ok_or_else(fail)
 }
 
 /// Convert a DateTime<FixedOffset> to a "broken down time" array
