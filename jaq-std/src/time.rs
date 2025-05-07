@@ -1,7 +1,7 @@
 use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use chrono::{DateTime, Datelike, FixedOffset, Local, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike, Utc};
 
 /// Convert a unix epoch timestamp with optional fractions into a
 /// DateTime<Utc> .
@@ -101,28 +101,16 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
 
 /// Format a date (either number or array) using strftime, possibly using
 /// the local timezone
-pub fn strftime<V: ValT>(v: &V, fmt: &str, local: bool) -> ValR<V> {
+pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: impl TimeZone) -> ValR<V> {
     let dt = epoch_to_datetime(v).or(array_to_datetime(v))?;
-
-    let dt = if local {
-        dt.with_timezone(&Local).fixed_offset()
-    } else {
-        dt.with_timezone(&Utc).fixed_offset()
-    };
-
+    let dt = dt.with_timezone(&tz).fixed_offset();
     Ok(dt.format(fmt).to_string().into())
 }
 
 /// Convert an epoch timestamp to a "broken down time" array
-pub fn gmtime<V: ValT>(v: &V, local: bool) -> ValR<V> {
+pub fn gmtime<V: ValT>(v: &V, tz: impl TimeZone) -> ValR<V> {
     let dt = epoch_to_datetime(v)?;
-
-    let dt = if local {
-        dt.with_timezone(&Local).fixed_offset()
-    } else {
-        dt.with_timezone(&Utc).fixed_offset()
-    };
-
+    let dt = dt.with_timezone(&tz).fixed_offset();
     datetime_to_array(dt)
 }
 
