@@ -51,7 +51,7 @@ fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> [V; 8] {
         V::from(dt.hour() as isize),
         V::from(dt.minute() as isize),
         if dt.nanosecond() > 0 {
-            V::from((dt.second() as f64 * 1e6 + dt.timestamp_subsec_micros() as f64) / 1e6)
+            V::from(dt.second() as f64 + dt.timestamp_subsec_micros() as f64 / 1e6)
         } else {
             V::from(dt.second() as isize)
         },
