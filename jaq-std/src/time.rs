@@ -29,18 +29,17 @@ fn datetime_to_epoch<Tz: TimeZone, V: ValT>(dt: DateTime<Tz>, frac: bool) -> Val
 /// Parse a "broken down time" array.
 fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
     let [year, month, day, hour, min, sec]: &_ = v.get(..6).and_then(|v| v.try_into().ok())?;
+    let sec = sec.as_f64().ok()?;
     Utc.with_ymd_and_hms(
         year.as_isize()? as i32,
         month.as_isize()? as u32 + 1,
         day.as_isize()? as u32,
         hour.as_isize()? as u32,
         min.as_isize()? as u32,
-        sec.as_f64().ok()? as u32,
+        sec.trunc() as u32,
     )
     .single()?
-    .with_nanosecond(
-        (sec.as_f64().ok()?.fract() * 1e9) as u32,
-    )
+    .with_nanosecond((sec.fract() * 1e9) as u32)
 }
 
 /// Convert a DateTime<FixedOffset> to a "broken down time" array
