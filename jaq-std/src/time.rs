@@ -14,6 +14,18 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     DateTime::from_timestamp_micros(val).ok_or_else(fail)
 }
 
+/// Convert a date-time pair to a UNIX epoch timestamp.
+fn datetime_to_epoch<Tz: TimeZone, V: ValT>(dt: DateTime<Tz>, frac: bool) -> ValR<V> {
+    if frac {
+        Ok((dt.timestamp_micros() as f64 / 1e6).into())
+    } else {
+        let seconds = dt.timestamp();
+        isize::try_from(seconds)
+            .map(V::from)
+            .or_else(|_| V::from_num(&seconds.to_string()))
+    }
+}
+
 /// Parse a "broken down time" array.
 fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
     let [year, month, day, hour, min, sec]: &_ = v.get(..6).and_then(|v| v.try_into().ok())?;
@@ -58,14 +70,7 @@ fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> [V; 8] {
 pub fn from_iso8601<V: ValT>(s: &str) -> ValR<V> {
     let dt = DateTime::parse_from_rfc3339(s)
         .map_err(|e| Error::str(format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
-    if s.contains('.') {
-        Ok((dt.timestamp_micros() as f64 / 1e6).into())
-    } else {
-        let seconds = dt.timestamp();
-        isize::try_from(seconds)
-            .map(V::from)
-            .or_else(|_| V::from_num(&seconds.to_string()))
-    }
+    datetime_to_epoch(dt, s.contains('.'))
 }
 
 /// Format a number as an ISO 8601 timestamp string.
@@ -111,13 +116,5 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
     let fail = || Error::str(format_args!("cannot convert {v} to time"));
     let dt = array_to_datetime(&v.clone().into_vec()?).ok_or_else(fail)?;
-
-    if dt.timestamp_subsec_micros() > 0 {
-        Ok((dt.timestamp_micros() as f64 / 1e6).into())
-    } else {
-        let seconds = dt.timestamp();
-        isize::try_from(seconds)
-            .map(V::from)
-            .or_else(|_| V::from_num(&seconds.to_string()))
-    }
+    datetime_to_epoch(dt, dt.timestamp_subsec_micros() > 0)
 }
