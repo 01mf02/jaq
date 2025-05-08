@@ -2,7 +2,7 @@ use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
 use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike, Utc};
 
-/// Convert a Unix epoch timestamp with optional fractions.
+/// Convert a UNIX epoch timestamp with optional fractions.
 fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
     let val = if let Some(i) = v.as_isize() {
@@ -111,7 +111,7 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
     datetime_to_array(dt).into_iter().map(Ok).collect()
 }
 
-/// Parse an array into a Unix epoch timestamp.
+/// Parse an array into a UNIX epoch timestamp.
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
     let fail = || Error::str(format_args!("cannot convert {v} to time"));
     let dt = array_to_datetime(&v.clone().into_vec()?).ok_or_else(fail)?;
