@@ -30,7 +30,7 @@ fn datetime_to_epoch<Tz: TimeZone, V: ValT>(dt: DateTime<Tz>, frac: bool) -> Val
 fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
     let [year, month, day, hour, min, sec]: &[V; 6] = v.get(..6)?.try_into().ok()?;
     let sec = sec.as_f64().ok()?;
-    let u32 = |v: &V| -> Option<u32> { Some(v.as_isize()?.try_into().ok()?) };
+    let u32 = |v: &V| -> Option<u32> { v.as_isize()?.try_into().ok() };
     Utc.with_ymd_and_hms(
         year.as_isize()?.try_into().ok()?,
         u32(month)? + 1,
