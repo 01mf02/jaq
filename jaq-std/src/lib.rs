@@ -591,6 +591,7 @@ fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 
 #[cfg(feature = "time")]
 fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+    use chrono::{Local, Utc};
     Box::new([
         ("fromdateiso8601", v(0), |_, cv| {
             bome(cv.1.try_as_str().and_then(time::from_iso8601))
@@ -598,6 +599,20 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         ("todateiso8601", v(0), |_, cv| {
             bome(time::to_iso8601(&cv.1).map(V::from))
         }),
+        ("strftime", v(1), |_, cv| {
+            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Utc))
+        }),
+        ("strflocaltime", v(1), |_, cv| {
+            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Local))
+        }),
+        ("gmtime", v(0), |_, cv| bome(time::gmtime(&cv.1, Utc))),
+        ("localtime", v(0), |_, cv| bome(time::gmtime(&cv.1, Local))),
+        ("strptime", v(1), |_, cv| {
+            unary(cv, |v, fmt| {
+                time::strptime(v.try_as_str()?, fmt.try_as_str()?)
+            })
+        }),
+        ("mktime", v(0), |_, cv| bome(time::mktime(&cv.1))),
     ])
 }
 
