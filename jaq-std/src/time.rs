@@ -5,12 +5,10 @@ use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike,
 /// Convert a UNIX epoch timestamp with optional fractions.
 fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
-    let val = if let Some(i) = v.as_isize() {
-        (i * 1000000) as i64
-    } else {
-        (v.as_f64()? * 1000000.0) as i64
+    let val = match v.as_isize() {
+        Some(i) => i as i64 * 1000000,
+        None => (v.as_f64()? * 1000000.0) as i64,
     };
-
     DateTime::from_timestamp_micros(val).ok_or_else(fail)
 }
 
