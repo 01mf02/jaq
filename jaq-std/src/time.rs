@@ -30,13 +30,15 @@ fn datetime_to_epoch<Tz: TimeZone, V: ValT>(dt: DateTime<Tz>, frac: bool) -> Val
 fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
     let [year, month, day, hour, min, sec]: &[V; 6] = v.get(..6)?.try_into().ok()?;
     let sec = sec.as_f64().ok()?;
+    let u32 = |v: &V| -> Option<u32> { Some(v.as_isize()?.try_into().ok()?) };
     Utc.with_ymd_and_hms(
-        year.as_isize()? as i32,
-        month.as_isize()? as u32 + 1,
-        day.as_isize()? as u32,
-        hour.as_isize()? as u32,
-        min.as_isize()? as u32,
-        sec.trunc() as u32,
+        year.as_isize()?.try_into().ok()?,
+        u32(month)? + 1,
+        u32(day)?,
+        u32(hour)?,
+        u32(min)?,
+        // the `as i8` cast saturates, returning a number in the range [-128, 128]
+        (sec.floor() as i8).try_into().ok()?,
     )
     .single()?
     .with_nanosecond((sec.fract() * 1e9) as u32)
