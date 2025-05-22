@@ -242,6 +242,7 @@ dependencies = [
  "jaq-core",
  "jaq-json",
  "jaq-std",
+ "jaq-xml",
  "log",
  "memmap2",
  "mimalloc",
@@ -309,6 +310,15 @@ dependencies = [
  "regex-lite",
  "serde_json",
  "urlencoding",
+]
+
+[[package]]
+name = "jaq-xml"
+version = "0.1.0"
+dependencies = [
+ "jaq-core",
+ "jaq-json",
+ "quick-xml",
 ]
 
 [[package]]
@@ -401,6 +411,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02b3e5e68a3a1a02aad3ec490a98007cbc13c37cbe84a3cd7b8e406d76e7f778"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.37.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "165859e9e55f79d67b96c5d96f4e88b6f2695a1972849c15a6a3f5c59fc2c003"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

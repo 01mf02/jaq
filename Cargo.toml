@@ -3,6 +3,7 @@ members = [
     "jaq-core",
     "jaq-std",
     "jaq-json",
+    "jaq-xml",
     "jaq",
     "jaq-play",
 ]

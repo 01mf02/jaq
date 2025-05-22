@@ -62,6 +62,12 @@ fn main() -> ExitCode {
     }
 }
 
+enum Format {
+    Raw,
+    Json,
+    Xml,
+}
+
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     if let Some(test_files) = &cli.run_tests {
         return Ok(match test_files.last() {
@@ -94,7 +100,14 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
             let path = Path::new(file);
             let file =
                 load_file(path).map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
-            let inputs = read_slice(cli, &file);
+            let format = if cli.raw_input {
+                Format::Raw
+            } else if path.extension().and_then(|ext| ext.to_str()) == Some("xml") {
+                Format::Xml
+            } else {
+                Format::Json
+            };
+            let inputs = read_slice(cli.slurp, format, &file);
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -246,6 +259,10 @@ fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> std::io::E
     io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
+fn xml_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
+    jaq_xml::parse_slice(slice).map(|r| r.map_err(invalid_data))
+}
+
 fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
     let mut lexer = hifijson::SliceLexer::new(slice);
     core::iter::from_fn(move || {
@@ -278,12 +295,17 @@ where
     }
 }
 
-fn read_slice<'a>(cli: &Cli, slice: &'a [u8]) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
-    if cli.raw_input {
+fn read_slice<'a>(
+    slurp: bool, fmt: Format,
+    slice: &'a [u8],
+) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
+    match fmt {
+        Format::Raw => {
         let read = io::BufReader::new(slice);
-        Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
-    } else {
-        Box::new(collect_if(cli.slurp, json_slice(slice)))
+        Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
+        }
+        Format::Json => Box::new(collect_if(slurp, json_slice(slice))),
+        Format::Xml => Box::new(collect_if(slurp, xml_slice(slice))),
     }
 }
 

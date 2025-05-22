@@ -4,6 +4,13 @@ use std::env::ArgsOs;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+#[derive(Copy, Clone, Debug)]
+pub enum Format {
+    Raw,
+    Json,
+    Xml,
+}
+
 #[derive(Debug, Default)]
 pub struct Cli {
     // Input options
@@ -15,6 +22,9 @@ pub struct Cli {
     /// jaq yields an array for each file, whereas
     /// jq produces only a single array.
     pub slurp: bool,
+
+    pub from: Option<Format>,
+    pub to: Option<Format>,
 
     // Output options
     pub compact_output: bool,
@@ -91,6 +101,9 @@ impl Cli {
             "null-input" => self.short('n', args)?,
             "raw-input" => self.short('R', args)?,
             "slurp" => self.short('s', args)?,
+
+            "from" => self.from = Some(parse_format("--from", args)?),
+            "to" => self.to = Some(parse_format("--to", args)?),
 
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
@@ -197,6 +210,7 @@ pub enum Error {
     KeyValue(&'static str),
     Int(&'static str),
     Path(&'static str),
+    Format(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -207,6 +221,7 @@ impl fmt::Display for Error {
             Self::KeyValue(o) => write!(f, "{o} expects a key and a value"),
             Self::Int(o) => write!(f, "{o} expects an integer"),
             Self::Path(o) => write!(f, "{o} expects a path"),
+            Self::Format(o) => write!(f, "{o} expects a data format (possible values: raw, json, xml)"),
         }
     }
 }
@@ -216,6 +231,17 @@ impl From<OsString> for Error {
     fn from(e: OsString) -> Self {
         Self::Utf8(e)
     }
+}
+
+fn parse_format(arg: &'static str, args: &mut ArgsOs) -> Result<Format, Error> {
+    let err = || Error::Format(arg);
+    let fmt = args.next().and_then(|a| a.into_string().ok()).ok_or_else(err)?;
+    Ok(match &*fmt {
+        "raw" => Format::Raw,
+        "json" => Format::Json,
+        "xml" => Format::Xml,
+        _ => return Err(err()),
+    })
 }
 
 fn parse_key_val(arg: &'static str, args: &mut ArgsOs) -> Result<(String, OsString), Error> {
