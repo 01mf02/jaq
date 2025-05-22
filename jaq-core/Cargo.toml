@@ -1,6 +1,6 @@
 [package]
 name = "jaq-core"
-version = "2.1.0"
+version = "2.2.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -16,6 +16,7 @@ default = ["std"]
 std = []
 
 [dependencies]
+arbitrary = { version = "1.4", optional = true }
 dyn-clone = "1.0"
 once_cell = "1.16.0"
 typed-arena = "2.0.2"

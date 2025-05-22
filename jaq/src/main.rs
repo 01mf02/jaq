@@ -2,6 +2,7 @@ mod cli;
 
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
+use is_terminal::IsTerminal;
 use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
 use jaq_json::Val;
 use std::io::{self, BufRead, Write};
@@ -16,7 +17,6 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() -> ExitCode {
     use env_logger::Env;
-    use is_terminal::IsTerminal;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "debug"))
         .format(|buf, record| match record.level() {
             // format error messages (yielded by `stderr`) without newline
@@ -491,7 +491,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) => {
             '{'.bold().fmt(f)?;
             let kv = |f: &mut Formatter, (k, val): (&std::rc::Rc<String>, &Val)| {
-                write!(f, "{:?}:", k.bold())?;
+                write!(f, "{}:", Val::Str(k.clone()).bold())?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
@@ -511,7 +511,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
     }
 }
 
-fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
+fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> {
     let f = |f: &mut Formatter| {
         let opts = PpOpts {
             compact: cli.compact_output,
@@ -540,8 +540,13 @@ fn print(w: &mut impl Write, cli: &Cli, val: &Val) -> io::Result<()> {
     }
 }
 
-fn with_stdout<T>(f: impl FnOnce(&mut io::StdoutLock) -> T) -> T {
-    f(&mut io::stdout().lock())
+fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {
+    let stdout = io::stdout();
+    if stdout.is_terminal() {
+        f(&mut stdout.lock())
+    } else {
+        f(&mut io::BufWriter::new(stdout.lock()))
+    }
 }
 
 type StringColors = Vec<(String, Option<Color>)>;

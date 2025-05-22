@@ -143,6 +143,13 @@ test!(
 );
 
 test!(
+    fmt_obj_key,
+    &["-c"],
+    r#"{"विश\u094dव": 1}"#,
+    r#"{"विश्व":1}"#
+);
+
+test!(
     mods,
     &["-c", "-L", "tests", r#"include "a"; [a, data, d]"#],
     "0",

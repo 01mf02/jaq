@@ -144,3 +144,9 @@ fn math_rem() {
     give(json!(null), "2000000001 % 3", json!(0));
     give(json!(null), "2000000001 % 2000000001", json!(0));
 }
+
+yields!(
+    path_values,
+    "[{a: 1, b: [2, 3]} | path_values]",
+    json!([[["a"], 1], [["b"], [2, 3]], [["b", 0], 2], [["b", 1], 3]])
+);

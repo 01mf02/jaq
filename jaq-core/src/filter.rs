@@ -1,12 +1,12 @@
+//! Filter execution.
+
 use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_map_with, map_with};
-use crate::compile::{Fold, Lut, Pattern, Tailrec, Term as Ast};
+use crate::compile::{Bind, Fold, Lut, Pattern, Tailrec, Term as Ast, TermId as Id};
 use crate::fold::fold;
 use crate::val::{ValT, ValX, ValXs};
-use crate::{exn, rc_lazy_list, Bind, Ctx, Error, Exn};
+use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
-
-pub(crate) use crate::compile::TermId as Id;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
@@ -18,31 +18,129 @@ dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 
 type BoxUpdate<'a, V> = Box<dyn Update<'a, V> + 'a>;
 
-type Results<'a, T, V> = crate::box_iter::Results<'a, T, Exn<'a, V>>;
+type Results<'a, T, V> = box_iter::Results<'a, T, Exn<'a, V>>;
+
+/// List of bindings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Vars<'a, V>(RcList<Bind<V, usize, (&'a Id, Self)>>);
+
+impl<'a, V> Vars<'a, V> {
+    fn get(&self, i: usize) -> Option<&Bind<V, usize, (&'a Id, Self)>> {
+        self.0.get(i)
+    }
+}
+
+/// Filter execution context.
+#[derive(Clone)]
+pub struct Ctx<'a, V> {
+    vars: Vars<'a, V>,
+    /// Number of bound labels at the current path
+    ///
+    /// This is used to create fresh break IDs.
+    labels: usize,
+    inputs: &'a Inputs<'a, V>,
+}
+
+impl<'a, V> Ctx<'a, V> {
+    /// Construct a context.
+    pub fn new(vars: impl IntoIterator<Item = V>, inputs: &'a Inputs<'a, V>) -> Self {
+        Self {
+            vars: Vars(RcList::new().extend(vars.into_iter().map(Bind::Var))),
+            labels: 0,
+            inputs,
+        }
+    }
+
+    /// Add a new variable binding.
+    fn cons_var(mut self, x: V) -> Self {
+        self.vars.0 = self.vars.0.cons(Bind::Var(x));
+        self
+    }
+
+    /// Add a new filter binding.
+    fn cons_fun(mut self, (f, ctx): (&'a Id, Self)) -> Self {
+        self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
+        self
+    }
+
+    fn cons_label(mut self) -> Self {
+        self.labels += 1;
+        self.vars.0 = self.vars.0.cons(Bind::Label(self.labels));
+        self
+    }
+
+    /// Remove the `skip` most recent variable bindings.
+    fn skip_vars(mut self, skip: usize) -> Self {
+        if skip > 0 {
+            self.vars.0 = self.vars.0.skip(skip).clone();
+        }
+        self
+    }
+
+    /// Replace variables in context with given ones.
+    fn with_vars(&self, vars: Vars<'a, V>) -> Self {
+        Self {
+            vars,
+            labels: self.labels,
+            inputs: self.inputs,
+        }
+    }
+
+    /// Return remaining input values.
+    pub fn inputs(&self) -> &'a Inputs<'a, V> {
+        self.inputs
+    }
+}
+
+impl<'a, V: Clone> Ctx<'a, V> {
+    /// Remove the latest bound variable from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
+    pub fn pop_var(&mut self) -> V {
+        let (head, tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Var(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        self.vars.0 = tail;
+        head
+    }
+
+    /// Remove the latest bound function from the context.
+    ///
+    /// This is useful for writing [`Native`] filters.
+    pub fn pop_fun(&mut self) -> (&'a Id, Self) {
+        let ((id, vars), tail) = match core::mem::take(&mut self.vars.0).pop() {
+            Some((Bind::Fun(head), tail)) => (head, tail),
+            _ => panic!(),
+        };
+        self.vars.0 = tail;
+        (id, self.with_vars(vars))
+    }
+}
 
 /// Enhance the context `ctx` with variables bound to the outputs of `args` executed on `cv`,
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
 fn bind_vars<'a, F: FilterT>(
-    args: &'a [Bind<Id>],
+    args: &'a [Arg<Id>],
     lut: &'a Lut<F>,
     ctx: Ctx<'a, F::V>,
     cv: Cv<'a, F::V>,
 ) -> Results<'a, Cv<'a, F::V>, F::V> {
     match args.split_first() {
-        Some((Bind::Var(arg), [])) => {
+        Some((Arg::Var(arg), [])) => {
             map_with(arg.run(lut, cv.clone()), (ctx, cv.1), |y, (ctx, v)| {
                 Ok((ctx.cons_var(y?), v))
             })
         }
-        Some((Bind::Fun(arg), [])) => box_once(Ok((ctx.cons_fun((arg, cv.0)), cv.1))),
-        Some((Bind::Var(arg), rest)) => {
+        Some((Arg::Fun(arg), [])) => box_once(Ok((ctx.cons_fun((arg, cv.0)), cv.1))),
+        Some((Arg::Var(arg), rest)) => {
             flat_map_then_with(arg.run(lut, cv.clone()), (ctx, cv), |y, (ctx, cv)| {
                 bind_vars(rest, lut, ctx.cons_var(y), cv)
             })
         }
-        Some((Bind::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
+        Some((Arg::Fun(arg), rest)) => bind_vars(rest, lut, ctx.cons_fun((arg, cv.0.clone())), cv),
         None => box_once(Ok((ctx, cv.1))),
     }
 }
@@ -95,6 +193,40 @@ fn run_and_bind<'a, F: FilterT>(
     }
 }
 
+fn fold_update<'a, F: FilterT>(
+    lut: &'a Lut<F>,
+    fold_type: &'a Fold<Id>,
+    path: &'a Id,
+    v: F::V,
+    mut xs: impl Iterator<Item = Result<Ctx<'a, F::V>, Exn<'a, F::V>>> + Clone + 'a,
+    f: BoxUpdate<'a, F::V>,
+) -> ValXs<'a, F::V> {
+    let ctx = match xs.next() {
+        Some(Ok(ctx)) => ctx,
+        Some(Err(e)) => return box_once(Err(e)),
+        None => match fold_type {
+            Fold::Reduce => return f(v),
+            Fold::Foreach(_) => return box_once(Ok(v)),
+        },
+    };
+
+    let rec = |v, (xs, f)| fold_update(lut, fold_type, path, v, xs, f);
+    let update: BoxUpdate<_> = match fold_type {
+        Fold::Reduce => Box::new(move |v| rec(v, (xs.clone(), f.clone()))),
+        Fold::Foreach(None) => {
+            Box::new(move |v| flat_map_then_with(f(v), (xs.clone(), f.clone()), rec))
+        }
+        Fold::Foreach(Some(proj)) => {
+            let ctx_ = ctx.clone();
+            Box::new(move |v| {
+                let proj = proj.update(lut, (ctx_.clone(), v), f.clone());
+                flat_map_then_with(proj, (xs.clone(), f.clone()), rec)
+            })
+        }
+    };
+    path.update(lut, (ctx, v), update)
+}
+
 fn reduce<'a, T, V, F>(xs: Results<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
 where
     T: Clone + 'a,
@@ -103,16 +235,6 @@ where
 {
     let xs = rc_lazy_list::List::from_iter(xs);
     Box::new(fold(xs, init, f, |_| (), |_, _| None, Some))
-}
-
-fn label_skip<'a, V: 'a>(ys: ValXs<'a, V>, skip: usize) -> ValXs<'a, V> {
-    if skip == 0 {
-        return ys;
-    }
-    Box::new(ys.map(move |y| match y {
-        Err(Exn(exn::Inner::Break(n))) => Err(Exn(exn::Inner::Break(n + skip))),
-        y => y,
-    }))
 }
 
 fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
@@ -301,15 +423,18 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 })
             }
 
-            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
+            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
-                Bind::Fun((id, vars)) => {
-                    label_skip(id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)), *skip)
-                }
+                Bind::Fun((id, vars)) => id.run(lut, (cv.0.with_vars(vars.clone()), cv.1)),
+                Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
                 use core::ops::ControlFlow;
-                let inputs = cv.0.inputs;
+                let with_vars = move |vars| Ctx {
+                    vars,
+                    labels: cv.0.labels,
+                    inputs: cv.0.inputs,
+                };
                 let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv);
                 match tailrec {
                     None => flat_map_then(cvs, |cv| id.run(lut, cv)),
@@ -317,7 +442,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                         [flat_map_then(cvs, |cv| id.run(lut, cv))].into(),
                         move |r| match r {
                             Err(Exn(exn::Inner::TailCall(id_, vars, v))) if id == id_ => {
-                                ControlFlow::Continue(id.run(lut, (Ctx { vars, inputs }, v)))
+                                ControlFlow::Continue(id.run(lut, (with_vars(vars), v)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
@@ -331,13 +456,14 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
                 flat_map_then(cvs, |cv| lut.funs[*id].run(lut, cv))
             }
-            Ast::Label(id) => Box::new(id.run(lut, cv).map_while(|y| match y {
-                Err(Exn(exn::Inner::Break(n))) => {
-                    n.checked_sub(1).map(|m| Err(Exn(exn::Inner::Break(m))))
-                }
-                y => Some(y),
-            })),
-            Ast::Break(skip) => box_once(Err(Exn(exn::Inner::Break(*skip)))),
+            Ast::Label(id) => {
+                let ctx = cv.0.cons_label();
+                let labels = ctx.labels;
+                Box::new(id.run(lut, (ctx, cv.1)).map_while(move |y| match y {
+                    Err(Exn(exn::Inner::Break(b))) if b == labels => None,
+                    y => Some(y),
+                }))
+            }
         }
     }
 
@@ -356,8 +482,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
             // jq implements updates on `try ... catch` and `label`, but
             // I do not see how to implement this in jaq
-            // folding, however, could be done, even if jq does not support it
-            Ast::TryCatch(..) | Ast::Label(_) | Ast::Fold(..) => err,
+            Ast::TryCatch(..) | Ast::Label(..) => err,
 
             Ast::Id => f(cv.1),
             Ast::Path(l, path) => {
@@ -395,13 +520,15 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     .any(|y| y.map_or(true, |y| y.as_bool()));
                 if some_true { l } else { r }.update(lut, cv, f)
             }
-
-            Ast::Var(v, skip) => match cv.0.vars.get(*v).unwrap() {
+            Ast::Fold(xs, pat, init, update, fold_type) => {
+                let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, lut, cv.clone(), pat));
+                let rec = move |v| fold_update(lut, fold_type, update, v, xs.clone(), f.clone());
+                init.update(lut, cv, Box::new(rec))
+            }
+            Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(_) => err,
-                Bind::Fun(l) => label_skip(
-                    l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
-                    *skip,
-                ),
+                Bind::Fun(l) => l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
+                Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, _tailrec) => {
                 let init = cv.1.clone();
@@ -415,7 +542,6 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     lut.funs[*id].update(lut, (cv.0, v), f.clone())
                 })
             }
-            Ast::Break(skip) => box_once(Err(Exn(exn::Inner::Break(*skip)))),
         }
     }
 }

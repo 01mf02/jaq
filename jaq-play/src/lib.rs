@@ -58,6 +58,7 @@ where
 }
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
+    let display = |s| FormatterFn(move |f: &mut Formatter| fmt_str(f, &escape(s)));
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
@@ -65,10 +66,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
         Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s) => {
-            let display = FormatterFn(|f: &mut Formatter| fmt_str(f, &escape(s)));
-            span(f, "string", display)
-        }
+        Val::Str(s) => span(f, "string", display(s)),
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;
@@ -79,7 +77,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) => {
             write!(f, "{{")?;
             fmt_seq(f, opts, level, &**o, |f, (k, val)| {
-                span_dbg(f, "key", escape(k))?;
+                span(f, "key", display(k))?;
                 write!(f, ":")?;
                 if !opts.compact {
                     write!(f, " ")?;

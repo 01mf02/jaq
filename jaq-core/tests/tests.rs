@@ -236,6 +236,12 @@ yields!(
 );
 
 yields!(
+    label_break_common,
+    "[label $x | (def x: break $x; (label $y | x), 0)]",
+    json!([])
+);
+
+yields!(
     try_catch_short_circuit,
     "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
     ["1", "2", "cannot index {} with 0"]
@@ -485,4 +491,22 @@ yields!(
     comment
 ]"#,
     [1, 3, 4, 7]
+);
+
+yields!(
+    reduce_update,
+    "[[1, 2]] | reduce (0, 1) as $p (.; .[$p]) += 1",
+    [[1, 3]]
+);
+
+yields!(
+    foreach_update,
+    "[[1, [2]]] | foreach (0, 1) as $p (.; .[$p]) += [3]",
+    json!([[1, [2, 3], 3]])
+);
+
+yields!(
+    foreach_update_proj,
+    "[[1, [[2]]]] | foreach (0, 1, 0) as $p (.; .[$p]; if $p == 0 then .[0] else {}[] as $x | . end) += 1",
+    json!([[2, [[3]]]])
 );

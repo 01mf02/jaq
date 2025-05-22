@@ -40,5 +40,9 @@ jobs:
       working-directory: jaq-json
       run: cargo check --no-default-features
 
+    - name: Check jaq-core fuzzing target compilation
+      working-directory: jaq-core/fuzz
+      run: cargo check
+
     - name: Clippy
       run: cargo clippy -- -Dwarnings

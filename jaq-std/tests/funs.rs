@@ -51,6 +51,38 @@ yields!(
     "86400.123456 | todateiso8601",
     "1970-01-02T00:00:00.123456Z"
 );
+yields!(
+    strftime,
+    r#"86400 | strftime("%F %T")"#,
+    "1970-01-02 00:00:00"
+);
+yields!(
+    strftime_arr,
+    r#"[ 1970, 0, 2, 0, 0, 0, 5, 1 ] | strftime("%F %T")"#,
+    "1970-01-02 00:00:00"
+);
+yields!(
+    strftime_mu,
+    r#"86400.123456 | strftime("%F %T.%6f")"#,
+    "1970-01-02 00:00:00.123456"
+);
+yields!(gmtime, r"86400 | gmtime", [1970, 0, 2, 0, 0, 0, 5, 1]);
+yields!(
+    gmtime_mu,
+    r"86400.123456 | gmtime",
+    json!([1970, 0, 2, 0, 0, 0.123456, 5, 1])
+);
+yields!(
+    gmtime_mktime_mu,
+    r"86400.123456 | gmtime | mktime",
+    86400.123456
+);
+yields!(
+    strptime,
+    r#""1970-01-02T00:00:00Z" | strptime("%Y-%m-%dT%H:%M:%SZ")"#,
+    [1970, 0, 2, 0, 0, 0, 5, 1]
+);
+yields!(mktime, "[ 1970, 0, 2, 0, 0, 0, 5, 1 ] | mktime", 86400);
 
 #[test]
 fn fromtodate() {
