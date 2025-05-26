@@ -671,15 +671,9 @@ impl<'s, F> Compiler<&'s str, F> {
                 t
             }
             Num(n) => n.parse().map_or_else(|_| Term::Num(n.into()), Term::Int),
-            // map `try f catch g` to `label $x | try f catch (g, break $x)`
-            // and `try f` or `f?` to `label $x | try f catch (   break $x)`
             TryCatch(try_, catch) => {
-                let catch = match catch {
-                    None => Break(""),
-                    Some(c) => BinOp(c, parse::BinaryOp::Comma, Break("").into()),
-                };
-                let tc = self.with_label("", |c| Term::TryCatch(c.iterm(*try_), c.iterm(catch)));
-                Term::Label(self.lut.insert_term(tc))
+                let catch = catch.map_or_else(|| Call("!empty", Vec::new()), |t| *t);
+                Term::TryCatch(self.iterm(*try_), self.iterm(catch))
             }
             Fold(name, xs, pat, args) => {
                 use self::Fold::{Foreach, Reduce};
