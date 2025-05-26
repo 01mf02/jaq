@@ -6,6 +6,8 @@ use quick_xml::name::QName;
 use quick_xml::{Reader, Writer};
 use std::io::Write;
 
+pub mod new;
+
 pub fn u8_str(u: &[u8]) -> Result<String> {
     std::str::from_utf8(u)
         .map_err(|e| Error::Encoding(e.into()))
