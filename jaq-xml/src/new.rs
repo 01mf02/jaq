@@ -1,5 +1,6 @@
 use jaq_json::Val;
 use xmlparser::{ElementEnd, Error, ExternalId, StrSpan, Token, Tokenizer};
+use core::fmt::{self, Display, Formatter};
 
 // prefix and local name of a tag
 type Tag<'a> = (StrSpan<'a>, StrSpan<'a>);
@@ -140,4 +141,116 @@ pub fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
             name, external_id, ..
         } => singleton("doctype", doctype(&name, external_id, None)),
     })
+}
+
+pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
+    let mut tokens = Tokenizer::from(s);
+    core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
+}
+
+pub fn write(f: &mut Formatter, v: &Val) -> fmt::Result {
+    use jaq_core::ValT;
+    let write_kv = |f: &mut Formatter, kv: (_, &Val)| match kv {
+        (k, Val::Str(v)) => write!(f, " {k}=\"v\""),
+        _ => panic!(),
+    };
+    match v {
+        Val::Str(s) => write!(f, "{s}"),
+        Val::Arr(a) => a.iter().try_for_each(|v| write(f, v)),
+        Val::Obj(o) if o.contains_key(&"t".to_string()) => {
+            let mut t = "";
+            let mut a = None;
+            let mut c = None;
+
+            for (k, v) in o.iter() {
+                match (&***k, v) {
+                    ("t", Val::Str(s)) => t = &**s,
+                    ("a", Val::Obj(attrs)) => a = Some(attrs),
+                    ("c", v) => c = Some(v),
+                    (_, _) => panic!(),
+                }
+            }
+            write!(f, "<{t}")?;
+            if let Some(a) = a {
+                a.iter().try_for_each(|kv| write_kv(f, kv))?
+            }
+            match c {
+                Some(c) => {
+                    write!(f, ">")?;
+                    write(f, c)?;
+                    write!(f, "</{t}>")
+                }
+                None => write!(f, "/>"),
+            }
+        }
+        Val::Obj(o) => {
+            let mut o = o.iter();
+            let (k, v) = o.next().unwrap();
+            assert!(o.next().is_none());
+            match &***k {
+                "xmldecl" => {
+                    write!(f, "<?xml")?;
+                    match v {
+                        Val::Obj(kvs) => kvs.iter().try_for_each(|kv| write_kv(f, kv))?,
+                        _ => todo!(),
+                    };
+                    write!(f, ">")
+                }
+                "doctype" => {
+                    let mut name = "";
+                    let mut external = None;
+                    let mut internal = None;
+                    match v {
+                        Val::Obj(o) if o.contains_key(&"name".to_string()) => {
+                            for (k, v) in o.iter() {
+                                match (&***k, v) {
+                                    ("name", Val::Str(s)) => name = &**s,
+                                    ("external", Val::Str(s)) => external = Some(s),
+                                    ("internal", Val::Str(s)) => internal = Some(s),
+                                    (_, _) => panic!(),
+                                }
+                            }
+                        }
+                        _ => todo!(),
+                    };
+                    write!(f, "<!DOCTYPE {name}")?;
+                    if let Some(s) = external {
+                        write!(f, " {s}")?;
+                    }
+                    if let Some(s) = internal {
+                        write!(f, " [{s}]")?;
+                    }
+                    write!(f, ">")
+                }
+                "cdata" => write!(f, "<![CDATA[{}]]>", v.as_str().unwrap()),
+                "comment" => write!(f, "<!--{}-->", v.as_str().unwrap()),
+                "pi" => {
+                    let mut target = "";
+                    let mut content = None;
+                    match v {
+                        Val::Obj(o) if o.contains_key(&"target".to_string()) => {
+                            for (k, v) in o.iter() {
+                                match (&***k, v) {
+                                    ("target", Val::Str(s)) => target = &**s,
+                                    ("content", Val::Str(s)) => content = Some(s),
+                                    (_, _) => panic!(),
+                                }
+                            }
+                        }
+                        _ => todo!(),
+                    };
+                    write!(f, "<?{target}")?;
+                    if let Some(s) = content {
+                        write!(f, " {s}")?;
+                    }
+                    write!(f, ">")
+                }
+                _ => todo!(),
+            }
+        }
+        _ => {
+            dbg!(v);
+            todo!()
+        }
+    }
 }
