@@ -81,7 +81,7 @@ impl Type {
 }
 
 /// Order-preserving map
-type Map<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+pub type Map<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 /// Error that can occur during filter execution.
 pub type Error = jaq_core::Error<Val>;
