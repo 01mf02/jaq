@@ -1,6 +1,8 @@
-use jaq_json::Val;
+extern crate alloc;
+
+use core::fmt::{self, Formatter};
+use jaq_json::{Map, Val};
 use xmlparser::{ElementEnd, Error, ExternalId, StrSpan, Token, Tokenizer};
-use core::fmt::{self, Display, Formatter};
 
 // prefix and local name of a tag
 type Tag<'a> = (StrSpan<'a>, StrSpan<'a>);
@@ -148,109 +150,155 @@ pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
 }
 
-pub fn write(f: &mut Formatter, v: &Val) -> fmt::Result {
-    use jaq_core::ValT;
-    let write_kv = |f: &mut Formatter, kv: (_, &Val)| match kv {
-        (k, Val::Str(v)) => write!(f, " {k}=\"v\""),
-        _ => panic!(),
-    };
-    match v {
-        Val::Str(s) => write!(f, "{s}"),
-        Val::Arr(a) => a.iter().try_for_each(|v| write(f, v)),
-        Val::Obj(o) if o.contains_key(&"t".to_string()) => {
-            let mut t = "";
-            let mut a = None;
-            let mut c = None;
+type RcStr = alloc::rc::Rc<String>;
 
-            for (k, v) in o.iter() {
+pub enum XmlVal {
+    XmlDecl(Vec<(RcStr, RcStr)>),
+    DocType {
+        name: RcStr,
+        external: Option<RcStr>,
+        internal: Option<RcStr>,
+    },
+    Pi {
+        target: RcStr,
+        content: Option<RcStr>,
+    },
+    Tac(RcStr, Vec<(RcStr, RcStr)>, Option<Box<Self>>),
+    Seq(Vec<Self>),
+    Str(RcStr),
+    Cdata(RcStr),
+    Comment(RcStr),
+}
+
+fn invalid_entry(o: &'static str, k: &RcStr, v: &Val) {
+    panic!("invalid entry in {o} object: {{\"{k}\": {v}}}")
+}
+
+impl TryFrom<&Val> for XmlVal {
+    type Error = ();
+    fn try_from(v: &Val) -> Result<Self, Self::Error> {
+        let from_kv = |(k, v): (&RcStr, &_)| match v {
+            Val::Str(v) => Ok((k.clone(), v.clone())),
+            _ => Err(invalid_entry("attribute", k, v)),
+        };
+        let from_kvs = |a: &Map<_, _>| a.iter().map(from_kv).collect::<Result<_, _>>();
+        match v {
+            Val::Str(s) => Ok(Self::Str(s.clone())),
+            Val::Arr(a) => a
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()
+                .map(Self::Seq),
+            Val::Obj(o) if o.contains_key(&"t".to_string()) => {
+                let mut t = RcStr::default();
+                let mut a = Vec::new();
+                let mut c = None;
+                for (k, v) in o.iter() {
+                    match (&***k, v) {
+                        ("t", Val::Str(s)) => t = s.clone(),
+                        ("a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
+                        ("c", v) => c = Some(Box::new(v.try_into()?)),
+                        _ => invalid_entry("tac", k, v),
+                    }
+                }
+                Ok(Self::Tac(t.clone(), a, c))
+            }
+            Val::Obj(o) => {
+                let mut o = o.iter();
+                let (k, v) = match (o.next(), o.next()) {
+                    (Some(kv), None) => kv,
+                    _ => panic!("expected singleton object, found: {v}"),
+                };
                 match (&***k, v) {
-                    ("t", Val::Str(s)) => t = &**s,
-                    ("a", Val::Obj(attrs)) => a = Some(attrs),
-                    ("c", v) => c = Some(v),
-                    (_, _) => panic!(),
+                    ("xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
+                    ("doctype", Val::Obj(o)) if o.contains_key(&"name".to_string()) => {
+                        let mut name = RcStr::default();
+                        let mut external = None;
+                        let mut internal = None;
+                        for (k, v) in o.iter() {
+                            match (&***k, v) {
+                                ("name", Val::Str(s)) => name = s.clone(),
+                                ("external", Val::Str(s)) => external = Some(s.clone()),
+                                ("internal", Val::Str(s)) => internal = Some(s.clone()),
+                                _ => invalid_entry("doctype", k, v),
+                            }
+                        }
+                        Ok(Self::DocType {
+                            name,
+                            external,
+                            internal,
+                        })
+                    }
+                    ("cdata", Val::Str(s)) => Ok(Self::Cdata(s.clone())),
+
+                    ("comment", Val::Str(s)) => Ok(Self::Comment(s.clone())),
+                    ("pi", Val::Obj(o)) if o.contains_key(&"target".to_string()) => {
+                        let mut target = RcStr::default();
+                        let mut content = None;
+                        for (k, v) in o.iter() {
+                            match (&***k, v) {
+                                ("target", Val::Str(s)) => target = s.clone(),
+                                ("content", Val::Str(s)) => content = Some(s.clone()),
+                                _ => invalid_entry("pi", k, v),
+                            }
+                        }
+                        Ok(Self::Pi { target, content })
+                    }
+                    _ => Err(invalid_entry("unknown", k, v)),
                 }
             }
-            write!(f, "<{t}")?;
-            if let Some(a) = a {
-                a.iter().try_for_each(|kv| write_kv(f, kv))?
-            }
-            match c {
-                Some(c) => {
+            _ => panic!("expected XML value, found {v}"),
+        }
+    }
+}
+
+impl XmlVal {
+    pub fn write(&self, f: &mut Formatter) -> fmt::Result {
+        let write_kvs = |f: &mut Formatter, a: &Vec<_>| {
+            a.iter().try_for_each(|(k, v)| write!(f, " {k}=\"{v}\""))
+        };
+        match self {
+            Self::Str(s) => write!(f, "{s}"),
+            Self::Seq(a) => a.iter().try_for_each(|v| v.write(f)),
+            Self::Tac(t, a, c) => {
+                write!(f, "<{t}")?;
+                write_kvs(f, a)?;
+                if let Some(c) = c {
                     write!(f, ">")?;
-                    write(f, c)?;
+                    c.write(f)?;
                     write!(f, "</{t}>")
+                } else {
+                    write!(f, "/>")
                 }
-                None => write!(f, "/>"),
             }
-        }
-        Val::Obj(o) => {
-            let mut o = o.iter();
-            let (k, v) = o.next().unwrap();
-            assert!(o.next().is_none());
-            match &***k {
-                "xmldecl" => {
-                    write!(f, "<?xml")?;
-                    match v {
-                        Val::Obj(kvs) => kvs.iter().try_for_each(|kv| write_kv(f, kv))?,
-                        _ => todo!(),
-                    };
-                    write!(f, ">")
-                }
-                "doctype" => {
-                    let mut name = "";
-                    let mut external = None;
-                    let mut internal = None;
-                    match v {
-                        Val::Obj(o) if o.contains_key(&"name".to_string()) => {
-                            for (k, v) in o.iter() {
-                                match (&***k, v) {
-                                    ("name", Val::Str(s)) => name = &**s,
-                                    ("external", Val::Str(s)) => external = Some(s),
-                                    ("internal", Val::Str(s)) => internal = Some(s),
-                                    (_, _) => panic!(),
-                                }
-                            }
-                        }
-                        _ => todo!(),
-                    };
-                    write!(f, "<!DOCTYPE {name}")?;
-                    if let Some(s) = external {
-                        write!(f, " {s}")?;
-                    }
-                    if let Some(s) = internal {
-                        write!(f, " [{s}]")?;
-                    }
-                    write!(f, ">")
-                }
-                "cdata" => write!(f, "<![CDATA[{}]]>", v.as_str().unwrap()),
-                "comment" => write!(f, "<!--{}-->", v.as_str().unwrap()),
-                "pi" => {
-                    let mut target = "";
-                    let mut content = None;
-                    match v {
-                        Val::Obj(o) if o.contains_key(&"target".to_string()) => {
-                            for (k, v) in o.iter() {
-                                match (&***k, v) {
-                                    ("target", Val::Str(s)) => target = &**s,
-                                    ("content", Val::Str(s)) => content = Some(s),
-                                    (_, _) => panic!(),
-                                }
-                            }
-                        }
-                        _ => todo!(),
-                    };
-                    write!(f, "<?{target}")?;
-                    if let Some(s) = content {
-                        write!(f, " {s}")?;
-                    }
-                    write!(f, ">")
-                }
-                _ => todo!(),
+            Self::XmlDecl(a) => {
+                write!(f, "<?xml")?;
+                write_kvs(f, a)?;
+                write!(f, ">")
             }
-        }
-        _ => {
-            dbg!(v);
-            todo!()
+            Self::DocType {
+                name,
+                external,
+                internal,
+            } => {
+                write!(f, "<!DOCTYPE {name}")?;
+                if let Some(s) = external {
+                    write!(f, " {s}")?;
+                }
+                if let Some(s) = internal {
+                    write!(f, " [{s}]")?;
+                }
+                write!(f, ">")
+            }
+            Self::Cdata(s) => write!(f, "<![CDATA[{s}]]>"),
+            Self::Comment(s) => write!(f, "<!--{s}-->"),
+            Self::Pi { target, content } => {
+                write!(f, "<?{target}")?;
+                if let Some(s) = content {
+                    write!(f, " {s}")?;
+                }
+                write!(f, ">")
+            }
         }
     }
 }
