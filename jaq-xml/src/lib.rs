@@ -170,7 +170,7 @@ pub enum XmlVal {
     Comment(RcStr),
 }
 
-fn invalid_entry(o: &'static str, k: &RcStr, v: &Val) {
+fn invalid_entry(o: &'static str, k: &RcStr, v: &Val) -> ! {
     panic!("invalid entry in {o} object: {{\"{k}\": {v}}}")
 }
 
@@ -179,7 +179,7 @@ impl TryFrom<&Val> for XmlVal {
     fn try_from(v: &Val) -> Result<Self, Self::Error> {
         let from_kv = |(k, v): (&RcStr, &_)| match v {
             Val::Str(v) => Ok((k.clone(), v.clone())),
-            _ => Err(invalid_entry("attribute", k, v)),
+            _ => invalid_entry("attribute", k, v),
         };
         let from_kvs = |a: &Map<_, _>| a.iter().map(from_kv).collect::<Result<_, _>>();
         match v {
@@ -244,7 +244,7 @@ impl TryFrom<&Val> for XmlVal {
                         }
                         Ok(Self::Pi { target, content })
                     }
-                    _ => Err(invalid_entry("unknown", k, v)),
+                    _ => invalid_entry("unknown", k, v),
                 }
             }
             _ => panic!("expected XML value, found {v}"),

@@ -1,6 +1,6 @@
 mod cli;
 
-use cli::Cli;
+use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
 use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
@@ -62,12 +62,6 @@ fn main() -> ExitCode {
     }
 }
 
-enum Format {
-    Raw,
-    Json,
-    Xml,
-}
-
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     if let Some(test_files) = &cli.run_tests {
         return Ok(match test_files.last() {
@@ -92,7 +86,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     //println!("Filter: {:?}", filter);
 
     let last = if cli.files.is_empty() {
-        let inputs = read_buffered(cli, io::stdin().lock());
+        let inputs = read_stdin(cli);
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
@@ -100,14 +94,12 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
             let path = Path::new(file);
             let file =
                 load_file(path).map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
-            let format = if cli.raw_input {
-                Format::Raw
-            } else if path.extension().and_then(|ext| ext.to_str()) == Some("xml") {
-                Format::Xml
-            } else {
-                Format::Json
-            };
+            let format = cli
+                .from
+                .or_else(|| Format::determine(path))
+                .unwrap_or(Format::Json);
             let inputs = read_slice(cli.slurp, format, &file);
+
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -260,7 +252,24 @@ fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> std::io::E
 }
 
 fn xml_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
-    jaq_xml::parse_slice(slice).map(|r| r.map_err(invalid_data))
+    use jaq_core::box_iter::then;
+    let s = core::str::from_utf8(slice).map_err(invalid_data);
+    then(s, |s| {
+        let vals = jaq_xml::parse_str(s).map(|r| r.map_err(invalid_data));
+        Box::new(vals)
+    })
+}
+
+fn xml_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
+    use jaq_core::box_iter::then;
+    let s = io::read_to_string(read);
+    then(s, |s| {
+        let vals = jaq_xml::parse_str(&s).map(|r| r.map_err(invalid_data));
+        // TODO: having to collect() here is quite unfortunate, but at least
+        // the effect is likely less noticeable because most of the time,
+        // the largest part of the data will be in a single tag anyway
+        Box::new(vals.collect::<Vec<_>>().into_iter())
+    })
 }
 
 fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
@@ -284,39 +293,37 @@ fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
     json_slice(&load_file(path.as_ref())?).collect()
 }
 
-fn read_buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a>
-where
-    R: BufRead + 'a,
-{
-    if cli.raw_input {
-        Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
-    } else {
-        Box::new(collect_if(cli.slurp, json_read(read)))
+fn read_stdin(cli: &Cli) -> Box<dyn Iterator<Item = io::Result<Val>>> {
+    let stdin = || io::stdin().lock();
+    use cli::Format;
+    match cli.from.unwrap_or(Format::Json) {
+        Format::Raw => Box::new(raw_input(cli.slurp, stdin()).map(|r| r.map(Val::from))),
+        Format::Json => Box::new(collect_if(cli.slurp, json_read(stdin()))),
+        Format::Xml => Box::new(collect_if(cli.slurp, xml_read(stdin()))),
     }
 }
 
 fn read_slice<'a>(
-    slurp: bool, fmt: Format,
+    slurp: bool,
+    fmt: Format,
     slice: &'a [u8],
 ) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
     match fmt {
         Format::Raw => {
-        let read = io::BufReader::new(slice);
-        Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
+            let read = io::BufReader::new(slice);
+            Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
         }
         Format::Json => Box::new(collect_if(slurp, json_slice(slice))),
         Format::Xml => Box::new(collect_if(slurp, xml_slice(slice))),
     }
 }
 
-fn raw_input<'a, R>(slurp: bool, mut read: R) -> impl Iterator<Item = io::Result<String>> + 'a
+fn raw_input<'a, R>(slurp: bool, read: R) -> impl Iterator<Item = io::Result<String>> + 'a
 where
     R: BufRead + 'a,
 {
     if slurp {
-        let mut buf = String::new();
-        let s = read.read_to_string(&mut buf).map(|_| buf);
-        Box::new(std::iter::once(s))
+        Box::new(std::iter::once(io::read_to_string(read)))
     } else {
         Box::new(read.lines()) as Box<dyn Iterator<Item = _>>
     }
@@ -512,22 +519,28 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 }
 
 fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> {
-    let f = |f: &mut Formatter| {
-        let opts = PpOpts {
-            compact: cli.compact_output,
-            indent: if cli.tab {
-                String::from("\t")
-            } else {
-                " ".repeat(cli.indent)
-            },
-            sort_keys: cli.sort_keys,
-        };
-        fmt_val(f, &opts, 0, val)
+    use jaq_xml::XmlVal;
+    let opts = || PpOpts {
+        compact: cli.compact_output,
+        indent: if cli.tab {
+            String::from("\t")
+        } else {
+            " ".repeat(cli.indent)
+        },
+        sort_keys: cli.sort_keys,
     };
+    let fmt_json = |f: &mut Formatter| fmt_val(f, &opts(), 0, val);
+    let fmt_xml = |v: XmlVal| move |f: &mut Formatter| v.write(f);
+    let format = cli.to.unwrap_or(Format::Json);
 
-    match val {
-        Val::Str(s) if cli.raw_output || cli.join_output => write!(w, "{s}")?,
-        _ => write!(w, "{}", FormatterFn(f))?,
+    match (val, format) {
+       (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
+       (Val::Str(s), _) if cli.join_output => write!(w, "{s}")?,
+        (_, Format::Json | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
+        (_, Format::Xml) => {
+            let xml = XmlVal::try_from(val).unwrap();
+            write!(w, "{}", FormatterFn(fmt_xml(xml)))?
+        }
     };
 
     if cli.join_output {
