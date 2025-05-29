@@ -7,7 +7,7 @@ use xmlparser::{ElementEnd, Error, ExternalId, StrSpan, Token, Tokenizer};
 // prefix and local name of a tag
 type Tag<'a> = (StrSpan<'a>, StrSpan<'a>);
 
-fn tag_as_str<'a>((prefix, local): Tag<'a>) -> (&'a str, &'a str) {
+fn tag_as_str((prefix, local): Tag) -> (&str, &str) {
     (prefix.as_str(), local.as_str())
 }
 
