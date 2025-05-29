@@ -176,7 +176,6 @@ impl<'s, P: Default> Loader<&'s str, P, ReadFn<P>> {
     /// The prelude is normally initialised with filters like `map` or `true`.
     pub fn new(prelude: impl IntoIterator<Item = Def<&'s str>>) -> Self {
         let defs = [
-            Def::new("!recurse", Vec::new(), Term::recurse("!recurse")),
             Def::new("!empty", Vec::new(), Term::empty()),
         ];
 

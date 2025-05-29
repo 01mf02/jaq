@@ -68,6 +68,8 @@ pub(crate) enum Tailrec {
 pub(crate) enum Term<T = TermId> {
     /// Identity (`.`)
     Id,
+    /// Recursion (`..`)
+    Recurse,
     ToString,
 
     Int(isize),
@@ -627,7 +629,7 @@ impl<'s, F> Compiler<&'s str, F> {
         use parse::Term::*;
         match t {
             Id => Term::Id,
-            Recurse => self.term(Call("!recurse", Vec::new()), &Tr::new()),
+            Recurse => Term::Recurse,
             Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
             Neg(t) => Term::Neg(self.iterm(*t)),
             Pipe(l, None, r) => Term::Pipe(self.iterm(*l), None, self.iterm_tr(*r, tr)),
