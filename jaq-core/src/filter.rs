@@ -265,7 +265,7 @@ fn recurse_run<'a, V: ValT + 'a>(v: V) -> ValXs<'a, V> {
 /// trying to update values that have been deleted.
 fn recurse_update<'a, V: ValT + 'a>(v: V, f: &dyn Update<'a, V>) -> ValXs<'a, V> {
     use crate::path::Opt::Optional;
-    box_iter::then(v.map_values(Optional, |v| recurse_update(v, &f)), f)
+    box_iter::then(v.map_values(Optional, |v| recurse_update(v, f)), f)
 }
 
 /// Combination of context and input value.
