@@ -175,9 +175,7 @@ impl<'s, P: Default> Loader<&'s str, P, ReadFn<P>> {
     ///
     /// The prelude is normally initialised with filters like `map` or `true`.
     pub fn new(prelude: impl IntoIterator<Item = Def<&'s str>>) -> Self {
-        let defs = [
-            Def::new("!empty", Vec::new(), Term::empty()),
-        ];
+        let defs = [Def::new("!empty", Vec::new(), Term::empty())];
 
         let prelude = Module {
             body: defs.into_iter().chain(prelude).collect(),
