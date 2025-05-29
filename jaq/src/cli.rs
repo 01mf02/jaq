@@ -2,23 +2,50 @@
 use core::fmt;
 use std::env::ArgsOs;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[derive(Copy, Clone, Debug)]
+pub enum Format {
+    /// When the option `--slurp` is used additionally,
+    /// then the whole input is read into a single string.
+    Raw,
+    Json,
+    Xml,
+}
+
+impl Format {
+    pub fn determine(path: &Path) -> Option<Self> {
+        match path.extension()?.to_str()? {
+            "xml" | "html" => Some(Format::Xml),
+            "json" => Some(Format::Json),
+            _ => None,
+        }
+    }
+
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "raw" => Some(Format::Raw),
+            "json" => Some(Format::Json),
+            "xml" => Some(Format::Xml),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Cli {
     // Input options
     pub null_input: bool,
-    /// When the option `--slurp` is used additionally,
-    /// then the whole input is read into a single string.
-    pub raw_input: bool,
     /// When input is read from files,
     /// jaq yields an array for each file, whereas
     /// jq produces only a single array.
     pub slurp: bool,
 
+    pub from: Option<Format>,
+    pub to: Option<Format>,
+
     // Output options
     pub compact_output: bool,
-    pub raw_output: bool,
     /// This flag enables `--raw-output`.
     pub join_output: bool,
     pub in_place: bool,
@@ -92,6 +119,9 @@ impl Cli {
             "raw-input" => self.short('R', args)?,
             "slurp" => self.short('s', args)?,
 
+            "from" => self.from = Some(parse_format("--from", args)?),
+            "to" => self.to = Some(parse_format("--to", args)?),
+
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
             "join-output" => self.short('j', args)?,
@@ -129,11 +159,11 @@ impl Cli {
     fn short(&mut self, arg: char, args: &mut ArgsOs) -> Result<(), Error> {
         match arg {
             'n' => self.null_input = true,
-            'R' => self.raw_input = true,
+            'R' => self.from = Some(Format::Raw),
             's' => self.slurp = true,
 
             'c' => self.compact_output = true,
-            'r' => self.raw_output = true,
+            'r' => self.to = Some(Format::Raw),
             'j' => self.join_output = true,
             'i' => self.in_place = true,
             'S' => self.sort_keys = true,
@@ -197,16 +227,19 @@ pub enum Error {
     KeyValue(&'static str),
     Int(&'static str),
     Path(&'static str),
+    Format(&'static str),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let fmts = "raw, json, xml";
         match self {
             Self::Flag(s) => write!(f, "unknown flag: {s}"),
             Self::Utf8(s) => write!(f, "invalid UTF-8: {s:?}"),
             Self::KeyValue(o) => write!(f, "{o} expects a key and a value"),
             Self::Int(o) => write!(f, "{o} expects an integer"),
             Self::Path(o) => write!(f, "{o} expects a path"),
+            Self::Format(o) => write!(f, "{o} expects a data format (possible values: {fmts})"),
         }
     }
 }
@@ -216,6 +249,12 @@ impl From<OsString> for Error {
     fn from(e: OsString) -> Self {
         Self::Utf8(e)
     }
+}
+
+fn parse_format(arg: &'static str, args: &mut ArgsOs) -> Result<Format, Error> {
+    let err = || Error::Format(arg);
+    let fmt = args.next().and_then(|a| a.into_string().ok());
+    Format::from_str(&fmt.ok_or_else(err)?).ok_or_else(err)
 }
 
 fn parse_key_val(arg: &'static str, args: &mut ArgsOs) -> Result<(String, OsString), Error> {
