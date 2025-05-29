@@ -179,21 +179,6 @@ impl<S> Term<S> {
         Self::Str(None, [StrPart::Str(s)].into())
     }
 
-    /// `..`, also known as `recurse/0`, is defined as `., (.[]? | ..)`.
-    pub(crate) fn recurse(recurse: S) -> Self {
-        // `[]?`
-        let path = (path::Part::Range(None, None), path::Opt::Optional);
-        // `.[]?` (returns array/object elements or nothing instead)
-        let path = Term::Path(Term::Id.into(), Path(Vec::from([path])));
-
-        // `..`
-        let f = Term::Call(recurse, Vec::new());
-        // .[]? | ..
-        let pipe = Term::Pipe(path.into(), None, f.into());
-        // ., (.[]? | ..)
-        Term::BinOp(Term::Id.into(), BinaryOp::Comma, pipe.into())
-    }
-
     /// `{}[]` returns zero values.
     pub(crate) fn empty() -> Self {
         // `[]`

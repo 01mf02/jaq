@@ -249,6 +249,25 @@ fn lazy_is_lazy() {
     assert_eq!(iter.next(), Some(0));
 }
 
+/// Runs `def recurse: ., (.[]? | recurse); v | recurse`.
+fn recurse_run<'a, V: ValT + 'a>(v: V) -> ValXs<'a, V> {
+    let id = core::iter::once(Ok(v.clone()));
+    Box::new(id.chain(v.values().flat_map(Result::ok).flat_map(recurse_run)))
+}
+
+/// Runs `def recurse: (.[]? | recurse), .; v | recurse |= f`.
+///
+/// This uses a `recurse` different from that of `recurse_run`; in particular,
+/// `recurse_run` yields values from root to leafs, whereas
+/// this function performs updates from leafs to root.
+/// Performing updates from root to leafs can easily lead to
+/// nontermination or other weird effects, such as
+/// trying to update values that have been deleted.
+fn recurse_update<'a, V: ValT + 'a>(v: V, f: &dyn Update<'a, V>) -> ValXs<'a, V> {
+    use crate::path::Opt::Optional;
+    box_iter::then(v.map_values(Optional, |v| recurse_update(v, f)), f)
+}
+
 /// Combination of context and input value.
 pub type Cv<'c, V> = (Ctx<'c, V>, V);
 
@@ -309,6 +328,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
         use core::iter::once;
         match &lut.terms[self.0] {
             Ast::Id => box_once(Ok(cv.1)),
+            Ast::Recurse => recurse_run(cv.1),
             Ast::ToString => box_once(match cv.1.as_str() {
                 Some(_) => Ok(cv.1),
                 None => Ok(Self::V::from(cv.1.to_string())),
@@ -485,6 +505,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::TryCatch(..) | Ast::Label(..) => err,
 
             Ast::Id => f(cv.1),
+            Ast::Recurse => recurse_update(cv.1, &f),
             Ast::Path(l, path) => {
                 let path = path.map_ref(|i| {
                     let cv = cv.clone();
