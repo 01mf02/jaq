@@ -534,8 +534,8 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
     let format = cli.to.unwrap_or(Format::Json);
 
     match (val, format) {
-       (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
-       (Val::Str(s), _) if cli.join_output => write!(w, "{s}")?,
+        (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
+        (Val::Str(s), _) if cli.join_output => write!(w, "{s}")?,
         (_, Format::Json | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
         (_, Format::Xml) => {
             let xml = XmlVal::try_from(val).unwrap();
