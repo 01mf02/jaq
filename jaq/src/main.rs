@@ -247,7 +247,7 @@ fn load_file(path: impl AsRef<Path>) -> io::Result<Box<dyn core::ops::Deref<Targ
     }
 }
 
-fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> std::io::Error {
+fn invalid_data(e: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> std::io::Error {
     io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
