@@ -186,7 +186,10 @@ pub fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
             span,
         } => {
             let internal = loop {
-                let Some(tk) = tokens.next() else { todo!() };
+                let Some(tk) = tokens.next() else {
+                    let pos = tokens.stream().gen_text_pos_from(span.start());
+                    Err(Error::Unclosed(TagPos("DOCTYPE".into(), pos)))?
+                };
                 if let Token::DtdEnd { span: span_ } = tk? {
                     break &tokens.stream().span().as_str()[span.end()..span_.start()];
                 }
