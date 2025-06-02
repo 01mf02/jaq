@@ -209,6 +209,25 @@ pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
 
 type RcStr = alloc::rc::Rc<String>;
 
+#[derive(Debug)]
+pub enum Serror {
+    InvalidEntry(&'static str, RcStr, Val),
+    SingletonObj(Val),
+}
+
+impl fmt::Display for Serror {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidEntry(o, k, v) => {
+                write!(f, "invalid entry in {o} object: {{\"{k}\": {v}}}")
+            }
+            Self::SingletonObj(v) => write!(f, "expected singleton object, found: {v}"),
+        }
+    }
+}
+
+impl std::error::Error for Serror {}
+
 pub enum XmlVal {
     XmlDecl(Vec<(RcStr, RcStr)>),
     DocType {
@@ -227,16 +246,12 @@ pub enum XmlVal {
     Comment(RcStr),
 }
 
-fn invalid_entry(o: &'static str, k: &RcStr, v: &Val) -> ! {
-    panic!("invalid entry in {o} object: {{\"{k}\": {v}}}")
-}
-
 impl TryFrom<&Val> for XmlVal {
-    type Error = ();
+    type Error = Serror;
     fn try_from(v: &Val) -> Result<Self, Self::Error> {
         let from_kv = |(k, v): (&RcStr, &_)| match v {
             Val::Str(v) => Ok((k.clone(), v.clone())),
-            _ => invalid_entry("attribute", k, v),
+            _ => Err(Serror::InvalidEntry("attribute", k.clone(), v.clone())),
         };
         let from_kvs = |a: &Map<_, _>| a.iter().map(from_kv).collect::<Result<_, _>>();
         match v {
@@ -255,7 +270,7 @@ impl TryFrom<&Val> for XmlVal {
                         ("t", Val::Str(s)) => t = s.clone(),
                         ("a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
                         ("c", v) => c = Some(Box::new(v.try_into()?)),
-                        _ => invalid_entry("tac", k, v),
+                        _ => Err(Serror::InvalidEntry("tac", k.clone(), v.clone()))?,
                     }
                 }
                 Ok(Self::Tac(t.clone(), a, c))
@@ -264,7 +279,7 @@ impl TryFrom<&Val> for XmlVal {
                 let mut o = o.iter();
                 let (k, v) = match (o.next(), o.next()) {
                     (Some(kv), None) => kv,
-                    _ => panic!("expected singleton object, found: {v}"),
+                    _ => Err(Serror::SingletonObj(v.clone()))?,
                 };
                 match (&***k, v) {
                     ("xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
@@ -277,7 +292,7 @@ impl TryFrom<&Val> for XmlVal {
                                 ("name", Val::Str(s)) => name = s.clone(),
                                 ("external", Val::Str(s)) => external = Some(s.clone()),
                                 ("internal", Val::Str(s)) => internal = Some(s.clone()),
-                                _ => invalid_entry("doctype", k, v),
+                                _ => Err(Serror::InvalidEntry("doctype", k.clone(), v.clone()))?,
                             }
                         }
                         Ok(Self::DocType {
@@ -296,12 +311,12 @@ impl TryFrom<&Val> for XmlVal {
                             match (&***k, v) {
                                 ("target", Val::Str(s)) => target = s.clone(),
                                 ("content", Val::Str(s)) => content = Some(s.clone()),
-                                _ => invalid_entry("pi", k, v),
+                                _ => Err(Serror::InvalidEntry("pi", k.clone(), v.clone()))?,
                             }
                         }
                         Ok(Self::Pi { target, content })
                     }
-                    _ => invalid_entry("unknown", k, v),
+                    _ => Err(Serror::InvalidEntry("unknown", k.clone(), v.clone()))?,
                 }
             }
             Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => {
