@@ -304,7 +304,9 @@ impl TryFrom<&Val> for XmlVal {
                     _ => invalid_entry("unknown", k, v),
                 }
             }
-            _ => panic!("expected XML value, found {v}"),
+            Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => {
+                Ok(Self::Str(v.to_string().into()))
+            }
         }
     }
 }
