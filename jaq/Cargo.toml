@@ -18,7 +18,7 @@ default = ["mimalloc"]
 jaq-core = { version = "2.1.1", path = "../jaq-core" }
 jaq-std  = { version = "2.1.0", path = "../jaq-std" }
 jaq-json = { version = "1.1.1", path = "../jaq-json" }
-jaq-xml  = { version = "0.1.0", path = "../jaq-xml" }
+jaq-formats = { version = "0.1.0", path = "../jaq-formats" }
 
 codesnake = { version = "0.2" }
 env_logger = { version = "0.10.0", default-features = false }

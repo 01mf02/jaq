@@ -255,7 +255,7 @@ fn xml_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
     use jaq_core::box_iter::then;
     let s = core::str::from_utf8(slice).map_err(invalid_data);
     then(s, |s| {
-        let vals = jaq_xml::parse_str(s).map(|r| r.map_err(invalid_data));
+        let vals = jaq_formats::xml::parse_str(s).map(|r| r.map_err(invalid_data));
         Box::new(vals)
     })
 }
@@ -264,7 +264,7 @@ fn xml_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val>
     use jaq_core::box_iter::then;
     let s = io::read_to_string(read);
     then(s, |s| {
-        let vals = jaq_xml::parse_str(&s).map(|r| r.map_err(invalid_data));
+        let vals = jaq_formats::xml::parse_str(&s).map(|r| r.map_err(invalid_data));
         // TODO: having to collect() here is quite unfortunate, but at least
         // the effect is likely less noticeable because most of the time,
         // the largest part of the data will be in a single tag anyway
@@ -519,7 +519,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 }
 
 fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> {
-    use jaq_xml::XmlVal;
+    use jaq_formats::xml::XmlVal;
     let opts = || PpOpts {
         compact: cli.compact_output,
         indent: if cli.tab {
@@ -530,7 +530,6 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
         sort_keys: cli.sort_keys,
     };
     let fmt_json = |f: &mut Formatter| fmt_val(f, &opts(), 0, val);
-    let fmt_xml = |v: XmlVal| move |f: &mut Formatter| v.write(f);
     let format = cli.to.unwrap_or(Format::Json);
 
     match (val, format) {
@@ -539,7 +538,7 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
         (_, Format::Json | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
         (_, Format::Xml) => {
             let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;
-            write!(w, "{}", FormatterFn(fmt_xml(xml)))?
+            write!(w, "{xml}")?
         }
     };
 

@@ -240,9 +240,9 @@ dependencies = [
  "hifijson",
  "is-terminal",
  "jaq-core",
+ "jaq-formats",
  "jaq-json",
  "jaq-std",
- "jaq-xml",
  "log",
  "memmap2",
  "mimalloc",
@@ -262,6 +262,14 @@ dependencies = [
  "once_cell",
  "serde_json",
  "typed-arena",
+]
+
+[[package]]
+name = "jaq-formats"
+version = "0.1.0"
+dependencies = [
+ "jaq-json",
+ "xmlparser",
 ]
 
 [[package]]
@@ -310,14 +318,6 @@ dependencies = [
  "regex-lite",
  "serde_json",
  "urlencoding",
-]
-
-[[package]]
-name = "jaq-xml"
-version = "0.1.0"
-dependencies = [
- "jaq-json",
- "xmlparser",
 ]
 
 [[package]]

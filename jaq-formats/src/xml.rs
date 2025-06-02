@@ -1,10 +1,15 @@
 extern crate alloc;
 
+use alloc::borrow::ToOwned;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::{boxed::Box, vec::Vec};
+
 use core::fmt::{self, Formatter};
 use jaq_json::{Map, Val};
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
-// prefix and local name of a tag
+/// Prefix and local name of a tag.
 #[derive(Debug)]
 struct Tag<'a>(StrSpan<'a>, StrSpan<'a>);
 
@@ -30,6 +35,7 @@ impl Tag<'_> {
     }
 }
 
+/// Tag and its human-readable position for error reporting.
 #[derive(Debug)]
 pub struct TagPos(String, TextPos);
 
@@ -39,6 +45,7 @@ impl fmt::Display for TagPos {
     }
 }
 
+/// Deserialisation error.
 #[derive(Debug)]
 pub enum Error {
     Xmlparser(xmlparser::Error),
@@ -66,6 +73,7 @@ impl From<xmlparser::Error> for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
 fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> {
@@ -125,7 +133,7 @@ fn tac(tag: &Tag, tokens: &mut Tokenizer) -> Result<Val, Error> {
     ]))
 }
 
-pub fn doctype(name: &str, external: Option<ExternalId>, internal: Option<&str>) -> Val {
+fn doctype(name: &str, external: Option<ExternalId>, internal: Option<&str>) -> Val {
     let external = external.map(|ext| match ext {
         ExternalId::System(system) => format!("SYSTEM {system}"),
         ExternalId::Public(pub_id, system) => format!("PUBLIC {pub_id} {system}"),
@@ -144,7 +152,7 @@ fn make_obj<T: Into<Val>, const N: usize>(arr: [(&str, Option<T>); N]) -> Val {
     Val::obj(iter.collect())
 }
 
-pub fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
+fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
     let ss_val = |ss: StrSpan| ss.as_str().to_owned().into();
     let singleton = |k: &str, v| Val::obj(core::iter::once((k.to_string().into(), v)).collect());
 
@@ -226,8 +234,10 @@ impl fmt::Display for Serror {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Serror {}
 
+/// XML value.
 pub enum XmlVal {
     XmlDecl(Vec<(RcStr, RcStr)>),
     DocType {
@@ -326,21 +336,19 @@ impl TryFrom<&Val> for XmlVal {
     }
 }
 
-impl XmlVal {
-    pub fn write(&self, f: &mut Formatter) -> fmt::Result {
+impl fmt::Display for XmlVal {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let write_kvs = |f: &mut Formatter, a: &Vec<_>| {
             a.iter().try_for_each(|(k, v)| write!(f, " {k}=\"{v}\""))
         };
         match self {
             Self::Str(s) => write!(f, "{s}"),
-            Self::Seq(a) => a.iter().try_for_each(|v| v.write(f)),
+            Self::Seq(a) => a.iter().try_for_each(|v| v.fmt(f)),
             Self::Tac(t, a, c) => {
                 write!(f, "<{t}")?;
                 write_kvs(f, a)?;
                 if let Some(c) = c {
-                    write!(f, ">")?;
-                    c.write(f)?;
-                    write!(f, "</{t}>")
+                    write!(f, ">{c}</{t}>")
                 } else {
                     write!(f, "/>")
                 }
