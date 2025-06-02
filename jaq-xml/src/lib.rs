@@ -2,28 +2,88 @@ extern crate alloc;
 
 use core::fmt::{self, Formatter};
 use jaq_json::{Map, Val};
-use xmlparser::{ElementEnd, Error, ExternalId, StrSpan, Token, Tokenizer};
+use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
 // prefix and local name of a tag
-type Tag<'a> = (StrSpan<'a>, StrSpan<'a>);
+#[derive(Debug)]
+struct Tag<'a>(StrSpan<'a>, StrSpan<'a>);
 
-fn tag_as_str((prefix, local): Tag) -> (&str, &str) {
-    (prefix.as_str(), local.as_str())
+impl PartialEq for Tag<'_> {
+    fn eq(&self, rhs: &Self) -> bool {
+        (self.0.as_str(), self.1.as_str()) == (rhs.0.as_str(), rhs.1.as_str())
+    }
 }
+
+impl fmt::Display for Tag<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if !self.0.is_empty() {
+            write!(f, "{}:", self.0)?;
+        }
+        write!(f, "{}", self.1)
+    }
+}
+
+impl Tag<'_> {
+    fn tag_pos(&self, tokens: &Tokenizer) -> TagPos {
+        let pos = tokens.stream().gen_text_pos_from(self.0.start());
+        TagPos(self.to_string(), pos)
+    }
+}
+
+#[derive(Debug)]
+pub struct TagPos(String, TextPos);
+
+impl fmt::Display for TagPos {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{} (at {})", self.0, self.1)
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    Xmlparser(xmlparser::Error),
+    Unmatched(TagPos, TagPos),
+    Unclosed(TagPos),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Xmlparser(e) => e.fmt(f),
+            Self::Unmatched(open, close) => {
+                write!(f, "expected closing tag for {open}, found {close}")
+            }
+            Self::Unclosed(open) => {
+                write!(f, "expected closing tag for {open}, found end of file")
+            }
+        }
+    }
+}
+
+impl From<xmlparser::Error> for Error {
+    fn from(e: xmlparser::Error) -> Self {
+        Self::Xmlparser(e)
+    }
+}
+
+impl std::error::Error for Error {}
 
 fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> {
     let mut children = Vec::new();
     loop {
-        let Some(tk) = tokens.next() else { todo!() };
+        let Some(tk) = tokens.next() else {
+            return Err(Error::Unclosed(tag.tag_pos(tokens)));
+        };
         match tk? {
             Token::ElementEnd {
                 end: ElementEnd::Close(prefix, local),
                 ..
             } => {
-                if tag_as_str((prefix, local)) == tag_as_str(*tag) {
+                let tag_ = Tag(prefix, local);
+                if *tag == tag_ {
                     return Ok(children);
                 } else {
-                    todo!()
+                    Err(Error::Unmatched(tag.tag_pos(tokens), tag_.tag_pos(tokens)))?
                 }
             }
             tk => children.push(parse(tk, tokens)?),
@@ -31,19 +91,11 @@ fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> 
     }
 }
 
-// TODO: unescaping HTML sequences?
 fn tac(tag: &Tag, tokens: &mut Tokenizer) -> Result<Val, Error> {
-    let tag_str = |tag: &Tag| {
-        if tag.0.is_empty() {
-            tag.1.as_str().to_owned()
-        } else {
-            format!("{}:{}", tag.0, tag.1)
-        }
-    };
-
     let mut attrs = Vec::new();
     let children = loop {
-        let Some(tk) = tokens.next() else { todo!() };
+        // SAFETY: xmlparser returns an error instead of None
+        let tk = tokens.next().unwrap();
         match tk? {
             Token::Attribute {
                 prefix,
@@ -51,21 +103,23 @@ fn tac(tag: &Tag, tokens: &mut Tokenizer) -> Result<Val, Error> {
                 value,
                 ..
             } => attrs.push((
-                tag_str(&(prefix, local)).into(),
+                Tag(prefix, local).to_string().into(),
                 value.as_str().to_owned().into(),
             )),
             Token::ElementEnd { end, .. } => match end {
                 ElementEnd::Open => break Some(parse_children(tag, tokens)?),
                 ElementEnd::Empty => break None,
+                // SAFETY: xmlparser returns an error instead of yielding this
                 ElementEnd::Close(..) => panic!(),
             },
+            // SAFETY: xmlparser returns an error instead of yielding this
             _ => panic!(),
         }
     };
     let attrs = if attrs.is_empty() { None } else { Some(attrs) };
 
     Ok(make_obj([
-        ("t", Some(tag_str(tag).into())),
+        ("t", Some(tag.to_string().into())),
         ("a", attrs.map(|v| Val::obj(v.into_iter().collect()))),
         ("c", children.map(|v| v.into_iter().collect())),
     ]))
@@ -119,9 +173,9 @@ pub fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
         ),
         Token::Cdata { text, .. } => singleton("cdata", ss_val(text)),
         Token::Comment { text, .. } => singleton("comment", ss_val(text)),
-        Token::ElementStart { prefix, local, .. } => tac(&(prefix, local), tokens)?,
+        Token::ElementStart { prefix, local, .. } => tac(&Tag(prefix, local), tokens)?,
         Token::Text { text } => ss_val(text),
-        // xmlparser should never yield these tokens at this point
+        // SAFETY: xmlparser returns an error instead of yielding this
         Token::Attribute { .. }
         | Token::DtdEnd { .. }
         | Token::ElementEnd { .. }
