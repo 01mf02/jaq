@@ -4,6 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-jaq-core = { version = "2.0", path = "../jaq-core" }
 jaq-json = { version = "1.1.0", path = "../jaq-json" }
 xmlparser = "0.13.6"

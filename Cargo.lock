@@ -316,7 +316,6 @@ dependencies = [
 name = "jaq-xml"
 version = "0.1.0"
 dependencies = [
- "jaq-core",
  "jaq-json",
  "xmlparser",
 ]
