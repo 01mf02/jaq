@@ -263,7 +263,52 @@ impl TryFrom<&Val> for XmlVal {
             Val::Str(v) => Ok((k.clone(), v.clone())),
             _ => Err(Serror::InvalidEntry("attribute", k.clone(), v.clone())),
         };
-        let from_kvs = |a: &Map<_, _>| a.iter().map(from_kv).collect::<Result<_, _>>();
+        let from_kvs = |a: &Map| a.iter().map(from_kv).collect::<Result<_, _>>();
+
+        let from_tac = |o: &Map| {
+            let mut t = RcStr::default();
+            let mut a = Vec::new();
+            let mut c = None;
+            for (k, v) in o.iter() {
+                match (&***k, v) {
+                    ("t", Val::Str(s)) => t = s.clone(),
+                    ("a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
+                    ("c", v) => c = Some(Box::new(v.try_into()?)),
+                    _ => Err(Serror::InvalidEntry("tac", k.clone(), v.clone()))?,
+                }
+            }
+            Ok(Self::Tac(t.clone(), a, c))
+        };
+        let from_dt = |o: &Map| {
+            let mut name = RcStr::default();
+            let mut external = None;
+            let mut internal = None;
+            for (k, v) in o.iter() {
+                match (&***k, v) {
+                    ("name", Val::Str(s)) => name = s.clone(),
+                    ("external", Val::Str(s)) => external = Some(s.clone()),
+                    ("internal", Val::Str(s)) => internal = Some(s.clone()),
+                    _ => Err(Serror::InvalidEntry("doctype", k.clone(), v.clone()))?,
+                }
+            }
+            Ok(Self::DocType {
+                name,
+                external,
+                internal,
+            })
+        };
+        let from_pi = |o: &Map| {
+            let mut target = RcStr::default();
+            let mut content = None;
+            for (k, v) in o.iter() {
+                match (&***k, v) {
+                    ("target", Val::Str(s)) => target = s.clone(),
+                    ("content", Val::Str(s)) => content = Some(s.clone()),
+                    _ => Err(Serror::InvalidEntry("pi", k.clone(), v.clone()))?,
+                }
+            }
+            Ok(Self::Pi { target, content })
+        };
         match v {
             Val::Str(s) => Ok(Self::Str(s.clone())),
             Val::Arr(a) => a
@@ -271,20 +316,7 @@ impl TryFrom<&Val> for XmlVal {
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()
                 .map(Self::Seq),
-            Val::Obj(o) if o.contains_key(&"t".to_string()) => {
-                let mut t = RcStr::default();
-                let mut a = Vec::new();
-                let mut c = None;
-                for (k, v) in o.iter() {
-                    match (&***k, v) {
-                        ("t", Val::Str(s)) => t = s.clone(),
-                        ("a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
-                        ("c", v) => c = Some(Box::new(v.try_into()?)),
-                        _ => Err(Serror::InvalidEntry("tac", k.clone(), v.clone()))?,
-                    }
-                }
-                Ok(Self::Tac(t.clone(), a, c))
-            }
+            Val::Obj(o) if o.contains_key(&"t".to_string()) => from_tac(o),
             Val::Obj(o) => {
                 let mut o = o.iter();
                 let (k, v) = match (o.next(), o.next()) {
@@ -293,39 +325,11 @@ impl TryFrom<&Val> for XmlVal {
                 };
                 match (&***k, v) {
                     ("xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
-                    ("doctype", Val::Obj(o)) if o.contains_key(&"name".to_string()) => {
-                        let mut name = RcStr::default();
-                        let mut external = None;
-                        let mut internal = None;
-                        for (k, v) in o.iter() {
-                            match (&***k, v) {
-                                ("name", Val::Str(s)) => name = s.clone(),
-                                ("external", Val::Str(s)) => external = Some(s.clone()),
-                                ("internal", Val::Str(s)) => internal = Some(s.clone()),
-                                _ => Err(Serror::InvalidEntry("doctype", k.clone(), v.clone()))?,
-                            }
-                        }
-                        Ok(Self::DocType {
-                            name,
-                            external,
-                            internal,
-                        })
-                    }
+                    ("doctype", Val::Obj(o)) if o.contains_key(&"name".to_string()) => from_dt(o),
                     ("cdata", Val::Str(s)) => Ok(Self::Cdata(s.clone())),
 
                     ("comment", Val::Str(s)) => Ok(Self::Comment(s.clone())),
-                    ("pi", Val::Obj(o)) if o.contains_key(&"target".to_string()) => {
-                        let mut target = RcStr::default();
-                        let mut content = None;
-                        for (k, v) in o.iter() {
-                            match (&***k, v) {
-                                ("target", Val::Str(s)) => target = s.clone(),
-                                ("content", Val::Str(s)) => content = Some(s.clone()),
-                                _ => Err(Serror::InvalidEntry("pi", k.clone(), v.clone()))?,
-                            }
-                        }
-                        Ok(Self::Pi { target, content })
-                    }
+                    ("pi", Val::Obj(o)) if o.contains_key(&"target".to_string()) => from_pi(o),
                     _ => Err(Serror::InvalidEntry("unknown", k.clone(), v.clone()))?,
                 }
             }
