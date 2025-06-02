@@ -16,7 +16,7 @@ pub enum Format {
 impl Format {
     pub fn determine(path: &Path) -> Option<Self> {
         match path.extension()?.to_str()? {
-            "xml" | "html" => Some(Format::Xml),
+            "xml" | "xhtml" => Some(Format::Xml),
             "json" => Some(Format::Json),
             _ => None,
         }
