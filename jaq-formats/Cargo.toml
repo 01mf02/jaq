@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["std", "xml"]
+default = ["std", "xml", "yaml"]
 std = []
 xml = ["xmlparser"]
+yaml = ["saphyr-parser"]
 
 [dependencies]
 jaq-json = { version = "1.1.0", path = "../jaq-json" }
 
 xmlparser = { version = "0.13.6", optional = true }
+saphyr-parser = { version = "0.0.4", optional = true }
