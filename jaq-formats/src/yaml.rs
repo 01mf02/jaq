@@ -88,7 +88,7 @@ impl<'input, T: Input> State<'input, T> {
     fn parse_map_entry(&mut self) -> Option<Result<(Rc<String>, Val), Error>> {
         match self.next() {
             Ok((Event::MappingEnd, _)) => None,
-            Ok((next, span)) => Some(self.parse_val((next, span.clone())).and_then(|k| {
+            Ok((next, span)) => Some(self.parse_val((next, span)).and_then(|k| {
                 let Val::Str(k) = k else {
                     Err(Error::KeyVal(span))?
                 };
@@ -167,7 +167,7 @@ fn strip(s: &str, f: impl FnMut(char) -> bool) -> (&str, &str) {
 // Watch out, something like "1." is valid YAML, but not valid JSON
 fn normalise_float(sign: Option<char>, s: &str) -> Option<String> {
     let mk_sign = |sign| if sign == Some('-') { "-" } else { "" };
-    let digits = |s| strip(s, |c| matches!(c, '0'..='9'));
+    let digits = |s| strip(s, |c| c.is_ascii_digit());
     let sign = mk_sign(sign);
 
     let (i, s) = digits(s);
@@ -208,9 +208,7 @@ fn parse_float(s: &str) -> Option<Val> {
 fn parse_plain_scalar(s: Cow<str>, tag: Option<Tag>, span: Span) -> Result<Val, Error> {
     // that's basically what "!!" boils down to
     const TAG: &str = "tag:yaml.org,2002:";
-    let tag = tag
-        .map(|Tag { handle, suffix }| (handle == TAG).then_some(suffix))
-        .flatten();
+    let tag = tag.and_then(|Tag { handle, suffix }| (handle == TAG).then_some(suffix));
     let err = |s: Cow<str>, typ| Error::Scalar(typ, s.into_owned(), span);
     Ok(match (&*s, tag.as_deref()) {
         ("null" | "Null" | "NULL" | "~", None | Some("null")) => Val::Null,
@@ -229,11 +227,11 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<Tag>, span: Span) -> Result<Val, 
         (_, Some("bool")) => Err(err(s, "bool"))?,
 
         (".nan" | ".NaN" | ".NAN", None | Some("float")) => Val::Float(f64::NAN),
-        (_, Some("int")) => parse_int(&*s).ok_or_else(|| err(s, "int"))?,
-        (_, Some("float")) => parse_float(&*s).ok_or_else(|| err(s, "float"))?,
+        (_, Some("int")) => parse_int(&s).ok_or_else(|| err(s, "int"))?,
+        (_, Some("float")) => parse_float(&s).ok_or_else(|| err(s, "float"))?,
         // Is it an int? Is it a float? No, it's ... a string!
-        _ => parse_int(&*s)
-            .or_else(|| parse_float(&*s))
+        _ => parse_int(&s)
+            .or_else(|| parse_float(&s))
             .unwrap_or_else(|| Val::Str(s.into_owned().into())),
     })
 }
