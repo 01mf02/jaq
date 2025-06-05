@@ -164,7 +164,10 @@ impl Cli {
 
             'c' => self.compact_output = true,
             'r' => self.to = Some(Format::Raw),
-            'j' => self.join_output = true,
+            'j' => {
+                self.join_output = true;
+                self.short('r', args)?
+            }
             'i' => self.in_place = true,
             'S' => self.sort_keys = true,
             'C' => self.color_output = true,
