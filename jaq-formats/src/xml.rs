@@ -1,7 +1,5 @@
-use alloc::borrow::ToOwned;
-use alloc::format;
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
 
 use core::fmt::{self, Formatter};
 use jaq_json::{Map, Val};
