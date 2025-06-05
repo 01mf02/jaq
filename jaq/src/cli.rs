@@ -238,7 +238,7 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let fmts = "raw, json, xml";
+        let fmts = "raw, json, xml, yaml";
         match self {
             Self::Flag(s) => write!(f, "unknown flag: {s}"),
             Self::Utf8(s) => write!(f, "invalid UTF-8: {s:?}"),
