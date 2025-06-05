@@ -11,12 +11,14 @@ pub enum Format {
     Raw,
     Json,
     Xml,
+    Yaml,
 }
 
 impl Format {
     pub fn determine(path: &Path) -> Option<Self> {
         match path.extension()?.to_str()? {
             "xml" | "xhtml" => Some(Format::Xml),
+            "yml" | "yaml" => Some(Format::Yaml),
             "json" => Some(Format::Json),
             _ => None,
         }
@@ -27,6 +29,7 @@ impl Format {
             "raw" => Some(Format::Raw),
             "json" => Some(Format::Json),
             "xml" => Some(Format::Xml),
+            "yaml" => Some(Format::Yaml),
             _ => None,
         }
     }

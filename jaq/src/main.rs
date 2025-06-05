@@ -253,25 +253,33 @@ fn invalid_data(e: impl Into<BoxError>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
-fn xml_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
+fn parse_slice<'a, E: Into<BoxError>, I: Iterator<Item = Result<Val, E>> + 'a>(
+    slice: &'a [u8],
+    f: impl FnOnce(&'a str) -> I,
+) -> impl Iterator<Item = io::Result<Val>> + 'a {
     use jaq_core::box_iter::then;
     let s = core::str::from_utf8(slice).map_err(invalid_data);
-    then(s, |s| {
-        let vals = jaq_formats::xml::parse_str(s).map(|r| r.map_err(invalid_data));
-        Box::new(vals)
-    })
+    then(s, |s| Box::new(f(s).map(|r| r.map_err(invalid_data))))
 }
 
-fn xml_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    use jaq_core::box_iter::then;
-    let s = io::read_to_string(read);
-    then(s, |s| {
-        let vals = jaq_formats::xml::parse_str(&s).map(|r| r.map_err(invalid_data));
-        // TODO: having to collect() here is quite unfortunate, but at least
-        // the effect is likely less noticeable because most of the time,
-        // the largest part of the data will be in a single tag anyway
-        Box::new(vals.collect::<Vec<_>>().into_iter())
-    })
+// TODO: Writing this as a function would require taking something like
+// `f: impl for<'a> FnOnce(&'a str) -> impl Iterator<...> + 'a`,
+// but this is currently rejected by Rust because of E0562.
+// We could bypass this by instead taking
+// `f: impl FnOnce(&'a str) -> Box<dyn Iterator<...> + 'a>`,
+// but this makes the function a bit more annoying to call.
+// So a macro it is!
+macro_rules! parse_read {
+    ($read:expr, $f:expr) => {{
+        let s = io::read_to_string($read);
+        jaq_core::box_iter::then(s, |s| {
+            let vals = $f(&s).map(|r| r.map_err(invalid_data));
+            // TODO: having to collect() here is quite unfortunate, but at least
+            // for XML, the effect is less noticeable because most of the time,
+            // the largest part of the data will be in a single tag anyway
+            Box::new(vals.collect::<Vec<_>>().into_iter())
+        })
+    }};
 }
 
 fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
@@ -296,12 +304,14 @@ fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
 }
 
 fn read_stdin(cli: &Cli) -> Box<dyn Iterator<Item = io::Result<Val>>> {
+    use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
     let stdin = || io::stdin().lock();
     use cli::Format;
     match cli.from.unwrap_or(Format::Json) {
         Format::Raw => Box::new(raw_input(cli.slurp, stdin()).map(|r| r.map(Val::from))),
         Format::Json => Box::new(collect_if(cli.slurp, json_read(stdin()))),
-        Format::Xml => Box::new(collect_if(cli.slurp, xml_read(stdin()))),
+        Format::Xml => Box::new(collect_if(cli.slurp, parse_read!(stdin(), parse_xml))),
+        Format::Yaml => Box::new(collect_if(cli.slurp, parse_read!(stdin(), parse_yaml))),
     }
 }
 
@@ -310,13 +320,15 @@ fn read_slice<'a>(
     fmt: Format,
     slice: &'a [u8],
 ) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
+    use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
     match fmt {
         Format::Raw => {
             let read = io::BufReader::new(slice);
             Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
         }
         Format::Json => Box::new(collect_if(slurp, json_slice(slice))),
-        Format::Xml => Box::new(collect_if(slurp, xml_slice(slice))),
+        Format::Xml => Box::new(collect_if(slurp, parse_slice(slice, parse_xml))),
+        Format::Yaml => Box::new(collect_if(slurp, parse_slice(slice, parse_yaml))),
     }
 }
 
@@ -534,9 +546,14 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
     let fmt_json = |f: &mut Formatter| fmt_val(f, &opts(), 0, val);
     let format = cli.to.unwrap_or(Format::Json);
 
+    if matches!(format, Format::Yaml) {
+        // start of YAML document
+        writeln!(w, "---")?;
+    }
+
     match (val, format) {
         (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
-        (_, Format::Json | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
+        (_, Format::Json | Format::Yaml | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
         (_, Format::Xml) => {
             let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;
             write!(w, "{xml}")?
@@ -550,7 +567,13 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
     } else {
         // this also flushes output, because stdout is line-buffered in Rust
         writeln!(w)
+    }?;
+
+    if matches!(format, Format::Yaml) {
+        // end of YAML document
+        writeln!(w, "...")?;
     }
+    Ok(())
 }
 
 fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {
