@@ -306,7 +306,6 @@ fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
 fn read_stdin(cli: &Cli) -> Box<dyn Iterator<Item = io::Result<Val>>> {
     use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
     let stdin = || io::stdin().lock();
-    use cli::Format;
     match cli.from.unwrap_or(Format::Json) {
         Format::Raw => Box::new(raw_input(cli.slurp, stdin()).map(|r| r.map(Val::from))),
         Format::Json => Box::new(collect_if(cli.slurp, json_read(stdin()))),
