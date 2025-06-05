@@ -51,12 +51,12 @@ fn main() -> ExitCode {
         }
     };
 
-    set_color(!cli.in_place && cli.color_if(|| std::io::stdout().is_terminal() && !no_color));
+    set_color(!cli.in_place && cli.color_if(|| io::stdout().is_terminal() && !no_color));
 
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            set_color(cli.color_if(|| std::io::stderr().is_terminal() && !no_color));
+            set_color(cli.color_if(|| io::stderr().is_terminal() && !no_color));
             e.report()
         }
     }
@@ -249,7 +249,7 @@ fn load_file(path: impl AsRef<Path>) -> io::Result<Box<dyn core::ops::Deref<Targ
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
+fn invalid_data(e: impl Into<BoxError>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
