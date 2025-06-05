@@ -6,3 +6,5 @@ extern crate std;
 
 #[cfg(feature = "xml")]
 pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
