@@ -22,8 +22,24 @@ A good overview of the syntax is given at <https://www.json.org>.
 jaq reads data adhering to the [XML 1.0](https://www.w3.org/TR/xml/) standard.
 However, it treats only XML data encoded as UTF-8.
 
-jaq cannot directly read HTML files --- you can use tools such as
+jaq can read XHTML files, but it cannot directly read HTML files.
+You can use tools such as
 [html2xhtml](https://github.com/jfisteus/html2xhtml) to convert HTML to XHTML.
+
+Mappings between XML to JSON generally have to make a compromise between
+"friendliness" and round-tripping;
+see "[Experiences with JSON and XML Transformations]".
+Here, "friendliness" means that JSON generated from XML has a flat structure,
+making it easy to consume it.
+Stefan Goessner gives a nice discussion of different "friendly" mappings in
+"[Converting Between XML and JSON]".
+The take-away message is: "Friendly" mappings lose information.
+For that reason, jaq does not use a "friendly" mapping, but rather
+a mapping that preserves XML information perfectly,
+making it suitable for round-tripping.
+
+[Experiences with JSON and XML Transformations]: https://www.w3.org/2011/10/integration-workshop/p/XML_JSON_mapping_paper.pdf
+[Converting Between XML and JSON]: https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html
 
 As an example, consider the following input:
 
@@ -82,6 +98,12 @@ $ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a
 <a href="https://www.w3.org">World Wide Web Consortium (<i>W3C</i>)</a>
 ~~~
 
+Finally, we can extract all text from an XML file (discarding CDATA blocks):
+
+~~~ jq
+def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
+~~~
+
 ### Other XML values
 
 - Strings are neither escaped nor unescaped; that means,
@@ -94,7 +116,8 @@ $ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a
 - An XML declaration such as
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` is converted to
   `{"xmldecl": {"version": "1.0", "encoding": "UTF-8", "standalone": "yes"}}`.
-  Note that the values given in this declaration are ignored by the XML parser.
+  (Note that the values given in this declaration, such as the encoding,
+  are ignored by jaq's XML parser.)
 - A processing instruction such as
   `<?xml-stylesheet href="common.css"?>` is converted to
   `{"pi": {"target": "xml-stylesheet", "content": "href=\"common.css\""}}`.
