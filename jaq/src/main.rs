@@ -4,6 +4,7 @@ use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
 use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
+use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
 use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -86,7 +87,18 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     //println!("Filter: {:?}", filter);
 
     let last = if cli.files.is_empty() {
-        let inputs = read_stdin(cli);
+        let stdin = || io::stdin().lock();
+        let format = cli.from.unwrap_or(Format::Json);
+        let s = match format {
+            Format::Raw | Format::Json => String::new(),
+            Format::Xml | Format::Yaml => io::read_to_string(stdin())?,
+        };
+        let inputs = match format {
+            Format::Raw => Box::new(raw_input(cli.slurp, stdin()).map(|r| r.map(Val::from))),
+            Format::Json => collect_if(cli.slurp, json_read(stdin())),
+            Format::Xml => collect_if(cli.slurp, parse_xml(&s).map(map_invalid_data)),
+            Format::Yaml => collect_if(cli.slurp, parse_yaml(&s).map(map_invalid_data)),
+        };
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
@@ -98,7 +110,19 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 .from
                 .or_else(|| Format::determine(path))
                 .unwrap_or(Format::Json);
-            let inputs = read_slice(cli.slurp, format, &file);
+            let s = match format {
+                Format::Raw | Format::Json => "",
+                Format::Xml | Format::Yaml => core::str::from_utf8(&file).map_err(invalid_data)?,
+            };
+            let inputs = match format {
+                Format::Raw => {
+                    let read = io::BufReader::new(&**file);
+                    Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
+                }
+                Format::Json => collect_if(cli.slurp, json_slice(&file)),
+                Format::Xml => collect_if(cli.slurp, parse_xml(s).map(map_invalid_data)),
+                Format::Yaml => collect_if(cli.slurp, parse_yaml(s).map(map_invalid_data)),
+            };
 
             if cli.in_place {
                 // create a temporary file where output is written to
@@ -253,33 +277,8 @@ fn invalid_data(e: impl Into<BoxError>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
-fn parse_slice<'a, E: Into<BoxError>, I: Iterator<Item = Result<Val, E>> + 'a>(
-    slice: &'a [u8],
-    f: impl FnOnce(&'a str) -> I,
-) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    use jaq_core::box_iter::then;
-    let s = core::str::from_utf8(slice).map_err(invalid_data);
-    then(s, |s| Box::new(f(s).map(|r| r.map_err(invalid_data))))
-}
-
-// TODO: Writing this as a function would require taking something like
-// `f: impl for<'a> FnOnce(&'a str) -> impl Iterator<...> + 'a`,
-// but this is currently rejected by Rust because of E0562.
-// We could bypass this by instead taking
-// `f: impl FnOnce(&'a str) -> Box<dyn Iterator<...> + 'a>`,
-// but this makes the function a bit more annoying to call.
-// So a macro it is!
-macro_rules! parse_read {
-    ($read:expr, $f:expr) => {{
-        let s = io::read_to_string($read);
-        jaq_core::box_iter::then(s, |s| {
-            let vals = $f(&s).map(|r| r.map_err(invalid_data));
-            // TODO: having to collect() here is quite unfortunate, but at least
-            // for XML, the effect is less noticeable because most of the time,
-            // the largest part of the data will be in a single tag anyway
-            Box::new(vals.collect::<Vec<_>>().into_iter())
-        })
-    }};
+fn map_invalid_data<T>(r: Result<T, impl Into<BoxError>>) -> Result<T, io::Error> {
+    r.map_err(invalid_data)
 }
 
 fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
@@ -301,34 +300,6 @@ fn json_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val
 
 fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
     json_slice(&load_file(path.as_ref())?).collect()
-}
-
-fn read_stdin(cli: &Cli) -> Box<dyn Iterator<Item = io::Result<Val>>> {
-    use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
-    let stdin = || io::stdin().lock();
-    match cli.from.unwrap_or(Format::Json) {
-        Format::Raw => Box::new(raw_input(cli.slurp, stdin()).map(|r| r.map(Val::from))),
-        Format::Json => Box::new(collect_if(cli.slurp, json_read(stdin()))),
-        Format::Xml => Box::new(collect_if(cli.slurp, parse_read!(stdin(), parse_xml))),
-        Format::Yaml => Box::new(collect_if(cli.slurp, parse_read!(stdin(), parse_yaml))),
-    }
-}
-
-fn read_slice<'a>(
-    slurp: bool,
-    fmt: Format,
-    slice: &'a [u8],
-) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
-    use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
-    match fmt {
-        Format::Raw => {
-            let read = io::BufReader::new(slice);
-            Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
-        }
-        Format::Json => Box::new(collect_if(slurp, json_slice(slice))),
-        Format::Xml => Box::new(collect_if(slurp, parse_slice(slice, parse_xml))),
-        Format::Yaml => Box::new(collect_if(slurp, parse_slice(slice, parse_yaml))),
-    }
 }
 
 fn raw_input<'a, R>(slurp: bool, read: R) -> impl Iterator<Item = io::Result<String>> + 'a
