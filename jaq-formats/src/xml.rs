@@ -41,10 +41,13 @@ impl fmt::Display for TagPos {
     }
 }
 
+#[derive(Debug)]
+pub struct Lerror(xmlparser::Error);
+
 /// Deserialisation error.
 #[derive(Debug)]
 pub enum Error {
-    Xmlparser(xmlparser::Error),
+    Lex(Lerror),
     Unmatched(TagPos, TagPos),
     Unclosed(TagPos),
 }
@@ -52,7 +55,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Xmlparser(e) => e.fmt(f),
+            Self::Lex(Lerror(e)) => e.fmt(f),
             Self::Unmatched(open, close) => {
                 write!(f, "expected closing tag for {open}, found {close}")
             }
@@ -65,7 +68,7 @@ impl fmt::Display for Error {
 
 impl From<xmlparser::Error> for Error {
     fn from(e: xmlparser::Error) -> Self {
-        Self::Xmlparser(e)
+        Self::Lex(Lerror(e))
     }
 }
 

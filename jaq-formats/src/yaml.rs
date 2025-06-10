@@ -4,8 +4,11 @@ use jaq_json::Val;
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
 
 #[derive(Debug)]
+pub struct Lerror(ScanError);
+
+#[derive(Debug)]
 pub enum Error {
-    ScanError(ScanError),
+    Lex(Lerror),
     Scalar(&'static str, String, Span),
     KeyVal(Span),
 }
@@ -13,7 +16,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::ScanError(e) => e.fmt(f),
+            Self::Lex(Lerror(e)) => e.fmt(f),
             Self::Scalar(typ, s, span) => {
                 let (line, col) = (span.start.line(), span.start.col());
                 write!(f, "scalar \"{s}\" is no {typ} ({line}:{col})")
@@ -28,7 +31,7 @@ impl fmt::Display for Error {
 
 impl From<ScanError> for Error {
     fn from(e: ScanError) -> Self {
-        Self::ScanError(e)
+        Self::Lex(Lerror(e))
     }
 }
 
@@ -49,7 +52,7 @@ impl<'input, T: Input> State<'input, T> {
     }
 
     fn next(&mut self) -> Result<EventSpan<'input>, Error> {
-        self.parser.next().unwrap().map_err(Error::ScanError)
+        self.parser.next().unwrap().map_err(Error::from)
     }
 
     fn push_alias(&mut self, val: Val, anchor_id: usize) {
