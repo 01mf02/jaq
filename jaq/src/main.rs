@@ -4,8 +4,7 @@ use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
 use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
-use jaq_formats::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
-use jaq_json::Val;
+use jaq_json::{xml::parse_str as parse_xml, yaml::parse_str as parse_yaml, Val};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -503,7 +502,6 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 }
 
 fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> {
-    use jaq_formats::xml::XmlVal;
     let opts = || PpOpts {
         compact: cli.compact_output,
         indent: if cli.tab {
@@ -525,6 +523,7 @@ fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> 
         (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
         (_, Format::Json | Format::Yaml | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
         (_, Format::Xml) => {
+            use jaq_json::xml::XmlVal;
             let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;
             write!(w, "{xml}")?
         }

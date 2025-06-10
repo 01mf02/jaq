@@ -1,6 +1,6 @@
+use crate::Val;
 use alloc::{borrow::Cow, format, rc::Rc, string::String, vec::Vec};
 use core::fmt::{self, Formatter};
-use jaq_json::Val;
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
 
 #[derive(Debug)]

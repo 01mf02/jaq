@@ -1,8 +1,7 @@
+use crate::{Map, Val};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
-
 use core::fmt::{self, Formatter};
-use jaq_json::{Map, Val};
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
 /// Prefix and local name of a tag.

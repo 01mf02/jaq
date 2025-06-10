@@ -258,7 +258,6 @@ dependencies = [
  "hifijson",
  "is-terminal",
  "jaq-core",
- "jaq-formats",
  "jaq-json",
  "jaq-std",
  "log",
@@ -283,15 +282,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "jaq-formats"
-version = "0.1.0"
-dependencies = [
- "jaq-json",
- "saphyr-parser",
- "xmlparser",
-]
-
-[[package]]
 name = "jaq-json"
 version = "1.1.2"
 dependencies = [
@@ -300,7 +290,9 @@ dependencies = [
  "indexmap",
  "jaq-core",
  "jaq-std",
+ "saphyr-parser",
  "serde_json",
+ "xmlparser",
 ]
 
 [[package]]

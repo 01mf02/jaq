@@ -4,6 +4,8 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
@@ -13,8 +15,12 @@ use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
 
-#[cfg(feature = "hifijson")]
-use hifijson::{LexAlloc, Token};
+#[cfg(feature = "json")]
+pub mod json;
+#[cfg(feature = "xml")]
+pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
 
 /// JSON value with sharing.
 ///
@@ -399,19 +405,9 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
 }
 
 #[cfg(feature = "parse")]
-/// Convert string to a single JSON value.
-fn from_json(s: &str) -> ValR {
-    use hifijson::token::Lex;
-    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
-    lexer
-        .exactly_one(Val::parse)
-        .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
-}
-
-#[cfg(feature = "parse")]
 fn parse_fun() -> Filter<RunPtr<Val>> {
     ("fromjson", v(0), |_, cv| {
-        box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
+        box_once_err(cv.1.as_str().and_then(|s| json::from_str(s)))
     })
 }
 
@@ -554,55 +550,6 @@ impl Val {
                 .iter()
                 .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
             _ => self == other,
-        }
-    }
-
-    /// Parse at least one JSON value, given an initial token and a lexer.
-    ///
-    /// If the underlying lexer reads input fallibly (for example `IterLexer`),
-    /// the error returned by this function might be misleading.
-    /// In that case, always check whether the lexer contains an error.
-    #[cfg(feature = "hifijson")]
-    pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
-        use hifijson::{token, Error};
-        match token {
-            Token::Null => Ok(Self::Null),
-            Token::True => Ok(Self::Bool(true)),
-            Token::False => Ok(Self::Bool(false)),
-            Token::DigitOrMinus => {
-                let (num, parts) = lexer.num_string()?;
-                // if we are dealing with an integer ...
-                if parts.dot.is_none() && parts.exp.is_none() {
-                    // ... that fits into an isize
-                    if let Ok(i) = num.parse() {
-                        return Ok(Self::Int(i));
-                    }
-                }
-                Ok(Self::Num(Rc::new(num.to_string())))
-            }
-            Token::Quote => Ok(Self::from(lexer.str_string()?.to_string())),
-            Token::LSquare => Ok(Self::Arr({
-                let mut arr = Vec::new();
-                lexer.seq(Token::RSquare, |token, lexer| {
-                    arr.push(Self::parse(token, lexer)?);
-                    Ok::<_, hifijson::Error>(())
-                })?;
-                arr.into()
-            })),
-            Token::LCurly => Ok(Self::obj({
-                let mut obj = Map::default();
-                lexer.seq(Token::RCurly, |token, lexer| {
-                    let key =
-                        lexer.str_colon(token, |lexer| lexer.str_string().map_err(Error::Str))?;
-
-                    let token = lexer.ws_token().ok_or(token::Expect::Value)?;
-                    let value = Self::parse(token, lexer)?;
-                    obj.insert(Rc::new(key.to_string()), value);
-                    Ok::<_, Error>(())
-                })?;
-                obj
-            })),
-            _ => Err(token::Expect::Value)?,
         }
     }
 }
