@@ -102,7 +102,7 @@ impl<'input, T: Input> State<'input, T> {
     fn parse_val(&mut self, ev: EventSpan) -> Result<Val, Error> {
         let (val, anchor_id) = match ev {
             (Event::Scalar(s, ScalarStyle::Plain, anchor_id, tag), span) => {
-                (parse_plain_scalar(s, tag, span)?, anchor_id)
+                (parse_plain_scalar(s, tag.as_ref(), span)?, anchor_id)
             }
             (Event::Scalar(s, _style, anchor_id, _tag), _) => {
                 (Val::Str(s.into_owned().into()), anchor_id)
@@ -205,12 +205,11 @@ fn parse_float(s: &str) -> Option<Val> {
     }
 }
 
-fn parse_plain_scalar(s: Cow<str>, tag: Option<Tag>, span: Span) -> Result<Val, Error> {
-    // that's basically what "!!" boils down to
-    const TAG: &str = "tag:yaml.org,2002:";
-    let tag = tag.and_then(|Tag { handle, suffix }| (handle == TAG).then_some(suffix));
+fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, Error> {
+    // if the tag starts with "!!"
+    let tag = tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix));
     let err = |s: Cow<str>, typ| Error::Scalar(typ, s.into_owned(), span);
-    Ok(match (&*s, tag.as_deref()) {
+    Ok(match (&*s, tag) {
         ("null" | "Null" | "NULL" | "~", None | Some("null")) => Val::Null,
         /*
         ("y" | "Y" | "yes" | "Yes" | "YES", None | Some("bool")) => b(true),

@@ -13,4 +13,4 @@ yaml = ["saphyr-parser"]
 jaq-json = { version = "1.1.0", path = "../jaq-json" }
 
 xmlparser = { version = "0.13.6", optional = true }
-saphyr-parser = { version = "0.0.4", optional = true }
+saphyr-parser = { version = "0.0.5", optional = true }
