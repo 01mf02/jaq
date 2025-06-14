@@ -161,5 +161,6 @@ def @sh: [if isarray then .[] end | fmt_row("null"; "'\(escape_sh)'")] | join(" 
 def @text: "\(.)";
 def @html   : tostring | escape_html;
 def @uri    : tostring | encode_uri;
+def @urid   : tostring | decode_uri;
 def @base64 : tostring | encode_base64;
 def @base64d: tostring | decode_base64;
