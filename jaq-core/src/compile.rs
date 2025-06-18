@@ -213,8 +213,7 @@ pub struct Compiler<S, F> {
     errs: Vec<Error<S>>,
 }
 
-// TODO: remove S: Default
-impl<S: Default, F> Default for Compiler<S, F> {
+impl<S, F> Default for Compiler<S, F> {
     fn default() -> Self {
         Self {
             lut: Lut::default(),
