@@ -4,6 +4,7 @@ use super::lex::{StrPart, Tok, Token};
 use super::path::{self, Path};
 use super::{ops, prec_climb};
 use alloc::{boxed::Box, vec::Vec};
+use core::fmt::{self, Debug};
 
 /// Parse error, storing what we expected and what we got instead.
 pub type Error<S, T = S> = (Expect<S>, T);
@@ -828,7 +829,7 @@ pub(crate) struct Module<S, B> {
 /// def map(f): [.[] | f];
 /// def recurse(f; cond): recurse(f | select(cond));
 /// ~~~
-#[derive(Debug)]
+// TODO v3.0: Make this just a tuple?
 pub struct Def<S, F = Term<S>> {
     /// name, e.g. `"double"` or `"map"`
     pub name: S,
@@ -836,6 +837,13 @@ pub struct Def<S, F = Term<S>> {
     pub args: Vec<S>,
     /// right-hand side, e.g. a term corresponding to `[.[] | f]`
     pub body: F,
+}
+
+// required for Haskell interop
+impl<S: Debug, F: Debug> Debug for Def<S, F> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({:?}, {:?}, {:?})", self.name, self.args, self.body)
+    }
 }
 
 impl<S, F> Def<S, F> {
