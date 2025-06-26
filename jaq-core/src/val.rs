@@ -4,7 +4,8 @@
 //! you need to implement the [`ValT`] trait.
 
 use crate::box_iter::BoxIter;
-use crate::path::Opt;
+use crate::path::{self, Opt};
+use crate::RcList;
 use core::fmt::Display;
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
@@ -14,6 +15,7 @@ use core::str::FromStr;
 
 /// Value or eRror.
 pub type ValR<V> = Result<V, crate::Error<V>>;
+pub type ValPR<V> = Result<(V, RcList<V>), crate::Error<V>>;
 /// Value or eXception.
 pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
@@ -31,6 +33,7 @@ pub trait ValT:
     + From<bool>
     + From<isize>
     + From<alloc::string::String>
+    + From<path::Part<Self>>
     + FromIterator<Self>
     + PartialEq
     + PartialOrd
@@ -50,6 +53,11 @@ pub trait ValT:
     ///
     /// This is used when creating values with the syntax `{k: v}`.
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR<Self>;
+
+    /// Yield the key-value pairs of a value.
+    ///
+    /// This is used to collect the paths of `.[]`.
+    fn key_values(self) -> BoxIter<'static, Result<(Self, Self), crate::Error<Self>>>;
 
     /// Yield the children of a value.
     ///

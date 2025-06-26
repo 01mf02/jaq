@@ -1,7 +1,8 @@
 //! Paths and their parts.
 
-use crate::box_iter::{box_once, flat_map_with, map_with, then, BoxIter};
-use crate::val::{ValR, ValT, ValX, ValXs};
+use crate::box_iter::{self, box_once, flat_map_with, map_with, then, BoxIter};
+use crate::val::{ValPR, ValR, ValT, ValX, ValXs};
+use crate::RcList;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Path such as `.[].a?[1:]`.
@@ -75,7 +76,11 @@ impl<'a, U: Clone + 'a> Path<U> {
 
 impl<'a, V: ValT + 'a> Path<V> {
     pub(crate) fn run(self, v: V) -> BoxIter<'a, ValR<V>> {
-        run(self.0.into_iter(), v)
+        run(self.0.into_iter(), v, |part, v| part.run(v))
+    }
+
+    pub(crate) fn paths(self, vp: (V, RcList<V>)) -> BoxIter<'a, ValPR<V>> {
+        run(self.0.into_iter(), vp, |part, vp| part.paths(vp))
     }
 
     pub(crate) fn update<F>(mut self, v: V, f: F) -> ValX<'a, V>
@@ -91,14 +96,17 @@ impl<'a, V: ValT + 'a> Path<V> {
     }
 }
 
-fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> BoxIter<'a, ValR<V>>
-where
-    I: Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
-{
+type Results<'a, T, V> = box_iter::Results<'a, T, crate::Error<V>>;
+
+fn run<'a, V: 'a, T: 'a>(
+    mut iter: impl Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
+    val: T,
+    f: fn(Part<V>, T) -> Results<'a, T, V>,
+) -> Results<'a, T, V> {
     if let Some((part, opt)) = iter.next() {
         let essential = matches!(opt, Opt::Essential);
-        let ys = part.run(val).filter(move |v| essential || v.is_ok());
-        flat_map_with(ys, iter, move |v, iter| then(v, |v| run(iter, v)))
+        let ys = f(part, val).filter(move |v| essential || v.is_ok());
+        flat_map_with(ys, iter, move |v, iter| then(v, |v| run(iter, v, f)))
     } else {
         box_once(Ok(val))
     }
@@ -118,11 +126,23 @@ where
 }
 
 impl<'a, V: ValT + 'a> Part<V> {
-    fn run(&self, v: V) -> impl Iterator<Item = ValR<V>> + 'a {
+    fn run(&self, v: V) -> BoxIter<'a, ValR<V>> {
         match self {
             Self::Index(idx) => box_once(v.index(idx)),
             Self::Range(None, None) => Box::new(v.values()),
             Self::Range(from, upto) => box_once(v.range(from.as_ref()..upto.as_ref())),
+        }
+    }
+
+    fn paths(&self, (v, p): (V, RcList<V>)) -> BoxIter<'a, ValPR<V>> {
+        let cons = |p: RcList<V>| |v: V| (v, p.cons(V::from(self.as_ref().map(Clone::clone))));
+        match self {
+            Self::Index(idx) => box_once(v.index(idx).map(cons(p))),
+            Self::Range(None, None) => Box::new(
+                v.key_values()
+                    .map(move |kv| kv.map(|(k, v)| (v, p.clone().cons(V::from(Self::Index(k)))))),
+            ),
+            Self::Range(from, upto) => box_once(v.range(from.as_ref()..upto.as_ref()).map(cons(p))),
         }
     }
 

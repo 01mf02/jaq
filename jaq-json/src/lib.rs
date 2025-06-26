@@ -107,6 +107,16 @@ impl jaq_core::ValT for Val {
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
     }
 
+    fn key_values(self) -> Box<dyn Iterator<Item = Result<(Val, Val), Error>>> {
+        let arr_idx = |(i, x)| Ok((Self::Int(i as isize), x));
+        let obj_idx = |(k, v)| Ok((Self::Str(k), v));
+        match self {
+            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().enumerate().map(arr_idx)),
+            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(obj_idx)),
+            _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
+        }
+    }
+
     fn values(self) -> Box<dyn Iterator<Item = ValR>> {
         match self {
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
@@ -668,6 +678,14 @@ impl From<f64> for Val {
 impl From<String> for Val {
     fn from(s: String) -> Self {
         Self::Str(Rc::new(s))
+    }
+}
+
+impl From<jaq_core::path::Part<Val>> for Val {
+    fn from(p: jaq_core::path::Part<Val>) -> Self {
+        match p {
+            _ => todo!(),
+        }
     }
 }
 

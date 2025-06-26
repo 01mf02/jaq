@@ -1,5 +1,6 @@
 //! Exceptions and errors.
 
+use crate::RcList;
 use alloc::{string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
 
@@ -17,8 +18,20 @@ pub(crate) enum Inner<'a, V> {
     ///
     /// This is used internally to execute tail-recursive filters.
     /// If this can be observed by users, then this is a bug.
-    TailCall(&'a crate::compile::TermId, crate::filter::Vars<'a, V>, V),
+    TailCall(
+        &'a crate::compile::TermId,
+        crate::filter::Vars<'a, V>,
+        V,
+        Option<RcList<V>>,
+    ),
     Break(usize),
+}
+
+struct TailCall<'a, V> {
+    id: &'a crate::compile::TermId,
+    vars: crate::filter::Vars<'a, V>,
+    val: V,
+    path: Option<RcList<V>>,
 }
 
 impl<V> Exn<'_, V> {
