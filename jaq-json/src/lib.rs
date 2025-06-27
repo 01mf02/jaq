@@ -681,10 +681,15 @@ impl From<String> for Val {
     }
 }
 
-impl From<jaq_core::path::Part<Val>> for Val {
-    fn from(p: jaq_core::path::Part<Val>) -> Self {
+impl From<path::Part<Val>> for Val {
+    fn from(p: path::Part<Val>) -> Self {
+        let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_string().into(), v));
         match p {
-            _ => todo!(),
+            path::Part::Index(i) => i,
+            path::Part::Range(start, end) => {
+                let kvs = [("start", start), ("end", end)];
+                Val::obj(kvs.into_iter().flat_map(kv).collect())
+            }
         }
     }
 }
