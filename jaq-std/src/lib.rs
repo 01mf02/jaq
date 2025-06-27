@@ -27,9 +27,7 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{
-    load, Bind, Cv, Error, Exn, FilterT, Native, PathsPtr, RunPtr, UpdatePtr, ValR, ValX, ValXs,
-};
+use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -176,14 +174,16 @@ pub fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
     (name, arity, Native::new(run))
 }
 
+type RunPathsPtr<V> = (RunPtr<V>, jaq_core::PathsPtr<V>);
+type RunPathsUpdatePtr<V> = (RunPtr<V>, jaq_core::PathsPtr<V>, jaq_core::UpdatePtr<V>);
+
 /// Convert a filter with a run and an update pointer to a native filter.
-fn paths<V>((name, arity, (run, paths)): Filter<(RunPtr<V>, PathsPtr<V>)>) -> Filter<Native<V>> {
+fn paths<V>((name, arity, (run, paths)): Filter<RunPathsPtr<V>>) -> Filter<Native<V>> {
     (name, arity, Native::new(run).with_paths(paths))
 }
 
 /// Convert a filter with a run, a paths, and an update pointer to a native filter.
-fn upd<V>((name, arity, f): Filter<(RunPtr<V>, PathsPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
-    let (r, p, u) = f;
+fn upd<V>((name, arity, (r, p, u)): Filter<RunPathsUpdatePtr<V>>) -> Filter<Native<V>> {
     (name, arity, Native::new(r).with_paths(p).with_update(u))
 }
 
@@ -458,7 +458,7 @@ macro_rules! limit {
     };
 }
 
-fn base_paths<V: ValT>() -> Box<[Filter<(RunPtr<V>, PathsPtr<V>)>]> {
+fn base_paths<V: ValT>() -> Box<[Filter<RunPathsPtr<V>>]> {
     let f = || [Bind::Fun(())].into();
     let vf = || [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
@@ -658,7 +658,7 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     ])
 }
 
-fn error<V, F>() -> Filter<(RunPtr<V, F>, PathsPtr<V, F>, UpdatePtr<V, F>)> {
+fn error<V>() -> Filter<RunPathsUpdatePtr<V>> {
     (
         "error",
         v(0),
@@ -692,12 +692,12 @@ macro_rules! id_with {
 }
 
 #[cfg(feature = "log")]
-fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, PathsPtr<V>, UpdatePtr<V>)> {
+fn debug<V: core::fmt::Display>() -> Filter<RunPathsUpdatePtr<V>> {
     ("debug", v(0), id_with!(|x| log::debug!("{}", x)))
 }
 
 #[cfg(feature = "log")]
-fn stderr<V: ValT>() -> Filter<(RunPtr<V>, PathsPtr<V>, UpdatePtr<V>)> {
+fn stderr<V: ValT>() -> Filter<RunPathsUpdatePtr<V>> {
     fn eprint_raw<V: ValT>(v: &V) {
         if let Some(s) = v.as_str() {
             log::error!("{}", s)
