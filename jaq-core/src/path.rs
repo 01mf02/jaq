@@ -1,7 +1,7 @@
 //! Paths and their parts.
 
 use crate::box_iter::{self, box_once, flat_map_with, map_with, then, BoxIter};
-use crate::val::{ValPR, ValR, ValT, ValX, ValXs};
+use crate::val::{ValR, ValT, ValX, ValXs};
 use crate::RcList;
 use alloc::{boxed::Box, vec::Vec};
 
@@ -79,7 +79,7 @@ impl<'a, V: ValT + 'a> Path<V> {
         run(self.0.into_iter(), v, |part, v| part.run(v))
     }
 
-    pub(crate) fn paths(self, vp: (V, RcList<V>)) -> BoxIter<'a, ValPR<V>> {
+    pub(crate) fn paths(self, vp: (V, RcList<V>)) -> Results<'a, (V, RcList<V>), V> {
         run(self.0.into_iter(), vp, |part, vp| part.paths(vp))
     }
 
@@ -134,7 +134,7 @@ impl<'a, V: ValT + 'a> Part<V> {
         }
     }
 
-    fn paths(&self, (v, p): (V, RcList<V>)) -> BoxIter<'a, ValPR<V>> {
+    fn paths(&self, (v, p): (V, RcList<V>)) -> Results<'a, (V, RcList<V>), V> {
         let cons = |p: RcList<V>| |v: V| (v, p.cons(V::from(self.as_ref().map(Clone::clone))));
         match self {
             Self::Index(idx) => box_once(v.index(idx).map(cons(p))),

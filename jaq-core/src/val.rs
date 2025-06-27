@@ -5,7 +5,6 @@
 
 use crate::box_iter::BoxIter;
 use crate::path::{self, Opt};
-use crate::RcList;
 use core::fmt::Display;
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
@@ -15,7 +14,6 @@ use core::str::FromStr;
 
 /// Value or eRror.
 pub type ValR<V> = Result<V, crate::Error<V>>;
-pub type ValPR<V> = Result<(V, RcList<V>), crate::Error<V>>;
 /// Value or eXception.
 pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.

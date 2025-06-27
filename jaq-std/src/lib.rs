@@ -325,6 +325,17 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
                     .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
             )
         }),
+        ("path", f(), |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let cvp = (fc, (cv.1, Default::default()));
+            Box::new(f.paths(lut, cvp).map(|vp| {
+                vp.map(|(_v, path)| {
+                    let mut path: Vec<_> = path.iter().cloned().collect();
+                    path.reverse();
+                    path.into_iter().collect()
+                })
+            }))
+        }),
         ("floor", v(0), |_, cv| bome(cv.1.round(f64::floor))),
         ("round", v(0), |_, cv| bome(cv.1.round(f64::round))),
         ("ceil", v(0), |_, cv| bome(cv.1.round(f64::ceil))),
