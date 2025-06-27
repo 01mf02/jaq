@@ -27,13 +27,6 @@ pub(crate) enum Inner<'a, V> {
     Break(usize),
 }
 
-struct TailCall<'a, V> {
-    id: &'a crate::compile::TermId,
-    vars: crate::filter::Vars<'a, V>,
-    val: V,
-    path: Option<RcList<V>>,
-}
-
 impl<V> Exn<'_, V> {
     /// If the exception is an error, yield it, else yield the exception.
     pub(crate) fn get_err(self) -> Result<Error<V>, Self> {
