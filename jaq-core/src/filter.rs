@@ -339,7 +339,14 @@ impl<V> Native<V> {
         }
     }
 
+    /// Specify a paths function (used for `path(...)`).
+    pub const fn with_paths(self, paths: PathsPtr<V, Self>) -> Self {
+        Self { paths, ..self }
+    }
+
     /// Specify an update function (used for `filter |= ...`).
+    ///
+    /// If an update function is given, then a paths function should be implemented too.
     pub const fn with_update(self, update: UpdatePtr<V, Self>) -> Self {
         Self { update, ..self }
     }
