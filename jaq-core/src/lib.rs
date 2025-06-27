@@ -67,7 +67,7 @@ pub mod val;
 
 pub use compile::Compiler;
 pub use exn::{Error, Exn};
-pub use filter::{Ctx, Cv, FilterT, Native, RunPtr, UpdatePtr};
+pub use filter::{Ctx, Cv, FilterT, Native, PathsPtr, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};
 

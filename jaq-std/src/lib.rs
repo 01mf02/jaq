@@ -27,7 +27,9 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
+use jaq_core::{
+    load, Bind, Cv, Error, Exn, FilterT, Native, PathsPtr, RunPtr, UpdatePtr, ValR, ValX, ValXs,
+};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -65,7 +67,8 @@ pub fn funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
 /// Does not return filters from the standard library, such as `map`.
 pub fn base_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     let base_run = base_run().into_vec().into_iter().map(run);
-    base_run.chain([upd(error())])
+    let base_paths = base_paths().into_vec().into_iter().map(paths);
+    base_run.chain(base_paths).chain([upd(error())])
 }
 
 /// Supplementary set of filters that are generic over the value type.
@@ -174,8 +177,14 @@ pub fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
 }
 
 /// Convert a filter with a run and an update pointer to a native filter.
-fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
-    (name, arity, Native::new(run).with_update(update))
+fn paths<V>((name, arity, (run, paths)): Filter<(RunPtr<V>, PathsPtr<V>)>) -> Filter<Native<V>> {
+    (name, arity, Native::new(run).with_paths(paths))
+}
+
+/// Convert a filter with a run, a paths, and an update pointer to a native filter.
+fn upd<V>((name, arity, f): Filter<(RunPtr<V>, PathsPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
+    let (r, p, u) = f;
+    (name, arity, Native::new(r).with_paths(p).with_update(u))
 }
 
 /// Sort array by the given function.
@@ -315,9 +324,8 @@ pub fn v(n: usize) -> Box<[Bind]> {
 }
 
 #[allow(clippy::unit_arg)]
-fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
+fn base_run<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     let f = || [Bind::Fun(())].into();
-    let vf = [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
         ("inputs", v(0), |_, cv| {
             Box::new(
@@ -378,23 +386,6 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
             let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y >= my);
             once_or_empty(cv.1.into_vec().map_err(Exn::from).and_then(f))
         }),
-        ("first", f(), |lut, mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            Box::new(f.run(lut, (fc, cv.1)).next().into_iter())
-        }),
-        ("last", f(), |lut, mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            once_or_empty(f.run(lut, (fc, cv.1)).try_fold(None, |_acc, x| x.map(Some)))
-        }),
-        ("limit", vf, |lut, mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let n = cv.0.pop_var();
-            let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            then(n.try_as_isize().map_err(Exn::from), |n| match pos(n) {
-                0 => Box::new(core::iter::empty()),
-                n => Box::new(f.run(lut, (fc, cv.1)).take(n)),
-            })
-        }),
         ("range", v(3), |_, mut cv| {
             let by = cv.0.pop_var();
             let to = cv.0.pop_var();
@@ -434,6 +425,46 @@ fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
         ("escape_sh", v(0), |_, cv| {
             bome(cv.1.try_as_str().map(|s| s.replace('\'', r"'\''").into()))
         }),
+    ])
+}
+
+macro_rules! first {
+    ( $run:ident ) => {
+        |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            Box::new(f.$run(lut, (fc, cv.1)).next().into_iter())
+        }
+    };
+}
+macro_rules! last {
+    ( $run:ident ) => {
+        |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            once_or_empty(f.$run(lut, (fc, cv.1)).try_fold(None, |_, x| x.map(Some)))
+        }
+    };
+}
+macro_rules! limit {
+    ( $run:ident ) => {
+        |lut, mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let n = cv.0.pop_var();
+            let pos = |n: isize| n.try_into().unwrap_or(0usize);
+            then(n.try_as_isize().map_err(Exn::from), |n| match pos(n) {
+                0 => Box::new(core::iter::empty()),
+                n => Box::new(f.$run(lut, (fc, cv.1)).take(n)),
+            })
+        }
+    };
+}
+
+fn base_paths<V: ValT>() -> Box<[Filter<(RunPtr<V>, PathsPtr<V>)>]> {
+    let f = || [Bind::Fun(())].into();
+    let vf = || [Bind::Var(()), Bind::Fun(())].into();
+    Box::new([
+        ("first", f(), (first!(run), first!(paths))),
+        ("last", f(), (last!(run), last!(paths))),
+        ("limit", vf(), (limit!(run), limit!(paths))),
     ])
 }
 
@@ -627,11 +658,16 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     ])
 }
 
-fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
-    fn err<V>(cv: Cv<V>) -> ValXs<V> {
-        bome(Err(Error::new(cv.1)))
-    }
-    ("error", v(0), (|_, cv| err(cv), |_, cv, _| err(cv)))
+fn error<V, F>() -> Filter<(RunPtr<V, F>, PathsPtr<V, F>, UpdatePtr<V, F>)> {
+    (
+        "error",
+        v(0),
+        (
+            |_, cv| bome(Err(Error::new(cv.1))),
+            |_, cv| box_once(Err(Exn::from(Error::new(cv.1 .0)))),
+            |_, cv, _| bome(Err(Error::new(cv.1))),
+        ),
+    )
 }
 
 #[cfg(feature = "log")]
@@ -643,6 +679,10 @@ macro_rules! id_with {
                 $eff(&cv.1);
                 box_once(Ok(cv.1))
             },
+            |_, cv| {
+                $eff(&cv.1 .0);
+                box_once(Ok(cv.1))
+            },
             |_, cv, f| {
                 $eff(&cv.1);
                 f(cv.1)
@@ -652,12 +692,12 @@ macro_rules! id_with {
 }
 
 #[cfg(feature = "log")]
-fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
+fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, PathsPtr<V>, UpdatePtr<V>)> {
     ("debug", v(0), id_with!(|x| log::debug!("{}", x)))
 }
 
 #[cfg(feature = "log")]
-fn stderr<V: ValT>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
+fn stderr<V: ValT>() -> Filter<(RunPtr<V>, PathsPtr<V>, UpdatePtr<V>)> {
     fn eprint_raw<V: ValT>(v: &V) {
         if let Some(s) = v.as_str() {
             log::error!("{}", s)
