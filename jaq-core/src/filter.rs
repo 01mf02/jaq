@@ -492,14 +492,21 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     Some(Tailrec::Catch) => Box::new(crate::Stack::new(
                         [flat_map_then(cvs, |cv| id.run(lut, cv))].into(),
                         move |r| match r {
-                            Err(Exn(exn::Inner::TailCall(id_, vars, v, None))) if id == id_ => {
-                                ControlFlow::Continue(id.run(lut, (with_vars(vars), v)))
+                            Err(Exn(exn::Inner::TailCall(tc))) if tc.id == id => {
+                                ControlFlow::Continue(id.run(lut, (with_vars(tc.vars), tc.val)))
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
                     )),
                     Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
-                        cv.and_then(|cv| Err(Exn(exn::Inner::TailCall(id, cv.0.vars, cv.1, None))))
+                        cv.and_then(|cv| {
+                            Err(Exn(exn::Inner::TailCall(Box::new(exn::TailCall {
+                                id,
+                                vars: cv.0.vars,
+                                val: cv.1,
+                                path: None,
+                            }))))
+                        })
                     })),
                 }
             }
@@ -589,17 +596,22 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     Some(Tailrec::Catch) => Box::new(crate::Stack::new(
                         [flat_map_then(cvs, |cv| id.paths(lut, cv))].into(),
                         move |r| match r {
-                            Err(Exn(exn::Inner::TailCall(id_, vars, v, Some(p)))) if id == id_ => {
-                                ControlFlow::Continue(id.paths(lut, (with_vars(vars), (v, p))))
+                            Err(Exn(exn::Inner::TailCall(tc))) if tc.id == id => {
+                                ControlFlow::Continue(
+                                    id.paths(lut, (with_vars(tc.vars), (tc.val, tc.path.unwrap()))),
+                                )
                             }
                             Ok(_) | Err(_) => ControlFlow::Break(r),
                         },
                     )),
                     Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
                         cv.and_then(|cv| {
-                            let val = cv.1 .0;
-                            let path = Some(cv.1 .1);
-                            Err(Exn(exn::Inner::TailCall(id, cv.0.vars, val, path)))
+                            Err(Exn(exn::Inner::TailCall(Box::new(exn::TailCall {
+                                id,
+                                vars: cv.0.vars,
+                                val: cv.1 .0,
+                                path: Some(cv.1 .1),
+                            }))))
                         })
                     })),
                 }
