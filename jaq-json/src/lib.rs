@@ -10,7 +10,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_core::{load, ops, path, Exn, Native, RunPtr};
+use jaq_core::{load, ops, path, val, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
 
 #[cfg(feature = "hifijson")]
@@ -681,16 +681,11 @@ impl From<String> for Val {
     }
 }
 
-impl From<path::Part<Val>> for Val {
-    fn from(p: path::Part<Val>) -> Self {
+impl From<val::Range<Val>> for Val {
+    fn from(r: val::Range<Val>) -> Self {
         let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_string().into(), v));
-        match p {
-            path::Part::Index(i) => i,
-            path::Part::Range(start, end) => {
-                let kvs = [("start", start), ("end", end)];
-                Val::obj(kvs.into_iter().flat_map(kv).collect())
-            }
-        }
+        let kvs = [("start", r.start), ("end", r.end)];
+        Val::obj(kvs.into_iter().flat_map(kv).collect())
     }
 }
 

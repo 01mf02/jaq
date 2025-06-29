@@ -4,7 +4,7 @@
 //! you need to implement the [`ValT`] trait.
 
 use crate::box_iter::BoxIter;
-use crate::path::{self, Opt};
+use crate::path::Opt;
 use core::fmt::Display;
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 
@@ -33,7 +33,7 @@ pub trait ValT:
     + From<bool>
     + From<isize>
     + From<alloc::string::String>
-    + From<path::Part<Self>>
+    + From<Range<Self>>
     + FromIterator<Self>
     + PartialEq
     + PartialOrd

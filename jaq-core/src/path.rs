@@ -133,14 +133,16 @@ impl<'a, V: ValT + 'a> Part<V> {
     }
 
     fn paths(&self, (v, p): (V, RcList<V>)) -> ValRs<'a, (V, RcList<V>), V> {
-        let cons = |p: RcList<V>| |v: V| (v, p.cons(V::from(self.as_ref().map(Clone::clone))));
         match self {
-            Self::Index(idx) => box_once(v.index(idx).map(cons(p))),
+            Self::Index(idx) => box_once(v.index(idx).map(|v| (v, p.cons(idx.clone())))),
             Self::Range(None, None) => Box::new(
                 v.key_values()
-                    .map(move |kv| kv.map(|(k, v)| (v, p.clone().cons(V::from(Self::Index(k)))))),
+                    .map(move |kv| kv.map(|(k, v)| (v, p.clone().cons(k)))),
             ),
-            Self::Range(from, upto) => box_once(v.range(from.as_ref()..upto.as_ref()).map(cons(p))),
+            Self::Range(from, upto) => box_once(
+                v.range(from.as_ref()..upto.as_ref())
+                    .map(|v| (v, p.cons(V::from(from.clone()..upto.clone())))),
+            ),
         }
     }
 
