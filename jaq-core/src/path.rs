@@ -1,7 +1,7 @@
 //! Paths and their parts.
 
-use crate::box_iter::{self, box_once, flat_map_with, map_with, then, BoxIter};
-use crate::val::{ValR, ValT, ValX, ValXs};
+use crate::box_iter::{box_once, flat_map_with, map_with, then, BoxIter};
+use crate::val::{ValRs, ValT, ValX, ValXs};
 use crate::RcList;
 use alloc::{boxed::Box, vec::Vec};
 
@@ -75,11 +75,11 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl<'a, V: ValT + 'a> Path<V> {
-    pub(crate) fn run(self, v: V) -> BoxIter<'a, ValR<V>> {
+    pub(crate) fn run(self, v: V) -> ValRs<'a, V> {
         run(self.0.into_iter(), v, |part, v| part.run(v))
     }
 
-    pub(crate) fn paths(self, vp: (V, RcList<V>)) -> Results<'a, (V, RcList<V>), V> {
+    pub(crate) fn paths(self, vp: (V, RcList<V>)) -> ValRs<'a, (V, RcList<V>), V> {
         run(self.0.into_iter(), vp, |part, vp| part.paths(vp))
     }
 
@@ -96,13 +96,11 @@ impl<'a, V: ValT + 'a> Path<V> {
     }
 }
 
-type Results<'a, T, V> = box_iter::Results<'a, T, crate::Error<V>>;
-
 fn run<'a, V: 'a, T: 'a>(
     mut iter: impl Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
     val: T,
-    f: fn(Part<V>, T) -> Results<'a, T, V>,
-) -> Results<'a, T, V> {
+    f: fn(Part<V>, T) -> ValRs<'a, T, V>,
+) -> ValRs<'a, T, V> {
     if let Some((part, opt)) = iter.next() {
         let essential = matches!(opt, Opt::Essential);
         let ys = f(part, val).filter(move |v| essential || v.is_ok());
@@ -126,7 +124,7 @@ where
 }
 
 impl<'a, V: ValT + 'a> Part<V> {
-    fn run(&self, v: V) -> BoxIter<'a, ValR<V>> {
+    fn run(&self, v: V) -> ValRs<'a, V> {
         match self {
             Self::Index(idx) => box_once(v.index(idx)),
             Self::Range(None, None) => Box::new(v.values()),
@@ -134,7 +132,7 @@ impl<'a, V: ValT + 'a> Part<V> {
         }
     }
 
-    fn paths(&self, (v, p): (V, RcList<V>)) -> Results<'a, (V, RcList<V>), V> {
+    fn paths(&self, (v, p): (V, RcList<V>)) -> ValRs<'a, (V, RcList<V>), V> {
         let cons = |p: RcList<V>| |v: V| (v, p.cons(V::from(self.as_ref().map(Clone::clone))));
         match self {
             Self::Index(idx) => box_once(v.index(idx).map(cons(p))),

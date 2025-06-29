@@ -13,11 +13,13 @@ use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use core::str::FromStr;
 
 /// Value or eRror.
-pub type ValR<V> = Result<V, crate::Error<V>>;
+pub type ValR<T, V = T> = Result<T, crate::Error<V>>;
+/// Stream of values and eRrors.
+pub type ValRs<'a, T, V = T> = BoxIter<'a, ValR<T, V>>;
 /// Value or eXception.
-pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
+pub type ValX<'a, T, V = T> = Result<T, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
-pub type ValXs<'a, V> = BoxIter<'a, ValX<'a, V>>;
+pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
 
 /// Range of options, used for iteration operations.
 pub type Range<V> = core::ops::Range<Option<V>>;

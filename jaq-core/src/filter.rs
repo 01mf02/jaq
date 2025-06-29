@@ -18,8 +18,6 @@ dyn_clone::clone_trait_object!(<'a, V> Update<'a, V>);
 
 type BoxUpdate<'a, V> = Box<dyn Update<'a, V> + 'a>;
 
-type Results<'a, T, V> = box_iter::Results<'a, T, Exn<'a, V>>;
-
 /// List of bindings.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Vars<'a, V>(RcList<Bind<V, usize, (&'a Id, Self)>>);
@@ -128,7 +126,7 @@ fn bind_vars<'a, F: FilterT, T: 'a + Clone>(
     ctx: Ctx<'a, F::V>,
     cv: Cv<'a, F::V, T>,
     proj: fn(&T) -> F::V,
-) -> Results<'a, Cv<'a, F::V, T>, F::V> {
+) -> ValXs<'a, Cv<'a, F::V, T>, F::V> {
     match args.split_first() {
         Some((Arg::Var(arg), [])) => map_with(
             arg.run(lut, (cv.0.clone(), proj(&cv.1))),
@@ -153,7 +151,7 @@ fn bind_pat<'a, F: FilterT>(
     lut: &'a Lut<F>,
     ctx: Ctx<'a, F::V>,
     cv: Cv<'a, F::V>,
-) -> Results<'a, Ctx<'a, F::V>, F::V> {
+) -> ValXs<'a, Ctx<'a, F::V>, F::V> {
     let (ctx0, v0) = cv.clone();
     let v1 = map_with(idxs.run(lut, cv), v0, move |i, v0| Ok(v0.index(&i?)?));
     match pat {
@@ -169,7 +167,7 @@ fn bind_pats<'a, F: FilterT>(
     lut: &'a Lut<F>,
     ctx: Ctx<'a, F::V>,
     cv: Cv<'a, F::V>,
-) -> Results<'a, Ctx<'a, F::V>, F::V> {
+) -> ValXs<'a, Ctx<'a, F::V>, F::V> {
     match pats.split_first() {
         None => box_once(Ok(ctx)),
         Some((pat, [])) => bind_pat(pat, lut, ctx, cv),
@@ -186,7 +184,7 @@ fn run_and_bind<'a, F: FilterT>(
     lut: &'a Lut<F>,
     cv: Cv<'a, F::V>,
     pat: &'a Pattern<Id>,
-) -> Results<'a, Ctx<'a, F::V>, F::V> {
+) -> ValXs<'a, Ctx<'a, F::V>, F::V> {
     let xs = xs.run(lut, (cv.0.clone(), cv.1));
     match pat {
         Pattern::Var => map_with(xs, cv.0, move |y, ctx| Ok(ctx.cons_var(y?))),
@@ -202,8 +200,8 @@ fn bind_run<'a, F: FilterT, T: Clone + 'a>(
     lut: &'a Lut<F>,
     cv: Cv<'a, F::V, T>,
     y: F::V,
-    run: impl Fn(&'a Id, &'a Lut<F>, Cv<'a, F::V, T>) -> Results<'a, T, F::V> + 'a,
-) -> Results<'a, T, F::V> {
+    run: impl Fn(&'a Id, &'a Lut<F>, Cv<'a, F::V, T>) -> ValXs<'a, T, F::V> + 'a,
+) -> ValXs<'a, T, F::V> {
     match pat {
         Pattern::Var => run(r, lut, (cv.0.cons_var(y), cv.1)),
         Pattern::Idx(pats) => {
@@ -215,8 +213,8 @@ fn bind_run<'a, F: FilterT, T: Clone + 'a>(
 
 fn label_run<'a, V, T: 'a>(
     cv: Cv<'a, V, T>,
-    run: impl Fn(Cv<'a, V, T>) -> Results<'a, T, V>,
-) -> Results<'a, T, V> {
+    run: impl Fn(Cv<'a, V, T>) -> ValXs<'a, T, V>,
+) -> ValXs<'a, T, V> {
     let ctx = cv.0.cons_label();
     let labels = ctx.labels;
     Box::new(run((ctx, cv.1)).map_while(move |y| match y {
@@ -231,8 +229,8 @@ fn fold_run<'a, V: Clone, T: Clone + 'a>(
     init: &'a Id,
     update: &'a Id,
     fold_type: &'a Fold<Id>,
-    run: impl Fn(&'a Id, Cv<'a, V, T>) -> Results<'a, T, V> + 'a + Copy,
-) -> Results<'a, T, V> {
+    run: impl Fn(&'a Id, Cv<'a, V, T>) -> ValXs<'a, T, V> + 'a + Copy,
+) -> ValXs<'a, T, V> {
     let init = run(init, cv.clone());
     let update = move |ctx, v| run(update, (ctx, v));
     let inner = |_, y: &T| Some(y.clone());
@@ -281,7 +279,7 @@ fn fold_update<'a, F: FilterT>(
     path.update(lut, (ctx, v), update)
 }
 
-fn reduce<'a, T, V, F>(xs: Results<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
+fn reduce<'a, T, V, F>(xs: ValXs<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
 where
     T: Clone + 'a,
     V: Clone + 'a,
@@ -307,7 +305,7 @@ fn lazy_is_lazy() {
 pub type Cv<'c, V, T = V> = (Ctx<'c, V>, T);
 /// Combination of context and input value with a path.
 type Cvp<'a, V> = Cv<'a, V, (V, RcList<V>)>;
-type ValPathXs<'a, V> = Results<'a, (V, RcList<V>), V>;
+type ValPathXs<'a, V> = ValXs<'a, (V, RcList<V>), V>;
 
 /// A filter which is implemented using function pointers.
 #[derive(Clone)]
@@ -738,8 +736,8 @@ pub trait FilterT<F: FilterT<F, V = Self::V> = Self> {
         &'a self,
         lut: &'a Lut<F>,
         cv: Cv<'a, Self::V>,
-        f: impl Fn(Cv<'a, Self::V>, Self::V) -> Results<'a, T, Self::V> + 'a,
-    ) -> Results<'a, T, Self::V> {
+        f: impl Fn(Cv<'a, Self::V>, Self::V) -> ValXs<'a, T, Self::V> + 'a,
+    ) -> ValXs<'a, T, Self::V> {
         flat_map_then_with(self.run(lut, cv.clone()), cv, move |y, cv| f(cv, y))
     }
 
