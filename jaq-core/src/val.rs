@@ -17,9 +17,9 @@ pub type ValR<T, V = T> = Result<T, crate::Error<V>>;
 /// Stream of values and eRrors.
 pub type ValRs<'a, T, V = T> = BoxIter<'a, ValR<T, V>>;
 /// Value or eXception.
-pub type ValX<'a, T, V = T> = Result<T, crate::Exn<'a, V>>;
+pub type ValX<T, V = T> = Result<T, crate::Exn<V>>;
 /// Stream of values and eXceptions.
-pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
+pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<T, V>>;
 
 /// Range of options, used for iteration operations.
 pub type Range<V> = core::ops::Range<Option<V>>;
@@ -86,35 +86,35 @@ pub trait ValT:
     ///
     /// - If `opt` is [`Opt::Essential`], return an error.
     /// - If `opt` is [`Opt::Optional`] , return the input value.
-    fn map_values<'a, I: Iterator<Item = ValX<'a, Self>>>(
+    fn map_values<I: Iterator<Item = ValX<Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a, Self>;
+    ) -> ValX<Self>;
 
     /// Map a function over the child of the value at the given index.
     ///
     /// This is used by `.[k] |= f`.
     ///
     /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_index<'a, I: Iterator<Item = ValX<'a, Self>>>(
+    fn map_index<I: Iterator<Item = ValX<Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a, Self>;
+    ) -> ValX<Self>;
 
     /// Map a function over the slice of the value with the given range.
     ///
     /// This is used by `.[s:e] |= f`, `.[s:] |= f`, and `.[:e] |= f`.
     ///
     /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_range<'a, I: Iterator<Item = ValX<'a, Self>>>(
+    fn map_range<I: Iterator<Item = ValX<Self>>>(
         self,
         range: Range<&Self>,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a, Self>;
+    ) -> ValX<Self>;
 
     /// Return a boolean representation of the value.
     ///

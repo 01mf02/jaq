@@ -83,7 +83,7 @@ impl<'a, V: ValT + 'a> Path<V> {
         run(self.0.into_iter(), vp, |part, vp| part.paths(vp))
     }
 
-    pub(crate) fn update<F>(mut self, v: V, f: F) -> ValX<'a, V>
+    pub(crate) fn update<F>(mut self, v: V, f: F) -> ValX<V>
     where
         F: Fn(V) -> ValXs<'a, V>,
     {
@@ -110,7 +110,7 @@ fn run<'a, V: 'a, T: 'a>(
     }
 }
 
-fn update<'a, V: ValT + 'a, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValX<'a, V>
+fn update<'a, V: ValT, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValX<V>
 where
     P: Iterator<Item = (Part<V>, Opt)> + Clone,
     F: Fn(V) -> ValXs<'a, V>,
@@ -146,10 +146,10 @@ impl<'a, V: ValT + 'a> Part<V> {
         }
     }
 
-    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValX<'a, V>
+    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValX<V>
     where
         F: Fn(V) -> I,
-        I: Iterator<Item = ValX<'a, V>>,
+        I: Iterator<Item = ValX<V>>,
     {
         match self {
             Self::Index(idx) => v.map_index(idx, opt, f),

@@ -88,7 +88,7 @@ pub type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
 pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-pub type ValX<'a> = jaq_core::ValX<'a, Val>;
+pub type ValX = jaq_core::ValX<Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -165,11 +165,7 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        opt: path::Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    fn map_values<I: Iterator<Item = ValX>>(self, opt: path::Opt, f: impl Fn(Self) -> I) -> ValX {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -184,12 +180,12 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
+    fn map_index<I: Iterator<Item = ValX>>(
         mut self,
         index: &Self,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    ) -> ValX {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
@@ -238,12 +234,12 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
+    fn map_range<I: Iterator<Item = ValX>>(
         mut self,
         range: jaq_core::val::Range<&Self>,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    ) -> ValX {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
             let from = range.start.as_ref().map(|i| i.as_int()).transpose();
@@ -371,7 +367,7 @@ pub fn base_funs() -> impl Iterator<Item = Filter<Native<Val>>> {
     base().into_vec().into_iter().map(run)
 }
 
-fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX<'a>> {
+fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
     box_once(r.map_err(Exn::from))
 }
 
