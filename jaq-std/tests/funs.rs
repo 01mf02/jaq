@@ -2,7 +2,7 @@
 
 pub mod common;
 
-use common::{give, gives};
+use common::{give, gives, fail, Error, Val};
 use serde_json::json;
 
 yields!(repeat, "def r(f): f, r(f); [limit(3; r(1, 2))]", [1, 2, 1]);
@@ -137,6 +137,16 @@ fn group_by() {
         "group_by(.key)",
         [json!([[{"key":1,"value":"foo"}, {"key":1,"value":"baz"}],[{"key":2,"value":"bar"}]])],
     );
+}
+
+#[test]
+fn keys_unsorted() {
+    give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
+
+    let err = |v| Error::typ(v, "iterable (array or object)");
+    fail(json!(0), "keys_unsorted", err(Val::Int(0)));
+    fail(json!(null), "keys_unsorted", err(Val::Null));
 }
 
 yields!(utf8bytelength_foo1, r#""foo" | utf8bytelength"#, 3);
@@ -311,3 +321,9 @@ fn rtrim() {
     give(json!("  foo"), "rtrim", json!("  foo"));
     give(json!(" اَلْعَرَبِيَّةُ "), "rtrim", json!(" اَلْعَرَبِيَّةُ"));
 }
+
+yields!(
+    path_values,
+    "[{a: 1, b: [2, 3]} | path_values]",
+    json!([[["a"], 1], [["b"], [2, 3]], [["b", 0], 2], [["b", 1], 3]])
+);

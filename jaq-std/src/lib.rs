@@ -187,6 +187,16 @@ fn upd<V>((name, arity, (r, p, u)): Filter<RunPathsUpdatePtr<V>>) -> Filter<Nati
     (name, arity, Native::new(r).with_paths(p).with_update(u))
 }
 
+/// Return all path-value pairs `($p, $v)`, such that `getpath($p) = $v`.
+fn path_values<'a, V: ValT + 'a>(v: V, path: Vec<V>) -> BoxIter<'a, (V, V)> {
+    let head = (path.iter().cloned().collect(), v.clone());
+    let f = move |k| path.iter().cloned().chain([k]).collect();
+    let kvs = v.key_values().flatten();
+    let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
+    let tail = kvs.into_iter().flat_map(move |(k, v)| path_values(v, f(k)));
+    Box::new(core::iter::once(head).chain(tail))
+}
+
 /// Sort array by the given function.
 fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<V>> {
     // Some(e) iff an error has previously occurred
@@ -364,6 +374,16 @@ fn base_run<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         }),
         ("reverse", v(0), |_, cv| {
             bome(cv.1.mutate_arr(|a| a.reverse()))
+        }),
+        ("keys_unsorted", v(0), |_, cv| {
+            bome(cv.1.key_values().map(|kv| kv.map(|(k, _v)| k)).collect())
+        }),
+        ("path_values", v(0), |_, cv| {
+            let pair = |(p, v)| Ok([p, v].into_iter().collect());
+            Box::new(path_values(cv.1, Vec::new()).skip(1).map(pair))
+        }),
+        ("paths", v(0), |_, cv| {
+            Box::new(path_values(cv.1, Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
         }),
         ("sort", v(0), |_, cv| bome(cv.1.mutate_arr(|a| a.sort()))),
         ("sort_by", f(), |lut, mut cv| {

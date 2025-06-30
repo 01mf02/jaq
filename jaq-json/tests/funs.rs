@@ -48,18 +48,6 @@ yields!(indices_str_overlap, r#""aaa" | indices("aa")"#, [0, 1]);
 yields!(indices_str_gb1, r#""🇬🇧!" | indices("!")"#, [2]);
 yields!(indices_str_gb2, r#""🇬🇧🇬🇧" | indices("🇬🇧")"#, [0, 2]);
 
-#[test]
-fn keys_unsorted() {
-    give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
-    give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
-
-    /* TODO: reenable these tests
-    let err = |v| Error::Type(v, Type::Iter);
-    fail(json!(0), "keys_unsorted", err(Val::Int(0)));
-    fail(json!(null), "keys_unsorted", err(Val::Null));
-    */
-}
-
 yields!(length_str_foo, r#""ƒoo" | length"#, 3);
 yields!(length_str_namaste, r#""नमस्ते" | length"#, 6);
 yields!(length_obj, r#"{"a": 5, "b": 3} | length"#, 2);
@@ -144,9 +132,3 @@ fn math_rem() {
     give(json!(null), "2000000001 % 3", json!(0));
     give(json!(null), "2000000001 % 2000000001", json!(0));
 }
-
-yields!(
-    path_values,
-    "[{a: 1, b: [2, 3]} | path_values]",
-    json!([[["a"], 1], [["b"], [2, 3]], [["b", 0], 2], [["b", 1], 3]])
-);

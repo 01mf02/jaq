@@ -377,18 +377,6 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
             box_once(Ok(cv.1.to_string().into()))
         }),
         ("length", v(0), |_, cv| box_once_err(cv.1.length())),
-        ("path_values", v(0), |_, cv| {
-            let pair = |(p, v)| Ok([p, v].into_iter().collect());
-            Box::new(cv.1.path_values(Vec::new()).skip(1).map(pair))
-        }),
-        ("paths", v(0), |_, cv| {
-            Box::new(cv.1.path_values(Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
-        }),
-        ("keys_unsorted", v(0), |_, cv| {
-            let keys = cv.1.key_values().map(|kvs| kvs.map(|(k, _v)| k).collect());
-            let err = || Error::typ(cv.1.clone(), Type::Iter.as_str());
-            box_once_err(keys.ok_or_else(err))
-        }),
         ("contains", v(1), |_, cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
         }),
@@ -522,28 +510,6 @@ impl Val {
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
             _ => Err(Error::index(self.clone(), key.clone())),
         }
-    }
-
-    /// Return any `key` for which `value | .[key]` is defined, as well as its output.
-    ///
-    /// Return `None` for values that are neither arrays nor objects.
-    fn key_values(&self) -> Option<BoxIter<(Val, &Val)>> {
-        let arr_idx = |(i, x)| (Self::Int(i as isize), x);
-        Some(match self {
-            Self::Arr(a) => Box::new(a.iter().enumerate().map(arr_idx)),
-            Self::Obj(o) => Box::new(o.iter().map(|(k, v)| (Self::Str(Rc::clone(k)), v))),
-            _ => return None,
-        })
-    }
-
-    /// Return all path-value pairs `($p, $v)`, such that `getpath($p) = $v`.
-    fn path_values<'a>(self, path: Vec<Val>) -> BoxIter<'a, (Val, Val)> {
-        let head = (path.iter().cloned().collect(), self.clone());
-        let f = move |k| path.iter().cloned().chain([k]).collect();
-        let kvs = self.key_values().into_iter().flatten();
-        let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
-        let tail = kvs.into_iter().flat_map(move |(k, v)| v.path_values(f(k)));
-        Box::new(core::iter::once(head).chain(tail))
     }
 
     /// `a` contains `b` iff either
