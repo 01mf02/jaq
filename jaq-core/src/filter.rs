@@ -1,12 +1,14 @@
 //! Filter execution.
 
 use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_map_with, map_with};
-use crate::compile::{Bind, Fold, Lut, Pattern, Tailrec, Term as Ast, TermId as Id};
+use crate::compile::{Bind, Fold, Pattern, Tailrec, Term as Ast, TermId as Id};
 use crate::fold::fold;
 use crate::val::{ValR, ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
+
+type Lut<V> = crate::compile::Lut<Native<V>>;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
@@ -120,13 +122,13 @@ impl<'a, V: Clone> Ctx<'a, V> {
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
-fn bind_vars<'a, F: FilterT, T: 'a + Clone>(
+fn bind_vars<'a, V: ValT, T: 'a + Clone>(
     args: &'a [Arg<Id>],
-    lut: &'a Lut<F>,
-    ctx: Ctx<'a, F::V>,
-    cv: Cv<'a, F::V, T>,
-    proj: fn(&T) -> F::V,
-) -> ValXs<'a, Cv<'a, F::V, T>, F::V> {
+    lut: &'a Lut<V>,
+    ctx: Ctx<'a, V>,
+    cv: Cv<'a, V, T>,
+    proj: fn(&T) -> V,
+) -> ValXs<'a, Cv<'a, V, T>, V> {
     match args.split_first() {
         Some((Arg::Var(arg), [])) => map_with(
             arg.run(lut, (cv.0.clone(), proj(&cv.1))),
@@ -146,12 +148,12 @@ fn bind_vars<'a, F: FilterT, T: 'a + Clone>(
     }
 }
 
-fn bind_pat<'a, F: FilterT>(
+fn bind_pat<'a, V: ValT>(
     (idxs, pat): &'a (Id, Pattern<Id>),
-    lut: &'a Lut<F>,
-    ctx: Ctx<'a, F::V>,
-    cv: Cv<'a, F::V>,
-) -> ValXs<'a, Ctx<'a, F::V>, F::V> {
+    lut: &'a Lut<V>,
+    ctx: Ctx<'a, V>,
+    cv: Cv<'a, V>,
+) -> ValXs<'a, Ctx<'a, V>, V> {
     let (ctx0, v0) = cv.clone();
     let v1 = map_with(idxs.run(lut, cv), v0, move |i, v0| Ok(v0.index(&i?)?));
     match pat {
@@ -162,12 +164,12 @@ fn bind_pat<'a, F: FilterT>(
     }
 }
 
-fn bind_pats<'a, F: FilterT>(
+fn bind_pats<'a, V: ValT>(
     pats: &'a [(Id, Pattern<Id>)],
-    lut: &'a Lut<F>,
-    ctx: Ctx<'a, F::V>,
-    cv: Cv<'a, F::V>,
-) -> ValXs<'a, Ctx<'a, F::V>, F::V> {
+    lut: &'a Lut<V>,
+    ctx: Ctx<'a, V>,
+    cv: Cv<'a, V>,
+) -> ValXs<'a, Ctx<'a, V>, V> {
     match pats.split_first() {
         None => box_once(Ok(ctx)),
         Some((pat, [])) => bind_pat(pat, lut, ctx, cv),
@@ -179,12 +181,12 @@ fn bind_pats<'a, F: FilterT>(
     }
 }
 
-fn run_and_bind<'a, F: FilterT>(
+fn run_and_bind<'a, V: ValT>(
     xs: &'a Id,
-    lut: &'a Lut<F>,
-    cv: Cv<'a, F::V>,
+    lut: &'a Lut<V>,
+    cv: Cv<'a, V>,
     pat: &'a Pattern<Id>,
-) -> ValXs<'a, Ctx<'a, F::V>, F::V> {
+) -> ValXs<'a, Ctx<'a, V>, V> {
     let xs = xs.run(lut, (cv.0.clone(), cv.1));
     match pat {
         Pattern::Var => map_with(xs, cv.0, move |y, ctx| Ok(ctx.cons_var(y?))),
@@ -194,14 +196,14 @@ fn run_and_bind<'a, F: FilterT>(
     }
 }
 
-fn bind_run<'a, F: FilterT, T: Clone + 'a>(
+fn bind_run<'a, V: ValT, T: Clone + 'a>(
     pat: &'a Pattern<Id>,
     r: &'a Id,
-    lut: &'a Lut<F>,
-    cv: Cv<'a, F::V, T>,
-    y: F::V,
-    run: impl Fn(&'a Id, &'a Lut<F>, Cv<'a, F::V, T>) -> ValXs<'a, T, F::V> + 'a,
-) -> ValXs<'a, T, F::V> {
+    lut: &'a Lut<V>,
+    cv: Cv<'a, V, T>,
+    y: V,
+    run: impl Fn(&'a Id, &'a Lut<V>, Cv<'a, V, T>) -> ValXs<'a, T, V> + 'a,
+) -> ValXs<'a, T, V> {
     match pat {
         Pattern::Var => run(r, lut, (cv.0.cons_var(y), cv.1)),
         Pattern::Idx(pats) => {
@@ -266,35 +268,35 @@ fn fold_run<'a, V: Clone, T: Clone + 'a>(
 ///
 /// This has a special optimisation for the case where only a single `v` is returned.
 /// In that case, we can consume `cv` instead of cloning it.
-fn pipe<'a, F: FilterT, T: 'a>(
+fn pipe<'a, V: ValT, T: 'a>(
     l: &'a Id,
-    lut: &'a Lut<F>,
-    cv: Cv<'a, F::V>,
-    r: impl Fn(Cv<'a, F::V>, F::V) -> ValXs<'a, T, F::V> + 'a,
-) -> ValXs<'a, T, F::V> {
+    lut: &'a Lut<V>,
+    cv: Cv<'a, V>,
+    r: impl Fn(Cv<'a, V>, V) -> ValXs<'a, T, V> + 'a,
+) -> ValXs<'a, T, V> {
     flat_map_then_with(l.run(lut, cv.clone()), cv, move |y, cv| r(cv, y))
 }
 
 /// Run `self` and `r` and return the cartesian product of their outputs.
-fn cartesian<'a, F: FilterT>(
+fn cartesian<'a, V: ValT>(
     l: &'a Id,
     r: &'a Id,
-    lut: &'a Lut<F>,
-    cv: Cv<'a, F::V>,
-) -> box_iter::BoxIter<'a, Pair<ValX<F::V>>> {
+    lut: &'a Lut<V>,
+    cv: Cv<'a, V>,
+) -> box_iter::BoxIter<'a, (ValX<V>, ValX<V>)> {
     flat_map_with(l.run(lut, cv.clone()), cv, move |l, cv| {
         map_with(r.run(lut, cv), l, |r, l| (l, r))
     })
 }
 
-fn fold_update<'a, F: FilterT>(
-    lut: &'a Lut<F>,
+fn fold_update<'a, V: ValT>(
+    lut: &'a Lut<V>,
     fold_type: &'a Fold<Id>,
     path: &'a Id,
-    v: F::V,
-    mut xs: impl Iterator<Item = Result<Ctx<'a, F::V>, Exn<F::V>>> + Clone + 'a,
-    f: BoxUpdate<'a, F::V>,
-) -> ValXs<'a, F::V> {
+    v: V,
+    mut xs: impl Iterator<Item = Result<Ctx<'a, V>, Exn<V>>> + Clone + 'a,
+    f: BoxUpdate<'a, V>,
+) -> ValXs<'a, V> {
     let ctx = match xs.next() {
         Some(Ok(ctx)) => ctx,
         Some(Err(e)) => return box_once(Err(e)),
@@ -378,29 +380,19 @@ pub struct Native<V> {
     update: UpdatePtr<V>,
 }
 
-impl<V> Clone for Native<V> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<V> Copy for Native<V> {}
-
-/// Run function pointer.
-///
-/// Implementation-wise, this would be a perfect spot for `for<'a, F: FilterT<V>>`;
-/// unfortunately, this is [not stable yet](https://github.com/rust-lang/rust/issues/108185).
-/// That would also allow to eliminate `F` from `FilterT`.
-pub type RunPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cv<'a, V>) -> ValXs<'a, V>;
-/// Update function pointer.
-pub type PathsPtr<V, F = Native<V>> = for<'a> fn(&'a Lut<F>, Cvp<'a, V>) -> ValPathXs<'a, V>;
-/// Update function pointer.
-pub type UpdatePtr<V, F = Native<V>> =
-    for<'a> fn(&'a Lut<F>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValXs<'a, V>;
+/// Run function pointer (see [`Id::run`]).
+pub type RunPtr<V> = for<'a> fn(&'a Lut<V>, Cv<'a, V>) -> ValXs<'a, V>;
+/// Paths function pointer (see [`Id::paths`]).
+pub type PathsPtr<V> = for<'a> fn(&'a Lut<V>, Cvp<'a, V>) -> ValPathXs<'a, V>;
+/// Update function pointer (see [`Id::update`]).
+pub type UpdatePtr<V> = for<'a> fn(&'a Lut<V>, Cv<'a, V>, BoxUpdate<'a, V>) -> ValXs<'a, V>;
 
 impl<V> Native<V> {
-    /// Create a native filter from a run function, without support for updates.
-    pub const fn new(run: RunPtr<V, Self>) -> Self {
+    /// Create a native filter from a run function.
+    ///
+    /// A filter created this way initially supports neither paths nor updates.
+    /// For that, use [`Self::with_paths`] and [`Self::with_update`].
+    pub const fn new(run: RunPtr<V>) -> Self {
         Self {
             run,
             paths: |_, _| box_once(Err(Exn::from(Error::path_expr()))),
@@ -409,38 +401,21 @@ impl<V> Native<V> {
     }
 
     /// Specify a paths function (used for `path(...)`).
-    pub const fn with_paths(self, paths: PathsPtr<V, Self>) -> Self {
+    pub const fn with_paths(self, paths: PathsPtr<V>) -> Self {
         Self { paths, ..self }
     }
 
     /// Specify an update function (used for `filter |= ...`).
     ///
     /// If an update function is given, then a paths function should be implemented too.
-    pub const fn with_update(self, update: UpdatePtr<V, Self>) -> Self {
+    pub const fn with_update(self, update: UpdatePtr<V>) -> Self {
         Self { update, ..self }
     }
 }
 
-impl<V: ValT> FilterT for Native<V> {
-    type V = V;
-
-    fn run<'a>(self, lut: &'a Lut<Self>, cv: Cv<'a, V>) -> ValXs<'a, V> {
-        (self.run)(lut, cv)
-    }
-
-    fn paths<'a>(self, lut: &'a Lut<Self>, cv: Cvp<'a, V>) -> ValPathXs<'a, V> {
-        (self.paths)(lut, cv)
-    }
-
-    fn update<'a>(self, lut: &'a Lut<Self>, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValXs<'a, V> {
-        (self.update)(lut, cv, f)
-    }
-}
-
-impl<F: FilterT<F>> FilterT<F> for Id {
-    type V = F::V;
-
-    fn run<'a>(self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValXs<'a, Self::V> {
+impl Id {
+    /// `f.run(lut, (c, v))` returns the output of `v | f` in the context `c`.
+    pub fn run<'a, V: ValT>(&self, lut: &'a Lut<V>, cv: Cv<'a, V>) -> ValXs<'a, V> {
         use alloc::string::ToString;
         use core::iter::once;
         match &lut.terms[self.0] {
@@ -448,15 +423,15 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Recurse => recurse_run(cv.1, &|v| v.values()),
             Ast::ToString => box_once(match cv.1.as_str() {
                 Some(_) => Ok(cv.1),
-                None => Ok(Self::V::from(cv.1.to_string())),
+                None => Ok(V::from(cv.1.to_string())),
             }),
-            Ast::Int(n) => box_once(Ok(Self::V::from(*n))),
-            Ast::Num(x) => box_once(Self::V::from_num(x).map_err(Exn::from)),
-            Ast::Str(s) => box_once(Ok(Self::V::from(s.clone()))),
+            Ast::Int(n) => box_once(Ok(V::from(*n))),
+            Ast::Num(x) => box_once(V::from_num(x).map_err(Exn::from)),
+            Ast::Str(s) => box_once(Ok(V::from(s.clone()))),
             Ast::Arr(f) => box_once(f.run(lut, cv).collect()),
-            Ast::ObjEmpty => box_once(Self::V::from_map([]).map_err(Exn::from)),
+            Ast::ObjEmpty => box_once(V::from_map([]).map_err(Exn::from)),
             Ast::ObjSingle(k, v) => {
-                Box::new(cartesian(k, v, lut, cv).map(|(k, v)| Ok(Self::V::from_map([(k?, v?)])?)))
+                Box::new(cartesian(k, v, lut, cv).map(|(k, v)| Ok(V::from_map([(k?, v?)])?)))
             }
             Ast::TryCatch(f, c) => try_catch_run(f.run(lut, (cv.0.clone(), cv.1)), move |e| {
                 c.run(lut, (cv.0.clone(), e.into_val()))
@@ -505,11 +480,11 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 Box::new(move |v| f.run(lut, (cv.0.clone(), v))),
             ),
             Ast::UpdateMath(path, op, f) => pipe(f, lut, cv, move |cv, y| {
-                let u = move |x: F::V| box_once(op.run(x, y.clone()).map_err(Exn::from));
+                let u = move |x: V| box_once(op.run(x, y.clone()).map_err(Exn::from));
                 path.update(lut, cv, Box::new(u))
             }),
             Ast::UpdateAlt(path, f) => pipe(f, lut, cv, move |cv, y| {
-                let u = move |x: F::V| box_once(Ok(if x.as_bool() { x } else { y.clone() }));
+                let u = move |x: V| box_once(Ok(if x.as_bool() { x } else { y.clone() }));
                 path.update(lut, cv, Box::new(u))
             }),
             Ast::Assign(path, f) => pipe(f, lut, cv, move |cv, y| {
@@ -518,16 +493,16 @@ impl<F: FilterT<F>> FilterT<F> for Id {
 
             Ast::Logic(l, stop, r) => pipe(l, lut, cv, move |cv, l| {
                 if l.as_bool() == *stop {
-                    box_once(Ok(Self::V::from(*stop)))
+                    box_once(Ok(V::from(*stop)))
                 } else {
-                    Box::new(r.run(lut, cv).map(|r| Ok(Self::V::from(r?.as_bool()))))
+                    Box::new(r.run(lut, cv).map(|r| Ok(V::from(r?.as_bool()))))
                 }
             }),
             Ast::Math(l, op, r) => {
                 Box::new(cartesian(l, r, lut, cv).map(|(x, y)| Ok(op.run(x?, y?)?)))
             }
             Ast::Cmp(l, op, r) => {
-                Box::new(cartesian(l, r, lut, cv).map(|(x, y)| Ok(Self::V::from(op.run(&x?, &y?)))))
+                Box::new(cartesian(l, r, lut, cv).map(|(x, y)| Ok(V::from(op.run(&x?, &y?)))))
             }
 
             Ast::Fold(xs, pat, init, update, fold_type) => {
@@ -573,17 +548,22 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             }
             Ast::Native(id, args) => {
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv, Clone::clone);
-                flat_map_then(cvs, |cv| lut.funs[*id].run(lut, cv))
+                flat_map_then(cvs, |cv| (lut.funs[*id].run)(lut, cv))
             }
             Ast::Label(id) => label_run(cv, |cv| id.run(lut, cv)),
         }
     }
 
-    fn paths<'a>(self, lut: &'a Lut<F>, cv: Cvp<'a, F::V>) -> ValPathXs<'a, F::V> {
+    /// `f.paths(lut, (c, (v, p)))` returns the outputs and paths of `v | f` in the context `c`,
+    /// where `v` is assumed to be at path `p`.
+    ///
+    /// In particular, `v | path(f)` in context `c` yields the same paths as
+    /// `f.paths(lut, (c, (v, Default::default())))`.
+    pub fn paths<'a, V: ValT>(&self, lut: &'a Lut<V>, cv: Cvp<'a, V>) -> ValPathXs<'a, V> {
         // TODO: capture value in path_expr?
         let err = box_once(Err(Exn::from(Error::path_expr())));
-        let proj_cv = |cv: &Cvp<'a, F::V>| (cv.0.clone(), cv.1 .0.clone());
-        let proj_val = |(val, _path): &(F::V, _)| val.clone();
+        let proj_cv = |cv: &Cvp<'a, V>| (cv.0.clone(), cv.1 .0.clone());
+        let proj_val = |(val, _path): &(V, _)| val.clone();
         match &lut.terms[self.0] {
             Ast::ToString => err,
             Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
@@ -678,17 +658,18 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Label(id) => label_run(cv, |cv| id.paths(lut, cv)),
             Ast::Native(id, args) => {
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv, proj_val);
-                flat_map_then(cvs, |cv| lut.funs[*id].paths(lut, cv))
+                flat_map_then(cvs, |cv| (lut.funs[*id].paths)(lut, cv))
             }
         }
     }
 
-    fn update<'a>(
-        self,
-        lut: &'a Lut<F>,
-        cv: Cv<'a, Self::V>,
-        f: BoxUpdate<'a, Self::V>,
-    ) -> ValXs<'a, Self::V> {
+    /// `p.update(lut, (c, v), f)` returns the output of `v | p |= f` in the context `c`.
+    pub fn update<'a, V: ValT>(
+        &self,
+        lut: &'a Lut<V>,
+        cv: Cv<'a, V>,
+        f: BoxUpdate<'a, V>,
+    ) -> ValXs<'a, V> {
         let err = box_once(Err(Exn::from(Error::path_expr())));
         match &lut.terms[self.0] {
             Ast::ToString => err,
@@ -756,39 +737,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 let init = cv.1.clone();
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv, Clone::clone);
                 reduce(cvs, init, move |cv, v| {
-                    lut.funs[*id].update(lut, (cv.0, v), f.clone())
+                    (lut.funs[*id].update)(lut, (cv.0, v), f.clone())
                 })
             }
         }
     }
 }
-
-/// Function from a value to a stream of value results.
-///
-/// `F` is the type of (natively implemented) filter functions.
-pub trait FilterT<F: FilterT<F, V = Self::V> = Self>: Copy {
-    /// Type of values that the filter takes and yields.
-    ///
-    /// This is an associated type because it is strictly determined by `F`.
-    type V: ValT;
-
-    /// `f.run(lut, (c, v))` returns the output of `v | f` in the context `c`.
-    fn run<'a>(self, lut: &'a Lut<F>, cv: Cv<'a, Self::V>) -> ValXs<'a, Self::V>;
-
-    /// `f.paths(lut, (c, (v, p)))` returns the outputs and paths of `v | f` in the context `c`,
-    /// where `v` is assumed to be at path `p`.
-    ///
-    /// In particular, `v | path(f)` in context `c` yields the same paths as
-    /// `f.paths(lut, (c, (v, Default::default())))`.
-    fn paths<'a>(self, lut: &'a Lut<F>, cv: Cvp<'a, Self::V>) -> ValPathXs<'a, Self::V>;
-
-    /// `p.update(lut, (c, v), f)` returns the output of `v | p |= f` in the context `c`.
-    fn update<'a>(
-        self,
-        lut: &'a Lut<F>,
-        cv: Cv<'a, Self::V>,
-        f: BoxUpdate<'a, Self::V>,
-    ) -> ValXs<'a, Self::V>;
-}
-
-type Pair<T> = (T, T);

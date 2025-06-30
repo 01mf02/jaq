@@ -27,7 +27,7 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, ValR, ValX, ValXs};
+use jaq_core::{load, Bind, Cv, Error, Exn, Native, RunPtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {

@@ -12,7 +12,7 @@
 //! (This example requires enabling the `serde_json` feature for `jaq-json`.)
 //!
 //! ~~~
-//! use jaq_core::{load, Compiler, Ctx, Error, FilterT, RcIter};
+//! use jaq_core::{load, Compiler, Ctx, Error, RcIter};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
 //!
@@ -67,7 +67,7 @@ pub mod val;
 
 pub use compile::Compiler;
 pub use exn::{Error, Exn};
-pub use filter::{Ctx, Cv, FilterT, Native, PathsPtr, RunPtr, UpdatePtr};
+pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr};
 pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};
 
@@ -122,9 +122,9 @@ impl<T> Bind<T, T> {
 #[derive(Debug, Clone)]
 pub struct Filter<F>(compile::TermId, compile::Lut<F>);
 
-impl<F: FilterT> Filter<F> {
+impl<V: ValT> Filter<Native<V>> {
     /// Run a filter on given input, yielding output values.
-    pub fn run<'a>(&'a self, cv: Cv<'a, F::V>) -> impl Iterator<Item = ValR<F::V>> + 'a {
+    pub fn run<'a>(&'a self, cv: Cv<'a, V>) -> impl Iterator<Item = ValR<V>> + 'a {
         self.0
             .run(&self.1, cv)
             .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
@@ -133,7 +133,7 @@ impl<F: FilterT> Filter<F> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields(&self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
+    pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
         let inputs = RcIter::new(core::iter::empty());
         let out = self.run((Ctx::new([], &inputs), x));
         assert!(out.eq(ys));
