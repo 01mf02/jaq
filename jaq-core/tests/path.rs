@@ -1,7 +1,6 @@
 pub mod common;
 
-use common::{fail, give, gives};
-use jaq_core::Error;
+use common::{fail, give, gives, Val, Error};
 use serde_json::json;
 
 #[test]
@@ -178,7 +177,7 @@ fn update_complex() {
     // in general, `a | a |= .`
     // works in jq when `a` is either null, a number, or a boolean --- it
     // does *not* work when `a` is a string, an array, or an object!
-    fail(json!(0), "0 |= .+1", Error::path_expr());
+    fail(json!(0), "0 |= .+1", Error::path_expr(Val::Int(0)));
 }
 
 yields!(alt_update_l, "[1, 2] | .[] // . |= 3", [3, 3]);
