@@ -172,7 +172,7 @@ yields!(limit_inf_sumr, "[limit(3; 0 + recurse(.+1))]", [0, 1, 2]);
 yields!(limit_inf_path, "[limit(2; [1] | .[repeat(0)])]", [1, 1]);
 
 #[test]
-fn recurse() {
+fn recurse_obj() {
     let x = json!({"a":0,"b":[1]});
     gives(x.clone(), "recurse", [x, json!(0), json!([1]), json!(1)]);
 
@@ -181,19 +181,21 @@ fn recurse() {
 
     let y = [json!(2), json!(4), json!(16)];
     gives(json!(2), "recurse(. * .; . < 20)", y);
+}
 
+#[test]
+fn recurse_arr() {
     let x = json!([[[0], 1], 2, [3, [4]]]);
 
     let y = json!([[[1], 2], 3, [4, [5]]]);
     give(x.clone(), "(.. | scalars) |= .+1", y);
 
     let f = ".. |= if . < [] then .+1 else . + [42] end";
-    let y = json!([[[1, 43], 2, 43], 3, [4, [5, 43], 43], 43]);
-    // jq gives: `[[[1, 42], 2, 42], 3, [4, [5, 42], 42], 42]`
+    let y = json!([[[1, 42], 2, 42], 3, [4, [5, 42], 42], 42]);
     give(x.clone(), f, y);
 
     let f = ".. |= if . < [] then .+1 else [42] + . end";
-    let y = json!([43, [43, [43, 1], 2], 3, [43, 4, [43, 5]]]);
+    let y = json!([42, [42, [42, 1], 2], 3, [42, 4, [42, 5]]]);
     // jq fails here with: "Cannot index number with number"
     give(x.clone(), f, y);
 }
@@ -352,4 +354,26 @@ yields!(
     format_sh_rejects_nested_arrays,
     r#"["fine, but", []] | try @sh catch -1"#,
     -1
+);
+yields!(
+    format_uri,
+    r#"["abc👍 +&?/", "", null, 123, [], {} | @uri]"#,
+    [
+        "abc%F0%9F%91%8D%20%2B%26%3F%2F",
+        "",
+        "null",
+        "123",
+        "%5B%5D",
+        "%7B%7D"
+    ]
+);
+yields!(
+    format_urid,
+    r#"["abc%F0%9F%91%8D%20%2B%26%3F%2F", "", null, 123, [], {} | try @urid catch .]"#,
+    ["abc👍 +&?/", "", "null", "123", "[]", "{}"]
+);
+yields!(
+    format_urid_invalid,
+    r#""%FF" | try @urid catch ."#,
+    "invalid utf-8 sequence of 1 bytes from index 0"
 );

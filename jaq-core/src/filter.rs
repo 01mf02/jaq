@@ -3,7 +3,7 @@
 use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_map_with, map_with};
 use crate::compile::{Bind, Fold, Lut, Pattern, Tailrec, Term as Ast, TermId as Id};
 use crate::fold::fold;
-use crate::val::{ValT, ValX, ValXs};
+use crate::val::{ValR, ValT, ValX, ValXs};
 use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
@@ -223,8 +223,25 @@ fn label_run<'a, V, T: 'a>(
     }))
 }
 
+fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<T, V>> + 'a>(
+    mut ys: ValXs<'a, T, V>,
+    f: impl Fn(Error<V>) -> I + 'a,
+) -> ValXs<'a, T, V> {
+    let mut end: Option<I> = None;
+    Box::new(core::iter::from_fn(move || match &mut end {
+        Some(end) => end.next(),
+        None => match ys.next()? {
+            Err(Exn(exn::Inner::Err(e))) => {
+                end = Some(f(*e));
+                end.as_mut().and_then(|end| end.next())
+            }
+            y => Some(y),
+        },
+    }))
+}
+
 fn fold_run<'a, V: Clone, T: Clone + 'a>(
-    xs: impl Iterator<Item = Result<Ctx<'a, V>, Exn<V>>> + Clone + 'a,
+    xs: impl Iterator<Item = ValX<Ctx<'a, V>, V>> + Clone + 'a,
     cv: Cv<'a, V, T>,
     init: &'a Id,
     update: &'a Id,
@@ -326,6 +343,28 @@ fn lazy_is_lazy() {
     assert_eq!(iter.next(), Some(0));
 }
 
+/// Runs `def recurse(f): ., (f? | recurse(f)); v | recurse(f)`.
+fn recurse_run<'a, T: Clone + 'a, V: 'a, I: Iterator<Item = ValR<T, V>> + 'a>(
+    x: T,
+    f: &'a impl Fn(T) -> I,
+) -> ValXs<'a, T, V> {
+    let id = core::iter::once(Ok(x.clone()));
+    Box::new(id.chain(f(x).flat_map(Result::ok).flat_map(|y| recurse_run(y, f))))
+}
+
+/// Runs `def recurse: (.[]? | recurse), .; v | recurse |= f`.
+///
+/// This uses a `recurse` different from that of `recurse_run`; in particular,
+/// `recurse_run` yields values from root to leafs, whereas
+/// this function performs updates from leafs to root.
+/// Performing updates from root to leafs can easily lead to
+/// nontermination or other weird effects, such as
+/// trying to update values that have been deleted.
+fn recurse_update<'a, V: ValT + 'a>(v: V, f: &dyn Update<'a, V>) -> ValXs<'a, V> {
+    use crate::path::Opt::Optional;
+    box_iter::then(v.map_values(Optional, |v| recurse_update(v, f)), f)
+}
+
 /// Combination of context and input value.
 pub type Cv<'c, V, T = V> = (Ctx<'c, V>, T);
 /// Combination of context and input value with a path.
@@ -406,6 +445,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
         use core::iter::once;
         match &lut.terms[self.0] {
             Ast::Id => box_once(Ok(cv.1)),
+            Ast::Recurse => recurse_run(cv.1, &|v| v.values()),
             Ast::ToString => box_once(match cv.1.as_str() {
                 Some(_) => Ok(cv.1),
                 None => Ok(Self::V::from(cv.1.to_string())),
@@ -418,13 +458,9 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::ObjSingle(k, v) => {
                 Box::new(cartesian(k, v, lut, cv).map(|(k, v)| Ok(Self::V::from_map([(k?, v?)])?)))
             }
-            // TODO: write test for `try (break $x)`
-            Ast::TryCatch(f, c) => {
-                Box::new(f.run(lut, (cv.0.clone(), cv.1)).flat_map(move |y| match y {
-                    Err(Exn(exn::Inner::Err(e))) => c.run(lut, (cv.0.clone(), e.into_val())),
-                    y => box_once(y),
-                }))
-            }
+            Ast::TryCatch(f, c) => try_catch_run(f.run(lut, (cv.0.clone(), cv.1)), move |e| {
+                c.run(lut, (cv.0.clone(), e.into_val()))
+            }),
             Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| Ok((-v?)?))),
 
             // `l | r`
@@ -555,6 +591,10 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err,
             Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
             Ast::Id => box_once(Ok(cv.1)),
+            Ast::Recurse => recurse_run(cv.1, &|(v, p)| {
+                v.key_values()
+                    .map(move |r| r.map(|(k, v_)| (v_, p.clone().cons(k))))
+            }),
             Ast::Pipe(l, None, r) => {
                 flat_map_then_with(l.paths(lut, (cv.0.clone(), cv.1)), cv.0, move |y, ctx| {
                     r.paths(lut, (ctx, y))
@@ -577,17 +617,11 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                     if v.as_bool() { then_ } else { else_ }.paths(lut, cv)
                 })
             }
-            Ast::TryCatch(f, c) => {
-                Box::new(f.paths(lut, (cv.0.clone(), cv.1)).flat_map(move |y| {
-                    match y {
-                        Err(Exn(exn::Inner::Err(e))) => Box::new(
-                            c.run(lut, (cv.0.clone(), e.into_val()))
-                                .map(|_| Err(Exn::from(Error::path_expr()))),
-                        ),
-                        y => box_once(y),
-                    }
-                }))
-            }
+            // TODO!!!
+            Ast::TryCatch(f, c) => try_catch_run(f.paths(lut, (cv.0.clone(), cv.1)), move |e| {
+                c.run(lut, (cv.0.clone(), e.into_val()))
+                    .map(|_| Err(Exn::from(Error::path_expr())))
+            }),
             Ast::Path(f, path) => {
                 let path = path.map_ref(|i| {
                     let cv = (cv.0.clone(), cv.1 .0.clone());
@@ -667,6 +701,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::TryCatch(..) | Ast::Label(..) => err,
 
             Ast::Id => f(cv.1),
+            Ast::Recurse => recurse_update(cv.1, &f),
             Ast::Path(l, path) => {
                 let path = path.map_ref(|i| {
                     let cv = cv.clone();
