@@ -341,11 +341,18 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             Ast::ObjSingle(k, v) => Box::new(
                 Self::cartesian(k, v, lut, cv).map(|(k, v)| Ok(Self::V::from_map([(k?, v?)])?)),
             ),
-            // TODO: write test for `try (break $x)`
             Ast::TryCatch(f, c) => {
-                Box::new(f.run(lut, (cv.0.clone(), cv.1)).flat_map(move |y| match y {
-                    Err(Exn(exn::Inner::Err(e))) => c.run(lut, (cv.0.clone(), e.into_val())),
-                    y => box_once(y),
+                let mut ys = f.run(lut, (cv.0.clone(), cv.1));
+                let mut end: Option<ValXs<_>> = None;
+                Box::new(core::iter::from_fn(move || match &mut end {
+                    Some(end) => end.next(),
+                    None => match ys.next()? {
+                        Err(Exn(exn::Inner::Err(e))) => {
+                            end = Some(c.run(lut, (cv.0.clone(), e.into_val())));
+                            end.as_mut().and_then(|end| end.next())
+                        }
+                        y => Some(y),
+                    },
                 }))
             }
             Ast::Neg(f) => Box::new(f.run(lut, cv).map(|v| Ok((-v?)?))),
