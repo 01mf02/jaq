@@ -8,6 +8,12 @@ use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, Inputs, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
+/// Combination of context and input value.
+pub type Cv<'c, V, T = V> = (Ctx<'c, V>, T);
+/// Combination of context and input value with a path.
+type Cvp<'a, V> = Cv<'a, V, (V, RcList<V>)>;
+type ValPathXs<'a, V> = ValXs<'a, (V, RcList<V>), V>;
+
 type Lut<V> = crate::compile::Lut<Native<V>>;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
@@ -366,12 +372,6 @@ fn recurse_update<'a, V: ValT + 'a>(v: V, f: &dyn Update<'a, V>) -> ValXs<'a, V>
     use crate::path::Opt::Optional;
     box_iter::then(v.map_values(Optional, |v| recurse_update(v, f)), f)
 }
-
-/// Combination of context and input value.
-pub type Cv<'c, V, T = V> = (Ctx<'c, V>, T);
-/// Combination of context and input value with a path.
-type Cvp<'a, V> = Cv<'a, V, (V, RcList<V>)>;
-type ValPathXs<'a, V> = ValXs<'a, (V, RcList<V>), V>;
 
 /// A filter which is implemented using function pointers.
 pub struct Native<V> {
