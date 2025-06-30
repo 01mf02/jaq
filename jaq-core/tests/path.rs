@@ -1,6 +1,6 @@
 pub mod common;
 
-use common::{fail, give, gives, Val, Error};
+use common::{fail, give, gives, Error, Val};
 use serde_json::json;
 
 #[test]
