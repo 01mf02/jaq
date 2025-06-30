@@ -480,6 +480,13 @@ fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
             use urlencoding::encode;
             bome(cv.1.try_as_str().map(|s| encode(s).into_owned().into()))
         }),
+        ("decode_uri", v(0), |_, cv| {
+            use urlencoding::decode;
+            bome(cv.1.try_as_str().and_then(|s| {
+                let d = decode(s).map_err(Error::str)?;
+                Ok(d.into_owned().into())
+            }))
+        }),
         ("encode_base64", v(0), |_, cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             bome(cv.1.try_as_str().map(|s| STANDARD.encode(s).into()))

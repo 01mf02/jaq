@@ -232,7 +232,7 @@ Here is an overview that summarises:
 - [x] Error handling (`try ... catch ...`)
 - [x] Breaking (`label $x | f | ., break $x`)
 - [x] String interpolation (`"The successor of \(.) is \(.+1)."`)
-- [x] Format strings (`@json`, `@text`, `@csv`, `@tsv`, `@html`, `@sh`, `@base64`, `@base64d`)
+- [x] Format strings (`@json`, `@text`, `@csv`, `@tsv`, `@html`, `@sh`, `@base64`, `@base64d`, `@uri`, `@urid`)
 
 
 ## Paths
