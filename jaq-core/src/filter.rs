@@ -357,7 +357,7 @@ fn recurse_run<'a, T: Clone + 'a, V: 'a, I: Iterator<Item = ValR<T, V>> + 'a>(
     f: &'a impl Fn(T) -> I,
 ) -> ValXs<'a, T, V> {
     let id = core::iter::once(Ok(x.clone()));
-    Box::new(id.chain(f(x).flat_map(Result::ok).flat_map(|y| recurse_run(y, f))))
+    Box::new(id.chain(f(x).flatten().flat_map(|y| recurse_run(y, f))))
 }
 
 /// Runs `def recurse: (.[]? | recurse), .; v | recurse |= f`.

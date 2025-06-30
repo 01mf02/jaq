@@ -57,7 +57,9 @@ pub trait ValT:
     /// Yield the key-value pairs of a value.
     ///
     /// This is used to collect the paths of `.[]`.
-    fn key_values(self) -> BoxIter<'static, Result<(Self, Self), crate::Error<Self>>>;
+    /// It should yield any `key` for which `value | .[key]` is defined,
+    /// as well as its output.
+    fn key_values(self) -> BoxIter<'static, ValR<(Self, Self), Self>>;
 
     /// Yield the children of a value.
     ///
