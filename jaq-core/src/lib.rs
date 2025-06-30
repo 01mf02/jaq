@@ -75,7 +75,8 @@ use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
 
-type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
+/// Iterator over value results returned by the `inputs` filter.
+pub type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
 ///
