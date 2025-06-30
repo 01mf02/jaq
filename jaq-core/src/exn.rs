@@ -18,16 +18,30 @@ pub(crate) enum Inner<V> {
     ///
     /// This is used internally to execute tail-recursive filters.
     /// If this can be observed by users, then this is a bug.
-    TailCall(Box<TailCall<V>>),
+    TailCall(Box<(crate::compile::TermId, crate::filter::Vars<V>, CallInput<V>)>),
     Break(usize),
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct TailCall<V> {
-    pub id: crate::compile::TermId,
-    pub vars: crate::filter::Vars<V>,
-    pub val: V,
-    pub path: Option<RcList<V>>,
+pub(crate) enum CallInput<V> {
+    Run(V),
+    Paths((V, RcList<V>)),
+}
+
+impl<V> CallInput<V> {
+    pub fn unwrap_run(self) -> V {
+        match self {
+            Self::Run(v) => v,
+            _ => panic!(),
+        }
+    }
+
+    pub fn unwrap_paths(self) -> (V, RcList<V>) {
+        match self {
+            Self::Paths(vp) => vp,
+            _ => panic!(),
+        }
+    }
 }
 
 impl<V> Exn<V> {

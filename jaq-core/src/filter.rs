@@ -327,6 +327,36 @@ fn fold_update<'a, V: ValT>(
     path.update(lut, (ctx, v), update)
 }
 
+fn def_run<'a, V, T: 'a>(
+    id: &'a Id,
+    tailrec: &Option<Tailrec>,
+    cvs: ValXs<'a, Cv<'a, V, T>, V>,
+    run: impl Fn(Cv<'a, V, T>) -> ValXs<'a, T, V> + 'a + Copy,
+    with_vars: impl Fn(Vars<V>) -> Ctx<'a, V> + 'a,
+    into: impl Fn(T) -> exn::CallInput<V> + 'a,
+    from: impl Fn(exn::CallInput<V>) -> T + 'a,
+) -> ValXs<'a, T, V> {
+    use core::ops::ControlFlow;
+    match tailrec {
+        None => flat_map_then(cvs, move |cv| run(cv)),
+        Some(Tailrec::Catch) => Box::new(crate::Stack::new(
+            [flat_map_then(cvs, move |cv| run(cv))].into(),
+            move |r| match r {
+                Err(Exn(exn::Inner::TailCall(tc))) if tc.0 == *id => {
+                    ControlFlow::Continue(run((with_vars(tc.1), from(tc.2))))
+                }
+                Ok(_) | Err(_) => ControlFlow::Break(r),
+            },
+        )),
+        Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
+            cv.and_then(|cv| {
+                let tc = (*id, cv.0.vars, into(cv.1));
+                Err(Exn(exn::Inner::TailCall(Box::new(tc))))
+            })
+        })),
+    }
+}
+
 fn reduce<'a, T: Clone + 'a, V: Clone + 'a, F>(xs: ValXs<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
 where
     F: Fn(T, V) -> ValXs<'a, V> + 'a,
@@ -512,35 +542,15 @@ impl Id {
                 Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
-                use core::ops::ControlFlow;
                 let with_vars = move |vars| Ctx {
                     vars,
                     labels: cv.0.labels,
                     inputs: cv.0.inputs,
                 };
                 let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv, Clone::clone);
-                match tailrec {
-                    None => flat_map_then(cvs, |cv| id.run(lut, cv)),
-                    Some(Tailrec::Catch) => Box::new(crate::Stack::new(
-                        [flat_map_then(cvs, |cv| id.run(lut, cv))].into(),
-                        move |r| match r {
-                            Err(Exn(exn::Inner::TailCall(tc))) if tc.id == *id => {
-                                ControlFlow::Continue(id.run(lut, (with_vars(tc.vars), tc.val)))
-                            }
-                            Ok(_) | Err(_) => ControlFlow::Break(r),
-                        },
-                    )),
-                    Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
-                        cv.and_then(|cv| {
-                            Err(Exn(exn::Inner::TailCall(Box::new(exn::TailCall {
-                                id: *id,
-                                vars: cv.0.vars,
-                                val: cv.1,
-                                path: None,
-                            }))))
-                        })
-                    })),
-                }
+                let run = |cv| id.run(lut, cv);
+                let (into, from) = (exn::CallInput::Run, exn::CallInput::unwrap_run);
+                def_run(id, tailrec, cvs, run, with_vars, into, from)
             }
             Ast::Native(id, args) => {
                 let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv, Clone::clone);
@@ -618,37 +628,15 @@ impl Id {
                 fold_run(xs, cv, init, update, fold_type, |f, cv| f.paths(lut, cv))
             }
             Ast::CallDef(id, args, skip, tailrec) => {
-                use core::ops::ControlFlow;
                 let with_vars = move |vars| Ctx {
                     vars,
                     labels: cv.0.labels,
                     inputs: cv.0.inputs,
                 };
                 let cvs = bind_vars(args, lut, cv.0.clone().skip_vars(*skip), cv, proj_val);
-                match tailrec {
-                    None => flat_map_then(cvs, |cv| id.paths(lut, cv)),
-                    Some(Tailrec::Catch) => Box::new(crate::Stack::new(
-                        [flat_map_then(cvs, |cv| id.paths(lut, cv))].into(),
-                        move |r| match r {
-                            Err(Exn(exn::Inner::TailCall(tc))) if tc.id == *id => {
-                                ControlFlow::Continue(
-                                    id.paths(lut, (with_vars(tc.vars), (tc.val, tc.path.unwrap()))),
-                                )
-                            }
-                            Ok(_) | Err(_) => ControlFlow::Break(r),
-                        },
-                    )),
-                    Some(Tailrec::Throw) => Box::new(cvs.map(move |cv| {
-                        cv.and_then(|cv| {
-                            Err(Exn(exn::Inner::TailCall(Box::new(exn::TailCall {
-                                id: *id,
-                                vars: cv.0.vars,
-                                val: cv.1 .0,
-                                path: Some(cv.1 .1),
-                            }))))
-                        })
-                    })),
-                }
+                let paths = |cv| id.paths(lut, cv);
+                let (into, from) = (exn::CallInput::Paths, exn::CallInput::unwrap_paths);
+                def_run(id, tailrec, cvs, paths, with_vars, into, from)
             }
             Ast::Label(id) => label_run(cv, |cv| id.paths(lut, cv)),
             Ast::Native(id, args) => {
