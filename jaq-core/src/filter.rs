@@ -274,12 +274,10 @@ fn fold_run<'a, V: Clone, T: Clone + 'a>(
 ///
 /// This has a special optimisation for the case where only a single `v` is returned.
 /// In that case, we can consume `cv` instead of cloning it.
-fn pipe<'a, V: ValT, T: 'a>(
-    l: &'a Id,
-    lut: &'a Lut<V>,
-    cv: Cv<'a, V>,
-    r: impl Fn(Cv<'a, V>, V) -> ValXs<'a, T, V> + 'a,
-) -> ValXs<'a, T, V> {
+fn pipe<'a, V: ValT, T: 'a, F>(l: &'a Id, lut: &'a Lut<V>, cv: Cv<'a, V>, r: F) -> ValXs<'a, T, V>
+where
+    F: Fn(Cv<'a, V>, V) -> ValXs<'a, T, V> + 'a,
+{
     flat_map_then_with(l.run(lut, cv.clone()), cv, move |y, cv| r(cv, y))
 }
 
@@ -329,10 +327,8 @@ fn fold_update<'a, V: ValT>(
     path.update(lut, (ctx, v), update)
 }
 
-fn reduce<'a, T, V, F>(xs: ValXs<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
+fn reduce<'a, T: Clone + 'a, V: Clone + 'a, F>(xs: ValXs<'a, T, V>, init: V, f: F) -> ValXs<'a, V>
 where
-    T: Clone + 'a,
-    V: Clone + 'a,
     F: Fn(T, V) -> ValXs<'a, V> + 'a,
 {
     let xs = rc_lazy_list::List::from_iter(xs);
