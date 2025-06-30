@@ -63,8 +63,11 @@ impl<V> Error<V> {
     }
 
     /// Create a path expression error.
-    pub fn path_expr() -> Self {
-        Self(Part::Str(Vec::from([Part::Str("invalid path expression")])))
+    pub fn path_expr(v: V) -> Self {
+        Self(Part::Str(Vec::from([
+            Part::Str("invalid path expression with input "),
+            Part::Val(v),
+        ])))
     }
 
     /// Create a type error.

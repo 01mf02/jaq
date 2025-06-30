@@ -395,8 +395,8 @@ impl<V> Native<V> {
     pub const fn new(run: RunPtr<V>) -> Self {
         Self {
             run,
-            paths: |_, _| box_once(Err(Exn::from(Error::path_expr()))),
-            update: |_, _, _| box_once(Err(Exn::from(Error::path_expr()))),
+            paths: |_, cv| box_once(Err(Exn::from(Error::path_expr(cv.1 .0)))),
+            update: |_, cv, _| box_once(Err(Exn::from(Error::path_expr(cv.1)))),
         }
     }
 
@@ -560,16 +560,16 @@ impl Id {
     /// In particular, `v | path(f)` in context `c` yields the same paths as
     /// `f.paths(lut, (c, (v, Default::default())))`.
     pub fn paths<'a, V: ValT>(&self, lut: &'a Lut<V>, cv: Cvp<'a, V>) -> ValPathXs<'a, V> {
-        // TODO: capture value in path_expr?
-        let err = box_once(Err(Exn::from(Error::path_expr())));
+        let err = |v| box_once(Err(Exn::from(Error::path_expr(v))));
         let proj_cv = |cv: &Cvp<'a, V>| (cv.0.clone(), cv.1 .0.clone());
         let proj_val = |(val, _path): &(V, _)| val.clone();
         match &lut.terms[self.0] {
-            Ast::ToString => err,
-            Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
-            Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
-            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
+            Ast::ToString => err(cv.1 .0),
+            Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err(cv.1 .0),
+            Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err(cv.1 .0),
+            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err(cv.1 .0),
+            Ast::Update(..) | Ast::Assign(..) => err(cv.1 .0),
+            Ast::UpdateMath(..) | Ast::UpdateAlt(..) => err(cv.1 .0),
             Ast::Id => box_once(Ok(cv.1)),
             Ast::Recurse => recurse_run(cv.1, &|(v, p)| {
                 v.key_values()
@@ -597,10 +597,9 @@ impl Id {
                     if v.as_bool() { then_ } else { else_ }.paths(lut, cv)
                 })
             }
-            // TODO!!!
             Ast::TryCatch(f, c) => try_catch_run(f.paths(lut, (cv.0.clone(), cv.1)), move |e| {
                 c.run(lut, (cv.0.clone(), e.into_val()))
-                    .map(|_| Err(Exn::from(Error::path_expr())))
+                    .map(|e| Err(Exn::from(Error::path_expr(e?))))
             }),
             Ast::Path(f, path) => {
                 let path = path.map_ref(|i| {
@@ -614,7 +613,7 @@ impl Id {
                 })
             }
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
-                Bind::Var(_) => err,
+                Bind::Var(_) => err(cv.1 .0),
                 Bind::Fun(l) => l.0.paths(lut, (cv.0.with_vars(l.1.clone()), cv.1)),
                 Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
@@ -670,16 +669,17 @@ impl Id {
         cv: Cv<'a, V>,
         f: BoxUpdate<'a, V>,
     ) -> ValXs<'a, V> {
-        let err = box_once(Err(Exn::from(Error::path_expr())));
+        let err = |v| box_once(Err(Exn::from(Error::path_expr(v))));
         match &lut.terms[self.0] {
-            Ast::ToString => err,
-            Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err,
-            Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err,
-            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err,
-            Ast::Update(..) | Ast::UpdateMath(..) | Ast::UpdateAlt(..) | Ast::Assign(..) => err,
+            Ast::ToString => err(cv.1),
+            Ast::Int(_) | Ast::Num(_) | Ast::Str(_) => err(cv.1),
+            Ast::Arr(_) | Ast::ObjEmpty | Ast::ObjSingle(..) => err(cv.1),
+            Ast::Neg(_) | Ast::Logic(..) | Ast::Math(..) | Ast::Cmp(..) => err(cv.1),
+            Ast::Update(..) | Ast::Assign(..) => err(cv.1),
+            Ast::UpdateMath(..) | Ast::UpdateAlt(..) => err(cv.1),
             // jq implements updates on `try ... catch` and `label`, but
             // I do not see how to implement this in jaq
-            Ast::TryCatch(..) | Ast::Label(..) => err,
+            Ast::TryCatch(..) | Ast::Label(..) => err(cv.1),
 
             Ast::Id => f(cv.1),
             Ast::Recurse => recurse_update(cv.1, &f),
@@ -724,7 +724,7 @@ impl Id {
                 init.update(lut, cv, Box::new(rec))
             }
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
-                Bind::Var(_) => err,
+                Bind::Var(_) => err(cv.1),
                 Bind::Fun(l) => l.0.update(lut, (cv.0.with_vars(l.1.clone()), cv.1), f),
                 Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
