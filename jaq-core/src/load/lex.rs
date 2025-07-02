@@ -291,7 +291,8 @@ impl<'a> Lexer<&'a str> {
     fn token(&mut self) -> Option<Token<&'a str>> {
         self.space();
 
-        let is_op = |c| "|=!<>+-*/%".contains(c);
+        let hd_op = |c| "|=!<>+-*/%".contains(c);
+        let tl_op = |c| hd_op(c) && c != '-';
 
         let mut chars = self.i.chars();
         let (s, tok) = match chars.next()? {
@@ -299,7 +300,7 @@ impl<'a> Lexer<&'a str> {
             '$' => (self.consumed(1, Self::ident1), Tok::Var),
             '@' => (self.consumed(1, Self::ident1), Tok::Fmt),
             '0'..='9' => (self.consumed(1, Self::num), Tok::Num),
-            c if is_op(c) => (self.consumed(1, |lex| lex.trim(is_op)), Tok::Sym),
+            c if hd_op(c) => (self.consumed(1, |lex| lex.trim(tl_op)), Tok::Sym),
             '.' => match chars.next() {
                 Some('.') => (self.take(2), Tok::Sym),
                 Some('a'..='z' | 'A'..='Z' | '_') => (self.consumed(2, Self::ident0), Tok::Sym),

@@ -385,6 +385,12 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
                 x.indices(&v).map(|idxs| idxs.map(to_int).collect())
             })
         }),
+        ("bsearch", v(1), |_, cv| {
+            let to_idx = |r: Result<_, _>| r.map_or_else(|i| -1 - i as isize, |i| i as isize);
+            unary(cv, move |a, x| {
+                a.as_arr().map(|a| Val::Int(to_idx(a.binary_search(&x))))
+            })
+        }),
     ])
 }
 
@@ -489,6 +495,13 @@ impl Val {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::typ(self, Type::Arr.as_str())),
+        }
+    }
+
+    fn as_arr(&self) -> Result<&Rc<Vec<Self>>, Error> {
+        match self {
+            Self::Arr(a) => Ok(a),
+            _ => Err(Error::typ(self.clone(), Type::Arr.as_str())),
         }
     }
 

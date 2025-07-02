@@ -5,6 +5,11 @@ pub mod common;
 use common::give;
 use serde_json::json;
 
+yields!(bsearch_absent1, "[1, 3] | bsearch(0)", -1);
+yields!(bsearch_absent2, "[1, 3] | bsearch(2)", -2);
+yields!(bsearch_absent3, "[1, 3] | bsearch(4)", -3);
+yields!(bsearch_present, "[1, 3] | [bsearch(1, 3)]", [0, 1]);
+
 #[test]
 fn has() {
     /* TODO: reenable these tests
