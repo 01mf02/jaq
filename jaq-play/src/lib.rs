@@ -4,7 +4,7 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, load, Ctx, Native, RcIter};
+use jaq_core::{compile, load, Native, RcIter};
 use jaq_json::{fmt_str, Val};
 use wasm_bindgen::prelude::*;
 
@@ -243,19 +243,21 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let (_vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
+    let (vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);
 
-    let inputs = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
+    let iter = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    let inputs = RcIter::new(inputs);
-    let null = RcIter::new(null);
+    let iter: jaq_core::Inputs<_> = &RcIter::new(iter);
+    let null: jaq_core::Inputs<_> = &RcIter::new(null);
 
-    for x in if settings.null_input { &null } else { &inputs } {
+    let vars = jaq_core::Vars::new(vals);
+
+    for x in if settings.null_input { null } else { iter } {
         let x = x.map_err(Error::Hifijson)?;
-        for y in filter.run((Ctx::new([], &inputs), x)) {
+        for y in filter.run(vars.clone(), iter, x) {
             f(y.map_err(Error::Jaq)?);
         }
     }

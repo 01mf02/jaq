@@ -373,17 +373,13 @@ fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
 
 fn base() -> Box<[Filter<RunPtr<Val>>]> {
     Box::new([
-        ("tojson", v(0), |_, cv| {
-            box_once(Ok(cv.1.to_string().into()))
-        }),
-        ("length", v(0), |_, cv| box_once_err(cv.1.length())),
-        ("contains", v(1), |_, cv| {
+        ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
+        ("length", v(0), |cv| box_once_err(cv.1.length())),
+        ("contains", v(1), |cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
         }),
-        ("has", v(1), |_, cv| {
-            unary(cv, |v, k| v.has(&k).map(Val::from))
-        }),
-        ("indices", v(1), |_, cv| {
+        ("has", v(1), |cv| unary(cv, |v, k| v.has(&k).map(Val::from))),
+        ("indices", v(1), |cv| {
             let to_int = |i: usize| Val::Int(i.try_into().unwrap());
             unary(cv, move |x, v| {
                 x.indices(&v).map(|idxs| idxs.map(to_int).collect())
@@ -404,7 +400,7 @@ fn from_json(s: &str) -> ValR {
 
 #[cfg(feature = "parse")]
 fn parse_fun() -> Filter<RunPtr<Val>> {
-    ("fromjson", v(0), |_, cv| {
+    ("fromjson", v(0), |cv| {
         box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
     })
 }
