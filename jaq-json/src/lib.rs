@@ -385,7 +385,7 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
                 x.indices(&v).map(|idxs| idxs.map(to_int).collect())
             })
         }),
-        ("bsearch", v(1), |_, cv| {
+        ("bsearch", v(1), |cv| {
             let to_idx = |r: Result<_, _>| r.map_or_else(|i| -1 - i as isize, |i| i as isize);
             unary(cv, move |a, x| {
                 a.as_arr().map(|a| Val::Int(to_idx(a.binary_search(&x))))
