@@ -244,6 +244,17 @@ yields!(round_floor, "-1.4 | round", -1);
 yields!(floor_floor, "-1.4 | floor", -2);
 yields!(ceili_floor, "-1.4 | ceil ", -1);
 
+yields!(
+    sort_break_out,
+    "[1, 2] | (label $x | sort_by(label $y | ., break $x)), 3",
+    3
+);
+yields!(
+    sort_break_in,
+    "[1, 2] | label $x | sort_by(label $y | ., break $y)",
+    [1, 2]
+);
+
 #[test]
 fn startswith() {
     give(json!("foobar"), r#"startswith("")"#, json!(true));

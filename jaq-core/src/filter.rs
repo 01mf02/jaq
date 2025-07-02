@@ -25,6 +25,11 @@ type Results<'a, T, V> = box_iter::Results<'a, T, Exn<'a, V>>;
 pub(crate) struct Vars<'a, V>(RcList<Bind<V, usize, (&'a Id, Self)>>);
 
 impl<'a, V> Vars<'a, V> {
+    /// Initialise new variables from values.
+    pub fn new(vars: impl IntoIterator<Item = V>) -> Self {
+        Self(RcList::new().extend(vars.into_iter().map(Bind::Var)))
+    }
+
     fn get(&self, i: usize) -> Option<&Bind<V, usize, (&'a Id, Self)>> {
         self.0.get(i)
     }
@@ -480,7 +485,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
                 }
             }
             Ast::Native(id, args) => {
-                let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
+                let cvs = bind_vars(args, lut, cv.0.with_vars(Vars::new([])), cv);
                 flat_map_then(cvs, |cv| lut.funs[*id].run(lut, cv))
             }
             Ast::Label(id) => {
@@ -565,7 +570,7 @@ impl<F: FilterT<F>> FilterT<F> for Id {
             }
             Ast::Native(id, args) => {
                 let init = cv.1.clone();
-                let cvs = bind_vars(args, lut, Ctx::new([], cv.0.inputs), cv);
+                let cvs = bind_vars(args, lut, cv.0.with_vars(Vars::new([])), cv);
                 reduce(cvs, init, move |cv, v| {
                     lut.funs[*id].update(lut, (cv.0, v), f.clone())
                 })
