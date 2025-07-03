@@ -107,6 +107,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 })?;
 
                 // replace the input file with the temporary file
+                std::mem::drop(file);
                 let perms = std::fs::metadata(path)?.permissions();
                 tmp.persist(path).map_err(Error::Persist)?;
                 std::fs::set_permissions(path, perms)?;
