@@ -1,10 +1,8 @@
 //! Filter parsing, compilation, and execution.
-use crate::{read, repl, Cli, Error};
+use crate::{read, repl, Cli, Error, Val};
 use core::fmt::{self, Display, Formatter};
 use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
-use jaq_json::Val;
-use std::io;
-use std::path::PathBuf;
+use std::{io, path::PathBuf};
 
 pub type Filter = jaq_core::Filter<Native<Val>>;
 

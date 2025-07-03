@@ -1,4 +1,4 @@
-use crate::{filter, run, Cli, Error, Val};
+use crate::{filter, run, write, Cli, Error, Val};
 use jaq_core::Native;
 use jaq_std::Filter;
 use rustyline::error::ReadlineError;
@@ -20,7 +20,7 @@ fn eval(code: String, input: Val) -> Result<(), Error> {
         filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
     let cli = &Cli::default();
     let inputs = core::iter::once(Ok(input));
-    crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| crate::print(out, cli, &v)))?;
+    crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| write::print(out, cli, &v)))?;
     Ok(())
 }
 
