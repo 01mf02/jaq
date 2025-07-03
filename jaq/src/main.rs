@@ -3,7 +3,7 @@ mod cli;
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
-use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
+use jaq_core::{compile, load, Native, RcIter, ValT, Vars};
 use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -389,15 +389,15 @@ fn run(
     let iter = Box::new(iter) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    let iter = RcIter::new(iter);
-    let null = RcIter::new(null);
+    let iter: jaq_core::Inputs<_> = &RcIter::new(iter);
+    let null: jaq_core::Inputs<_> = &RcIter::new(null);
 
-    let ctx = Ctx::new(vars, &iter);
+    let vars = Vars::new(vars);
 
-    for item in if cli.null_input { &null } else { &iter } {
+    for item in if cli.null_input { null } else { iter } {
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
-        for output in filter.run((ctx.clone(), input)) {
+        for output in filter.run(vars.clone(), iter, input) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
@@ -647,8 +647,8 @@ impl Report {
 fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     let (ctx, filter) = parse(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
 
+    let vars = Vars::new(ctx);
     let inputs = RcIter::new(Box::new(core::iter::empty()));
-    let ctx = Ctx::new(ctx, &inputs);
 
     let json = |s: String| {
         use hifijson::token::Lex;
@@ -658,7 +658,7 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     };
     let input = json(test.input)?;
     let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Val, _> = filter.run((ctx, input)).collect();
+    let obtain: Result<Val, _> = filter.run(vars, &inputs, input).collect();
     Ok((expect?, obtain.map_err(Error::Jaq)?))
 }
 

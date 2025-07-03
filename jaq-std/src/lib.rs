@@ -27,7 +27,7 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{load, Bind, Cv, Error, Exn, FilterT, Native, RunPtr, UpdatePtr, ValR, ValX, ValXs};
+use jaq_core::{load, Bind, Cv, Error, Exn, Native, RunPtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -65,7 +65,8 @@ pub fn funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
 /// Does not return filters from the standard library, such as `map`.
 pub fn base_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     let base_run = base_run().into_vec().into_iter().map(run);
-    base_run.chain([upd(error())])
+    let base_paths = base_paths().into_vec().into_iter().map(paths);
+    base_run.chain(base_paths).chain([upd(error())])
 }
 
 /// Supplementary set of filters that are generic over the value type.
@@ -132,9 +133,9 @@ trait ValTx: ValT + Sized {
     }
 
     /// Apply a function to an array.
-    fn try_mutate_arr<'a, F>(self, f: F) -> ValX<'a, Self>
+    fn try_mutate_arr<F>(self, f: F) -> ValX<Self>
     where
-        F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<'a, Self>>,
+        F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<Self>>,
     {
         let mut a = self.into_vec()?;
         f(&mut a)?;
@@ -173,13 +174,31 @@ pub fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
     (name, arity, Native::new(run))
 }
 
+type RunPathsPtr<V> = (RunPtr<V>, jaq_core::PathsPtr<V>);
+type RunPathsUpdatePtr<V> = (RunPtr<V>, jaq_core::PathsPtr<V>, jaq_core::UpdatePtr<V>);
+
 /// Convert a filter with a run and an update pointer to a native filter.
-fn upd<V>((name, arity, (run, update)): Filter<(RunPtr<V>, UpdatePtr<V>)>) -> Filter<Native<V>> {
-    (name, arity, Native::new(run).with_update(update))
+fn paths<V>((name, arity, (run, paths)): Filter<RunPathsPtr<V>>) -> Filter<Native<V>> {
+    (name, arity, Native::new(run).with_paths(paths))
+}
+
+/// Convert a filter with a run, a paths, and an update pointer to a native filter.
+fn upd<V>((name, arity, (r, p, u)): Filter<RunPathsUpdatePtr<V>>) -> Filter<Native<V>> {
+    (name, arity, Native::new(r).with_paths(p).with_update(u))
+}
+
+/// Return all path-value pairs `($p, $v)`, such that `getpath($p) = $v`.
+fn path_values<'a, V: ValT + 'a>(v: V, path: Vec<V>) -> BoxIter<'a, (V, V)> {
+    let head = (path.iter().cloned().collect(), v.clone());
+    let f = move |k| path.iter().cloned().chain([k]).collect();
+    let kvs = v.key_values().flatten();
+    let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
+    let tail = kvs.into_iter().flat_map(move |(k, v)| path_values(v, f(k)));
+    Box::new(core::iter::once(head).chain(tail))
 }
 
 /// Sort array by the given function.
-fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<'a, V>> {
+fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<V>> {
     // Some(e) iff an error has previously occurred
     let mut err = None;
     xs.sort_by_cached_key(|x| {
@@ -198,7 +217,7 @@ fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(
 }
 
 /// Group an array by the given function.
-fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<'a, V> {
+fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<V> {
     let mut yx: Vec<(Vec<V>, V)> = xs
         .into_iter()
         .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
@@ -226,7 +245,7 @@ fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<'a, 
 }
 
 /// Get the minimum or maximum element from an array according to the given function.
-fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<'a, V>>
+fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<V>>
 where
     F: Fn(V) -> ValXs<'a, V>,
     R: Fn(&[V], &[V]) -> bool,
@@ -315,114 +334,155 @@ pub fn v(n: usize) -> Box<[Bind]> {
 }
 
 #[allow(clippy::unit_arg)]
-fn base_run<V: ValT, F: FilterT<V = V>>() -> Box<[Filter<RunPtr<V, F>>]> {
+fn base_run<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     let f = || [Bind::Fun(())].into();
-    let vf = [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
-        ("inputs", v(0), |_, cv| {
+        ("inputs", v(0), |cv| {
             Box::new(
                 cv.0.inputs()
                     .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
             )
         }),
-        ("floor", v(0), |_, cv| bome(cv.1.round(f64::floor))),
-        ("round", v(0), |_, cv| bome(cv.1.round(f64::round))),
-        ("ceil", v(0), |_, cv| bome(cv.1.round(f64::ceil))),
-        ("utf8bytelength", v(0), |_, cv| {
+        ("path", f(), |mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let cvp = (fc, (cv.1, Default::default()));
+            Box::new(f.paths(cvp).map(|vp| {
+                vp.map(|(_v, path)| {
+                    let mut path: Vec<_> = path.iter().cloned().collect();
+                    path.reverse();
+                    path.into_iter().collect()
+                })
+            }))
+        }),
+        ("floor", v(0), |cv| bome(cv.1.round(f64::floor))),
+        ("round", v(0), |cv| bome(cv.1.round(f64::round))),
+        ("ceil", v(0), |cv| bome(cv.1.round(f64::ceil))),
+        ("utf8bytelength", v(0), |cv| {
             bome(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
         }),
-        ("explode", v(0), |_, cv| {
+        ("explode", v(0), |cv| {
             bome(cv.1.try_as_str().and_then(|s| explode(s).collect()))
         }),
-        ("implode", v(0), |_, cv| {
+        ("implode", v(0), |cv| {
             bome(cv.1.into_vec().and_then(|s| implode(&s)).map(V::from))
         }),
-        ("ascii_downcase", v(0), |_, cv| {
+        ("ascii_downcase", v(0), |cv| {
             bome(cv.1.mutate_str(str::make_ascii_lowercase))
         }),
-        ("ascii_upcase", v(0), |_, cv| {
+        ("ascii_upcase", v(0), |cv| {
             bome(cv.1.mutate_str(str::make_ascii_uppercase))
         }),
-        ("reverse", v(0), |_, cv| {
-            bome(cv.1.mutate_arr(|a| a.reverse()))
+        ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
+        ("keys_unsorted", v(0), |cv| {
+            bome(cv.1.key_values().map(|kv| kv.map(|(k, _v)| k)).collect())
         }),
-        ("sort", v(0), |_, cv| bome(cv.1.mutate_arr(|a| a.sort()))),
-        ("sort_by", f(), |lut, mut cv| {
+        ("path_values", v(0), |cv| {
+            let pair = |(p, v)| Ok([p, v].into_iter().collect());
+            Box::new(path_values(cv.1, Vec::new()).skip(1).map(pair))
+        }),
+        ("paths", v(0), |cv| {
+            Box::new(path_values(cv.1, Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
+        }),
+        ("sort", v(0), |cv| bome(cv.1.mutate_arr(|a| a.sort()))),
+        ("sort_by", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
-            let f = move |v| f.run(lut, (fc.clone(), v));
+            let f = move |v| f.run((fc.clone(), v));
             box_once(cv.1.try_mutate_arr(|a| sort_by(a, f)))
         }),
-        ("group_by", f(), |lut, mut cv| {
+        ("group_by", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
-            let f = move |v| f.run(lut, (fc.clone(), v));
+            let f = move |v| f.run((fc.clone(), v));
             box_once((|| group_by(cv.1.into_vec()?, f))())
         }),
-        ("min_by_or_empty", f(), |lut, mut cv| {
+        ("min_by_or_empty", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
-            let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y < my);
+            let f = move |a| cmp_by(a, |v| f.run((fc.clone(), v)), |my, y| y < my);
             once_or_empty(cv.1.into_vec().map_err(Exn::from).and_then(f))
         }),
-        ("max_by_or_empty", f(), |lut, mut cv| {
+        ("max_by_or_empty", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
-            let f = move |a| cmp_by(a, |v| f.run(lut, (fc.clone(), v)), |my, y| y >= my);
+            let f = move |a| cmp_by(a, |v| f.run((fc.clone(), v)), |my, y| y >= my);
             once_or_empty(cv.1.into_vec().map_err(Exn::from).and_then(f))
         }),
-        ("first", f(), |lut, mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            Box::new(f.run(lut, (fc, cv.1)).next().into_iter())
-        }),
-        ("last", f(), |lut, mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            once_or_empty(f.run(lut, (fc, cv.1)).try_fold(None, |_acc, x| x.map(Some)))
-        }),
-        ("limit", vf, |lut, mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let n = cv.0.pop_var();
-            let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            then(n.try_as_isize().map_err(Exn::from), |n| match pos(n) {
-                0 => Box::new(core::iter::empty()),
-                n => Box::new(f.run(lut, (fc, cv.1)).take(n)),
-            })
-        }),
-        ("range", v(3), |_, mut cv| {
+        ("range", v(3), |mut cv| {
             let by = cv.0.pop_var();
             let to = cv.0.pop_var();
             let from = cv.0.pop_var();
             Box::new(range(Ok(from), to, by))
         }),
-        ("startswith", v(1), |_, cv| {
+        ("startswith", v(1), |cv| {
             unary(cv, |v, s| {
                 Ok(v.try_as_str()?.starts_with(s.try_as_str()?).into())
             })
         }),
-        ("endswith", v(1), |_, cv| {
+        ("endswith", v(1), |cv| {
             unary(cv, |v, s| {
                 Ok(v.try_as_str()?.ends_with(s.try_as_str()?).into())
             })
         }),
-        ("ltrimstr", v(1), |_, cv| {
+        ("ltrimstr", v(1), |cv| {
             unary(cv, |v, pre| {
                 Ok(v.try_as_str()?
                     .strip_prefix(pre.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("rtrimstr", v(1), |_, cv| {
+        ("rtrimstr", v(1), |cv| {
             unary(cv, |v, suf| {
                 Ok(v.try_as_str()?
                     .strip_suffix(suf.try_as_str()?)
                     .map_or_else(|| v.clone(), |s| V::from(s.to_owned())))
             })
         }),
-        ("trim", v(0), |_, cv| bome(cv.1.trim_with(str::trim))),
-        ("ltrim", v(0), |_, cv| bome(cv.1.trim_with(str::trim_start))),
-        ("rtrim", v(0), |_, cv| bome(cv.1.trim_with(str::trim_end))),
-        ("escape_csv", v(0), |_, cv| {
+        ("trim", v(0), |cv| bome(cv.1.trim_with(str::trim))),
+        ("ltrim", v(0), |cv| bome(cv.1.trim_with(str::trim_start))),
+        ("rtrim", v(0), |cv| bome(cv.1.trim_with(str::trim_end))),
+        ("escape_csv", v(0), |cv| {
             bome(cv.1.try_as_str().map(|s| s.replace('"', "\"\"").into()))
         }),
-        ("escape_sh", v(0), |_, cv| {
+        ("escape_sh", v(0), |cv| {
             bome(cv.1.try_as_str().map(|s| s.replace('\'', r"'\''").into()))
         }),
+    ])
+}
+
+macro_rules! first {
+    ( $run:ident ) => {
+        |mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            Box::new(f.$run((fc, cv.1)).next().into_iter())
+        }
+    };
+}
+macro_rules! last {
+    ( $run:ident ) => {
+        |mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            once_or_empty(f.$run((fc, cv.1)).try_fold(None, |_, x| x.map(Some)))
+        }
+    };
+}
+macro_rules! limit {
+    ( $run:ident ) => {
+        |mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let n = cv.0.pop_var();
+            let pos = |n: isize| n.try_into().unwrap_or(0usize);
+            then(n.try_as_isize().map_err(Exn::from), |n| match pos(n) {
+                0 => Box::new(core::iter::empty()),
+                n => Box::new(f.$run((fc, cv.1)).take(n)),
+            })
+        }
+    };
+}
+
+fn base_paths<V: ValT>() -> Box<[Filter<RunPathsPtr<V>>]> {
+    let f = || [Bind::Fun(())].into();
+    let vf = || [Bind::Var(()), Bind::Fun(())].into();
+    Box::new([
+        ("first", f(), (first!(run), first!(paths))),
+        ("last", f(), (last!(run), last!(paths))),
+        ("limit", vf(), (limit!(run), limit!(paths))),
     ])
 }
 
@@ -439,12 +499,12 @@ fn now<V: From<String>>() -> Result<f64, Error<V>> {
 fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     use std::env::vars;
     Box::new([
-        ("env", v(0), |_, _| {
+        ("env", v(0), |_| {
             bome(V::from_map(vars().map(|(k, v)| (V::from(k), V::from(v)))))
         }),
-        ("now", v(0), |_, _| bome(now().map(V::from))),
-        ("halt", v(0), |_, _| std::process::exit(0)),
-        ("halt_error", v(1), |_, mut cv| {
+        ("now", v(0), |_| bome(now().map(V::from))),
+        ("halt", v(0), |_| std::process::exit(0)),
+        ("halt_error", v(1), |mut cv| {
             bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
                 if let Some(s) = cv.1.as_str() {
                     std::print!("{}", s);
@@ -466,32 +526,32 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 #[cfg(feature = "format")]
 fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     Box::new([
-        ("escape_html", v(0), |_, cv| {
+        ("escape_html", v(0), |cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
             bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
         }),
-        ("escape_tsv", v(0), |_, cv| {
+        ("escape_tsv", v(0), |cv| {
             let pats = ["\n", "\r", "\t", "\\", "\0"];
             let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
             bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
         }),
-        ("encode_uri", v(0), |_, cv| {
+        ("encode_uri", v(0), |cv| {
             use urlencoding::encode;
             bome(cv.1.try_as_str().map(|s| encode(s).into_owned().into()))
         }),
-        ("decode_uri", v(0), |_, cv| {
+        ("decode_uri", v(0), |cv| {
             use urlencoding::decode;
             bome(cv.1.try_as_str().and_then(|s| {
                 let d = decode(s).map_err(Error::str)?;
                 Ok(d.into_owned().into())
             }))
         }),
-        ("encode_base64", v(0), |_, cv| {
+        ("encode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             bome(cv.1.try_as_str().map(|s| STANDARD.encode(s).into()))
         }),
-        ("decode_base64", v(0), |_, cv| {
+        ("decode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
             use core::str::from_utf8;
             bome(cv.1.try_as_str().and_then(|s| {
@@ -590,9 +650,9 @@ fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {
 fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     let vv = || [Bind::Var(()), Bind::Var(())].into();
     Box::new([
-        ("matches", vv(), |_, cv| bome(re(false, true, cv))),
-        ("split_matches", vv(), |_, cv| bome(re(true, true, cv))),
-        ("split_", vv(), |_, cv| bome(re(true, false, cv))),
+        ("matches", vv(), |cv| bome(re(false, true, cv))),
+        ("split_matches", vv(), |cv| bome(re(true, true, cv))),
+        ("split_", vv(), |cv| bome(re(true, false, cv))),
     ])
 }
 
@@ -600,34 +660,39 @@ fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     use chrono::{Local, Utc};
     Box::new([
-        ("fromdateiso8601", v(0), |_, cv| {
+        ("fromdateiso8601", v(0), |cv| {
             bome(cv.1.try_as_str().and_then(time::from_iso8601))
         }),
-        ("todateiso8601", v(0), |_, cv| {
+        ("todateiso8601", v(0), |cv| {
             bome(time::to_iso8601(&cv.1).map(V::from))
         }),
-        ("strftime", v(1), |_, cv| {
+        ("strftime", v(1), |cv| {
             unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Utc))
         }),
-        ("strflocaltime", v(1), |_, cv| {
+        ("strflocaltime", v(1), |cv| {
             unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Local))
         }),
-        ("gmtime", v(0), |_, cv| bome(time::gmtime(&cv.1, Utc))),
-        ("localtime", v(0), |_, cv| bome(time::gmtime(&cv.1, Local))),
-        ("strptime", v(1), |_, cv| {
+        ("gmtime", v(0), |cv| bome(time::gmtime(&cv.1, Utc))),
+        ("localtime", v(0), |cv| bome(time::gmtime(&cv.1, Local))),
+        ("strptime", v(1), |cv| {
             unary(cv, |v, fmt| {
                 time::strptime(v.try_as_str()?, fmt.try_as_str()?)
             })
         }),
-        ("mktime", v(0), |_, cv| bome(time::mktime(&cv.1))),
+        ("mktime", v(0), |cv| bome(time::mktime(&cv.1))),
     ])
 }
 
-fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
-    fn err<V>(cv: Cv<V>) -> ValXs<V> {
-        bome(Err(Error::new(cv.1)))
-    }
-    ("error", v(0), (|_, cv| err(cv), |_, cv, _| err(cv)))
+fn error<V>() -> Filter<RunPathsUpdatePtr<V>> {
+    (
+        "error",
+        v(0),
+        (
+            |cv| bome(Err(Error::new(cv.1))),
+            |cv| box_once(Err(Exn::from(Error::new(cv.1 .0)))),
+            |cv, _| bome(Err(Error::new(cv.1))),
+        ),
+    )
 }
 
 #[cfg(feature = "log")]
@@ -635,11 +700,15 @@ fn error<V, F>() -> Filter<(RunPtr<V, F>, UpdatePtr<V, F>)> {
 macro_rules! id_with {
     ( $eff:expr ) => {
         (
-            |_, cv| {
+            |cv| {
                 $eff(&cv.1);
                 box_once(Ok(cv.1))
             },
-            |_, cv, f| {
+            |cv| {
+                $eff(&cv.1 .0);
+                box_once(Ok(cv.1))
+            },
+            |cv, f| {
                 $eff(&cv.1);
                 f(cv.1)
             },
@@ -648,12 +717,12 @@ macro_rules! id_with {
 }
 
 #[cfg(feature = "log")]
-fn debug<V: core::fmt::Display>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
+fn debug<V: core::fmt::Display>() -> Filter<RunPathsUpdatePtr<V>> {
     ("debug", v(0), id_with!(|x| log::debug!("{}", x)))
 }
 
 #[cfg(feature = "log")]
-fn stderr<V: ValT>() -> Filter<(RunPtr<V>, UpdatePtr<V>)> {
+fn stderr<V: ValT>() -> Filter<RunPathsUpdatePtr<V>> {
     fn eprint_raw<V: ValT>(v: &V) {
         if let Some(s) = v.as_str() {
             log::error!("{}", s)
