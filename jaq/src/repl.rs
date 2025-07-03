@@ -25,11 +25,13 @@ fn eval(code: String, input: Val) -> Result<(), Error> {
 }
 
 fn repl_with(f: impl Fn(String)) -> Result<(), ReadlineError> {
-    use rustyline::config::{Behavior, Configurer};
+    use rustyline::config::{Behavior, Config};
     use yansi::Paint;
-    let mut rl = DefaultEditor::new()?;
-    rl.set_auto_add_history(true);
-    rl.set_behavior(Behavior::PreferTerm);
+    let config = Config::builder()
+        .behavior(Behavior::PreferTerm)
+        .auto_add_history(true)
+        .build();
+    let mut rl = DefaultEditor::with_config(config)?;
     let prompt = "> ".bold().to_string();
     loop {
         match rl.readline(&prompt) {
