@@ -125,12 +125,12 @@ pub struct Filter<F>(compile::TermId, pub compile::Lut<F>);
 
 impl<V: ValT> Filter<Native<V>> {
     /// Run a filter on given input, yielding output values.
-    pub fn run<'a>(
-        &'a self,
+    pub fn run<'f, 'i: 'f>(
+        &'f self,
         vars: Vars<V>,
-        inputs: Inputs<'a, V>,
+        inputs: Inputs<'i, V>,
         v: V,
-    ) -> impl Iterator<Item = ValR<V>> + 'a {
+    ) -> impl Iterator<Item = ValR<V>> + 'f {
         self.0
             .run((Ctx::new(&self.1, vars, inputs), v))
             .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
