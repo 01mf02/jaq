@@ -38,13 +38,17 @@ fn repl_with(depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
         .auto_add_history(true)
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
+    let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
+    let _ = history.iter().try_for_each(|h| rl.load_history(h));
     let prompt = format!("{}{} ", str::repeat("  ", depth), '>'.bold());
     loop {
         match rl.readline(&prompt) {
             Ok(line) => f(line),
             Err(ReadlineError::Interrupted) => (),
-            Err(ReadlineError::Eof) => return Ok(()),
+            Err(ReadlineError::Eof) => break,
             Err(err) => Err(err)?,
         }
     }
+    let _ = history.iter().try_for_each(|h| rl.append_history(h));
+    Ok(())
 }
