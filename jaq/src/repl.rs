@@ -3,14 +3,20 @@ use jaq_core::Native;
 use jaq_std::Filter;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static DEPTH: AtomicUsize = AtomicUsize::new(0);
 
 pub fn fun() -> Filter<Native<Val>> {
     jaq_std::run(("repl", jaq_std::v(0), |_, cv| {
-        repl_with(|s| match eval(s, cv.1.clone()) {
+        let depth = DEPTH.fetch_add(1, Ordering::Relaxed);
+        repl_with(depth, |s| match eval(s, cv.1.clone()) {
             Ok(()) => (),
             Err(e) => eprint!("{e}"),
         })
         .unwrap();
+        DEPTH.fetch_sub(1, Ordering::Relaxed);
+
         Box::new(core::iter::empty())
     }))
 }
@@ -24,7 +30,7 @@ fn eval(code: String, input: Val) -> Result<(), Error> {
     Ok(())
 }
 
-fn repl_with(f: impl Fn(String)) -> Result<(), ReadlineError> {
+fn repl_with(depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     use rustyline::config::{Behavior, Config};
     use yansi::Paint;
     let config = Config::builder()
@@ -32,7 +38,7 @@ fn repl_with(f: impl Fn(String)) -> Result<(), ReadlineError> {
         .auto_add_history(true)
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
-    let prompt = "> ".bold().to_string();
+    let prompt = format!("{}{} ", str::repeat("  ", depth), '>'.bold());
     loop {
         match rl.readline(&prompt) {
             Ok(line) => f(line),
