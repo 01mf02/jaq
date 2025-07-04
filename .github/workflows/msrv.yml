@@ -26,6 +26,11 @@ jobs:
       run: cargo check
 
     - uses: dtolnay/rust-toolchain@1.65
+    - name: Check jaq-json
+      working-directory: jaq-json
+      run: cargo check
+
+    - uses: dtolnay/rust-toolchain@1.66
     - name: Check jaq
       working-directory: jaq
       run: cargo check
