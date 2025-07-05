@@ -34,7 +34,7 @@ impl<F> Default for Lut<F> {
 
 impl<F> Default for Filter<F> {
     fn default() -> Self {
-        Self(TermId(0), Lut::new([Term::Id].into()))
+        Self(TermId(0), Lut::new([Term::Id].into()).into())
     }
 }
 
@@ -544,7 +544,7 @@ impl<'s, F> Compiler<&'s str, F> {
             assert!(main_sig.matches("main", &[]));
             assert!(!main_def.rec && main_def.tailrec);
             //std::println!("main: {:?}", main_def.id);
-            Ok(Filter(main_def.id, self.lut.map_funs(|(_sig, f)| f)))
+            Ok(Filter(main_def.id, self.lut.map_funs(|(_sig, f)| f).into()))
         } else {
             Err(errs)
         }
