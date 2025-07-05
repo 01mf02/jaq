@@ -71,6 +71,7 @@ pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
 pub use rc_iter::RcIter;
 pub use val::{ValR, ValT, ValX, ValXs};
 
+use alloc::rc::Rc;
 use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
@@ -121,18 +122,18 @@ impl<T> Bind<T, T> {
 
 /// Function from a value to a stream of value results.
 #[derive(Debug, Clone)]
-pub struct Filter<F>(compile::TermId, pub compile::Lut<F>);
+pub struct Filter<F>(compile::TermId, Rc<compile::Lut<F>>);
 
 impl<V: ValT> Filter<Native<V>> {
     /// Run a filter on given input, yielding output values.
-    pub fn run<'f, 'i: 'f>(
-        &'f self,
+    pub fn run<'i>(
+        &self,
         vars: Vars<V>,
         inputs: Inputs<'i, V>,
         v: V,
-    ) -> impl Iterator<Item = ValR<V>> + 'f {
+    ) -> impl Iterator<Item = ValR<V>> + 'i {
         self.0
-            .run((Ctx::new(&self.1, vars, inputs), v))
+            .run((Ctx::new(self.1.clone(), vars, inputs), v))
             .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
     }
 
