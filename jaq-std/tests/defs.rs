@@ -76,14 +76,13 @@ yields!(
     false
 );
 
-yields!(join_empty, r#"[] | join(" ")"#, json!(null));
+yields!(join_empty, r#"[] | join(" ")"#, "");
 yields!(
     join_strs,
     r#"["Hello", "world"] | join(" ")"#,
     "Hello world"
 );
-// 2 + 1 + 3 + 1 + 4 + 1 + 5
-yields!(join_nums, r#"[2, 3, 4, 5] | join(1)"#, 17);
+yields!(join_nums, r#"[2, 3, 4, 5] | join(",")"#, "2,3,4,5");
 
 yields!(map, "[1, 2] | map(.+1)", [2, 3]);
 

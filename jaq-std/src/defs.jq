@@ -84,7 +84,7 @@ def map(f): [.[] | f];
 def map_values(f): .[] |= f;
 def add(f): reduce f as $x (null; . + $x);
 def add: add(.[]);
-def join(x): .[:-1][] += x | add;
+def join($x): .[] |= tostring | .[:-1][] += $x | add + "";
 def min_by(f): reduce min_by_or_empty(f) as $x (null; $x);
 def max_by(f): reduce max_by_or_empty(f) as $x (null; $x);
 def min: min_by(.);
