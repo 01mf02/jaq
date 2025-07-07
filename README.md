@@ -64,8 +64,6 @@ You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) 
 
 To compile jaq, you need a Rust toolchain.
 See <https://rustup.rs/> for instructions.
-(Note that Rust compilers shipped with Linux distributions
-may be too outdated to compile jaq.)
 
 Any of the following commands install jaq:
 
