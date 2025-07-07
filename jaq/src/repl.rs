@@ -5,6 +5,7 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+// counter that increases for each nested invocation of `repl`
 static DEPTH: AtomicUsize = AtomicUsize::new(0);
 
 pub fn fun() -> Filter<Native<Val>> {
