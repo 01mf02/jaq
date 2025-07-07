@@ -292,7 +292,7 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "jaq"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "codesnake",
  "dirs",
@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "arbitrary",
  "dyn-clone",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-json"
-version = "1.1.2"
+version = "1.1.3"
 dependencies = [
  "foldhash",
  "hifijson",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "2.1.1"
+version = "2.1.2"
 dependencies = [
  "aho-corasick",
  "base64",
