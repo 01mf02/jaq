@@ -280,7 +280,7 @@ Here is an overview that summarises:
 - [x] String prefix/postfix (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
 - [x] String whitespace trimming (`trim`, `ltrim`, `rtrim`)
 - [x] String splitting (`split("foo")`)
-- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`)
+- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`, `bsearch`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
 - [x] Time (`now`, `fromdateiso8601`, `todateiso8601`)
