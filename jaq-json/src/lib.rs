@@ -5,6 +5,8 @@
 
 extern crate alloc;
 
+mod num;
+
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
@@ -12,8 +14,9 @@ use core::fmt::{self, Debug};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
-use num_bigint::{BigInt, Sign};
-use num_traits::cast::ToPrimitive;
+pub use num::Num;
+use num_bigint::BigInt;
+use num_traits::{cast::ToPrimitive, Signed};
 
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
@@ -28,21 +31,15 @@ use hifijson::{LexAlloc, Token};
 /// Operations on numbers follow a few principles:
 /// * The sum, difference, product, and remainder of two integers is integer.
 /// * Any other operation between two numbers yields a float.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Val {
     #[default]
     /// Null
     Null,
     /// Boolean
     Bool(bool),
-    /// Machine-size integer
-    Int(isize),
-    /// Arbitrarily large integer
-    BigInt(Rc<BigInt>),
-    /// Floating-point number
-    Float(f64),
-    /// Floating-point number or integer not fitting into `Int`
-    Num(Rc<String>),
+    /// Number
+    Num(Num),
     /// String
     Str(Rc<String>),
     /// Array
@@ -103,7 +100,7 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 
 impl jaq_core::ValT for Val {
     fn from_num(n: &str) -> ValR {
-        Ok(Val::Num(Rc::new(n.to_string())))
+        Ok(Self::Num(Num::from_str(n)))
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
@@ -121,8 +118,11 @@ impl jaq_core::ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
-            (Val::Arr(a), Val::Int(i)) => {
+            (Val::Arr(a), Val::Num(Num::Int(i))) => {
                 Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
+            }
+            (a @ Val::Arr(_), Val::Num(Num::BigInt(i))) => {
+                a.index(&Val::Num(Num::Int(bigint_to_int_saturated(i))))
             }
             (Val::Obj(o), Val::Str(s)) => Ok(o.get(s).cloned().unwrap_or(Val::Null)),
             (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::index(s, index.clone())),
@@ -288,13 +288,17 @@ impl jaq_std::ValT for Val {
 
     fn as_isize(&self) -> Option<isize> {
         match self {
-            Self::Int(i) => Some(*i),
+            Self::Num(n) => n.as_int(),
             _ => None,
         }
     }
 
     fn as_f64(&self) -> Result<f64, Error> {
-        Self::as_float(self)
+        let fail = || Error::typ(self.clone(), Type::Float.as_str());
+        match self {
+            Self::Num(n) => n.as_float().ok_or_else(fail),
+            _ => Err(fail()),
+        }
     }
 }
 
@@ -312,18 +316,12 @@ impl Val {
     /// Fail on booleans.
     fn length(&self) -> ValR {
         match self {
-            Val::Null => Ok(Val::Int(0)),
+            Val::Null => Ok(Val::from(0)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
-            Val::Int(i) => Ok(Val::Int(i.abs())),
-            Val::BigInt(i) => Ok(match i.sign() {
-                Sign::Plus | Sign::NoSign => self.clone(),
-                Sign::Minus => Val::BigInt(BigInt::from(i.magnitude().clone()).into()),
-            }),
-            Val::Num(n) => Val::from_dec_str(n).length(),
-            Val::Float(f) => Ok(Val::Float(f.abs())),
-            Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
-            Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
-            Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
+            Val::Num(n) => Ok(Val::Num(n.length())),
+            Val::Str(s) => Ok(Val::from(s.chars().count() as isize)),
+            Val::Arr(a) => Ok(Val::from(a.len() as isize)),
+            Val::Obj(o) => Ok(Val::from(o.len() as isize)),
         }
     }
 
@@ -398,7 +396,7 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
             unary(cv, |v, k| v.has(&k).map(Val::from))
         }),
         ("indices", v(1), |_, cv| {
-            let to_int = |i: usize| Val::Int(i.try_into().unwrap());
+            let to_int = |i: usize| Val::from(i as isize);
             unary(cv, move |x, v| {
                 x.indices(&v).map(|idxs| idxs.map(to_int).collect())
             })
@@ -406,7 +404,7 @@ fn base() -> Box<[Filter<RunPtr<Val>>]> {
         ("bsearch", v(1), |_, cv| {
             let to_idx = |r: Result<_, _>| r.map_or_else(|i| -1 - i as isize, |i| i as isize);
             unary(cv, move |a, x| {
-                a.as_arr().map(|a| Val::Int(to_idx(a.binary_search(&x))))
+                a.as_arr().map(|a| Val::from(to_idx(a.binary_search(&x))))
             })
         }),
     ])
@@ -465,10 +463,6 @@ fn wrap_test() {
 }
 
 impl Val {
-    fn big_int(i: BigInt) -> Self {
-        Self::BigInt(i.into())
-    }
-
     /// Construct an object value.
     pub fn obj(m: Map<Rc<String>, Self>) -> Self {
         Self::Obj(m.into())
@@ -478,22 +472,8 @@ impl Val {
     fn as_int(&self) -> Result<isize, Error> {
         let fail = || Error::typ(self.clone(), Type::Int.as_str());
         match self {
-            Self::Int(i) => Ok(*i),
-            Self::BigInt(i) => i.to_isize().ok_or_else(fail),
+            Self::Num(n) => n.as_int().ok_or_else(fail),
             _ => Err(fail()),
-        }
-    }
-
-    /// If the value is or can be converted to float, return it, else
-    /// fail.
-    fn as_float(&self) -> Result<f64, Error> {
-        match self {
-            Self::Int(n) => Ok(*n as f64),
-            Self::Float(n) => Ok(*n),
-            Self::Num(n) => n
-                .parse()
-                .or(Err(Error::typ(self.clone(), Type::Float.as_str()))),
-            _ => Err(Error::typ(self.clone(), Type::Float.as_str())),
         }
     }
 
@@ -529,17 +509,15 @@ impl Val {
         }
     }
 
-    /// Try to parse a string to a [`Self::Float`], else return [`Self::Null`].
-    fn from_dec_str(n: &str) -> Self {
-        n.parse().map_or(Self::Null, Self::Float)
-    }
-
     /// Return true if `value | .[key]` is defined.
     ///
     /// Fail on values that are neither arrays nor objects.
     fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
-            (Self::Arr(a), Self::Int(i)) if *i >= 0 => Ok((*i as usize) < a.len()),
+            (Self::Arr(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
+            (Self::Arr(a), Self::Num(Num::BigInt(i))) if !i.is_negative() => {
+                Ok(i.to_usize().map_or(false, |i| i < a.len()))
+            }
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
             _ => Err(Error::index(self.clone(), key.clone())),
         }
@@ -549,7 +527,7 @@ impl Val {
     ///
     /// Return `None` for values that are neither arrays nor objects.
     fn key_values(&self) -> Option<BoxIter<(Val, &Val)>> {
-        let arr_idx = |(i, x)| (Self::Int(i as isize), x);
+        let arr_idx = |(i, x)| (Self::from(i as isize), x);
         Some(match self {
             Self::Arr(a) => Box::new(a.iter().enumerate().map(arr_idx)),
             Self::Obj(o) => Box::new(o.iter().map(|(k, v)| (Self::Str(Rc::clone(k)), v))),
@@ -596,15 +574,15 @@ impl Val {
             Token::Null => Ok(Self::Null),
             Token::True => Ok(Self::Bool(true)),
             Token::False => Ok(Self::Bool(false)),
-            Token::DigitOrMinus => {
+            Token::DigitOrMinus => Ok(Self::Num({
                 let (num, parts) = lexer.num_string()?;
                 // if we are dealing with an integer ...
                 if parts.dot.is_none() && parts.exp.is_none() {
-                    let bigint = |_| Self::big_int(num.parse().unwrap());
-                    return Ok(num.parse().map_or_else(bigint, Self::Int));
+                    Num::try_from_int_str(&num).unwrap()
+                } else {
+                    Num::Dec(Rc::new(num.to_string()))
                 }
-                Ok(Self::Num(Rc::new(num.to_string())))
-            }
+            })),
             Token::Quote => Ok(Self::from(lexer.str_string()?.to_string())),
             Token::LSquare => Ok(Self::Arr({
                 let mut arr = Vec::new();
@@ -639,16 +617,7 @@ impl From<serde_json::Value> for Val {
         match v {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
-            Number(n) => {
-                let s = n.to_string();
-                match s.parse() {
-                    Ok(i) => Self::Int(i),
-                    Err(_) => match s.parse() {
-                        Ok(i) => Self::big_int(i),
-                        Err(_) => Self::Num(Rc::new(s)),
-                    },
-                }
-            }
+            Number(n) => Self::Num(Num::from_str(&n.to_string())),
             String(s) => Self::from(s),
             Array(a) => a.into_iter().map(Self::from).collect(),
             Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
@@ -664,10 +633,12 @@ impl From<Val> for serde_json::Value {
         match v {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
+            /*
             Val::Int(i) => Number(i.into()),
             Val::BigInt(i) => Number(serde_json::Number::from_str(&i.to_string()).unwrap()),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
-            Val::Num(n) => Number(serde_json::Number::from_str(&n).unwrap()),
+            */
+            Val::Num(n) => Number(serde_json::Number::from_str(&n.to_string()).unwrap()),
             Val::Str(s) => String((*s).clone()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             Val::Obj(o) => Object(
@@ -687,13 +658,13 @@ impl From<bool> for Val {
 
 impl From<isize> for Val {
     fn from(i: isize) -> Self {
-        Self::Int(i)
+        Self::Num(Num::Int(i))
     }
 }
 
 impl From<f64> for Val {
     fn from(f: f64) -> Self {
-        Self::Float(f)
+        Self::Num(Num::Float(f))
     }
 }
 
@@ -709,30 +680,20 @@ impl FromIterator<Self> for Val {
     }
 }
 
-fn int_or_big<const N: usize>(
-    i: Option<isize>,
-    x: [isize; N],
-    f: fn([BigInt; N]) -> BigInt,
-) -> Val {
-    i.map_or_else(|| Val::big_int(f(x.map(BigInt::from))), Val::Int)
+fn bigint_to_int_saturated(i: &BigInt) -> isize {
+    let (min, max) = (isize::MIN, isize::MAX);
+    i.to_isize()
+        .unwrap_or_else(|| if i.is_negative() { min } else { max })
 }
 
 impl core::ops::Add for Val {
     type Output = ValR;
     fn add(self, rhs: Self) -> Self::Output {
-        use num_bigint::BigInt;
         use Val::*;
         match (self, rhs) {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
-            (Int(x), Int(y)) => Ok(int_or_big(x.checked_add(y), [x, y], |[x, y]| x + y)),
-            (Int(i), BigInt(b)) | (BigInt(b), Int(i)) => Ok(Val::big_int(&BigInt::from(i) + &*b)),
-            (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i as f64)),
-            (BigInt(x), BigInt(y)) => Ok(Val::big_int(&*x + &*y)),
-            (BigInt(i), Float(f)) | (Float(f), BigInt(i)) => Ok(Float(f + i.to_f64().unwrap())),
-            (Float(x), Float(y)) => Ok(Float(x + y)),
-            (Num(n), r) => Self::from_dec_str(&n) + r,
-            (l, Num(n)) => l + Self::from_dec_str(&n),
+            (Num(x), Num(y)) => Ok(Num(x + y)),
             (Str(mut l), Str(r)) => {
                 Rc::make_mut(&mut l).push_str(&r);
                 Ok(Str(l))
@@ -754,23 +715,12 @@ impl core::ops::Add for Val {
 impl core::ops::Sub for Val {
     type Output = ValR;
     fn sub(self, rhs: Self) -> Self::Output {
-        use num_bigint::BigInt;
-        use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(int_or_big(x.checked_sub(y), [x, y], |[x, y]| x - y)),
-            (Int(i), BigInt(b)) => Ok(Val::big_int(&BigInt::from(i) - &*b)),
-            (BigInt(b), Int(i)) => Ok(Val::big_int(&*b - &BigInt::from(i))),
-            (Float(f), Int(i)) => Ok(Float(f - i as f64)),
-            (Int(i), Float(f)) => Ok(Float(i as f64 - f)),
-            (Float(f), BigInt(i)) => Ok(Float(f - i.to_f64().unwrap())),
-            (BigInt(i), Float(f)) => Ok(Float(i.to_f64().unwrap() - f)),
-            (Float(x), Float(y)) => Ok(Float(x - y)),
-            (Num(n), r) => Self::from_dec_str(&n) - r,
-            (l, Num(n)) => l - Self::from_dec_str(&n),
-            (Arr(mut l), Arr(r)) => {
+            (Self::Num(x), Self::Num(y)) => Ok(Self::Num(x - y)),
+            (Self::Arr(mut l), Self::Arr(r)) => {
                 let r = r.iter().collect::<alloc::collections::BTreeSet<_>>();
                 Rc::make_mut(&mut l).retain(|x| !r.contains(x));
-                Ok(Arr(l))
+                Ok(Self::Arr(l))
             }
             (l, r) => Err(Error::math(l, ops::Math::Sub, r)),
         }
@@ -792,22 +742,19 @@ fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
 impl core::ops::Mul for Val {
     type Output = ValR;
     fn mul(self, rhs: Self) -> Self::Output {
-        use num_bigint::BigInt;
+        use crate::Num::{BigInt, Int};
         use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(int_or_big(x.checked_mul(y), [x, y], |[x, y]| x * y)),
-
-            (Int(i), BigInt(b)) | (BigInt(b), Int(i)) => Ok(Val::big_int(&BigInt::from(i) * &*b)),
-            (BigInt(x), BigInt(y)) => Ok(Val::big_int(&*x * &*y)),
-            (BigInt(i), Float(f)) | (Float(f), BigInt(i)) => Ok(Float(f * i.to_f64().unwrap())),
-            (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
-            (Float(x), Float(y)) => Ok(Float(x * y)),
-            (Str(s), Int(i)) | (Int(i), Str(s)) if i > 0 => Ok(Self::from(s.repeat(i as usize))),
+            (Num(x), Num(y)) => Ok(Num(x * y)),
+            (s @ Str(_), Num(BigInt(i))) | (Num(BigInt(i)), s @ Str(_)) => {
+                s * Num(Int(bigint_to_int_saturated(&i)))
+            }
+            (Str(s), Num(Int(i))) | (Num(Int(i)), Str(s)) if i > 0 => {
+                Ok(Self::from(s.repeat(i as usize)))
+            }
             // string multiplication with negatives or 0 results in null
             // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
-            (Str(_), Int(_)) | (Int(_), Str(_)) => Ok(Null),
-            (Num(n), r) => Self::from_dec_str(&n) * r,
-            (l, Num(n)) => l * Self::from_dec_str(&n),
+            (Str(_), Num(Int(_))) | (Num(Int(_)), Str(_)) => Ok(Null),
             (Obj(mut l), Obj(r)) => {
                 obj_merge(&mut l, r);
                 Ok(Obj(l))
@@ -834,17 +781,9 @@ fn split<'a>(s: &'a str, sep: &'a str) -> Box<dyn Iterator<Item = String> + 'a> 
 impl core::ops::Div for Val {
     type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
-        use Val::{BigInt, Float, Int, Num, Str};
+        use Val::{Num, Str};
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Float(x as f64 / y as f64)),
-            (BigInt(x), BigInt(y)) => Ok(Float(x.to_f64().unwrap() / y.to_f64().unwrap())),
-            (Float(f), Int(i)) => Ok(Float(f / i as f64)),
-            (Int(i), Float(f)) => Ok(Float(i as f64 / f)),
-            (Float(f), BigInt(i)) => Ok(Float(f / i.to_f64().unwrap())),
-            (BigInt(i), Float(f)) => Ok(Float(i.to_f64().unwrap() / f)),
-            (Float(x), Float(y)) => Ok(Float(x / y)),
-            (Num(n), r) => Self::from_dec_str(&n) / r,
-            (l, Num(n)) => l / Self::from_dec_str(&n),
+            (Num(x), Num(y)) => Ok(Num(x / y)),
             (Str(x), Str(y)) => Ok(split(&x, &y).map(Val::from).collect()),
             (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
@@ -854,14 +793,9 @@ impl core::ops::Div for Val {
 impl core::ops::Rem for Val {
     type Output = ValR;
     fn rem(self, rhs: Self) -> Self::Output {
-        use Val::{Float, Int, Num};
+        use Val::Num;
         match (self, rhs) {
-            (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
-            (Float(f), Int(i)) => Ok(Float(f % i as f64)),
-            (Int(i), Float(f)) => Ok(Float(i as f64 % f)),
-            (Float(x), Float(y)) => Ok(Float(x % y)),
-            (Num(n), r) => Self::from_dec_str(&n) % r,
-            (l, Num(n)) => l % Self::from_dec_str(&n),
+            (Num(x), Num(y)) if y.as_int().map_or(true, |y| y != 0) => Ok(Num(x % y)),
             (l, r) => Err(Error::math(l, ops::Math::Rem, r)),
         }
     }
@@ -870,39 +804,12 @@ impl core::ops::Rem for Val {
 impl core::ops::Neg for Val {
     type Output = ValR;
     fn neg(self) -> Self::Output {
-        use Val::*;
         match self {
-            Int(x) => Ok(int_or_big(x.checked_neg(), [x], |[x]| -x)),
-            BigInt(x) => Ok(Val::big_int(-&*x)),
-            Float(x) => Ok(Float(-x)),
-            Num(n) => -Self::from_dec_str(&n),
+            Self::Num(n) => Ok(Self::Num(-n)),
             x => Err(Error::typ(x, Type::Num.as_str())),
         }
     }
 }
-
-impl PartialEq for Val {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Null, Self::Null) => true,
-            (Self::Bool(x), Self::Bool(y)) => x == y,
-            (Self::Int(x), Self::Int(y)) => x == y,
-            (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
-                float_eq(*i as f64, *f)
-            }
-            (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
-            (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
-            (Self::Num(n), y) => &Self::from_dec_str(n) == y,
-            (x, Self::Num(n)) => x == &Self::from_dec_str(n),
-            (Self::Str(x), Self::Str(y)) => x == y,
-            (Self::Arr(x), Self::Arr(y)) => x == y,
-            (Self::Obj(x), Self::Obj(y)) => x == y,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Val {}
 
 impl PartialOrd for Val {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -916,19 +823,6 @@ impl Ord for Val {
         match (self, other) {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
-            (Self::Int(x), Self::Int(y)) => x.cmp(y),
-            (Self::Int(x), Self::BigInt(y)) => BigInt::from(*x).cmp(y),
-            (Self::Int(i), Self::Float(f)) => float_cmp(*i as f64, *f),
-            (Self::BigInt(x), Self::Int(y)) => (**x).cmp(&BigInt::from(*y)),
-            (Self::BigInt(x), Self::BigInt(y)) => x.cmp(y),
-            // BigInt::to_f64 always yields Some, large values become f64::INFINITY
-            (Self::BigInt(x), Self::Float(y)) => float_cmp(x.to_f64().unwrap(), *y),
-            (Self::Float(f), Self::Int(i)) => float_cmp(*f, *i as f64),
-            (Self::Float(x), Self::BigInt(y)) => float_cmp(*x, y.to_f64().unwrap()),
-            (Self::Float(x), Self::Float(y)) => float_cmp(*x, *y),
-            (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
-            (Self::Num(n), y) => Self::from_dec_str(n).cmp(y),
-            (x, Self::Num(n)) => x.cmp(&Self::from_dec_str(n)),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
@@ -956,35 +850,14 @@ impl Ord for Val {
             (Self::Bool(_), _) => Less,
             (_, Self::Bool(_)) => Greater,
             // numbers are smaller than anything else, except for nulls and bools
-            (Self::Int(_) | Self::BigInt(_) | Self::Float(_), _) => Less,
-            (_, Self::Int(_) | Self::BigInt(_) | Self::Float(_)) => Greater,
+            (Self::Num(_), _) => Less,
+            (_, Self::Num(_)) => Greater,
             // etc.
             (Self::Str(_), _) => Less,
             (_, Self::Str(_)) => Greater,
             (Self::Arr(_), _) => Less,
             (_, Self::Arr(_)) => Greater,
         }
-    }
-}
-
-fn float_eq(left: f64, right: f64) -> bool {
-    float_cmp(left, right) == Ordering::Equal
-}
-
-fn float_cmp(left: f64, right: f64) -> Ordering {
-    if left == 0. && right == 0. {
-        // consider negative and positive 0 as equal
-        Ordering::Equal
-    } else if left.is_nan() {
-        // there are more than 50 shades of NaN, and which of these
-        // you strike when you perform a calculation is not deterministic (!),
-        // therefore `total_cmp` may yield different results for the same calculation
-        // so we bite the bullet and handle this like in jq
-        Ordering::Less
-    } else if right.is_nan() {
-        Ordering::Greater
-    } else {
-        f64::total_cmp(&left, &right)
     }
 }
 
@@ -1013,10 +886,6 @@ impl fmt::Display for Val {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "{b}"),
-            Self::Int(i) => write!(f, "{i}"),
-            Self::BigInt(i) => write!(f, "{i}"),
-            Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
-            Self::Float(_) => write!(f, "null"),
             Self::Num(n) => write!(f, "{n}"),
             Self::Str(s) => fmt_str(f, s),
             Self::Arr(a) => {
