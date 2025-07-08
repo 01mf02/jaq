@@ -12,6 +12,8 @@ use core::fmt::{self, Debug};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
+use num_bigint::{BigInt, Sign};
+use num_traits::cast::ToPrimitive;
 
 #[cfg(feature = "hifijson")]
 use hifijson::{LexAlloc, Token};
@@ -33,8 +35,10 @@ pub enum Val {
     Null,
     /// Boolean
     Bool(bool),
-    /// Integer
+    /// Machine-size integer
     Int(isize),
+    /// Arbitrarily large integer
+    BigInt(Rc<BigInt>),
     /// Floating-point number
     Float(f64),
     /// Floating-point number or integer not fitting into `Int`
@@ -311,6 +315,10 @@ impl Val {
             Val::Null => Ok(Val::Int(0)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
             Val::Int(i) => Ok(Val::Int(i.abs())),
+            Val::BigInt(i) => Ok(match i.sign() {
+                Sign::Plus | Sign::NoSign => self.clone(),
+                Sign::Minus => Val::BigInt(BigInt::from(i.magnitude().clone()).into()),
+            }),
             Val::Num(n) => Val::from_dec_str(n).length(),
             Val::Float(f) => Ok(Val::Float(f.abs())),
             Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
@@ -457,16 +465,22 @@ fn wrap_test() {
 }
 
 impl Val {
+    fn big_int(i: BigInt) -> Self {
+        Self::BigInt(i.into())
+    }
+
     /// Construct an object value.
     pub fn obj(m: Map<Rc<String>, Self>) -> Self {
         Self::Obj(m.into())
     }
 
-    /// If the value is integer, return it, else fail.
+    /// If the value is a machine-sized integer, return it, else fail.
     fn as_int(&self) -> Result<isize, Error> {
+        let fail = || Error::typ(self.clone(), Type::Int.as_str());
         match self {
             Self::Int(i) => Ok(*i),
-            _ => Err(Error::typ(self.clone(), Type::Int.as_str())),
+            Self::BigInt(i) => i.to_isize().ok_or_else(fail),
+            _ => Err(fail()),
         }
     }
 
@@ -586,10 +600,8 @@ impl Val {
                 let (num, parts) = lexer.num_string()?;
                 // if we are dealing with an integer ...
                 if parts.dot.is_none() && parts.exp.is_none() {
-                    // ... that fits into an isize
-                    if let Ok(i) = num.parse() {
-                        return Ok(Self::Int(i));
-                    }
+                    let bigint = |_| Self::big_int(num.parse().unwrap());
+                    return Ok(num.parse().map_or_else(bigint, Self::Int));
                 }
                 Ok(Self::Num(Rc::new(num.to_string())))
             }
@@ -627,10 +639,16 @@ impl From<serde_json::Value> for Val {
         match v {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
-            Number(n) => n
-                .to_string()
-                .parse()
-                .map_or_else(|_| Self::Num(Rc::new(n.to_string())), Self::Int),
+            Number(n) => {
+                let s = n.to_string();
+                match s.parse() {
+                    Ok(i) => Self::Int(i),
+                    Err(_) => match s.parse() {
+                        Ok(i) => Self::big_int(i),
+                        Err(_) => Self::Num(Rc::new(s)),
+                    },
+                }
+            }
             String(s) => Self::from(s),
             Array(a) => a.into_iter().map(Self::from).collect(),
             Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
@@ -647,6 +665,7 @@ impl From<Val> for serde_json::Value {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
             Val::Int(i) => Number(i.into()),
+            Val::BigInt(i) => Number(serde_json::Number::from_str(&i.to_string()).unwrap()),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
             Val::Num(n) => Number(serde_json::Number::from_str(&n).unwrap()),
             Val::Str(s) => String((*s).clone()),
@@ -690,15 +709,27 @@ impl FromIterator<Self> for Val {
     }
 }
 
+fn int_or_big<const N: usize>(
+    i: Option<isize>,
+    x: [isize; N],
+    f: fn([BigInt; N]) -> BigInt,
+) -> Val {
+    i.map_or_else(|| Val::big_int(f(x.map(BigInt::from))), Val::Int)
+}
+
 impl core::ops::Add for Val {
     type Output = ValR;
     fn add(self, rhs: Self) -> Self::Output {
+        use num_bigint::BigInt;
         use Val::*;
         match (self, rhs) {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
-            (Int(x), Int(y)) => Ok(Int(x + y)),
+            (Int(x), Int(y)) => Ok(int_or_big(x.checked_add(y), [x, y], |[x, y]| x + y)),
+            (Int(i), BigInt(b)) | (BigInt(b), Int(i)) => Ok(Val::big_int(&BigInt::from(i) + &*b)),
             (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i as f64)),
+            (BigInt(x), BigInt(y)) => Ok(Val::big_int(&*x + &*y)),
+            (BigInt(i), Float(f)) | (Float(f), BigInt(i)) => Ok(Float(f + i.to_f64().unwrap())),
             (Float(x), Float(y)) => Ok(Float(x + y)),
             (Num(n), r) => Self::from_dec_str(&n) + r,
             (l, Num(n)) => l + Self::from_dec_str(&n),
@@ -723,11 +754,16 @@ impl core::ops::Add for Val {
 impl core::ops::Sub for Val {
     type Output = ValR;
     fn sub(self, rhs: Self) -> Self::Output {
+        use num_bigint::BigInt;
         use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Int(x - y)),
+            (Int(x), Int(y)) => Ok(int_or_big(x.checked_sub(y), [x, y], |[x, y]| x - y)),
+            (Int(i), BigInt(b)) => Ok(Val::big_int(&BigInt::from(i) - &*b)),
+            (BigInt(b), Int(i)) => Ok(Val::big_int(&*b - &BigInt::from(i))),
             (Float(f), Int(i)) => Ok(Float(f - i as f64)),
             (Int(i), Float(f)) => Ok(Float(i as f64 - f)),
+            (Float(f), BigInt(i)) => Ok(Float(f - i.to_f64().unwrap())),
+            (BigInt(i), Float(f)) => Ok(Float(i.to_f64().unwrap() - f)),
             (Float(x), Float(y)) => Ok(Float(x - y)),
             (Num(n), r) => Self::from_dec_str(&n) - r,
             (l, Num(n)) => l - Self::from_dec_str(&n),
@@ -756,9 +792,14 @@ fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
 impl core::ops::Mul for Val {
     type Output = ValR;
     fn mul(self, rhs: Self) -> Self::Output {
+        use num_bigint::BigInt;
         use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Int(x * y)),
+            (Int(x), Int(y)) => Ok(int_or_big(x.checked_mul(y), [x, y], |[x, y]| x * y)),
+
+            (Int(i), BigInt(b)) | (BigInt(b), Int(i)) => Ok(Val::big_int(&BigInt::from(i) * &*b)),
+            (BigInt(x), BigInt(y)) => Ok(Val::big_int(&*x * &*y)),
+            (BigInt(i), Float(f)) | (Float(f), BigInt(i)) => Ok(Float(f * i.to_f64().unwrap())),
             (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
             (Float(x), Float(y)) => Ok(Float(x * y)),
             (Str(s), Int(i)) | (Int(i), Str(s)) if i > 0 => Ok(Self::from(s.repeat(i as usize))),
@@ -793,11 +834,14 @@ fn split<'a>(s: &'a str, sep: &'a str) -> Box<dyn Iterator<Item = String> + 'a> 
 impl core::ops::Div for Val {
     type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
-        use Val::{Float, Int, Num, Str};
+        use Val::{BigInt, Float, Int, Num, Str};
         match (self, rhs) {
             (Int(x), Int(y)) => Ok(Float(x as f64 / y as f64)),
+            (BigInt(x), BigInt(y)) => Ok(Float(x.to_f64().unwrap() / y.to_f64().unwrap())),
             (Float(f), Int(i)) => Ok(Float(f / i as f64)),
             (Int(i), Float(f)) => Ok(Float(i as f64 / f)),
+            (Float(f), BigInt(i)) => Ok(Float(f / i.to_f64().unwrap())),
+            (BigInt(i), Float(f)) => Ok(Float(i.to_f64().unwrap() / f)),
             (Float(x), Float(y)) => Ok(Float(x / y)),
             (Num(n), r) => Self::from_dec_str(&n) / r,
             (l, Num(n)) => l / Self::from_dec_str(&n),
@@ -828,7 +872,8 @@ impl core::ops::Neg for Val {
     fn neg(self) -> Self::Output {
         use Val::*;
         match self {
-            Int(x) => Ok(Int(-x)),
+            Int(x) => Ok(int_or_big(x.checked_neg(), [x], |[x]| -x)),
+            BigInt(x) => Ok(Val::big_int(-&*x)),
             Float(x) => Ok(Float(-x)),
             Num(n) => -Self::from_dec_str(&n),
             x => Err(Error::typ(x, Type::Num.as_str())),
@@ -872,8 +917,14 @@ impl Ord for Val {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Int(x), Self::Int(y)) => x.cmp(y),
+            (Self::Int(x), Self::BigInt(y)) => BigInt::from(*x).cmp(y),
             (Self::Int(i), Self::Float(f)) => float_cmp(*i as f64, *f),
+            (Self::BigInt(x), Self::Int(y)) => (**x).cmp(&BigInt::from(*y)),
+            (Self::BigInt(x), Self::BigInt(y)) => x.cmp(y),
+            // BigInt::to_f64 always yields Some, large values become f64::INFINITY
+            (Self::BigInt(x), Self::Float(y)) => float_cmp(x.to_f64().unwrap(), *y),
             (Self::Float(f), Self::Int(i)) => float_cmp(*f, *i as f64),
+            (Self::Float(x), Self::BigInt(y)) => float_cmp(*x, y.to_f64().unwrap()),
             (Self::Float(x), Self::Float(y)) => float_cmp(*x, *y),
             (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
             (Self::Num(n), y) => Self::from_dec_str(n).cmp(y),
@@ -905,8 +956,8 @@ impl Ord for Val {
             (Self::Bool(_), _) => Less,
             (_, Self::Bool(_)) => Greater,
             // numbers are smaller than anything else, except for nulls and bools
-            (Self::Int(_) | Self::Float(_), _) => Less,
-            (_, Self::Int(_) | Self::Float(_)) => Greater,
+            (Self::Int(_) | Self::BigInt(_) | Self::Float(_), _) => Less,
+            (_, Self::Int(_) | Self::BigInt(_) | Self::Float(_)) => Greater,
             // etc.
             (Self::Str(_), _) => Less,
             (_, Self::Str(_)) => Greater,
@@ -963,6 +1014,7 @@ impl fmt::Display for Val {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "{b}"),
             Self::Int(i) => write!(f, "{i}"),
+            Self::BigInt(i) => write!(f, "{i}"),
             Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
             Self::Float(_) => write!(f, "null"),
             Self::Num(n) => write!(f, "{n}"),

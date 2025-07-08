@@ -54,7 +54,9 @@ where
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     use yansi::Paint;
     match v {
-        Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => v.fmt(f),
+        Val::Null | Val::Bool(_) | Val::Int(_) | Val::BigInt(_) | Val::Float(_) | Val::Num(_) => {
+            v.fmt(f)
+        }
         Val::Str(_) => write!(f, "{}", v.green()),
         Val::Arr(a) => {
             '['.bold().fmt(f)?;

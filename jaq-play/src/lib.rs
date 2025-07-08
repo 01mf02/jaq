@@ -63,6 +63,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
         Val::Int(i) => span(f, "number", i),
+        Val::BigInt(i) => span(f, "number", i),
         Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
         Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
