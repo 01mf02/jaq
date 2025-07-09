@@ -93,7 +93,7 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
             indent: if cli.tab {
                 String::from("\t")
             } else {
-                " ".repeat(cli.indent)
+                " ".repeat(cli.indent())
             },
             sort_keys: cli.sort_keys,
         };
