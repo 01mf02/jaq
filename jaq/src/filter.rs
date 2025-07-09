@@ -146,7 +146,7 @@ impl Color {
 fn report_io(code: &str, (path, error): (&str, String)) -> Report {
     let path_range = load::span(code, path);
     Report {
-        message: format!("could not load file {}: {}", path, error),
+        message: format!("could not load file {path}: {error}"),
         labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
     }
 }
