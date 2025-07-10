@@ -507,7 +507,7 @@ fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
         ("halt_error", v(1), |mut cv| {
             bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
                 if let Some(s) = cv.1.as_str() {
-                    std::print!("{}", s);
+                    std::print!("{s}");
                 } else {
                     std::println!("{}", cv.1);
                 }
@@ -718,16 +718,16 @@ macro_rules! id_with {
 
 #[cfg(feature = "log")]
 fn debug<V: core::fmt::Display>() -> Filter<RunPathsUpdatePtr<V>> {
-    ("debug", v(0), id_with!(|x| log::debug!("{}", x)))
+    ("debug", v(0), id_with!(|x| log::debug!("{x}")))
 }
 
 #[cfg(feature = "log")]
 fn stderr<V: ValT>() -> Filter<RunPathsUpdatePtr<V>> {
     fn eprint_raw<V: ValT>(v: &V) {
         if let Some(s) = v.as_str() {
-            log::error!("{}", s)
+            log::error!("{s}")
         } else {
-            log::error!("{}", v)
+            log::error!("{v}")
         }
     }
     ("stderr", v(0), id_with!(eprint_raw))

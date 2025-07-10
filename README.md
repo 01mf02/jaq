@@ -3,7 +3,7 @@
 ![Build status](https://github.com/01mf02/jaq/actions/workflows/check.yml/badge.svg)
 [![Crates.io](https://img.shields.io/crates/v/jaq-core.svg)](https://crates.io/crates/jaq-core)
 [![Documentation](https://docs.rs/jaq-core/badge.svg)](https://docs.rs/jaq-core)
-[![Rust 1.65+](https://img.shields.io/badge/rust-1.65+-orange.svg)](https://www.rust-lang.org)
+[![Rust 1.66+](https://img.shields.io/badge/rust-1.66+-orange.svg)](https://www.rust-lang.org)
 
 jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
@@ -64,8 +64,6 @@ You may also install jaq using [homebrew](https://formulae.brew.sh/formula/jaq) 
 
 To compile jaq, you need a Rust toolchain.
 See <https://rustup.rs/> for instructions.
-(Note that Rust compilers shipped with Linux distributions
-may be too outdated to compile jaq.)
 
 Any of the following commands install jaq:
 
@@ -142,7 +140,7 @@ The other benchmarks evaluate various filters with `n` as input;
 see [`bench.sh`](bench.sh) for details.
 
 I generated the benchmark data with
-`bench.sh target/release/jaq jq-1.7.1 gojq-0.12.16 | tee bench.json`
+`bench.sh target/release/jaq jq-1.8.1 gojq-0.12.17 | tee bench.json`
 on a Linux system with an AMD Ryzen 5 5500U.[^binaries]
 I then processed the results with a "one-liner" (stretching the term and the line a bit):
 
@@ -151,46 +149,46 @@ I then processed the results with a "one-liner" (stretching the term and the lin
 (Of course, you can also use jaq here instead of jq.)
 Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
-[^binaries]: The binaries for jq-1.7.1 and gojq-0.12.16 were retrieved from their GitHub release pages.
+[^binaries]: The binaries for jq-1.8.1 and gojq-0.12.17 were retrieved from their GitHub release pages.
 
 Table: Evaluation results in milliseconds ("N/A" if error or more than 10 seconds).
 
-| Benchmark       |       n | jaq-2.0 | jq-1.7.1 | gojq-0.12.16 |
+| Benchmark       |       n | jaq-2.3 | jq-1.8.1 | gojq-0.12.17 |
 |-----------------|--------:|--------:|---------:|-------------:|
-| `empty`         |     512 |     300 |      500 |      **230** |
-| `bf-fib`        |      13 | **440** |     1230 |          570 |
-| `defs`          |  100000 |  **60** |      N/A |         1020 |
-| `upto`          |    8192 |   **0** |      470 |          460 |
-| `reduce-update` |   16384 |  **10** |      550 |         1340 |
-| `reverse`       | 1048576 |  **40** |      690 |          280 |
-| `sort`          | 1048576 | **110** |      530 |          630 |
-| `group-by`      | 1048576 | **500** |     1920 |         1500 |
-| `min-max`       | 1048576 | **210** |      320 |          260 |
-| `add`           | 1048576 | **460** |      630 |         1300 |
-| `kv`            |  131072 | **110** |      150 |          230 |
-| `kv-update`     |  131072 | **130** |      540 |          470 |
-| `kv-entries`    |  131072 | **570** |     1150 |          730 |
-| `ex-implode`    | 1048576 | **520** |     1110 |          580 |
-| `reduce`        | 1048576 | **770** |      890 |          N/A |
-| `try-catch`     | 1048576 | **290** |      320 |          370 |
-| `repeat`        | 1048576 | **140** |      840 |          530 |
-| `from`          | 1048576 | **320** |     1010 |          590 |
-| `last`          | 1048576 |  **40** |      240 |          110 |
-| `pyramid`       |  524288 | **340** |      350 |          480 |
-| `tree-contains` |      23 |  **70** |      610 |          210 |
-| `tree-flatten`  |      17 |     780 |      360 |       **10** |
-| `tree-update`   |      17 | **700** |      970 |         1340 |
-| `tree-paths`    |      17 |     440 |  **280** |          870 |
-| `to-fromjson`   |   65536 |  **40** |      360 |          110 |
-| `ack`           |       7 | **520** |      710 |         1220 |
-| `range-prop`    |     128 |     360 |      320 |      **230** |
-| `cumsum`        | 1048576 | **280** |      380 |          450 |
-| `cumsum-xy`     | 1048576 | **430** |      470 |          710 |
+| `empty`         |     512 |     330 |      440 |      **290** |
+| `bf-fib`        |      13 | **430** |     1110 |          540 |
+| `defs`          |  100000 |  **60** |      N/A |         1000 |
+| `upto`          |    8192 |   **0** |      470 |          450 |
+| `reduce-update` |   16384 |  **10** |      490 |         1200 |
+| `reverse`       | 1048576 |  **30** |      500 |          270 |
+| `sort`          | 1048576 | **100** |      450 |          540 |
+| `group-by`      | 1048576 | **340** |     1750 |         1540 |
+| `min-max`       | 1048576 |     190 |  **170** |          260 |
+| `add`           | 1048576 | **440** |      570 |         1150 |
+| `kv`            |  131072 | **100** |      140 |          270 |
+| `kv-update`     |  131072 | **110** |      480 |          480 |
+| `kv-entries`    |  131072 | **520** |     1050 |          800 |
+| `ex-implode`    | 1048576 | **470** |     1010 |          590 |
+| `reduce`        | 1048576 | **720** |      850 |          N/A |
+| `try-catch`     | 1048576 | **170** |      220 |          370 |
+| `repeat`        | 1048576 | **140** |      690 |          530 |
+| `from`          | 1048576 | **280** |      800 |          550 |
+| `last`          | 1048576 |  **40** |      160 |          110 |
+| `pyramid`       |  524288 |     310 |  **270** |          480 |
+| `tree-contains` |      23 |  **60** |      590 |          220 |
+| `tree-flatten`  |      17 |     750 |      340 |        **0** |
+| `tree-update`   |      17 | **470** |      970 |         1300 |
+| `tree-paths`    |      17 | **130** |      250 |          770 |
+| `to-fromjson`   |   65536 |  **40** |      370 |          100 |
+| `ack`           |       7 | **510** |      540 |         1090 |
+| `range-prop`    |     128 |     350 |      270 |      **230** |
+| `cumsum`        | 1048576 | **250** |      260 |          460 |
+| `cumsum-xy`     | 1048576 |     400 |  **350** |          680 |
 
 The results show that
-jaq-2.0 is fastest on 25 benchmarks, whereas
-jq-1.7.1 is fastest on 1 benchmark and
-gojq-0.12.16 is fastest on 3 benchmarks.
+jaq-2.3 is fastest on 23 benchmarks, whereas
+jq-1.8.1 is fastest on 3 benchmark and
+gojq-0.12.17 is fastest on 3 benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [gojq]: https://github.com/itchyny/gojq
@@ -280,7 +278,7 @@ Here is an overview that summarises:
 - [x] String prefix/postfix (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
 - [x] String whitespace trimming (`trim`, `ltrim`, `rtrim`)
 - [x] String splitting (`split("foo")`)
-- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`)
+- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`, `bsearch`)
 - [x] Stream consumers (`first`, `last`, `range`, `fold`)
 - [x] Stream generators (`range`, `recurse`)
 - [x] Time (`now`, `fromdateiso8601`, `todateiso8601`)
@@ -569,10 +567,11 @@ The interpretation of `reduce`/`foreach` in jaq has the following advantages ove
   When there is no more input value left,
   in jq, `input` yields an error, whereas in jaq, it yields no output value.
 * Joining:
-  When given an array `[x0, x1, ..., xn]`,
-  in jq, `join(x)` converts all elements of the input array to strings and intersperses them with `x`, whereas
-  in jaq, `join(x)` simply calculates `x0 + x + x1 + x + ... + xn`.
-  When all elements of the input array and `x` are strings, jq and jaq yield the same output.
+  When giving an array `[x1, ..., xn]` to `join($sep)`, jaq returns
+  `""` if the array is empty, otherwise `"\(x1)" + $sep + ... + $sep + "\(xn)"`;
+  that is, it concatenates the string representations of the array values interspersed with `$sep`.
+  Unlike jq, jaq does not map `null` values in the array to `""`,
+  nor does it reject array or object values in the array.
 
 
 

@@ -12,6 +12,11 @@ edition = "2021"
 [package.metadata.wasm-pack.profile.dev]
 wasm-opt = false
 
+# https://github.com/leptos-rs/cargo-leptos/issues/441
+# https://github.com/fzyzcjy/flutter_rust_bridge/issues/2601
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ['-O','--all-features']
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 

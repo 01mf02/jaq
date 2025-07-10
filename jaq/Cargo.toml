@@ -1,6 +1,6 @@
 [package]
 name = "jaq"
-version = "2.2.0"
+version = "2.3.0"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -9,7 +9,7 @@ description = "Just another JSON query tool"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["command-line-utilities", "compilers", "parser-implementations"]
-rust-version = "1.65"
+rust-version = "1.66"
 
 [features]
 default = ["mimalloc"]
@@ -20,12 +20,14 @@ jaq-std  = { version = "2.1.0", path = "../jaq-std" }
 jaq-json = { version = "1.1.1", path = "../jaq-json" }
 
 codesnake = { version = "0.2" }
+dirs = { version = "6.0" }
 env_logger = { version = "0.10.0", default-features = false }
 hifijson = "0.2.0"
 is-terminal = "0.4.13"
 log = { version = "0.4.17" }
 memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
+rustyline = { version = "13.0.0", default-features = false, features = ["with-file-history"] }
 tempfile = "3.3.0"
 unicode-width = "0.1.13"
 yansi = "1.0.1"
