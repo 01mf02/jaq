@@ -823,6 +823,7 @@ impl Ord for Val {
         match (self, other) {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
+            (Self::Num(x), Self::Num(y)) => x.cmp(y),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
