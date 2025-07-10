@@ -26,7 +26,7 @@ pub struct Cli {
     pub color_output: bool,
     pub monochrome_output: bool,
     pub tab: bool,
-    pub indent: usize,
+    pub indent: Option<usize>,
 
     // Compilation options
     pub from_file: bool,
@@ -100,7 +100,9 @@ impl Cli {
             "color-output" => self.short('C', args)?,
             "monochrome-output" => self.short('M', args)?,
             "tab" => self.tab = true,
-            "indent" => self.indent = args.next().and_then(int).ok_or(Error::Int("--indent"))?,
+            "indent" => {
+                self.indent = Some(args.next().and_then(int).ok_or(Error::Int("--indent"))?)
+            }
             "from-file" => self.short('f', args)?,
             "library-path" => self.short('L', args)?,
             "arg" => {
@@ -153,10 +155,7 @@ impl Cli {
     }
 
     pub fn parse() -> Result<Self, Error> {
-        let mut cli = Self {
-            indent: 2,
-            ..Self::default()
-        };
+        let mut cli = Self::default();
         let mut mode = Mode::Files;
         let mut args = std::env::args_os();
         args.next();
@@ -187,6 +186,10 @@ impl Cli {
         } else {
             f()
         }
+    }
+
+    pub fn indent(&self) -> usize {
+        self.indent.unwrap_or(2)
     }
 }
 
