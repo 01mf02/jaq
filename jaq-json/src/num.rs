@@ -44,6 +44,10 @@ impl Num {
         n.parse().map_or(Self::Float(f64::NAN), Self::Float)
     }
 
+    pub(crate) fn is_int(&self) -> bool {
+        matches!(self, Self::Int(_) | Self::BigInt(_))
+    }
+
     /// If the value is a machine-sized integer, return it, else fail.
     pub(crate) fn as_int(&self) -> Option<isize> {
         match self {
