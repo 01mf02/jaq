@@ -10,7 +10,6 @@ use filter::{run, FileReports, Filter};
 use is_terminal::IsTerminal;
 use jaq_core::{load, Vars};
 use jaq_json::Val;
-use jaq_std::RcIter;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -235,7 +234,7 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
         filter::parse_compile(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
 
     let vars = Vars::new(ctx);
-    let inputs = &RcIter::new(Box::new(core::iter::empty()));
+    let inputs = &jaq_std::input::RcIter::new(Box::new(core::iter::empty()));
     let data = funs::DataData::new(inputs);
 
     let json = |s: String| {

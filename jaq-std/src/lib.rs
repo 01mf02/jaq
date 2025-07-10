@@ -17,8 +17,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-mod rc_iter;
-
+pub mod input;
 #[cfg(feature = "math")]
 mod math;
 #[cfg(feature = "regex")]
@@ -30,10 +29,6 @@ use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
 use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValX, ValXs};
-pub use rc_iter::RcIter;
-
-/// Iterator over value results returned by the `inputs` filter.
-pub type Inputs<'i, V> = &'i RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -742,21 +737,4 @@ fn stderr<V: ValT, D: DataT>() -> Filter<RunPathsUpdatePtr<V, D>> {
         }
     }
     ("stderr", v(0), id_with!(eprint_raw))
-}
-
-pub trait HasInputs<'a, V> {
-    fn inputs(&self) -> Inputs<'a, V>;
-}
-
-impl<'a, V> HasInputs<'a, V> for Inputs<'a, V> {
-    fn inputs(&self) -> Inputs<'a, V> {
-        self
-    }
-}
-
-pub fn inputs<V: ValT, D: for<'a> DataT<Data<'a>: HasInputs<'a, V>>>() -> Filter<RunPtr<V, D>> {
-    ("inputs", v(0), |cv| {
-        let inputs = cv.0.data().inputs();
-        Box::new(inputs.map(|r| r.map_err(|e| Exn::from(Error::str(e)))))
-    })
 }

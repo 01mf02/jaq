@@ -154,9 +154,6 @@ def  splits(re):  splits(re; "");
 def  sub(re; f): sub(re; f;  "");
 def gsub(re; f): sub(re; f; "g");
 
-# I/O
-def input: first(inputs);
-
 # Date
 def   todate:   todateiso8601;
 def fromdate: fromdateiso8601;

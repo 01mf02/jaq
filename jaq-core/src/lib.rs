@@ -12,14 +12,13 @@
 //! (This example requires enabling the `serde_json` feature for `jaq-json`.)
 //!
 //! ~~~
-//! use jaq_core::{load, Compiler, Ctx, Error, RcIter, Vars};
+//! use jaq_core::{Compiler, Vars};
+//! use jaq_core::load::{Arena, File, Loader};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
 //! let program = File { code: ".[]", path: () };
-//!
-//! use load::{Arena, File, Loader};
 //!
 //! let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
 //! let arena = Arena::default();
@@ -29,14 +28,12 @@
 //!
 //! // compile the filter
 //! let filter = jaq_core::Compiler::default()
-//!     .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+//!     .with_funs(jaq_std::funs().chain(jaq_json::funs::<()>()))
 //!     .compile(modules)
 //!     .unwrap();
 //!
-//! let inputs = RcIter::new(core::iter::empty());
-//!
 //! // iterator over the output values
-//! let mut out = filter.run(Vars::new([]), &inputs, Val::from(input));
+//! let mut out = filter.run(Vars::new([]), &(), Val::from(input));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;

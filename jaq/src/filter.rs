@@ -2,7 +2,7 @@
 use crate::{funs, read, Cli, Error, Val};
 use core::fmt::{self, Display, Formatter};
 use jaq_core::{compile, load, Native, ValT, Vars};
-use jaq_std::RcIter;
+use jaq_std::input::RcIter;
 use std::{io, path::PathBuf};
 
 pub type Filter = jaq_core::Filter<Native<Val, funs::Data>>;

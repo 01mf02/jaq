@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::*;
 struct Data;
 
 impl DataT for Data {
-    type Data<'a> = jaq_std::Inputs<'a, Val>;
+    type Data<'a> = jaq_std::input::Inputs<'a, Val>;
 }
 
 type Filter = jaq_core::Filter<Native<Val, Data>>;
@@ -249,7 +249,7 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    use jaq_std::{Inputs, RcIter};
+    use jaq_std::input::{Inputs, RcIter};
     let (vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);

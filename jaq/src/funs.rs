@@ -1,6 +1,7 @@
 use crate::{filter, run, write, Cli, Error, Val};
 use jaq_core::{DataT, Native, RunPtr};
-use jaq_std::{inputs, v, Filter, HasInputs, Inputs};
+use jaq_std::input::{self, Inputs};
+use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -36,18 +37,19 @@ impl HasRepl for DataData<'_> {
     }
 }
 
-impl<'a> HasInputs<'a, Val> for DataData<'a> {
+impl<'a> input::HasInputs<'a, Val> for DataData<'a> {
     fn inputs(&self) -> Inputs<'a, Val> {
         self.inputs
     }
 }
 
-pub fn funs() -> Box<[Filter<Native<Val, Data>>]> {
-    [repl(), inputs()].map(jaq_std::run).into()
+pub fn funs() -> impl Iterator<Item = Filter<Native<Val, Data>>> {
+    [repl()].into_iter().chain(input::funs()).map(jaq_std::run)
 }
 
 pub fn repl<D: for<'a> DataT<Data<'a>: HasRepl>>() -> Filter<RunPtr<Val, D>> {
     ("repl", v(0), |cv| {
+        // TODO!!!
         let depth = cv.0.data().repl_depth().fetch_add(1, Ordering::Relaxed);
         repl_with(depth, |s| match eval(s, cv.1.clone()) {
             Ok(()) => (),
