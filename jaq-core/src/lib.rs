@@ -59,7 +59,6 @@ mod into_iter;
 pub mod load;
 pub mod ops;
 pub mod path;
-mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
 mod stack;
@@ -67,16 +66,11 @@ pub mod val;
 
 pub use compile::Compiler;
 pub use exn::{Error, Exn};
-pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
-pub use rc_iter::RcIter;
+pub use filter::{Ctx, Cv, DataT, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
 pub use val::{ValR, ValT, ValX, ValXs};
 
-use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
-
-/// Iterator over value results returned by the `inputs` filter.
-pub type Inputs<'i, V> = &'i RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
 ///
@@ -123,25 +117,26 @@ impl<T> Bind<T, T> {
 #[derive(Debug, Clone)]
 pub struct Filter<F>(compile::TermId, pub compile::Lut<F>);
 
-impl<V: ValT> Filter<Native<V>> {
+impl<V: ValT, D: DataT> Filter<Native<V, D>> {
     /// Run a filter on given input, yielding output values.
-    pub fn run<'f, 'i: 'f>(
-        &'f self,
+    pub fn run<'a>(
+        &'a self,
         vars: Vars<V>,
-        inputs: Inputs<'i, V>,
+        data: &'a D::Data<'a>,
         v: V,
-    ) -> impl Iterator<Item = ValR<V>> + 'f {
+    ) -> impl Iterator<Item = ValR<V>> + 'a {
         self.0
-            .run((Ctx::new(&self.1, vars, inputs), v))
+            .run((Ctx::new(&self.1, vars, &data), v))
             .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
     }
+}
 
+impl<V: ValT> Filter<Native<V>> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
     pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
-        let inputs = RcIter::new(core::iter::empty());
-        let out = self.run(Vars::new([]), &inputs, x);
+        let out = self.run(Vars::new([]), &(), x);
         assert!(out.eq(ys));
     }
 }

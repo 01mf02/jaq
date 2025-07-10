@@ -1,10 +1,11 @@
 //! Filter parsing, compilation, and execution.
-use crate::{read, repl, Cli, Error, Val};
+use crate::{funs, read, Cli, Error, Val};
 use core::fmt::{self, Display, Formatter};
-use jaq_core::{compile, load, Native, RcIter, ValT, Vars};
+use jaq_core::{compile, load, Native, ValT, Vars};
+use jaq_std::RcIter;
 use std::{io, path::PathBuf};
 
-pub type Filter = jaq_core::Filter<Native<Val>>;
+pub type Filter = jaq_core::Filter<Native<Val, funs::Data>>;
 
 pub fn parse_compile(
     path: &PathBuf,
@@ -36,7 +37,7 @@ pub fn parse_compile(
     })
     .map_err(load_errors)?;
 
-    let funs = jaq_std::funs().chain(jaq_json::funs()).chain([repl::fun()]);
+    let funs = jaq_std::funs().chain(jaq_json::funs()).chain(funs::funs());
     let compiler = Compiler::default()
         .with_funs(funs)
         .with_global_vars(vars.iter().map(|v| &**v));
@@ -49,34 +50,35 @@ pub fn parse_compile(
 /// This function cannot return an `Iterator` because it creates an `RcIter`.
 /// This is most unfortunate. We should think about how to simplify this ...
 pub(crate) fn run(
-     cli: &Cli,
-     filter: &Filter,
-     vars: Vec<Val>,
-     iter: impl Iterator<Item = io::Result<Val>>,
-     mut f: impl FnMut(Val) -> io::Result<()>,
- ) -> Result<Option<bool>, Error> {
-     let mut last = None;
-     let iter = iter.map(|r| r.map_err(|e| e.to_string()));
- 
-     let iter = Box::new(iter) as Box<dyn Iterator<Item = _>>;
-     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
- 
-    let iter: jaq_core::Inputs<_> = &RcIter::new(iter);
-    let null: jaq_core::Inputs<_> = &RcIter::new(null);
- 
+    cli: &Cli,
+    filter: &Filter,
+    vars: Vec<Val>,
+    iter: impl Iterator<Item = io::Result<Val>>,
+    mut f: impl FnMut(Val) -> io::Result<()>,
+) -> Result<Option<bool>, Error> {
+    let mut last = None;
+    let iter = iter.map(|r| r.map_err(|e| e.to_string()));
+
+    let iter = Box::new(iter) as Box<dyn Iterator<Item = _>>;
+    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
+
+    let iter = &RcIter::new(iter);
+    let null = &RcIter::new(null);
+
     let vars = Vars::new(vars);
- 
+
     for item in if cli.null_input { null } else { iter } {
-         let input = item.map_err(Error::Parse)?;
-         //println!("Got {:?}", input);
-        for output in filter.run(vars.clone(), iter, input) {
-             let output = output.map_err(Error::Jaq)?;
-             last = Some(output.as_bool());
-             f(output)?;
-         }
-     }
-     Ok(last)
- }
+        let data = funs::DataData::new(iter);
+        let input = item.map_err(Error::Parse)?;
+        //println!("Got {:?}", input);
+        for output in filter.run(vars.clone(), &data, input) {
+            let output = output.map_err(Error::Jaq)?;
+            last = Some(output.as_bool());
+            f(output)?;
+        }
+    }
+    Ok(last)
+}
 
 #[derive(Debug)]
 pub struct FileReports(load::File<String, PathBuf>, Vec<Report>);

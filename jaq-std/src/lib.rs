@@ -17,6 +17,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod rc_iter;
+
 #[cfg(feature = "math")]
 mod math;
 #[cfg(feature = "regex")]
@@ -27,7 +29,11 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{load, Bind, Cv, Error, Exn, Native, RunPtr, ValR, ValX, ValXs};
+use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValX, ValXs};
+pub use rc_iter::RcIter;
+
+/// Iterator over value results returned by the `inputs` filter.
+pub type Inputs<'i, V> = &'i RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -53,7 +59,7 @@ pub type Filter<F> = (&'static str, Box<[Bind]>, F);
     feature = "regex",
     feature = "time",
 ))]
-pub fn funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
+pub fn funs<V: ValT, D: DataT>() -> impl Iterator<Item = Filter<Native<V, D>>> {
     base_funs().chain(extra_funs())
 }
 
@@ -63,7 +69,7 @@ pub fn funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn base_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
+pub fn base_funs<V: ValT, D: DataT>() -> impl Iterator<Item = Filter<Native<V, D>>> {
     let base_run = base_run().into_vec().into_iter().map(run);
     let base_paths = base_paths().into_vec().into_iter().map(paths);
     base_run.chain(base_paths).chain([upd(error())])
@@ -78,7 +84,7 @@ pub fn base_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
     feature = "regex",
     feature = "time",
 ))]
-pub fn extra_funs<V: ValT>() -> impl Iterator<Item = Filter<Native<V>>> {
+pub fn extra_funs<V: ValT, D: DataT>() -> impl Iterator<Item = Filter<Native<V, D>>> {
     [std(), format(), math(), regex(), time()]
         .into_iter()
         .flat_map(|fs| fs.into_vec().into_iter().map(run))
@@ -170,20 +176,28 @@ trait ValTx: ValT + Sized {
 impl<T: ValT> ValTx for T {}
 
 /// Convert a filter with a run pointer to a native filter.
-pub fn run<V>((name, arity, run): Filter<RunPtr<V>>) -> Filter<Native<V>> {
+pub fn run<V, D: DataT>((name, arity, run): Filter<RunPtr<V, D>>) -> Filter<Native<V, D>> {
     (name, arity, Native::new(run))
 }
 
-type RunPathsPtr<V> = (RunPtr<V>, jaq_core::PathsPtr<V>);
-type RunPathsUpdatePtr<V> = (RunPtr<V>, jaq_core::PathsPtr<V>, jaq_core::UpdatePtr<V>);
+type RunPathsPtr<V, D> = (RunPtr<V, D>, jaq_core::PathsPtr<V, D>);
+type RunPathsUpdatePtr<V, D> = (
+    RunPtr<V, D>,
+    jaq_core::PathsPtr<V, D>,
+    jaq_core::UpdatePtr<V, D>,
+);
 
 /// Convert a filter with a run and an update pointer to a native filter.
-fn paths<V>((name, arity, (run, paths)): Filter<RunPathsPtr<V>>) -> Filter<Native<V>> {
+fn paths<V, D: DataT>(
+    (name, arity, (run, paths)): Filter<RunPathsPtr<V, D>>,
+) -> Filter<Native<V, D>> {
     (name, arity, Native::new(run).with_paths(paths))
 }
 
 /// Convert a filter with a run, a paths, and an update pointer to a native filter.
-fn upd<V>((name, arity, (r, p, u)): Filter<RunPathsUpdatePtr<V>>) -> Filter<Native<V>> {
+fn upd<V, D: DataT>(
+    (name, arity, (r, p, u)): Filter<RunPathsUpdatePtr<V, D>>,
+) -> Filter<Native<V, D>> {
     (name, arity, Native::new(r).with_paths(p).with_update(u))
 }
 
@@ -324,7 +338,10 @@ fn bome<'a, V: 'a>(r: ValR<V>) -> ValXs<'a, V> {
 
 /// Create a filter that takes a single variable argument and whose output is given by
 /// the function `f` that takes the input value and the value of the variable.
-pub fn unary<'a, V: Clone>(mut cv: Cv<'a, V>, f: impl Fn(V, V) -> ValR<V> + 'a) -> ValXs<'a, V> {
+pub fn unary<'a, V: Clone, D: DataT>(
+    mut cv: Cv<'a, V, D>,
+    f: impl Fn(V, V) -> ValR<V> + 'a,
+) -> ValXs<'a, V> {
     bome(f(cv.1, cv.0.pop_var()))
 }
 
@@ -334,15 +351,9 @@ pub fn v(n: usize) -> Box<[Bind]> {
 }
 
 #[allow(clippy::unit_arg)]
-fn base_run<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+fn base_run<V: ValT, D: DataT>() -> Box<[Filter<RunPtr<V, D>>]> {
     let f = || [Bind::Fun(())].into();
     Box::new([
-        ("inputs", v(0), |cv| {
-            Box::new(
-                cv.0.inputs()
-                    .map(|r| r.map_err(|e| Exn::from(Error::str(e)))),
-            )
-        }),
         ("path", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let cvp = (fc, (cv.1, Default::default()));
@@ -476,7 +487,7 @@ macro_rules! limit {
     };
 }
 
-fn base_paths<V: ValT>() -> Box<[Filter<RunPathsPtr<V>>]> {
+fn base_paths<V: ValT, D: DataT>() -> Box<[Filter<RunPathsPtr<V, D>>]> {
     let f = || [Bind::Fun(())].into();
     let vf = || [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
@@ -496,7 +507,7 @@ fn now<V: From<String>>() -> Result<f64, Error<V>> {
 }
 
 #[cfg(feature = "std")]
-fn std<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+fn std<V: ValT, D: DataT>() -> Box<[Filter<RunPtr<V, D>>]> {
     use std::env::vars;
     Box::new([
         ("env", v(0), |_| {
@@ -524,7 +535,7 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 }
 
 #[cfg(feature = "format")]
-fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+fn format<V: ValT, D: DataT>() -> Box<[Filter<RunPtr<V, D>>]> {
     Box::new([
         ("escape_html", v(0), |cv| {
             let pats = ["<", ">", "&", "\'", "\""];
@@ -563,8 +574,8 @@ fn format<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 }
 
 #[cfg(feature = "math")]
-fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
-    let rename = |name, (_name, arity, f): Filter<RunPtr<V>>| (name, arity, f);
+fn math<V: ValT, D: DataT>() -> Box<[Filter<RunPtr<V, D>>]> {
+    let rename = |name, (_name, arity, f): Filter<RunPtr<V, D>>| (name, arity, f);
     Box::new([
         math::f_f!(acos),
         math::f_f!(acosh),
@@ -628,7 +639,7 @@ fn math<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 }
 
 #[cfg(feature = "regex")]
-fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {
+fn re<V: ValT, D: DataT>(s: bool, m: bool, mut cv: Cv<V, D>) -> ValR<V> {
     let flags = cv.0.pop_var();
     let re = cv.0.pop_var();
 
@@ -647,7 +658,7 @@ fn re<V: ValT>(s: bool, m: bool, mut cv: Cv<V>) -> ValR<V> {
 }
 
 #[cfg(feature = "regex")]
-fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+fn regex<V: ValT, D: DataT>() -> Box<[Filter<RunPtr<V, D>>]> {
     let vv = || [Bind::Var(()), Bind::Var(())].into();
     Box::new([
         ("matches", vv(), |cv| bome(re(false, true, cv))),
@@ -657,7 +668,7 @@ fn regex<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
 }
 
 #[cfg(feature = "time")]
-fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
+fn time<V: ValT, D: DataT>() -> Box<[Filter<RunPtr<V, D>>]> {
     use chrono::{Local, Utc};
     Box::new([
         ("fromdateiso8601", v(0), |cv| {
@@ -683,7 +694,7 @@ fn time<V: ValT>() -> Box<[Filter<RunPtr<V>>]> {
     ])
 }
 
-fn error<V>() -> Filter<RunPathsUpdatePtr<V>> {
+fn error<V, D: DataT>() -> Filter<RunPathsUpdatePtr<V, D>> {
     (
         "error",
         v(0),
@@ -717,12 +728,12 @@ macro_rules! id_with {
 }
 
 #[cfg(feature = "log")]
-fn debug<V: core::fmt::Display>() -> Filter<RunPathsUpdatePtr<V>> {
+fn debug<V: core::fmt::Display, D: DataT>() -> Filter<RunPathsUpdatePtr<V, D>> {
     ("debug", v(0), id_with!(|x| log::debug!("{x}")))
 }
 
 #[cfg(feature = "log")]
-fn stderr<V: ValT>() -> Filter<RunPathsUpdatePtr<V>> {
+fn stderr<V: ValT, D: DataT>() -> Filter<RunPathsUpdatePtr<V, D>> {
     fn eprint_raw<V: ValT>(v: &V) {
         if let Some(s) = v.as_str() {
             log::error!("{s}")
@@ -731,4 +742,21 @@ fn stderr<V: ValT>() -> Filter<RunPathsUpdatePtr<V>> {
         }
     }
     ("stderr", v(0), id_with!(eprint_raw))
+}
+
+pub trait HasInputs<'a, V> {
+    fn inputs(&self) -> Inputs<'a, V>;
+}
+
+impl<'a, V> HasInputs<'a, V> for Inputs<'a, V> {
+    fn inputs(&self) -> Inputs<'a, V> {
+        self
+    }
+}
+
+pub fn inputs<V: ValT, D: for<'a> DataT<Data<'a>: HasInputs<'a, V>>>() -> Filter<RunPtr<V, D>> {
+    ("inputs", v(0), |cv| {
+        let inputs = cv.0.data().inputs();
+        Box::new(inputs.map(|r| r.map_err(|e| Exn::from(Error::str(e)))))
+    })
 }

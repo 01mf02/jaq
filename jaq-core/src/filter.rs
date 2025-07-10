@@ -4,17 +4,17 @@ use crate::box_iter::{self, box_once, flat_map_then, flat_map_then_with, flat_ma
 use crate::compile::{Bind, Fold, Pattern, Tailrec, Term as Ast, TermId as Id};
 use crate::fold::fold;
 use crate::val::{ValR, ValT, ValX, ValXs};
-use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, Inputs, RcList};
+use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
 /// Combination of context and input value.
-pub type Cv<'c, V, T = V> = (Ctx<'c, V>, T);
+pub type Cv<'c, V, D, T = V> = (Ctx<'c, V, D>, T);
 /// Combination of context and input value with a path.
-type Cvp<'a, V> = Cv<'a, V, (V, RcList<V>)>;
+type Cvp<'a, V, D> = Cv<'a, V, D, (V, RcList<V>)>;
 type ValPathXs<'a, V> = ValXs<'a, (V, RcList<V>), V>;
 
-type Lut<V> = crate::compile::Lut<Native<V>>;
+type Lut<V, D> = crate::compile::Lut<Native<V, D>>;
 
 // we can unfortunately not make a `Box<dyn ... + Clone>`
 // that is why we have to go through the pain of making a new trait here
@@ -41,26 +41,41 @@ impl<V> Vars<V> {
     }
 }
 
+/// Kind of data for native filters.
+pub trait DataT {
+    /// The actual data.
+    type Data<'a>;
+}
+
+impl DataT for () {
+    type Data<'a> = ();
+}
+
 /// Filter execution context.
-#[derive(Clone)]
-pub struct Ctx<'a, V> {
-    lut: &'a Lut<V>,
+pub struct Ctx<'a, V, D: DataT> {
+    lut: &'a Lut<V, D>,
+    data: &'a D::Data<'a>,
     vars: Vars<V>,
     /// Number of bound labels at the current path
     ///
     /// This is used to create fresh break IDs.
     labels: usize,
-    inputs: Inputs<'a, V>,
 }
 
-impl<'a, V> Ctx<'a, V> {
+impl<'a, D: DataT, V> Clone for Ctx<'a, V, D> {
+    fn clone(&self) -> Self {
+        self.with_vars(Vars(self.vars.0.clone()))
+    }
+}
+
+impl<'a, D: DataT, V> Ctx<'a, V, D> {
     /// Construct a fresh context.
-    pub(crate) fn new(lut: &'a Lut<V>, vars: Vars<V>, inputs: Inputs<'a, V>) -> Self {
+    pub(crate) fn new(lut: &'a Lut<V, D>, vars: Vars<V>, data: &'a D::Data<'a>) -> Self {
         Self {
             lut,
+            data,
             vars,
             labels: 0,
-            inputs,
         }
     }
 
@@ -94,19 +109,19 @@ impl<'a, V> Ctx<'a, V> {
     fn with_vars(&self, vars: Vars<V>) -> Self {
         Self {
             vars,
+            data: self.data,
             lut: self.lut,
             labels: self.labels,
-            inputs: self.inputs,
         }
     }
 
-    /// Return remaining input values.
-    pub fn inputs(&self) -> Inputs<'a, V> {
-        self.inputs
+    /// Return global data.
+    pub fn data(&self) -> &'a D::Data<'a> {
+        self.data
     }
 }
 
-impl<'a, V: Clone> Ctx<'a, V> {
+impl<'a, D: DataT, V: Clone> Ctx<'a, V, D> {
     /// Remove the latest bound variable from the context.
     ///
     /// This is useful for writing [`Native`] filters.
@@ -136,12 +151,12 @@ impl<'a, V: Clone> Ctx<'a, V> {
 /// and return the enhanced contexts together with the original value of `cv`.
 ///
 /// This is used when we call filters with variable arguments.
-fn bind_vars<'a, V: ValT, T: 'a + Clone>(
+fn bind_vars<'a, D: DataT, V: ValT, T: 'a + Clone>(
     args: &'a [Arg<Id>],
-    ctx: Ctx<'a, V>,
-    cv: Cv<'a, V, T>,
+    ctx: Ctx<'a, V, D>,
+    cv: Cv<'a, V, D, T>,
     proj: fn(&T) -> V,
-) -> ValXs<'a, Cv<'a, V, T>, V> {
+) -> ValXs<'a, Cv<'a, V, D, T>, V> {
     match args.split_first() {
         Some((Arg::Var(arg), [])) => map_with(
             arg.run((cv.0.clone(), proj(&cv.1))),
@@ -161,11 +176,11 @@ fn bind_vars<'a, V: ValT, T: 'a + Clone>(
     }
 }
 
-fn bind_pat<'a, V: ValT>(
+fn bind_pat<'a, D: DataT, V: ValT>(
     (idxs, pat): &'a (Id, Pattern<Id>),
-    ctx: Ctx<'a, V>,
-    cv: Cv<'a, V>,
-) -> ValXs<'a, Ctx<'a, V>, V> {
+    ctx: Ctx<'a, V, D>,
+    cv: Cv<'a, V, D>,
+) -> ValXs<'a, Ctx<'a, V, D>, V> {
     let (ctx0, v0) = cv.clone();
     let v1 = map_with(idxs.run(cv), v0, move |i, v0| Ok(v0.index(&i?)?));
     match pat {
@@ -176,11 +191,11 @@ fn bind_pat<'a, V: ValT>(
     }
 }
 
-fn bind_pats<'a, V: ValT>(
+fn bind_pats<'a, D: DataT, V: ValT>(
     pats: &'a [(Id, Pattern<Id>)],
-    ctx: Ctx<'a, V>,
-    cv: Cv<'a, V>,
-) -> ValXs<'a, Ctx<'a, V>, V> {
+    ctx: Ctx<'a, V, D>,
+    cv: Cv<'a, V, D>,
+) -> ValXs<'a, Ctx<'a, V, D>, V> {
     match pats.split_first() {
         None => box_once(Ok(ctx)),
         Some((pat, [])) => bind_pat(pat, ctx, cv),
@@ -190,11 +205,11 @@ fn bind_pats<'a, V: ValT>(
     }
 }
 
-fn run_and_bind<'a, V: ValT>(
+fn run_and_bind<'a, D: DataT, V: ValT>(
     xs: &'a Id,
-    cv: Cv<'a, V>,
+    cv: Cv<'a, V, D>,
     pat: &'a Pattern<Id>,
-) -> ValXs<'a, Ctx<'a, V>, V> {
+) -> ValXs<'a, Ctx<'a, V, D>, V> {
     let xs = xs.run((cv.0.clone(), cv.1));
     match pat {
         Pattern::Var => map_with(xs, cv.0, move |y, ctx| Ok(ctx.cons_var(y?))),
@@ -204,12 +219,12 @@ fn run_and_bind<'a, V: ValT>(
     }
 }
 
-fn bind_run<'a, V: ValT, T: Clone + 'a>(
+fn bind_run<'a, D: DataT, V: ValT, T: Clone + 'a>(
     pat: &'a Pattern<Id>,
     r: &'a Id,
-    cv: Cv<'a, V, T>,
+    cv: Cv<'a, V, D, T>,
     y: V,
-    run: fn(&'a Id, Cv<'a, V, T>) -> ValXs<'a, T, V>,
+    run: fn(&'a Id, Cv<'a, V, D, T>) -> ValXs<'a, T, V>,
 ) -> ValXs<'a, T, V> {
     match pat {
         Pattern::Var => run(r, (cv.0.cons_var(y), cv.1)),
@@ -220,9 +235,9 @@ fn bind_run<'a, V: ValT, T: Clone + 'a>(
     }
 }
 
-fn label_run<'a, V, T: 'a>(
-    cv: Cv<'a, V, T>,
-    run: impl Fn(Cv<'a, V, T>) -> ValXs<'a, T, V>,
+fn label_run<'a, D: DataT, V, T: 'a>(
+    cv: Cv<'a, V, D, T>,
+    run: impl Fn(Cv<'a, V, D, T>) -> ValXs<'a, T, V>,
 ) -> ValXs<'a, T, V> {
     let ctx = cv.0.cons_label();
     let labels = ctx.labels;
@@ -249,13 +264,13 @@ fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<T, V>> + 'a>(
     }))
 }
 
-fn fold_run<'a, V: Clone, T: Clone + 'a>(
-    xs: impl Iterator<Item = ValX<Ctx<'a, V>, V>> + Clone + 'a,
-    cv: Cv<'a, V, T>,
+fn fold_run<'a, D: DataT, V: Clone, T: Clone + 'a>(
+    xs: impl Iterator<Item = ValX<Ctx<'a, V, D>, V>> + Clone + 'a,
+    cv: Cv<'a, V, D, T>,
     init: &'a Id,
     update: &'a Id,
     fold_type: &'a Fold<Id>,
-    run: fn(&'a Id, Cv<'a, V, T>) -> ValXs<'a, T, V>,
+    run: fn(&'a Id, Cv<'a, V, D, T>) -> ValXs<'a, T, V>,
 ) -> ValXs<'a, T, V> {
     let init = run(init, cv.clone());
     let update = move |ctx, v| run(update, (ctx, v));
@@ -275,29 +290,29 @@ fn fold_run<'a, V: Clone, T: Clone + 'a>(
 ///
 /// This has a special optimisation for the case where only a single `v` is returned.
 /// In that case, we can consume `cv` instead of cloning it.
-fn pipe<'a, V: ValT, T: 'a, F>(l: &'a Id, cv: Cv<'a, V>, r: F) -> ValXs<'a, T, V>
+fn pipe<'a, D: DataT, V: ValT, T: 'a, F>(l: &'a Id, cv: Cv<'a, V, D>, r: F) -> ValXs<'a, T, V>
 where
-    F: Fn(Cv<'a, V>, V) -> ValXs<'a, T, V> + 'a,
+    F: Fn(Cv<'a, V, D>, V) -> ValXs<'a, T, V> + 'a,
 {
     flat_map_then_with(l.run(cv.clone()), cv, move |y, cv| r(cv, y))
 }
 
 /// Run `self` and `r` and return the cartesian product of their outputs.
-fn cartesian<'a, V: ValT>(
+fn cartesian<'a, D: DataT, V: ValT>(
     l: &'a Id,
     r: &'a Id,
-    cv: Cv<'a, V>,
+    cv: Cv<'a, V, D>,
 ) -> box_iter::BoxIter<'a, (ValX<V>, ValX<V>)> {
     flat_map_with(l.run(cv.clone()), cv, move |l, cv| {
         map_with(r.run(cv), l, |r, l| (l, r))
     })
 }
 
-fn fold_update<'a, V: ValT + 'a>(
+fn fold_update<'a, D: DataT + 'a, V: ValT + 'a>(
     fold_type: &'a Fold<Id>,
     path: &'a Id,
     v: V,
-    mut xs: impl Iterator<Item = Result<Ctx<'a, V>, Exn<V>>> + Clone + 'a,
+    mut xs: impl Iterator<Item = Result<Ctx<'a, V, D>, Exn<V>>> + Clone + 'a,
     f: BoxUpdate<'a, V>,
 ) -> ValXs<'a, V> {
     let ctx = match xs.next() {
@@ -326,12 +341,12 @@ fn fold_update<'a, V: ValT + 'a>(
     path.update((ctx, v), update)
 }
 
-fn def_run<'a, V, T: 'a>(
+fn def_run<'a, D: DataT, V, T: 'a>(
     id: &'a Id,
     tailrec: &Option<Tailrec>,
-    cvs: ValXs<'a, Cv<'a, V, T>, V>,
-    run: impl Fn(Cv<'a, V, T>) -> ValXs<'a, T, V> + 'a + Copy,
-    with_vars: impl Fn(Vars<V>) -> Ctx<'a, V> + 'a,
+    cvs: ValXs<'a, Cv<'a, V, D, T>, V>,
+    run: impl Fn(Cv<'a, V, D, T>) -> ValXs<'a, T, V> + 'a + Copy,
+    with_vars: impl Fn(Vars<V>) -> Ctx<'a, V, D> + 'a,
     into: impl Fn(T) -> exn::CallInput<V> + 'a,
     from: impl Fn(exn::CallInput<V>) -> T + 'a,
 ) -> ValXs<'a, T, V> {
@@ -399,25 +414,25 @@ fn recurse_update<'a, V: ValT + 'a>(v: V, f: &dyn Update<'a, V>) -> ValXs<'a, V>
 }
 
 /// A filter which is implemented using function pointers.
-pub struct Native<V> {
-    run: RunPtr<V>,
-    paths: PathsPtr<V>,
-    update: UpdatePtr<V>,
+pub struct Native<V, D: DataT = ()> {
+    run: RunPtr<V, D>,
+    paths: PathsPtr<V, D>,
+    update: UpdatePtr<V, D>,
 }
 
 /// Run function pointer (see [`Id::run`]).
-pub type RunPtr<V> = for<'a> fn(Cv<'a, V>) -> ValXs<'a, V>;
+pub type RunPtr<V, D> = for<'a> fn(Cv<'a, V, D>) -> ValXs<'a, V>;
 /// Paths function pointer (see [`Id::paths`]).
-pub type PathsPtr<V> = for<'a> fn(Cvp<'a, V>) -> ValPathXs<'a, V>;
+pub type PathsPtr<V, D> = for<'a> fn(Cvp<'a, V, D>) -> ValPathXs<'a, V>;
 /// Update function pointer (see [`Id::update`]).
-pub type UpdatePtr<V> = for<'a> fn(Cv<'a, V>, BoxUpdate<'a, V>) -> ValXs<'a, V>;
+pub type UpdatePtr<V, D> = for<'a> fn(Cv<'a, V, D>, BoxUpdate<'a, V>) -> ValXs<'a, V>;
 
-impl<V> Native<V> {
+impl<V, D: DataT> Native<V, D> {
     /// Create a native filter from a run function.
     ///
     /// A filter created this way initially supports neither paths nor updates.
     /// For that, use [`Self::with_paths`] and [`Self::with_update`].
-    pub const fn new(run: RunPtr<V>) -> Self {
+    pub const fn new(run: RunPtr<V, D>) -> Self {
         Self {
             run,
             paths: |cv| box_once(Err(Exn::from(Error::path_expr(cv.1 .0)))),
@@ -426,21 +441,21 @@ impl<V> Native<V> {
     }
 
     /// Specify a paths function (used for `path(...)`).
-    pub const fn with_paths(self, paths: PathsPtr<V>) -> Self {
+    pub const fn with_paths(self, paths: PathsPtr<V, D>) -> Self {
         Self { paths, ..self }
     }
 
     /// Specify an update function (used for `filter |= ...`).
     ///
     /// If an update function is given, then a paths function should be implemented too.
-    pub const fn with_update(self, update: UpdatePtr<V>) -> Self {
+    pub const fn with_update(self, update: UpdatePtr<V, D>) -> Self {
         Self { update, ..self }
     }
 }
 
 impl Id {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
-    pub fn run<'a, V: ValT>(&self, cv: Cv<'a, V>) -> ValXs<'a, V> {
+    pub fn run<'a, V: ValT, D: DataT>(&self, cv: Cv<'a, V, D>) -> ValXs<'a, V> {
         use alloc::string::ToString;
         use core::iter::once;
         match &cv.0.lut.terms[self.0] {
@@ -540,9 +555,9 @@ impl Id {
             Ast::CallDef(id, args, skip, tailrec) => {
                 let with_vars = move |vars| Ctx {
                     vars,
+                    data: cv.0.data,
                     lut: cv.0.lut,
                     labels: cv.0.labels,
-                    inputs: cv.0.inputs,
                 };
                 let cvs = bind_vars(args, cv.0.clone().skip_vars(*skip), cv, Clone::clone);
                 let run = |cv| id.run(cv);
@@ -562,9 +577,9 @@ impl Id {
     ///
     /// In particular, `v | path(f)` in context `c` yields the same paths as
     /// `f.paths((c, (v, Default::default())))`.
-    pub fn paths<'a, V: ValT>(&self, cv: Cvp<'a, V>) -> ValPathXs<'a, V> {
+    pub fn paths<'a, V: ValT, D: DataT>(&self, cv: Cvp<'a, V, D>) -> ValPathXs<'a, V> {
         let err = |v| box_once(Err(Exn::from(Error::path_expr(v))));
-        let proj_cv = |cv: &Cvp<'a, V>| (cv.0.clone(), cv.1 .0.clone());
+        let proj_cv = |cv: &Cvp<'a, V, D>| (cv.0.clone(), cv.1 .0.clone());
         let proj_val = |(val, _path): &(V, _)| val.clone();
         match &cv.0.lut.terms[self.0] {
             Ast::ToString => err(cv.1 .0),
@@ -627,9 +642,9 @@ impl Id {
             Ast::CallDef(id, args, skip, tailrec) => {
                 let with_vars = move |vars| Ctx {
                     vars,
+                    data: cv.0.data,
                     lut: cv.0.lut,
                     labels: cv.0.labels,
-                    inputs: cv.0.inputs,
                 };
                 let cvs = bind_vars(args, cv.0.clone().skip_vars(*skip), cv, proj_val);
                 let paths = |cv| id.paths(cv);
@@ -644,8 +659,12 @@ impl Id {
         }
     }
 
-    /// `p.update(lut, (c, v), f)` returns the output of `v | p |= f` in the context `c`.
-    pub fn update<'a, V: ValT>(&self, cv: Cv<'a, V>, f: BoxUpdate<'a, V>) -> ValXs<'a, V> {
+    /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
+    pub fn update<'a, V: ValT, D: DataT>(
+        &self,
+        cv: Cv<'a, V, D>,
+        f: BoxUpdate<'a, V>,
+    ) -> ValXs<'a, V> {
         let err = |v| box_once(Err(Exn::from(Error::path_expr(v))));
         match &cv.0.lut.terms[self.0] {
             Ast::ToString => err(cv.1),

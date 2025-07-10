@@ -10,7 +10,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_core::{load, ops, path, val, Exn, Native, RunPtr};
+use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
 
 #[cfg(feature = "hifijson")]
@@ -358,12 +358,12 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
-pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+pub fn funs<D: DataT>() -> impl Iterator<Item = Filter<Native<Val, D>>> {
     base_funs().chain([run(parse_fun())])
 }
 
 /// Minimal set of filters for JSON values.
-pub fn base_funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+pub fn base_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<Val, D>>> {
     base().into_vec().into_iter().map(run)
 }
 
@@ -371,7 +371,7 @@ fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
     box_once(r.map_err(Exn::from))
 }
 
-fn base() -> Box<[Filter<RunPtr<Val>>]> {
+fn base<D: DataT>() -> Box<[Filter<RunPtr<Val, D>>]> {
     Box::new([
         ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
         ("length", v(0), |cv| box_once_err(cv.1.length())),
@@ -405,7 +405,7 @@ fn from_json(s: &str) -> ValR {
 }
 
 #[cfg(feature = "parse")]
-fn parse_fun() -> Filter<RunPtr<Val>> {
+fn parse_fun<D: DataT>() -> Filter<RunPtr<Val, D>> {
     ("fromjson", v(0), |cv| {
         box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
     })

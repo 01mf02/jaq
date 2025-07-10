@@ -1,15 +1,16 @@
 mod cli;
 mod filter;
+mod funs;
 mod read;
-mod repl;
 mod write;
 
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
 use filter::{run, FileReports, Filter};
 use is_terminal::IsTerminal;
-use jaq_core::{load, RcIter, Vars};
+use jaq_core::{load, Vars};
 use jaq_json::Val;
+use jaq_std::RcIter;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -234,7 +235,8 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
         filter::parse_compile(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
 
     let vars = Vars::new(ctx);
-    let inputs = RcIter::new(Box::new(core::iter::empty()));
+    let inputs = &RcIter::new(Box::new(core::iter::empty()));
+    let data = funs::DataData::new(inputs);
 
     let json = |s: String| {
         use hifijson::token::Lex;
@@ -244,7 +246,7 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     };
     let input = json(test.input)?;
     let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Val, _> = filter.run(vars, &inputs, input).collect();
+    let obtain: Result<Val, _> = filter.run(vars, &data, input).collect();
     Ok((expect?, obtain.map_err(Error::Jaq)?))
 }
 
