@@ -795,7 +795,7 @@ impl core::ops::Rem for Val {
     fn rem(self, rhs: Self) -> Self::Output {
         use Val::Num;
         match (self, rhs) {
-            (Num(x), Num(y)) if y.as_int().map_or(true, |y| y != 0) => Ok(Num(x % y)),
+            (Num(x), Num(y)) if y.as_int() != Some(0) => Ok(Num(x % y)),
             (l, r) => Err(Error::math(l, ops::Math::Rem, r)),
         }
     }
