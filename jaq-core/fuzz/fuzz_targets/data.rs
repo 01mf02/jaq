@@ -1,7 +1,7 @@
 #![no_main]
 
 use jaq_core::load::{Arena, File, Loader};
-use jaq_core::{Compiler, Native, RcIter, Vars};
+use jaq_core::{Compiler, Native, Vars};
 
 use libfuzzer_sys::fuzz_target;
 
@@ -20,6 +20,5 @@ fuzz_target!(|data: String| {
         .compile(modules)
         .unwrap();
 
-    let inputs = RcIter::new(core::iter::empty());
-    let _ = filter.run(Vars::new([]), &inputs, jaq_json::Val::from(data));
+    let _ = filter.run(Vars::new([]), &(), jaq_json::Val::from(data));
 });
