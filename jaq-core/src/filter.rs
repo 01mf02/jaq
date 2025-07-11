@@ -278,7 +278,7 @@ fn bind_run<'a, D: DataT, V: ValT, T: Clone + 'a>(
     r: &'a Id,
     cv: Cv<'a, V, D, T>,
     y: V,
-    run: fn(&'a Id, Cv<'a, V, D, T>) -> ValXs<'a, T, V>,
+    run: IdRunFn<'a, V, D, T>,
 ) -> ValXs<'a, T, V> {
     match pat {
         Pattern::Var => run(r, (cv.0.cons_var(y), cv.1)),
@@ -324,7 +324,7 @@ fn fold_run<'a, D: DataT, V: Clone, T: Clone + 'a>(
     init: &'a Id,
     update: &'a Id,
     fold_type: &'a Fold<Id>,
-    run: fn(&'a Id, Cv<'a, V, D, T>) -> ValXs<'a, T, V>,
+    run: IdRunFn<'a, V, D, T>,
 ) -> ValXs<'a, T, V> {
     let init = run(init, cv.clone());
     let update = move |ctx, v| run(update, (ctx, v));
@@ -399,19 +399,19 @@ fn def_run<'a, D: DataT, V, T: 'a>(
     id: &'a Id,
     tailrec: &Option<Tailrec>,
     cvs: ValXs<'a, Cv<'a, V, D, T>, V>,
-    run: impl Fn(Cv<'a, V, D, T>) -> ValXs<'a, T, V> + 'a + Copy,
+    run: IdRunFn<'a, V, D, T>,
     with_vars: impl Fn(Vars<V>) -> Ctx<'a, V, D> + 'a,
     into: impl Fn(T) -> exn::CallInput<V> + 'a,
     from: impl Fn(exn::CallInput<V>) -> T + 'a,
 ) -> ValXs<'a, T, V> {
     use core::ops::ControlFlow;
     match tailrec {
-        None => flat_map_then(cvs, move |cv| run(cv)),
+        None => flat_map_then(cvs, move |cv| run(id, cv)),
         Some(Tailrec::Catch) => Box::new(crate::Stack::new(
-            [flat_map_then(cvs, move |cv| run(cv))].into(),
+            [flat_map_then(cvs, move |cv| run(id, cv))].into(),
             move |r| match r {
                 Err(Exn(exn::Inner::TailCall(tc))) if tc.0 == *id => {
-                    ControlFlow::Continue(run((with_vars(tc.1), from(tc.2))))
+                    ControlFlow::Continue(run(id, (with_vars(tc.1), from(tc.2))))
                 }
                 Ok(_) | Err(_) => ControlFlow::Break(r),
             },
@@ -473,6 +473,8 @@ pub struct Native<V, D: DataT = ()> {
     paths: PathsPtr<V, D>,
     update: UpdatePtr<V, D>,
 }
+
+type IdRunFn<'a, V, D, T> = fn(&'a Id, Cv<'a, V, D, T>) -> ValXs<'a, T, V>;
 
 /// Run function pointer (see [`Id::run`]).
 pub type RunPtr<V, D> = for<'a> fn(Cv<'a, V, D>) -> ValXs<'a, V>;
@@ -615,9 +617,8 @@ impl Id {
                     labels: cv.0.labels,
                 };
                 let cvs = bind_vars(args, cv.0.clone().skip_vars(*skip), cv, Clone::clone);
-                let run = |cv| id.run(cv);
                 let (into, from) = (exn::CallInput::Run, exn::CallInput::unwrap_run);
-                def_run(id, tailrec, cvs, run, with_vars, into, from)
+                def_run(id, tailrec, cvs, Id::run, with_vars, into, from)
             }
             Ast::Native(id, args) => {
                 let cvs = bind_vars(args, cv.0.with_vars(Vars::new([])), cv, Clone::clone);
@@ -703,9 +704,8 @@ impl Id {
                     labels: cv.0.labels,
                 };
                 let cvs = bind_vars(args, cv.0.clone().skip_vars(*skip), cv, proj_val);
-                let paths = |cv| id.paths(cv);
                 let (into, from) = (exn::CallInput::Paths, exn::CallInput::unwrap_paths);
-                def_run(id, tailrec, cvs, paths, with_vars, into, from)
+                def_run(id, tailrec, cvs, Id::paths, with_vars, into, from)
             }
             Ast::Label(id) => label_run(cv, |cv| id.paths(cv)),
             Ast::Native(id, args) => {
