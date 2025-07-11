@@ -41,7 +41,61 @@ impl<V> Vars<V> {
     }
 }
 
-/// Kind of data for native filters.
+/// Global data for native filters.
+///
+/// This trait allows native filters to operate on
+/// *global data that may live only as long as the filter is executed*.
+/// In particular, this is required by the `inputs` filter,
+/// whose global data --- namely the inputs to the main filter --- has a lifetime.
+///
+/// ## Motivation
+///
+/// If we have global data that is tied to a particular lifetime and
+/// we would bake that actual type of global data into a native filter type,
+/// then native filters could *only be used for data of this particular lifetime*.
+/// For example, suppose that a native filter operating on global data `&'a str`
+/// would have the type `Native<V, &'a str>`.
+/// The crucial point is that here, the `'a` is fixed,
+/// so we could only run the filter with `&'a str` for one particular `'a`.
+/// That would mean that if we want to execute the same filter with
+/// global data having different `'a` lifetimes,
+/// we would need to recompile the filter every time.
+///
+/// This trait allows us to avoid this problem by separating the actual data from
+/// the *knowledge* that a filter will operate on certain type of data.
+/// That allows us to run a filter using global data with a lifetime that
+/// depend on the lifetime of the filter execution.
+///
+/// ## Usage
+///
+/// A type `D` implementing [`DataT`] can be used to instantiate
+/// the type of native filters [`Native<V, D>`].
+/// Here, `D` serves as a marker and does not contain data itself.
+/// Any native filter of type [`Native<V, D>`] can then
+/// access the actual data associated with `D` via [`Ctx::data()`].
+/// We can think about it as follows:
+/// `D` serves as a guarantee that a native filter `Native<V, D>`
+/// will be able to obtain `D::Data`.
+///
+/// ## Example
+///
+/// ~~~
+/// use jaq_core::DataT;
+///
+/// struct DataKind;
+///
+/// impl DataT for DataKind {
+///     type Data<'a> = &'a str;
+/// }
+///
+/// type Native<V> = jaq_core::Native<V, DataKind>;
+/// ~~~
+///
+/// Here, `DataKind` serves as guarantee that native filters will be able to
+/// access global data of type `&'a str` that may
+/// live only as long as the filter is executed.
+/// This allows us the execute the filters arbitrarily often for
+/// short-lived values of type `&'a str`.
 pub trait DataT {
     /// The actual data.
     type Data<'a>;
