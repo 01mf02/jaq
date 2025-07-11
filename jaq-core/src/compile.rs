@@ -489,7 +489,7 @@ impl<'s, F> Compiler<&'s str, F> {
     /// Assume the existence of global variables with given names.
     ///
     /// The names all have to start with `$`.
-    /// For execution, the corresponding values have to be provided via [`crate::Ctx::new`].
+    /// For execution, the corresponding values have to be provided via [`crate::Filter::run`].
     pub fn with_global_vars(self, global_vars: impl IntoIterator<Item = &'s str>) -> Self {
         Self {
             global_vars: global_vars.into_iter().collect(),

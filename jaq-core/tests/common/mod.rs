@@ -1,4 +1,4 @@
-use jaq_json::{Error, Val, ValR};
+pub use jaq_json::{Error, Val, ValR};
 use serde_json::Value;
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {

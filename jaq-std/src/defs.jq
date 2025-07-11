@@ -92,6 +92,8 @@ def max: max_by(.);
 def unique_by(f): [group_by(f)[] | .[0]];
 def unique: unique_by(.);
 
+# Paths
+def paths(f): path_values | if .[1] | f then .[0] else empty end;
 def getpath($path): reduce $path[] as $p (.; .[$p]);
 def del(f): f |= empty;
 
@@ -102,6 +104,12 @@ def nth(n): .[ n];
 
 def skip($n; g): foreach g as $x ($n; . - 1; if . < 0 then $x else empty end);
 def nth(n; g): last(limit(n + 1; g));
+
+# Objects <-> Arrays
+def keys: keys_unsorted | sort;
+def   to_entries: [keys_unsorted[] as $k | { key: $k, value: .[$k] }];
+def from_entries: map({ (.key): .value }) | add + {};
+def with_entries(f): to_entries | map(f) | from_entries;
 
 # Predicates
 def isempty(g): first((g | false), true);
@@ -145,9 +153,6 @@ def capture(re): capture(re; "");
 def  splits(re):  splits(re; "");
 def  sub(re; f): sub(re; f;  "");
 def gsub(re; f): sub(re; f; "g");
-
-# I/O
-def input: first(inputs);
 
 # Date
 def   todate:   todateiso8601;

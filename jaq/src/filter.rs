@@ -1,10 +1,11 @@
 //! Filter parsing, compilation, and execution.
-use crate::{read, repl, Cli, Error, Val};
+use crate::{funs, read, Cli, Error, Val};
 use core::fmt::{self, Display, Formatter};
-use jaq_core::{compile, load, Ctx, Native, RcIter, ValT};
+use jaq_core::{compile, load, Native, ValT, Vars};
+use jaq_std::input::RcIter;
 use std::{io, path::PathBuf};
 
-pub type Filter = jaq_core::Filter<Native<Val>>;
+pub type Filter = jaq_core::Filter<Native<Val, funs::DataKind>>;
 
 pub fn parse_compile(
     path: &PathBuf,
@@ -36,7 +37,7 @@ pub fn parse_compile(
     })
     .map_err(load_errors)?;
 
-    let funs = jaq_std::funs().chain(jaq_json::funs()).chain([repl::fun()]);
+    let funs = jaq_std::funs().chain(jaq_json::funs()).chain(funs::funs());
     let compiler = Compiler::default()
         .with_funs(funs)
         .with_global_vars(vars.iter().map(|v| &**v));
@@ -61,15 +62,16 @@ pub(crate) fn run(
     let iter = Box::new(iter) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    let iter = RcIter::new(iter);
-    let null = RcIter::new(null);
+    let iter = &RcIter::new(iter);
+    let null = &RcIter::new(null);
 
-    let ctx = Ctx::new(vars, &iter);
+    let vars = Vars::new(vars);
 
-    for item in if cli.null_input { &null } else { &iter } {
+    for item in if cli.null_input { null } else { iter } {
+        let data = funs::Data::new(iter);
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
-        for output in filter.run((ctx.clone(), input)) {
+        for output in filter.run(vars.clone(), &data, input) {
             let output = output.map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;

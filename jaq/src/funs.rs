@@ -1,25 +1,65 @@
 use crate::{filter, run, write, Cli, Error, Val};
-use jaq_core::Native;
-use jaq_std::Filter;
+use jaq_core::{DataT, Native, RunPtr};
+use jaq_std::input::{self, Inputs};
+use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-// counter that increases for each nested invocation of `repl`
-static DEPTH: AtomicUsize = AtomicUsize::new(0);
+pub struct DataKind;
 
-pub fn fun() -> Filter<Native<Val>> {
-    jaq_std::run(("repl", jaq_std::v(0), |_, cv| {
-        let depth = DEPTH.fetch_add(1, Ordering::Relaxed);
+impl DataT for DataKind {
+    type Data<'a> = &'a Data<'a>;
+}
+
+pub struct Data<'a> {
+    inputs: Inputs<'a, Val>,
+    /// counter that increases for each nested invocation of `repl`
+    repl_depth: AtomicUsize,
+}
+
+impl<'a> Data<'a> {
+    pub fn new(inputs: Inputs<'a, Val>) -> Self {
+        Self {
+            inputs,
+            repl_depth: AtomicUsize::new(0),
+        }
+    }
+}
+
+pub trait HasRepl {
+    fn repl_depth(&self) -> &AtomicUsize;
+}
+
+impl HasRepl for &'_ Data<'_> {
+    fn repl_depth(&self) -> &AtomicUsize {
+        &self.repl_depth
+    }
+}
+
+impl<'a> input::HasInputs<'a, Val> for &'a Data<'a> {
+    fn inputs(&self) -> Inputs<'a, Val> {
+        self.inputs
+    }
+}
+
+pub fn funs() -> impl Iterator<Item = Filter<Native<Val, DataKind>>> {
+    [repl()].into_iter().chain(input::funs()).map(jaq_std::run)
+}
+
+pub fn repl<D: for<'a> DataT<Data<'a>: HasRepl>>() -> Filter<RunPtr<Val, D>> {
+    ("repl", v(0), |cv| {
+        // TODO!!!
+        let depth = cv.0.data().repl_depth().fetch_add(1, Ordering::Relaxed);
         repl_with(depth, |s| match eval(s, cv.1.clone()) {
             Ok(()) => (),
             Err(e) => eprint!("{e}"),
         })
         .unwrap();
-        DEPTH.fetch_sub(1, Ordering::Relaxed);
+        cv.0.data().repl_depth().fetch_sub(1, Ordering::Relaxed);
 
         Box::new(core::iter::empty())
-    }))
+    })
 }
 
 fn eval(code: String, input: Val) -> Result<(), Error> {
