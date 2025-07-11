@@ -20,5 +20,5 @@ fuzz_target!(|data: String| {
         .compile(modules)
         .unwrap();
 
-    let _ = filter.run(Vars::new([]), &(), jaq_json::Val::from(data));
+    let _ = filter.run(Vars::new([]), (), jaq_json::Val::from(data));
 });

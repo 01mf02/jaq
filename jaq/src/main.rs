@@ -235,7 +235,7 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
 
     let vars = Vars::new(ctx);
     let inputs = &jaq_std::input::RcIter::new(Box::new(core::iter::empty()));
-    let data = funs::DataData::new(inputs);
+    let data = funs::Data::new(inputs);
 
     let json = |s: String| {
         use hifijson::token::Lex;

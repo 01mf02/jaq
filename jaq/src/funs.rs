@@ -6,19 +6,19 @@ use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub struct Data;
+pub struct DataKind;
 
-impl DataT for Data {
-    type Data<'a> = DataData<'a>;
+impl DataT for DataKind {
+    type Data<'a> = &'a Data<'a>;
 }
 
-pub struct DataData<'a> {
+pub struct Data<'a> {
     inputs: Inputs<'a, Val>,
     /// counter that increases for each nested invocation of `repl`
     repl_depth: AtomicUsize,
 }
 
-impl<'a> DataData<'a> {
+impl<'a> Data<'a> {
     pub fn new(inputs: Inputs<'a, Val>) -> Self {
         Self {
             inputs,
@@ -31,19 +31,19 @@ pub trait HasRepl {
     fn repl_depth(&self) -> &AtomicUsize;
 }
 
-impl HasRepl for DataData<'_> {
+impl HasRepl for &'_ Data<'_> {
     fn repl_depth(&self) -> &AtomicUsize {
         &self.repl_depth
     }
 }
 
-impl<'a> input::HasInputs<'a, Val> for DataData<'a> {
+impl<'a> input::HasInputs<'a, Val> for &'a Data<'a> {
     fn inputs(&self) -> Inputs<'a, Val> {
         self.inputs
     }
 }
 
-pub fn funs() -> impl Iterator<Item = Filter<Native<Val, Data>>> {
+pub fn funs() -> impl Iterator<Item = Filter<Native<Val, DataKind>>> {
     [repl()].into_iter().chain(input::funs()).map(jaq_std::run)
 }
 

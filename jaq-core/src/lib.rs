@@ -33,7 +33,7 @@
 //!     .unwrap();
 //!
 //! // iterator over the output values
-//! let mut out = filter.run(Vars::new([]), &(), Val::from(input));
+//! let mut out = filter.run(Vars::new([]), (), Val::from(input));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -119,11 +119,11 @@ impl<V: ValT, D: DataT> Filter<Native<V, D>> {
     pub fn run<'a>(
         &'a self,
         vars: Vars<V>,
-        data: &'a D::Data<'a>,
+        data: D::Data<'a>,
         v: V,
     ) -> impl Iterator<Item = ValR<V>> + 'a {
         self.0
-            .run((Ctx::new(&self.1, vars, &data), v))
+            .run((Ctx::new(&self.1, vars, data), v))
             .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
     }
 }
@@ -133,7 +133,7 @@ impl<V: ValT> Filter<Native<V>> {
     ///
     /// This is for testing purposes.
     pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
-        let out = self.run(Vars::new([]), &(), x);
+        let out = self.run(Vars::new([]), (), x);
         assert!(out.eq(ys));
     }
 }

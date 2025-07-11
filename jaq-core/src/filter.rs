@@ -98,7 +98,7 @@ impl<V> Vars<V> {
 /// short-lived values of type `&'a str`.
 pub trait DataT {
     /// The actual data.
-    type Data<'a>;
+    type Data<'a>: Clone;
 }
 
 impl DataT for () {
@@ -108,7 +108,7 @@ impl DataT for () {
 /// Filter execution context.
 pub struct Ctx<'a, V, D: DataT> {
     lut: &'a Lut<V, D>,
-    data: &'a D::Data<'a>,
+    data: D::Data<'a>,
     vars: Vars<V>,
     /// Number of bound labels at the current path
     ///
@@ -124,7 +124,7 @@ impl<'a, D: DataT, V> Clone for Ctx<'a, V, D> {
 
 impl<'a, D: DataT, V> Ctx<'a, V, D> {
     /// Construct a fresh context.
-    pub(crate) fn new(lut: &'a Lut<V, D>, vars: Vars<V>, data: &'a D::Data<'a>) -> Self {
+    pub(crate) fn new(lut: &'a Lut<V, D>, vars: Vars<V>, data: D::Data<'a>) -> Self {
         Self {
             lut,
             data,
@@ -163,15 +163,15 @@ impl<'a, D: DataT, V> Ctx<'a, V, D> {
     fn with_vars(&self, vars: Vars<V>) -> Self {
         Self {
             vars,
-            data: self.data,
+            data: self.data.clone(),
             lut: self.lut,
             labels: self.labels,
         }
     }
 
     /// Return global data.
-    pub fn data(&self) -> &'a D::Data<'a> {
-        self.data
+    pub fn data(&self) -> &D::Data<'a> {
+        &self.data
     }
 }
 
@@ -607,9 +607,10 @@ impl Id {
                 Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
             Ast::CallDef(id, args, skip, tailrec) => {
+                let data = cv.0.data.clone();
                 let with_vars = move |vars| Ctx {
                     vars,
-                    data: cv.0.data,
+                    data: data.clone(),
                     lut: cv.0.lut,
                     labels: cv.0.labels,
                 };
@@ -694,9 +695,10 @@ impl Id {
                 fold_run(xs, cv, init, update, fold_type, |f, cv| f.paths(cv))
             }
             Ast::CallDef(id, args, skip, tailrec) => {
+                let data = cv.0.data.clone();
                 let with_vars = move |vars| Ctx {
                     vars,
-                    data: cv.0.data,
+                    data: data.clone(),
                     lut: cv.0.lut,
                     labels: cv.0.labels,
                 };

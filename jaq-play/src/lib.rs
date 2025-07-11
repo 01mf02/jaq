@@ -264,7 +264,7 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
 
     for x in if settings.null_input { null } else { iter } {
         let x = x.map_err(Error::Hifijson)?;
-        for y in filter.run(vars.clone(), &iter, x) {
+        for y in filter.run(vars.clone(), iter, x) {
             f(y.map_err(Error::Jaq)?);
         }
     }

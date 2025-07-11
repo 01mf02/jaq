@@ -5,7 +5,7 @@ use jaq_core::{compile, load, Native, ValT, Vars};
 use jaq_std::input::RcIter;
 use std::{io, path::PathBuf};
 
-pub type Filter = jaq_core::Filter<Native<Val, funs::Data>>;
+pub type Filter = jaq_core::Filter<Native<Val, funs::DataKind>>;
 
 pub fn parse_compile(
     path: &PathBuf,
@@ -68,7 +68,7 @@ pub(crate) fn run(
     let vars = Vars::new(vars);
 
     for item in if cli.null_input { null } else { iter } {
-        let data = funs::DataData::new(iter);
+        let data = funs::Data::new(iter);
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
         for output in filter.run(vars.clone(), &data, input) {
