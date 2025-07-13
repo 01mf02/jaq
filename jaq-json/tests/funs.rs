@@ -84,6 +84,32 @@ fn tojson() {
 }
 
 #[test]
+fn tonumber() {
+    give(json!(1.0), "tonumber", json!(1.0));
+    give(json!("1.0"), "tonumber", json!(1.0));
+    give(json!("42"), "tonumber", json!(42));
+    give(json!("null"), "try tonumber catch -7", json!(-7));
+    give(json!("true"), "try tonumber catch -7", json!(-7));
+    give(json!("str"), "try tonumber catch -7", json!(-7));
+    give(json!("\"str\""), "try tonumber catch -7", json!(-7));
+    give(json!("[3, 4]"), "try tonumber catch -7", json!(-7));
+    give(json!("{\"a\": 1}"), "try tonumber catch -7", json!(-7));
+}
+
+#[test]
+fn toboolean() {
+    give(json!(false), "toboolean", json!(false));
+    give(json!("true"), "toboolean", json!(true));
+    give(json!("false"), "toboolean", json!(false));
+    give(json!("null"), "try toboolean catch -7", json!(-7));
+    give(json!("3"), "try toboolean catch -7", json!(-7));
+    give(json!("str"), "try toboolean catch -7", json!(-7));
+    give(json!("\"str\""), "try toboolean catch -7", json!(-7));
+    give(json!("[3, 4]"), "try toboolean catch -7", json!(-7));
+    give(json!("{\"a\": 1}"), "try toboolean catch -7", json!(-7));
+}
+
+#[test]
 fn math_rem() {
     // generated with this command with modification for errors and float rounding
     // cargo run -- -rn 'def f: -2, -1, 0, 2.1, 3, 2000000001; f as $a | f as $b | "give!(json!(null), \"\($a) / \($b)\", \(try ($a % $b) catch tojson));"'

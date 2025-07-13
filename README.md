@@ -296,7 +296,7 @@ Their definitions are at [`std.jq`](jaq-std/src/std.jq).
 - [x] Type (`type`)
 - [x] Filtering (`select(. >= 0)`)
 - [x] Selection (`values`, `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`, `iterables`, `scalars`)
-- [x] Conversion (`tostring`, `tonumber`)
+- [x] Conversion (`tostring`, `tonumber`, `toboolean`)
 - [x] Iterable filters (`map(.+1)`, `map_values(.+1)`, `add`, `join("a")`)
 - [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`, `min`, `max`)
 - [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)

@@ -1,5 +1,12 @@
 # Conversion
-def tonumber: if isnumber then . else fromjson end;
+def tonumber: if (isnumber | not) then
+  fromjson |
+  if (isnumber | not) then error("cannot parse number") end
+end;
+def toboolean: if (isboolean | not) then
+  fromjson |
+  if (isboolean | not) then error("cannot parse boolean") end
+end;
 
 # Arrays
 def transpose: [range([.[] | length] | max) as $i | [.[][$i]]];
