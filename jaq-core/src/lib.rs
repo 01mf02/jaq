@@ -61,7 +61,6 @@ mod rc_list;
 mod stack;
 pub mod val;
 
-pub use compile::Compiler;
 pub use data::DataT;
 pub use exn::{Error, Exn};
 pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
@@ -111,6 +110,8 @@ impl<T> Bind<T, T> {
     }
 }
 
+/// jq program compiler.
+pub type Compiler<S, D> = compile::Compiler<S, Native<D>>;
 /// Function from a value to a stream of value results.
 pub type Filter<D> = compile::Filter<Native<D>>;
 /// Lookup table for terms and functions.
