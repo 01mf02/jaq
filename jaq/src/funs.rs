@@ -4,7 +4,7 @@ use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{Ordering, AtomicUsize};
 
 pub struct DataKind;
 
@@ -43,6 +43,8 @@ pub fn funs() -> impl Iterator<Item = Filter<Native<DataKind>>> {
 
 /// counter that increases for each nested invocation of `repl`
 static REPL_DEPTH: AtomicUsize = AtomicUsize::new(0);
+/// immediately abort REPL if REPL_DEPTH + 1 == REPL_KILL_DEPTH
+static REPL_KILL_DEPTH: AtomicUsize = AtomicUsize::new(0);
 
 pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
@@ -78,13 +80,28 @@ fn repl_with(depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
     let _ = history.iter().try_for_each(|h| rl.load_history(h));
     let prompt = format!("{}{} ", str::repeat("  ", depth), '>'.bold());
+    let mut first = true;
     loop {
+        use core::cmp::Ordering::{Equal, Less, Greater};
+        match (depth + 1).cmp(&REPL_KILL_DEPTH.load(Ordering::Relaxed)) {
+            Equal => break,
+            // reset kill depth if we are below the level where REPL was killed
+            Less => REPL_KILL_DEPTH.store(0, Ordering::Relaxed),
+            // in this case, kill depth is zero; that is, inactive
+            Greater => (),
+        }
         match rl.readline(&prompt) {
+            Ok(line) if line.chars().all(char::is_whitespace) => (),
             Ok(line) => f(line),
             Err(ReadlineError::Interrupted) => (),
             Err(ReadlineError::Eof) => break,
             Err(err) => Err(err)?,
         }
+        first = false;
+    }
+    // only kill subsequent REPLs at this depth if the first command was "^D" (EOF)
+    if first {
+        REPL_KILL_DEPTH.store(depth + 1, Ordering::Relaxed);
     }
     let _ = history.iter().try_for_each(|h| rl.append_history(h));
     Ok(())
