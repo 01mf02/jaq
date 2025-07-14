@@ -20,7 +20,7 @@ use crate::{Lut, ValT};
 /// The crucial point is that here, the `'a` is fixed,
 /// so we could only run the filter with `&'a str` for one particular `'a`.
 /// That would mean that if we want to execute the same filter with
-/// global data having different `'a` lifetimes
+/// data having different `'a` lifetimes
 /// (e.g. for strings coming from different files),
 /// we would need to recompile the filter every time (i.e. for every file).
 ///
