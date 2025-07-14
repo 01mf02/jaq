@@ -4,17 +4,36 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, load, DataT, Native};
+use jaq_core::{compile, load, unwrap_valr, Ctx, DataT, HasLut, Lut, Vars};
 use jaq_json::{fmt_str, Val};
+use jaq_std::input::{HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
-struct Data;
+struct DataKind;
 
-impl DataT for Data {
-    type Data<'a> = jaq_std::input::Inputs<'a, Val>;
+impl DataT for DataKind {
+    type V<'a> = Val;
+    type Data<'a> = Data<'a>;
 }
 
-type Filter = jaq_core::Filter<Native<Val, Data>>;
+#[derive(Clone)]
+struct Data<'a> {
+    lut: &'a Lut<DataKind>,
+    inputs: Inputs<'a, Val>,
+}
+
+impl<'a> HasLut<'a, DataKind> for Data<'a> {
+    fn lut(&self) -> &'a Lut<DataKind> {
+        self.lut
+    }
+}
+impl<'a> HasInputs<'a, Val> for Data<'a> {
+    fn inputs(&self) -> Inputs<'a, Val> {
+        self.inputs
+    }
+}
+
+type Filter = jaq_core::Filter<DataKind>;
 
 struct FormatterFn<F>(F);
 
@@ -249,7 +268,6 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    use jaq_std::input::{Inputs, RcIter};
     let (vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);
@@ -260,12 +278,17 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     let iter: Inputs<_> = &RcIter::new(iter);
     let null: Inputs<_> = &RcIter::new(null);
 
-    let vars = jaq_core::Vars::new(vals);
+    let data = Data {
+        inputs: iter,
+        lut: &filter.lut,
+    };
+    let vars = Vars::new(vals);
+    let ctx = Ctx::<DataKind>::new(data, vars);
 
     for x in if settings.null_input { null } else { iter } {
         let x = x.map_err(Error::Hifijson)?;
-        for y in filter.run(vars.clone(), iter, x) {
-            f(y.map_err(Error::Jaq)?);
+        for y in filter.id.run((ctx.clone(), x)) {
+            f(unwrap_valr(y).map_err(Error::Jaq)?);
         }
     }
     Ok(())
@@ -285,8 +308,9 @@ fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileRepo
     let vals = Vec::new();
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
+    let input_funs = IntoIterator::into_iter(jaq_std::input::funs()).map(jaq_std::run);
     let compiler = Compiler::default()
-        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+        .with_funs(jaq_std::funs().chain(jaq_json::funs()).chain(input_funs))
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))

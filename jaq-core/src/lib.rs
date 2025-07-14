@@ -12,7 +12,7 @@
 //! (This example requires enabling the `serde_json` feature for `jaq-json`.)
 //!
 //! ~~~
-//! use jaq_core::{Compiler, Vars};
+//! use jaq_core::{unwrap_valr, Compiler, Ctx, JustLut, Vars};
 //! use jaq_core::load::{Arena, File, Loader};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
@@ -28,12 +28,14 @@
 //!
 //! // compile the filter
 //! let filter = jaq_core::Compiler::default()
-//!     .with_funs(jaq_std::funs().chain(jaq_json::funs::<()>()))
+//!     .with_funs(jaq_std::funs().chain(jaq_json::funs()))
 //!     .compile(modules)
 //!     .unwrap();
 //!
+//! // context for filter execution
+//! let ctx = Ctx::<JustLut<Val>>::new(&filter.lut, Vars::new([]));
 //! // iterator over the output values
-//! let mut out = filter.run(Vars::new([]), (), Val::from(input));
+//! let mut out = filter.id.run((ctx, Val::from(input))).map(unwrap_valr);
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -49,6 +51,7 @@ extern crate std;
 
 pub mod box_iter;
 pub mod compile;
+mod data;
 mod exn;
 mod filter;
 mod fold;
@@ -62,9 +65,10 @@ mod stack;
 pub mod val;
 
 pub use compile::Compiler;
+pub use data::{DataT, HasLut, JustLut};
 pub use exn::{Error, Exn};
-pub use filter::{Ctx, Cv, DataT, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
-pub use val::{ValR, ValT, ValX, ValXs};
+pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
+pub use val::{unwrap_valr, ValR, ValT, ValX, ValXs};
 
 use rc_list::List as RcList;
 use stack::Stack;
@@ -111,29 +115,17 @@ impl<T> Bind<T, T> {
 }
 
 /// Function from a value to a stream of value results.
-#[derive(Debug, Clone)]
-pub struct Filter<F>(compile::TermId, pub compile::Lut<F>);
+pub type Filter<D> = compile::Filter<Native<D>>;
+/// Lookup table for terms and functions.
+pub type Lut<D> = compile::Lut<Native<D>>;
 
-impl<V: ValT, D: DataT> Filter<Native<V, D>> {
-    /// Run a filter on given input, yielding output values.
-    pub fn run<'a>(
-        &'a self,
-        vars: Vars<V>,
-        data: D::Data<'a>,
-        v: V,
-    ) -> impl Iterator<Item = ValR<V>> + 'a {
-        self.0
-            .run((Ctx::new(&self.1, vars, data), v))
-            .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
-    }
-}
-
-impl<V: ValT> Filter<Native<V>> {
+impl<V: ValT + 'static> Filter<JustLut<V>> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
     pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
-        let out = self.run(Vars::new([]), (), x);
+        let ctx = Ctx::<JustLut<V>>::new(&self.lut, Vars::new([]));
+        let out = self.id.run((ctx, x)).map(unwrap_valr);
         assert!(out.eq(ys));
     }
 }

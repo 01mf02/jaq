@@ -1,5 +1,5 @@
 use crate::{filter, run, write, Cli, Error, Val};
-use jaq_core::{DataT, Native, RunPtr};
+use jaq_core::{DataT, HasLut, Lut, Native, RunPtr};
 use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
@@ -9,31 +9,24 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct DataKind;
 
 impl DataT for DataKind {
+    type V<'a> = Val;
     type Data<'a> = &'a Data<'a>;
 }
 
 pub struct Data<'a> {
+    lut: &'a Lut<DataKind>,
     inputs: Inputs<'a, Val>,
-    /// counter that increases for each nested invocation of `repl`
-    repl_depth: AtomicUsize,
 }
 
 impl<'a> Data<'a> {
-    pub fn new(inputs: Inputs<'a, Val>) -> Self {
-        Self {
-            inputs,
-            repl_depth: AtomicUsize::new(0),
-        }
+    pub fn new(lut: &'a Lut<DataKind>, inputs: Inputs<'a, Val>) -> Self {
+        Self { lut, inputs }
     }
 }
 
-pub trait HasRepl {
-    fn repl_depth(&self) -> &AtomicUsize;
-}
-
-impl HasRepl for &'_ Data<'_> {
-    fn repl_depth(&self) -> &AtomicUsize {
-        &self.repl_depth
+impl<'a> HasLut<'a, DataKind> for &'a Data<'a> {
+    fn lut(&self) -> &'a Lut<DataKind> {
+        self.lut
     }
 }
 
@@ -43,20 +36,23 @@ impl<'a> input::HasInputs<'a, Val> for &'a Data<'a> {
     }
 }
 
-pub fn funs() -> impl Iterator<Item = Filter<Native<Val, DataKind>>> {
-    [repl()].into_iter().chain(input::funs()).map(jaq_std::run)
+pub fn funs() -> impl Iterator<Item = Filter<Native<DataKind>>> {
+    let input_funs = IntoIterator::into_iter(input::funs()).map(jaq_std::run);
+    core::iter::once(jaq_std::run::<DataKind>(repl())).chain(input_funs)
 }
 
-pub fn repl<D: for<'a> DataT<Data<'a>: HasRepl>>() -> Filter<RunPtr<Val, D>> {
+/// counter that increases for each nested invocation of `repl`
+static REPL_DEPTH: AtomicUsize = AtomicUsize::new(0);
+
+pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
-        // TODO!!!
-        let depth = cv.0.data().repl_depth().fetch_add(1, Ordering::Relaxed);
+        let depth = REPL_DEPTH.fetch_add(1, Ordering::Relaxed);
         repl_with(depth, |s| match eval(s, cv.1.clone()) {
             Ok(()) => (),
             Err(e) => eprint!("{e}"),
         })
         .unwrap();
-        cv.0.data().repl_depth().fetch_sub(1, Ordering::Relaxed);
+        REPL_DEPTH.fetch_sub(1, Ordering::Relaxed);
 
         Box::new(core::iter::empty())
     })

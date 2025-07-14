@@ -1,11 +1,12 @@
 //! Filter parsing, compilation, and execution.
 use crate::{funs, read, Cli, Error, Val};
 use core::fmt::{self, Display, Formatter};
-use jaq_core::{compile, load, Native, ValT, Vars};
+use jaq_core::{compile, load, unwrap_valr, ValT, Vars};
 use jaq_std::input::RcIter;
 use std::{io, path::PathBuf};
 
-pub type Filter = jaq_core::Filter<Native<Val, funs::DataKind>>;
+pub type Filter = jaq_core::Filter<funs::DataKind>;
+pub type Ctx<'a> = jaq_core::Ctx<'a, funs::DataKind>;
 
 pub fn parse_compile(
     path: &PathBuf,
@@ -68,11 +69,12 @@ pub(crate) fn run(
     let vars = Vars::new(vars);
 
     for item in if cli.null_input { null } else { iter } {
-        let data = funs::Data::new(iter);
+        let data = funs::Data::new(&filter.lut, iter);
+        let ctx = Ctx::new(&data, vars.clone());
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);
-        for output in filter.run(vars.clone(), &data, input) {
-            let output = output.map_err(Error::Jaq)?;
+        for output in filter.id.run((ctx.clone(), input)) {
+            let output = unwrap_valr(output).map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
         }

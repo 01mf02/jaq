@@ -358,12 +358,12 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
-pub fn funs<D: DataT>() -> impl Iterator<Item = Filter<Native<Val, D>>> {
+pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base_funs().chain([run(parse_fun())])
 }
 
 /// Minimal set of filters for JSON values.
-pub fn base_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<Val, D>>> {
+pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base().into_vec().into_iter().map(run)
 }
 
@@ -371,7 +371,7 @@ fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
     box_once(r.map_err(Exn::from))
 }
 
-fn base<D: DataT>() -> Box<[Filter<RunPtr<Val, D>>]> {
+fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
         ("length", v(0), |cv| box_once_err(cv.1.length())),
@@ -405,7 +405,7 @@ fn from_json(s: &str) -> ValR {
 }
 
 #[cfg(feature = "parse")]
-fn parse_fun<D: DataT>() -> Filter<RunPtr<Val, D>> {
+fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
     ("fromjson", v(0), |cv| {
         box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
     })

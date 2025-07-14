@@ -1,7 +1,7 @@
 //! Native implementations of `inputs` and `input`.
 use crate::{v, Filter};
 use alloc::{boxed::Box, string::String};
-use jaq_core::{Cv, DataT, Error, Exn, RunPtr, ValT, ValX};
+use jaq_core::{Cv, DataT, Error, Exn, RunPtr, ValX};
 
 /// Iterator over value results returned by the `inputs` filter.
 pub type Inputs<'i, V> = &'i RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
@@ -36,17 +36,16 @@ impl<'a, V> HasInputs<'a, V> for Inputs<'a, V> {
 }
 
 /// The `inputs` and `input` filters.
-pub fn funs<V: ValT, D: for<'a> DataT<Data<'a>: HasInputs<'a, V>>>() -> Box<[Filter<RunPtr<V, D>>]>
-{
+pub fn funs<D: for<'a> DataT<Data<'a>: HasInputs<'a, D::V<'a>>>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("inputs", v(0), |cv| Box::new(inputs(cv))),
         ("input", v(0), |cv| Box::new(inputs(cv).next().into_iter())),
     ])
 }
 
-fn inputs<'a, V: ValT, D: DataT<Data<'a>: HasInputs<'a, V>>>(
-    cv: Cv<'a, V, D>,
-) -> impl Iterator<Item = ValX<V>> + 'a {
+fn inputs<'a, D: DataT<Data<'a>: HasInputs<'a, D::V<'a>>>>(
+    cv: Cv<'a, D>,
+) -> impl Iterator<Item = ValX<D::V<'a>>> + 'a {
     let inputs = cv.0.data().inputs();
     inputs.map(|r| r.map_err(|e| Exn::from(Error::str(e))))
 }

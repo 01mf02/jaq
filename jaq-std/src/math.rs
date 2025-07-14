@@ -38,30 +38,33 @@ pub(crate) use math;
 /// Build a filter from float to float
 macro_rules! f_f {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, V::from)
+        crate::math::math!($f, D::V::as_f64, D::V::from)
     };
 }
 
 /// Build a filter from float to int
 macro_rules! f_i {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, |x| V::from(x as isize))
+        crate::math::math!($f, D::V::as_f64, |x| D::V::from(x as isize))
     };
 }
 
 /// Build a filter from float to (float, int)
 macro_rules! f_fi {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, |(x, y)| [V::from(x), V::from(y as isize)]
-            .into_iter()
-            .collect())
+        crate::math::math!($f, D::V::as_f64, |(x, y)| [
+            D::V::from(x),
+            D::V::from(y as isize)
+        ]
+        .into_iter()
+        .collect())
     };
 }
 
 /// Build a filter from float to (float, float)
 macro_rules! f_ff {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, |(x, y)| [V::from(x), V::from(y)]
+        crate::math::math!($f, D::V::as_f64, |(x, y)| [D::V::from(x), D::V::from(y)]
             .into_iter()
             .collect())
     };
@@ -70,28 +73,28 @@ macro_rules! f_ff {
 /// Build a filter from (float, float) to float
 macro_rules! ff_f {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, V::as_f64, V::from)
+        crate::math::math!($f, D::V::as_f64, D::V::as_f64, D::V::from)
     };
 }
 
 /// Build a filter from (int, float) to float
 macro_rules! if_f {
     ($f: ident) => {
-        crate::math::math!($f, V::try_as_i32, V::as_f64, V::from)
+        crate::math::math!($f, D::V::try_as_i32, D::V::as_f64, D::V::from)
     };
 }
 
 /// Build a filter from (float, int) to float
 macro_rules! fi_f {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, V::try_as_i32, V::from)
+        crate::math::math!($f, D::V::as_f64, D::V::try_as_i32, D::V::from)
     };
 }
 
 /// Build a filter from (float, float, float) to float
 macro_rules! fff_f {
     ($f: ident) => {
-        crate::math::math!($f, V::as_f64, V::as_f64, V::as_f64, V::from)
+        crate::math::math!($f, D::V::as_f64, D::V::as_f64, D::V::as_f64, D::V::from)
     };
 }
 
