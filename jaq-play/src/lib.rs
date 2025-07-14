@@ -4,7 +4,7 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, load, unwrap_valr, Ctx, DataT, HasLut, Lut, Vars};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Vars};
 use jaq_json::{fmt_str, Val};
 use jaq_std::input::{HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
@@ -22,7 +22,7 @@ struct Data<'a> {
     inputs: Inputs<'a, Val>,
 }
 
-impl<'a> HasLut<'a, DataKind> for Data<'a> {
+impl<'a> data::HasLut<'a, DataKind> for Data<'a> {
     fn lut(&self) -> &'a Lut<DataKind> {
         self.lut
     }

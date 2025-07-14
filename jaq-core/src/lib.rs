@@ -1,18 +1,15 @@
-//! JSON query language interpreter.
+//! jq language parser, compiler, and interpreter.
 //!
-//! This crate allows you to execute jq-like filters.
+//! This crate allows you to parse, compile, and execute jq-like filters.
 //!
 //! The example below demonstrates how to use this crate.
-//! See the implementation in the `jaq` crate if you are interested in how to:
-//!
-//! * enable usage of the standard library,
-//! * load JSON files lazily,
-//! * handle errors etc.
+//! See the implementation in the `jaq` crate if you are interested in
+//! more complex use cases, such as lazy JSON file loading, error handling etc.
 //!
 //! (This example requires enabling the `serde_json` feature for `jaq-json`.)
 //!
 //! ~~~
-//! use jaq_core::{unwrap_valr, Compiler, Ctx, JustLut, Vars};
+//! use jaq_core::{data, unwrap_valr, Compiler, Ctx, Vars};
 //! use jaq_core::load::{Arena, File, Loader};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
@@ -33,7 +30,7 @@
 //!     .unwrap();
 //!
 //! // context for filter execution
-//! let ctx = Ctx::<JustLut<Val>>::new(&filter.lut, Vars::new([]));
+//! let ctx = Ctx::<data::JustLut<Val>>::new(&filter.lut, Vars::new([]));
 //! // iterator over the output values
 //! let mut out = filter.id.run((ctx, Val::from(input))).map(unwrap_valr);
 //!
@@ -51,7 +48,7 @@ extern crate std;
 
 pub mod box_iter;
 pub mod compile;
-mod data;
+pub mod data;
 mod exn;
 mod filter;
 mod fold;
@@ -65,7 +62,7 @@ mod stack;
 pub mod val;
 
 pub use compile::Compiler;
-pub use data::{DataT, HasLut, JustLut};
+pub use data::DataT;
 pub use exn::{Error, Exn};
 pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
 pub use val::{unwrap_valr, ValR, ValT, ValX, ValXs};
@@ -119,12 +116,12 @@ pub type Filter<D> = compile::Filter<Native<D>>;
 /// Lookup table for terms and functions.
 pub type Lut<D> = compile::Lut<Native<D>>;
 
-impl<V: ValT + 'static> Filter<JustLut<V>> {
+impl<V: ValT + 'static> Filter<data::JustLut<V>> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
     pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
-        let ctx = Ctx::<JustLut<V>>::new(&self.lut, Vars::new([]));
+        let ctx = Ctx::<data::JustLut<V>>::new(&self.lut, Vars::new([]));
         let out = self.id.run((ctx, x)).map(unwrap_valr);
         assert!(out.eq(ys));
     }

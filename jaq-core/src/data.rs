@@ -1,3 +1,5 @@
+//! Mapping from compile-time data types to run-time data types.
+
 use crate::{Lut, ValT};
 
 /// Data types that filters operate on.
@@ -33,7 +35,7 @@ pub trait DataT: 'static {
     type Data<'a>: Clone + HasLut<'a, Self>;
 }
 
-/// Types that can provide a `'a`-lived LUT for the given data types.
+/// Types that provide an `'a`-lived LUT for the data types given in `D`.
 pub trait HasLut<'a, D: DataT + ?Sized> {
     /// Return the LUT.
     fn lut(&self) -> &'a Lut<D>;

@@ -1,5 +1,5 @@
 use crate::{filter, run, write, Cli, Error, Val};
-use jaq_core::{DataT, HasLut, Lut, Native, RunPtr};
+use jaq_core::{data, DataT, Lut, Native, RunPtr};
 use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
@@ -24,7 +24,7 @@ impl<'a> Data<'a> {
     }
 }
 
-impl<'a> HasLut<'a, DataKind> for &'a Data<'a> {
+impl<'a> data::HasLut<'a, DataKind> for &'a Data<'a> {
     fn lut(&self) -> &'a Lut<DataKind> {
         self.lut
     }
