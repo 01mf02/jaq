@@ -244,6 +244,14 @@ yields!(round_floor, "-1.4 | round", -1);
 yields!(floor_floor, "-1.4 | floor", -2);
 yields!(ceili_floor, "-1.4 | ceil ", -1);
 
+yields!(round_nan, "nan | round | isnan", true);
+yields!(round_inf, "infinite | round | isinfinite", true);
+yields!(
+    round_large,
+    "2e22 | round | tostring",
+    "20000000000000000000000"
+);
+
 yields!(
     sort_break_out,
     "[1, 2] | (label $x | sort_by(label $y | ., break $x)), 3",

@@ -135,8 +135,8 @@ impl jaq_core::ValT for Val {
         match self {
             Val::Arr(a) => {
                 let len = a.len();
-                let from = from.as_ref().map(|i| i.as_int()).transpose();
-                let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                let from = from.as_ref().map(|i| i.as_isize()).transpose();
+                let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
                 from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
                     let from = abs_bound(from, len, 0);
                     let upto = abs_bound(upto, len, len);
@@ -146,8 +146,8 @@ impl jaq_core::ValT for Val {
             }
             Val::Str(s) => {
                 let len = s.chars().count();
-                let from = from.as_ref().map(|i| i.as_int()).transpose();
-                let upto = upto.as_ref().map(|i| i.as_int()).transpose();
+                let from = from.as_ref().map(|i| i.as_isize()).transpose();
+                let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
                 from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
                     let from = abs_bound(from, len, 0);
                     let upto = abs_bound(upto, len, len);
@@ -215,7 +215,7 @@ impl jaq_core::ValT for Val {
                 let abs_or = |i| {
                     abs_index(i, a.len()).ok_or(Error::str(format_args!("index {i} out of bounds")))
                 };
-                let i = match index.as_int().and_then(abs_or) {
+                let i = match index.as_isize().and_then(abs_or) {
                     Ok(i) => i,
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
@@ -240,8 +240,8 @@ impl jaq_core::ValT for Val {
     ) -> ValX<'a> {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
-            let from = range.start.as_ref().map(|i| i.as_int()).transpose();
-            let upto = range.end.as_ref().map(|i| i.as_int()).transpose();
+            let from = range.start.as_ref().map(|i| i.as_isize()).transpose();
+            let upto = range.end.as_ref().map(|i| i.as_isize()).transpose();
             let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
                 Ok(from_upto) => from_upto,
                 Err(e) => return opt.fail(self, |_| Exn::from(e)),
@@ -286,19 +286,17 @@ impl jaq_std::ValT for Val {
         }
     }
 
+    fn is_int(&self) -> bool {
+        self.as_num().map_or(false, Num::is_int)
+    }
+
     fn as_isize(&self) -> Option<isize> {
-        match self {
-            Self::Num(n) => n.as_int(),
-            _ => None,
-        }
+        self.as_num().and_then(Num::as_isize)
     }
 
     fn as_f64(&self) -> Result<f64, Error> {
         let fail = || Error::typ(self.clone(), Type::Float.as_str());
-        match self {
-            Self::Num(n) => n.as_float().ok_or_else(fail),
-            _ => Err(fail()),
-        }
+        self.as_num().and_then(Num::as_f64).ok_or_else(fail)
     }
 }
 
@@ -468,13 +466,17 @@ impl Val {
         Self::Obj(m.into())
     }
 
-    /// If the value is a machine-sized integer, return it, else fail.
-    fn as_int(&self) -> Result<isize, Error> {
-        let fail = || Error::typ(self.clone(), Type::Int.as_str());
+    fn as_num(&self) -> Option<&Num> {
         match self {
-            Self::Num(n) => n.as_int().ok_or_else(fail),
-            _ => Err(fail()),
+            Self::Num(n) => Some(n),
+            _ => None,
         }
+    }
+
+    /// If the value is a machine-sized integer, return it, else fail.
+    fn as_isize(&self) -> Result<isize, Error> {
+        let fail = || Error::typ(self.clone(), Type::Int.as_str());
+        self.as_num().and_then(Num::as_isize).ok_or_else(fail)
     }
 
     /// If the value is a string, return it, else fail.

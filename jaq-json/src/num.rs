@@ -49,7 +49,7 @@ impl Num {
     }
 
     /// If the value is a machine-sized integer, return it, else fail.
-    pub(crate) fn as_int(&self) -> Option<isize> {
+    pub(crate) fn as_isize(&self) -> Option<isize> {
         match self {
             Self::Int(i) => Some(*i),
             Self::BigInt(i) => i.to_isize(),
@@ -58,7 +58,7 @@ impl Num {
     }
 
     /// If the value is or can be converted to float, return it, else fail.
-    pub(crate) fn as_float(&self) -> Option<f64> {
+    pub(crate) fn as_f64(&self) -> Option<f64> {
         match self {
             Self::Int(n) => Some(*n as f64),
             Self::BigInt(n) => Some(n.to_f64().unwrap()),
