@@ -1,7 +1,8 @@
 //! Paths and their parts.
 
 use crate::box_iter::{box_once, flat_map_with, map_with, then, BoxIter};
-use crate::val::{ValR, ValT, ValX, ValXs};
+use crate::val::{ValRs, ValT, ValX, ValXs};
+use crate::RcList;
 use alloc::{boxed::Box, vec::Vec};
 
 /// Path such as `.[].a?[1:]`.
@@ -74,11 +75,15 @@ impl<'a, U: Clone + 'a> Path<U> {
 }
 
 impl<'a, V: ValT + 'a> Path<V> {
-    pub(crate) fn run(self, v: V) -> BoxIter<'a, ValR<V>> {
-        run(self.0.into_iter(), v)
+    pub(crate) fn run(self, v: V) -> ValRs<'a, V> {
+        run(self.0.into_iter(), v, |part, v| part.run(v))
     }
 
-    pub(crate) fn update<F>(mut self, v: V, f: F) -> ValX<'a, V>
+    pub(crate) fn paths(self, vp: (V, RcList<V>)) -> ValRs<'a, (V, RcList<V>), V> {
+        run(self.0.into_iter(), vp, |part, vp| part.paths(vp))
+    }
+
+    pub(crate) fn update<F>(mut self, v: V, f: F) -> ValX<V>
     where
         F: Fn(V) -> ValXs<'a, V>,
     {
@@ -91,20 +96,21 @@ impl<'a, V: ValT + 'a> Path<V> {
     }
 }
 
-fn run<'a, V: ValT + 'a, I>(mut iter: I, val: V) -> BoxIter<'a, ValR<V>>
-where
-    I: Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
-{
+fn run<'a, V: 'a, T: 'a>(
+    mut iter: impl Iterator<Item = (Part<V>, Opt)> + Clone + 'a,
+    val: T,
+    f: fn(Part<V>, T) -> ValRs<'a, T, V>,
+) -> ValRs<'a, T, V> {
     if let Some((part, opt)) = iter.next() {
         let essential = matches!(opt, Opt::Essential);
-        let ys = part.run(val).filter(move |v| essential || v.is_ok());
-        flat_map_with(ys, iter, move |v, iter| then(v, |v| run(iter, v)))
+        let ys = f(part, val).filter(move |v| essential || v.is_ok());
+        flat_map_with(ys, iter, move |v, iter| then(v, |v| run(iter, v, f)))
     } else {
         box_once(Ok(val))
     }
 }
 
-fn update<'a, V: ValT + 'a, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValX<'a, V>
+fn update<'a, V: ValT, P, F>(mut iter: P, last: (Part<V>, Opt), v: V, f: &F) -> ValX<V>
 where
     P: Iterator<Item = (Part<V>, Opt)> + Clone,
     F: Fn(V) -> ValXs<'a, V>,
@@ -118,7 +124,7 @@ where
 }
 
 impl<'a, V: ValT + 'a> Part<V> {
-    fn run(&self, v: V) -> impl Iterator<Item = ValR<V>> + 'a {
+    fn run(&self, v: V) -> ValRs<'a, V> {
         match self {
             Self::Index(idx) => box_once(v.index(idx)),
             Self::Range(None, None) => Box::new(v.values()),
@@ -126,10 +132,24 @@ impl<'a, V: ValT + 'a> Part<V> {
         }
     }
 
-    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValX<'a, V>
+    fn paths(&self, (v, p): (V, RcList<V>)) -> ValRs<'a, (V, RcList<V>), V> {
+        match self {
+            Self::Index(idx) => box_once(v.index(idx).map(|v| (v, p.cons(idx.clone())))),
+            Self::Range(None, None) => Box::new(
+                v.key_values()
+                    .map(move |kv| kv.map(|(k, v)| (v, p.clone().cons(k)))),
+            ),
+            Self::Range(from, upto) => box_once(
+                v.range(from.as_ref()..upto.as_ref())
+                    .map(|v| (v, p.cons(V::from(from.clone()..upto.clone())))),
+            ),
+        }
+    }
+
+    fn update<F, I>(&self, v: V, opt: Opt, f: F) -> ValX<V>
     where
         F: Fn(V) -> I,
-        I: Iterator<Item = ValX<'a, V>>,
+        I: Iterator<Item = ValX<V>>,
     {
         match self {
             Self::Index(idx) => v.map_index(idx, opt, f),
