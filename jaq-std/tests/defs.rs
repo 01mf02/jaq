@@ -222,6 +222,12 @@ yields!(
     json!([[1], 2, 3])
 );
 
+yields!(
+    recurse_fib_100,
+    "def fib: recurse([.[1], add])[0]; nth(100; [0, 1] | fib) | tostring",
+    "354224848179261915075"
+);
+
 #[test]
 fn repeat() {
     let y = json!([0, 1, 0, 1]);

@@ -122,15 +122,18 @@ fn iter_update() {
 
     give(json!([1]), ".[] |= .+1", json!([2]));
     give(json!([[1]]), ".[][] |= .+1", json!([[2]]));
-
-    give(
-        json!({"a": 1, "b": 2}),
-        ".[] |= ((if .>1 then . else {}[] end) | .+1)",
-        json!({"b": 3}),
-    );
-
-    give(json!([[0, 1], "a"]), ".[][]? |= .+1", json!([[1, 2], "a"]));
 }
+
+yields!(
+    obj_iter_update,
+    r#"{"a": 1, "b": 2} | .[] |= ((if .>1 then . else {}[] end) | .+1)"#,
+    json!({"b": 3})
+);
+yields!(
+    arr_iter_opt_update,
+    r#"[[0, 1], "a"] | .[][]? |= .+1"#,
+    json!([[1, 2], "a"])
+);
 
 #[test]
 fn range_update() {
