@@ -87,9 +87,6 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
-        Val::Int(i) => span(f, "number", i),
-        Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
-        Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
         Val::Str(s) => span(f, "string", display(s)),
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
@@ -116,10 +113,6 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 
 fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
-}
-
-fn span_dbg(f: &mut Formatter, cls: &str, el: impl Debug) -> fmt::Result {
-    write!(f, "<span class=\"{cls}\">{el:?}</span>")
 }
 
 fn escape(s: &str) -> String {

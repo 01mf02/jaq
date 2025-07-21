@@ -4,7 +4,7 @@ use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::sync::atomic::{Ordering, AtomicUsize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct DataKind;
 
@@ -82,7 +82,7 @@ fn repl_with(depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     let prompt = format!("{}{} ", str::repeat("  ", depth), '>'.bold());
     let mut first = true;
     loop {
-        use core::cmp::Ordering::{Equal, Less, Greater};
+        use core::cmp::Ordering::{Equal, Greater, Less};
         match (depth + 1).cmp(&REPL_KILL_DEPTH.load(Ordering::Relaxed)) {
             Equal => break,
             // reset kill depth if we are below the level where REPL was killed
