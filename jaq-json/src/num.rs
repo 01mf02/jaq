@@ -2,8 +2,9 @@ use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use core::cmp::Ordering;
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use num_bigint::{BigInt, Sign};
-use num_traits::cast::ToPrimitive;
+use num_traits::cast::{FromPrimitive, ToPrimitive};
 
 /// Arbitrary-precision number.
 #[derive(Clone, Debug)]
@@ -24,13 +25,7 @@ impl Num {
     }
 
     pub(crate) fn from_str(s: &str) -> Self {
-        match s.parse() {
-            Ok(i) => Self::Int(i),
-            Err(_) => match s.parse() {
-                Ok(i) => Self::big_int(i),
-                Err(_) => Self::Dec(Rc::new(s.to_string())),
-            },
-        }
+        Self::try_from_int_str(s).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
     pub(crate) fn try_from_int_str(i: &str) -> Option<Self> {
@@ -193,6 +188,49 @@ impl core::ops::Neg for Num {
             Self::Dec(n) => -Self::from_dec_str(&n),
         }
     }
+}
+
+/// Hash a number.
+///
+/// This hasher maps all finite numbers to integers.
+/// For floating-point numbers, this creates many hash collisions,
+/// because e.g. 0.2 and 0.4 yield the same hash value.
+/// However, it makes it easy to uphold the property that
+/// for each number `n` and `m`, if `n == m`, then `n.hash() == m.hash()`.
+/// In any case, a hash map with floating-point numbers as keys is pure madness,
+/// so it's not something that we should encourage with high performance.
+impl Hash for Num {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let big = |i: &BigInt, state: &mut H| {
+            state.write_u8(0);
+            i.hash(state)
+        };
+        match self {
+            Self::BigInt(i) => big(i, state),
+            Self::Int(i) => big(&(*i).into(), state),
+            // SAFETY: this should always succeed
+            // TODO: use this also for `round()`?
+            Self::Float(f) if f.is_finite() => big(&BigInt::from_f64(*f).unwrap(), state),
+            // hash all remaining floats, like NaN and infinity, to the same
+            Self::Float(_) => state.write_u8(1),
+            Self::Dec(d) => Self::from_dec_str(d).hash(state),
+        }
+    }
+}
+
+#[test]
+fn hash_nums() {
+    use core::hash::BuildHasher;
+    let h = |n| foldhash::fast::FixedState::with_seed(42).hash_one(n);
+
+    assert_eq!(h(Num::Int(4096)), h(Num::big_int(4096.into())));
+    assert_eq!(h(Num::Float(0.2)), h(Num::Float(0.4)));
+    assert_eq!(h(Num::Float(0.0)), h(Num::Int(0)));
+    assert_eq!(h(Num::Float(3.1415)), h(Num::big_int(3.into())));
+    assert_eq!(h(Num::Float(f64::NAN)), h(Num::Float(0.0 / 0.0)));
+
+    assert_ne!(h(Num::Float(0.2)), h(Num::Int(1)));
+    assert_ne!(h(Num::Int(1)), h(Num::Int(2)));
 }
 
 impl PartialEq for Num {
