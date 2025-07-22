@@ -2,23 +2,54 @@
 use core::fmt;
 use std::env::ArgsOs;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[derive(Copy, Clone, Debug)]
+pub enum Format {
+    /// When the option `--slurp` is used additionally,
+    /// then the whole input is read into a single string.
+    Raw,
+    Json,
+    Xml,
+    Yaml,
+}
+
+impl Format {
+    /// Determine a file format from a path.
+    pub fn determine(path: &Path) -> Option<Self> {
+        match path.extension()?.to_str()? {
+            "xml" | "xhtml" => Some(Format::Xml),
+            "yml" | "yaml" => Some(Format::Yaml),
+            "json" => Some(Format::Json),
+            _ => None,
+        }
+    }
+
+    /// Parse a format name.
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "raw" => Some(Format::Raw),
+            "json" => Some(Format::Json),
+            "xml" => Some(Format::Xml),
+            "yaml" => Some(Format::Yaml),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Cli {
     // Input options
+    pub from: Option<Format>,
     pub null_input: bool,
-    /// When the option `--slurp` is used additionally,
-    /// then the whole input is read into a single string.
-    pub raw_input: bool,
     /// When input is read from files,
     /// jaq yields an array for each file, whereas
     /// jq produces only a single array.
     pub slurp: bool,
 
     // Output options
+    pub to: Option<Format>,
     pub compact_output: bool,
-    pub raw_output: bool,
     /// This flag enables `--raw-output`.
     pub join_output: bool,
     pub in_place: bool,
@@ -88,10 +119,12 @@ impl Cli {
             // handle all arguments after "--"
             "" => args.try_for_each(|arg| self.positional(mode, arg))?,
 
+            "from" => self.from = Some(parse_format("--from", args)?),
             "null-input" => self.short('n', args)?,
             "raw-input" => self.short('R', args)?,
             "slurp" => self.short('s', args)?,
 
+            "to" => self.to = Some(parse_format("--to", args)?),
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
             "join-output" => self.short('j', args)?,
@@ -130,13 +163,16 @@ impl Cli {
 
     fn short(&mut self, arg: char, args: &mut ArgsOs) -> Result<(), Error> {
         match arg {
+            'R' => self.from = Some(Format::Raw),
             'n' => self.null_input = true,
-            'R' => self.raw_input = true,
             's' => self.slurp = true,
 
+            'r' => self.to = Some(Format::Raw),
             'c' => self.compact_output = true,
-            'r' => self.raw_output = true,
-            'j' => self.join_output = true,
+            'j' => {
+                self.join_output = true;
+                self.short('r', args)?
+            }
             'i' => self.in_place = true,
             'S' => self.sort_keys = true,
             'C' => self.color_output = true,
@@ -200,16 +236,19 @@ pub enum Error {
     KeyValue(&'static str),
     Int(&'static str),
     Path(&'static str),
+    Format(&'static str),
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let fmts = "raw, json, xml, yaml";
         match self {
             Self::Flag(s) => write!(f, "unknown flag: {s}"),
             Self::Utf8(s) => write!(f, "invalid UTF-8: {s:?}"),
             Self::KeyValue(o) => write!(f, "{o} expects a key and a value"),
             Self::Int(o) => write!(f, "{o} expects an integer"),
             Self::Path(o) => write!(f, "{o} expects a path"),
+            Self::Format(o) => write!(f, "{o} expects a data format (possible values: {fmts})"),
         }
     }
 }
@@ -219,6 +258,12 @@ impl From<OsString> for Error {
     fn from(e: OsString) -> Self {
         Self::Utf8(e)
     }
+}
+
+fn parse_format(arg: &'static str, args: &mut ArgsOs) -> Result<Format, Error> {
+    let err = || Error::Format(arg);
+    let fmt = args.next().and_then(|a| a.into_string().ok());
+    Format::from_str(&fmt.ok_or_else(err)?).ok_or_else(err)
 }
 
 fn parse_key_val(arg: &'static str, args: &mut ArgsOs) -> Result<(String, OsString), Error> {

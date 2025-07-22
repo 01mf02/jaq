@@ -28,9 +28,12 @@ impl Num {
         Self::try_from_int_str(s).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
-    pub(crate) fn try_from_int_str(i: &str) -> Option<Self> {
-        let big = || i.parse().ok().map(Self::big_int);
-        i.parse().ok().map(Num::Int).or_else(big)
+    pub(crate) fn try_from_int_str(i: &str, radix: u32) -> Option<Self> {
+        let big = || BigInt::parse_bytes(i.as_bytes(), radix).map(Self::big_int);
+        isize::from_str_radix(i, radix)
+            .ok()
+            .map(Num::Int)
+            .or_else(big)
     }
 
     /// Try to parse a decimal string to a [`Self::Float`], else return NaN.
