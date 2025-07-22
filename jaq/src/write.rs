@@ -107,6 +107,7 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
 
     match (val, format) {
         (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
+        (_, Format::Cbor) => todo!(),
         (_, Format::Json | Format::Yaml | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
         (_, Format::Xml) => {
             use jaq_json::xml::XmlVal;

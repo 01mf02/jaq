@@ -10,6 +10,7 @@ pub enum Format {
     /// then the whole input is read into a single string.
     Raw,
     Json,
+    Cbor,
     Xml,
     Yaml,
 }
@@ -18,6 +19,7 @@ impl Format {
     /// Determine a file format from a path.
     pub fn determine(path: &Path) -> Option<Self> {
         match path.extension()?.to_str()? {
+            "cbor" => Some(Format::Cbor),
             "xml" | "xhtml" => Some(Format::Xml),
             "yml" | "yaml" => Some(Format::Yaml),
             "json" => Some(Format::Json),
@@ -28,6 +30,7 @@ impl Format {
     /// Parse a format name.
     fn from_str(s: &str) -> Option<Self> {
         match s {
+            "cbor" => Some(Format::Cbor),
             "raw" => Some(Format::Raw),
             "json" => Some(Format::Json),
             "xml" => Some(Format::Xml),

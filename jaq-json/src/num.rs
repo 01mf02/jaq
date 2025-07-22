@@ -28,6 +28,11 @@ impl Num {
         Self::try_from_int_str(s).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
+    pub(crate) fn from_integral<T: Copy + TryInto<isize> + Into<BigInt>>(x: T) -> Self {
+        x.try_into()
+            .map_or_else(|_| Num::big_int(x.into()), Num::Int)
+    }
+
     pub(crate) fn try_from_int_str(i: &str, radix: u32) -> Option<Self> {
         let big = || BigInt::parse_bytes(i.as_bytes(), radix).map(Self::big_int);
         isize::from_str_radix(i, radix)

@@ -1,7 +1,7 @@
 use crate::{invalid_data, BoxError, Format, Val};
 use hifijson::{token::Lex, IterLexer, SliceLexer};
-use jaq_core::box_iter::BoxIter;
-use jaq_json::{json, xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
+use jaq_core::box_iter::{box_once, BoxIter};
+use jaq_json::{cbor, json, xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
 use std::io::{self, BufRead};
 use std::path::Path;
 
@@ -44,7 +44,7 @@ pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
 /// This has to be synchronised with [`from_stdin`].
 pub fn stdin_string(fmt: Format) -> io::Result<String> {
     Ok(match fmt {
-        Format::Raw | Format::Json => String::new(),
+        Format::Raw | Format::Json | Format::Cbor => String::new(),
         Format::Xml | Format::Yaml => io::read_to_string(io::stdin().lock())?,
     })
 }
@@ -54,7 +54,7 @@ pub fn stdin_string(fmt: Format) -> io::Result<String> {
 /// This has to be synchronised with [`from_file`].
 pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
     Ok(match fmt {
-        Format::Raw | Format::Json => "",
+        Format::Raw | Format::Json | Format::Cbor => "",
         Format::Xml | Format::Yaml => core::str::from_utf8(bytes).map_err(invalid_data)?,
     })
 }
@@ -63,6 +63,7 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals {
     let stdin = || io::stdin().lock();
     match fmt {
         Format::Raw => Box::new(raw_input(slurp, stdin()).map(|r| r.map(Val::from))),
+        Format::Cbor => todo!(),
         Format::Json => collect_if(slurp, json_read(stdin())),
         Format::Xml => collect_if(slurp, parse_xml(s).map(map_invalid_data)),
         Format::Yaml => collect_if(slurp, parse_yaml(s).map(map_invalid_data)),
@@ -76,6 +77,7 @@ pub fn from_file<'a>(fmt: Format, bytes: &'a [u8], s: &'a str, slurp: bool) -> V
             Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
         }
         Format::Json => collect_if(slurp, json_slice(bytes)),
+        Format::Cbor => box_once(cbor::parse_slice(bytes).map_err(|_| todo!())),
         Format::Xml => collect_if(slurp, parse_xml(s).map(map_invalid_data)),
         Format::Yaml => collect_if(slurp, parse_yaml(s).map(map_invalid_data)),
     }

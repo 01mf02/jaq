@@ -20,6 +20,8 @@ pub use num::Num;
 use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
 
+#[cfg(feature = "cbor")]
+pub mod cbor;
 #[cfg(feature = "json")]
 pub mod json;
 #[cfg(feature = "xml")]
