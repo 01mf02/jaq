@@ -37,8 +37,11 @@ impl<'a> input::HasInputs<'a, Val> for &'a Data<'a> {
 }
 
 pub fn funs() -> impl Iterator<Item = Filter<Native<DataKind>>> {
-    let input_funs = IntoIterator::into_iter(input::funs()).map(jaq_std::run);
-    core::iter::once(jaq_std::run::<DataKind>(repl())).chain(input_funs)
+    let run = jaq_std::run::<DataKind>;
+    let std = jaq_std::funs::<DataKind>();
+    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    let repl = core::iter::once(run(repl()));
+    std.chain(jaq_json::funs()).chain(input).chain(repl)
 }
 
 /// counter that increases for each nested invocation of `repl`

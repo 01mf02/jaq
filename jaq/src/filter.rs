@@ -38,9 +38,8 @@ pub fn parse_compile(
     })
     .map_err(load_errors)?;
 
-    let funs = jaq_std::funs().chain(jaq_json::funs()).chain(funs::funs());
     let compiler = Compiler::default()
-        .with_funs(funs)
+        .with_funs(funs::funs())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))
