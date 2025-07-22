@@ -1,15 +1,21 @@
+//! YAML parsing.
 use crate::{Num, Val};
 use alloc::{borrow::Cow, format, rc::Rc, string::String, vec::Vec};
 use core::fmt::{self, Formatter};
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
 
+/// Lex error.
 #[derive(Debug)]
 pub struct Lerror(ScanError);
 
+/// Parse error.
 #[derive(Debug)]
 pub enum Error {
+    /// Lex error
     Lex(Lerror),
+    /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
     Scalar(&'static str, String, Span),
+    /// Non-string key has been encountered in a map, e.g. `{[]: 1}`
     KeyVal(Span),
 }
 
@@ -238,6 +244,7 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
     })
 }
 
+/// Parse a stream of YAML documents.
 pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     let mut st = State::new(Parser::new_from_str(s));
     assert!(matches!(st.next(), Ok((Event::StreamStart, _))));

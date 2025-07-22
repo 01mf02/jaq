@@ -1,3 +1,4 @@
+//! JSON parsing.
 use crate::{Error, Map, Num, Val, ValR};
 use alloc::{string::ToString, vec::Vec};
 use hifijson::{LexAlloc, Token};

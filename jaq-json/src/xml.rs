@@ -1,3 +1,4 @@
+//! XML parsing.
 use crate::{Map, Val};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
@@ -40,14 +41,18 @@ impl fmt::Display for TagPos {
     }
 }
 
+/// Lex error.
 #[derive(Debug)]
 pub struct Lerror(xmlparser::Error);
 
-/// Deserialisation error.
+/// Parse error.
 #[derive(Debug)]
 pub enum Error {
+    /// Lex error
     Lex(Lerror),
+    /// Unmatched closing tag, e.g. `<a></b>`
     Unmatched(TagPos, TagPos),
+    /// Unclosed tag, e.g. `<a>`
     Unclosed(TagPos),
 }
 
@@ -208,6 +213,7 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
     })
 }
 
+/// Parse a stream of root XML values.
 pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     let mut tokens = Tokenizer::from(s);
     core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
@@ -215,9 +221,12 @@ pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
 
 type RcStr = alloc::rc::Rc<String>;
 
+/// Serialisation error.
 #[derive(Debug)]
 pub enum Serror {
+    /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
     InvalidEntry(&'static str, RcStr, Val),
+    /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`
     SingletonObj(Val),
 }
 
@@ -237,20 +246,35 @@ impl std::error::Error for Serror {}
 
 /// XML value.
 pub enum XmlVal {
+    /// XML declaration, e.g. `<?xml version='1.0' encoding='UTF-8' standalone='yes'?>`
     XmlDecl(Vec<(RcStr, RcStr)>),
+    /// DOCTYPE directive, e.g. `<!DOCTYPE greeting SYSTEM "hello.dtd" [...]>`
     DocType {
+        /// name of the document type, e.g. "greeting"
         name: RcStr,
+        /// reference to an external file, e.g. `SYSTEM "hello.dtd"`
         external: Option<RcStr>,
+        /// internal definition of the DTD, e.g. `...`
         internal: Option<RcStr>,
     },
+    /// Processing instruction, e.g. <?xml-stylesheet type="text/css" href="style.css"?>`
     Pi {
+        /// target, e.g. `xml-stylesheet`
         target: RcStr,
+        /// content, e.g. `type="text/css" href="style.css"`
         content: Option<RcStr>,
     },
+    /// An element consisting of a Tag, an Attribute, and Content
+    ///
+    /// For example, `<a href="bla">Link</a>`.
     Tac(RcStr, Vec<(RcStr, RcStr)>, Option<Box<Self>>),
+    /// A sequence of XML values, e.g. `Hello<br />World`
     Seq(Vec<Self>),
+    /// A string, e.g. `Hello world`
     Str(RcStr),
+    /// CDATA, e.g. `<![CDATA[text]]>`
     Cdata(RcStr),
+    /// Comment, e.g. `<!-- text -->`
     Comment(RcStr),
 }
 
