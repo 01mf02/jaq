@@ -13,9 +13,10 @@ rust-version = "1.65"
 
 [features]
 default = ["parse", "std"]
-parse = ["json", "xml", "yaml"]
+parse = ["cbor", "json", "xml", "yaml"]
 std = []
 
+cbor = ["ciborium-ll", "ciborium-io"]
 json = ["hifijson"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser"]
@@ -31,6 +32,8 @@ num-traits = { version = "0.2.19", default-features = false }
 serde_json = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
 
 # parsers
+ciborium-io = { version = "0.2.2", optional = true }
+ciborium-ll = { version = "0.2.2", optional = true }
 hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }
 saphyr-parser = { version = "0.0.6", optional = true }
 xmlparser = { version = "0.13.6", optional = true }
