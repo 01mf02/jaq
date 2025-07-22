@@ -32,5 +32,5 @@ serde_json = { version = "1.0.81", default-features = false, features = ["alloc"
 
 # parsers
 hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }
-saphyr-parser = { version = "0.0.5", optional = true }
+saphyr-parser = { version = "0.0.6", optional = true }
 xmlparser = { version = "0.13.6", optional = true }
