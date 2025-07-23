@@ -20,7 +20,7 @@ pub enum Num {
 }
 
 impl Num {
-    fn big_int(i: BigInt) -> Self {
+    pub(crate) fn big_int(i: BigInt) -> Self {
         Self::BigInt(i.into())
     }
 
