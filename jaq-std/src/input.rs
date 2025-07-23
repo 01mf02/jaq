@@ -36,16 +36,20 @@ impl<'a, V> HasInputs<'a, V> for Inputs<'a, V> {
 }
 
 /// The `inputs` and `input` filters.
-pub fn funs<D: for<'a> DataT<Data<'a>: HasInputs<'a, D::V<'a>>>>() -> Box<[Filter<RunPtr<D>>]> {
+pub fn funs<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::Data<'a>: HasInputs<'a, D::V<'a>>,
+{
     Box::new([
         ("inputs", v(0), |cv| Box::new(inputs(cv))),
         ("input", v(0), |cv| Box::new(inputs(cv).next().into_iter())),
     ])
 }
 
-fn inputs<'a, D: DataT<Data<'a>: HasInputs<'a, D::V<'a>>>>(
-    cv: Cv<'a, D>,
-) -> impl Iterator<Item = ValX<D::V<'a>>> + 'a {
+fn inputs<'a, D: DataT>(cv: Cv<'a, D>) -> impl Iterator<Item = ValX<D::V<'a>>> + 'a
+where
+    D::Data<'a>: HasInputs<'a, D::V<'a>>,
+{
     let inputs = cv.0.data().inputs();
     inputs.map(|r| r.map_err(|e| Exn::from(Error::str(e))))
 }
