@@ -25,7 +25,7 @@ impl Num {
     }
 
     pub(crate) fn from_str(s: &str) -> Self {
-        Self::try_from_int_str(s).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
+        Self::try_from_int_str(s, 10).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
     pub(crate) fn from_integral<T: Copy + TryInto<isize> + Into<BigInt>>(x: T) -> Self {

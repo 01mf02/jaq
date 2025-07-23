@@ -1,6 +1,6 @@
 //! YAML parsing.
 use crate::{Num, Val};
-use alloc::{borrow::Cow, format, rc::Rc, string::String, vec::Vec};
+use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use core::fmt::{self, Formatter};
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
 
@@ -15,8 +15,6 @@ pub enum Error {
     Lex(Lerror),
     /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
     Scalar(&'static str, String, Span),
-    /// Non-string key has been encountered in a map, e.g. `{[]: 1}`
-    KeyVal(Span),
 }
 
 impl fmt::Display for Error {
@@ -26,10 +24,6 @@ impl fmt::Display for Error {
             Self::Scalar(typ, s, span) => {
                 let (line, col) = (span.start.line(), span.start.col());
                 write!(f, "scalar \"{s}\" is no {typ} ({line}:{col})")
-            }
-            Self::KeyVal(span) => {
-                let (line, col) = (span.start.line(), span.start.col());
-                write!(f, "key is no string ({line}:{col})")
             }
         }
     }
@@ -94,13 +88,10 @@ impl<'input, T: Input> State<'input, T> {
         }
     }
 
-    fn parse_map_entry(&mut self) -> Option<Result<(Rc<String>, Val), Error>> {
+    fn parse_map_entry(&mut self) -> Option<Result<(Val, Val), Error>> {
         match self.next() {
             Ok((Event::MappingEnd, _)) => None,
             Ok((next, span)) => Some(self.parse_val((next, span)).and_then(|k| {
-                let Val::Str(k) = k else {
-                    Err(Error::KeyVal(span))?
-                };
                 let next = self.next()?;
                 Ok((k, self.parse_val(next)?))
             })),

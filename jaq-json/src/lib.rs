@@ -13,6 +13,7 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
+use core::hash::{Hash, Hasher};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
@@ -53,7 +54,7 @@ pub enum Val {
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Object
-    Obj(Rc<Map<Rc<String>, Val>>),
+    Obj(Rc<Map<Val, Val>>),
 }
 
 /// Types and sets of types.
@@ -90,7 +91,7 @@ impl Type {
 }
 
 /// Order-preserving map
-pub type Map<K = Rc<String>, V = Val> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+type Map<K = Val, V = K> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 /// Error that can occur during filter execution.
 pub type Error = jaq_core::Error<Val>;
@@ -112,16 +113,14 @@ impl jaq_core::ValT for Val {
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
-        let iter = iter.into_iter().map(|(k, v)| Ok((k.into_str()?, v)));
-        Ok(Self::obj(iter.collect::<Result<_, _>>()?))
+        Ok(Self::obj(iter.into_iter().collect()))
     }
 
     fn key_values(self) -> Box<dyn Iterator<Item = Result<(Val, Val), Error>>> {
         let arr_idx = |(i, x)| Ok((Self::from(i as isize), x));
-        let obj_idx = |(k, v)| Ok((Self::Str(k), v));
         match self {
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().enumerate().map(arr_idx)),
-            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(obj_idx)),
+            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(Ok)),
             _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
         }
     }
@@ -142,8 +141,8 @@ impl jaq_core::ValT for Val {
             (a @ Val::Arr(_), Val::Num(Num::BigInt(i))) => {
                 a.index(&Val::Num(Num::Int(bigint_to_int_saturated(i))))
             }
-            (Val::Obj(o), Val::Str(s)) => Ok(o.get(s).cloned().unwrap_or(Val::Null)),
-            (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::index(s, index.clone())),
+            (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
+            (s @ Val::Arr(_), _) => Err(Error::index(s, index.clone())),
             (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
         }
     }
@@ -202,11 +201,7 @@ impl jaq_core::ValT for Val {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
                 let o = Rc::make_mut(o);
-                let i = match index {
-                    Val::Str(s) => s,
-                    i => return opt.fail(self, |v| Exn::from(Error::index(v, i.clone()))),
-                };
-                match o.entry(Rc::clone(i)) {
+                match o.entry(index.clone()) {
                     Occupied(mut e) => {
                         let v = core::mem::take(e.get_mut());
                         match f(v).next().transpose()? {
@@ -409,7 +404,9 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
 #[cfg(feature = "parse")]
 fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
     ("fromjson", v(0), |cv| {
-        box_once_err(cv.1.as_str().and_then(|s| json::from_str(s)))
+        use jaq_core::ValT;
+        let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+        box_once_err(cv.1.as_str().ok_or_else(fail).and_then(json::from_str))
     })
 }
 
@@ -450,7 +447,7 @@ fn wrap_test() {
 
 impl Val {
     /// Construct an object value.
-    pub fn obj(m: Map<Rc<String>, Self>) -> Self {
+    pub fn obj(m: Map) -> Self {
         Self::Obj(m.into())
     }
 
@@ -465,23 +462,6 @@ impl Val {
     fn as_isize(&self) -> Result<isize, Error> {
         let fail = || Error::typ(self.clone(), Type::Int.as_str());
         self.as_num().and_then(Num::as_isize).ok_or_else(fail)
-    }
-
-    /// If the value is a string, return it, else fail.
-    fn into_str(self) -> Result<Rc<String>, Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(Error::typ(self, Type::Str.as_str())),
-        }
-    }
-
-    #[cfg(feature = "parse")]
-    /// If the value is a string, return it, else fail.
-    fn as_str(&self) -> Result<&Rc<String>, Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
-        }
     }
 
     /// If the value is an array, return it, else fail.
@@ -508,7 +488,7 @@ impl Val {
             (Self::Arr(a), Self::Num(Num::BigInt(i))) if !i.is_negative() => {
                 Ok(i.to_usize().map_or(false, |i| i < a.len()))
             }
-            (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
+            (Self::Obj(o), k) => Ok(o.contains_key(k)),
             _ => Err(Error::index(self.clone(), key.clone())),
         }
     }
@@ -656,7 +636,7 @@ impl core::ops::Sub for Val {
     }
 }
 
-fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
+fn obj_merge(l: &mut Rc<Map>, r: Rc<Map>) {
     let l = Rc::make_mut(l);
     let r = rc_unwrap_or_clone(r).into_iter();
     r.for_each(|(k, v)| match (l.get_mut(&k), v) {
@@ -792,6 +772,30 @@ impl Ord for Val {
     }
 }
 
+impl Hash for Val {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        fn hash_with(u: u8, x: impl Hash, state: &mut impl Hasher) {
+            state.write_u8(u);
+            x.hash(state)
+        }
+        match self {
+            Self::Num(n) => n.hash(state),
+            // Num::hash() starts its hash with a 0 or 1, so we start with 2 here
+            Self::Null => state.write_u8(2),
+            Self::Bool(b) => state.write_u8(if *b { 3 } else { 4 }),
+            Self::Str(s) => hash_with(5, s, state),
+            Self::Arr(a) => hash_with(6, a, state),
+            Self::Obj(o) => {
+                state.write_u8(7);
+                // this is similar to what happens in `Val::cmp`
+                let mut kvs: Vec<_> = o.iter().collect();
+                kvs.sort_by_key(|(k, _v)| *k);
+                kvs.iter().for_each(|(k, v)| (k, v).hash(state));
+            }
+        }
+    }
+}
+
 /// Format a string as valid JSON string, including leading and trailing quotes.
 pub fn fmt_str(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
     write!(f, "\"")?;
@@ -830,7 +834,7 @@ impl fmt::Display for Val {
             }
             Self::Obj(o) => {
                 write!(f, "{{")?;
-                let mut iter = o.iter().map(|(k, v)| (Val::Str(k.clone()), v));
+                let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
                     write!(f, "{k}:{v}")?;
                 }

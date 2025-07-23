@@ -225,7 +225,7 @@ type RcStr = alloc::rc::Rc<String>;
 #[derive(Debug)]
 pub enum Serror {
     /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
-    InvalidEntry(&'static str, RcStr, Val),
+    InvalidEntry(&'static str, Val, Val),
     /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`
     SingletonObj(Val),
 }
@@ -281,8 +281,9 @@ pub enum XmlVal {
 impl TryFrom<&Val> for XmlVal {
     type Error = Serror;
     fn try_from(v: &Val) -> Result<Self, Self::Error> {
-        let from_kv = |(k, v): (&RcStr, &_)| match v {
-            Val::Str(v) => Ok((k.clone(), v.clone())),
+        use jaq_core::ValT;
+        let from_kv = |(k, v): (&_, &_)| match (k, v) {
+            (Val::Str(k), Val::Str(v)) => Ok((k.clone(), v.clone())),
             _ => Err(Serror::InvalidEntry("attribute", k.clone(), v.clone())),
         };
         let from_kvs = |a: &Map| a.iter().map(from_kv).collect::<Result<_, _>>();
@@ -292,11 +293,13 @@ impl TryFrom<&Val> for XmlVal {
             let mut a = Vec::new();
             let mut c = None;
             for (k, v) in o.iter() {
-                match (&***k, v) {
+                let fail = || Serror::InvalidEntry("tac", k.clone(), v.clone());
+                let k = k.as_str().ok_or_else(fail)?;
+                match (k, v) {
                     ("t", Val::Str(s)) => t = s.clone(),
                     ("a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
                     ("c", v) => c = Some(Box::new(v.try_into()?)),
-                    _ => Err(Serror::InvalidEntry("tac", k.clone(), v.clone()))?,
+                    _ => Err(fail())?,
                 }
             }
             Ok(Self::Tac(t.clone(), a, c))
@@ -306,11 +309,13 @@ impl TryFrom<&Val> for XmlVal {
             let mut external = None;
             let mut internal = None;
             for (k, v) in o.iter() {
-                match (&***k, v) {
+                let fail = || Serror::InvalidEntry("doctype", k.clone(), v.clone());
+                let k = k.as_str().ok_or_else(fail)?;
+                match (k, v) {
                     ("name", Val::Str(s)) => name = s.clone(),
                     ("external", Val::Str(s)) => external = Some(s.clone()),
                     ("internal", Val::Str(s)) => internal = Some(s.clone()),
-                    _ => Err(Serror::InvalidEntry("doctype", k.clone(), v.clone()))?,
+                    _ => Err(fail())?,
                 }
             }
             Ok(Self::DocType {
@@ -323,14 +328,17 @@ impl TryFrom<&Val> for XmlVal {
             let mut target = RcStr::default();
             let mut content = None;
             for (k, v) in o.iter() {
-                match (&***k, v) {
+                let fail = || Serror::InvalidEntry("pi", k.clone(), v.clone());
+                let k = k.as_str().ok_or_else(fail)?;
+                match (k, v) {
                     ("target", Val::Str(s)) => target = s.clone(),
                     ("content", Val::Str(s)) => content = Some(s.clone()),
-                    _ => Err(Serror::InvalidEntry("pi", k.clone(), v.clone()))?,
+                    _ => Err(fail())?,
                 }
             }
             Ok(Self::Pi { target, content })
         };
+        let contains_key = |o: &Map, k: &str| o.contains_key(&Val::from(k.to_string()));
         match v {
             Val::Str(s) => Ok(Self::Str(s.clone())),
             Val::Arr(a) => a
@@ -338,21 +346,23 @@ impl TryFrom<&Val> for XmlVal {
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()
                 .map(Self::Seq),
-            Val::Obj(o) if o.contains_key(&"t".to_string()) => from_tac(o),
+            Val::Obj(o) if contains_key(o, "t") => from_tac(o),
             Val::Obj(o) => {
                 let mut o = o.iter();
                 let (k, v) = match (o.next(), o.next()) {
                     (Some(kv), None) => kv,
                     _ => Err(Serror::SingletonObj(v.clone()))?,
                 };
-                match (&***k, v) {
+                let fail = || Serror::InvalidEntry("unknown", k.clone(), v.clone());
+                let k = k.as_str().ok_or_else(fail)?;
+                match (k, v) {
                     ("xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
-                    ("doctype", Val::Obj(o)) if o.contains_key(&"name".to_string()) => from_dt(o),
+                    ("doctype", Val::Obj(o)) if contains_key(o, "name") => from_dt(o),
                     ("cdata", Val::Str(s)) => Ok(Self::Cdata(s.clone())),
 
                     ("comment", Val::Str(s)) => Ok(Self::Comment(s.clone())),
-                    ("pi", Val::Obj(o)) if o.contains_key(&"target".to_string()) => from_pi(o),
-                    _ => Err(Serror::InvalidEntry("unknown", k.clone(), v.clone()))?,
+                    ("pi", Val::Obj(o)) if contains_key(o, "target") => from_pi(o),
+                    _ => Err(fail())?,
                 }
             }
             Val::Null | Val::Bool(_) | Val::Num(_) => Ok(Self::Str(v.to_string().into())),
