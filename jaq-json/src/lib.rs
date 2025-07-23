@@ -407,7 +407,9 @@ fn from_json(s: &str) -> ValR {
 #[cfg(feature = "parse")]
 fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
     ("fromjson", v(0), |cv| {
-        box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
+        use jaq_core::ValT;
+        let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+        box_once_err(cv.1.as_str().ok_or_else(fail).and_then(from_json))
     })
 }
 
@@ -478,15 +480,6 @@ impl Val {
         match self {
             Self::Str(s) => Ok(s),
             _ => Err(Error::typ(self, Type::Str.as_str())),
-        }
-    }
-
-    #[cfg(feature = "parse")]
-    /// If the value is a string, return it, else fail.
-    fn as_str(&self) -> Result<&Rc<String>, Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
         }
     }
 
