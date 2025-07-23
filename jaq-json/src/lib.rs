@@ -521,7 +521,7 @@ impl From<serde_json::Value> for Val {
             Number(n) => Self::Num(Num::from_str(&n.to_string())),
             String(s) => Self::from(s),
             Array(a) => a.into_iter().map(Self::from).collect(),
-            Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
+            Object(o) => Self::obj(o.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
         }
     }
 }
@@ -530,6 +530,7 @@ impl From<serde_json::Value> for Val {
 impl From<Val> for serde_json::Value {
     fn from(v: Val) -> Self {
         use core::str::FromStr;
+        use jaq_core::ValT;
         use serde_json::Value::*;
         match v {
             Val::Null => Null,
@@ -542,9 +543,10 @@ impl From<Val> for serde_json::Value {
             Val::Num(n) => Number(serde_json::Number::from_str(&n.to_string()).unwrap()),
             Val::Str(s) => String((*s).clone()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
+            // TODO: how to deal with non-string keys?
             Val::Obj(o) => Object(
                 o.iter()
-                    .map(|(k, v)| ((**k).clone(), v.clone().into()))
+                    .map(|(k, v)| (k.as_str().unwrap().to_string(), v.clone().into()))
                     .collect(),
             ),
         }

@@ -23,7 +23,10 @@ fn index_access() {
     give(json!({"_a": 1}), "._a", json!(1));
     give(json!({"_0": 1}), "._0", json!(1));
 
-    give(json!({"a": 1}), r#".[0, "a", 0 == 0]?"#, json!(1));
+    // this diverges from jq, which fails here, because
+    // jaq can create objects with non-string keys
+    give(json!({"a": 1}), r#".[0]"#, json!(null));
+
     give(json!([0, 1, 2]), r#".["a", 0, 0 == 0]?"#, json!(0));
     give(json!([0, 1, 2]), r#".[3]?"#, json!(null));
     gives(json!("asdf"), ".[0]?", []);
@@ -101,7 +104,6 @@ fn index_update() {
     fail(json!([0, 1, 2]), ".[-4] |= -1", Oob(-4));
     */
 
-    give(json!({"a": 1}), r#".[0, "a"]? |= .+1"#, json!({"a": 2}));
     give(json!([0, 1, 2]), r#".["a", 0]? |= .+1"#, json!([1, 1, 2]));
     give(json!([0, 1, 2]), r#".[3]? |= .+1"#, json!([0, 1, 2]));
     give(json!("asdf"), ".[0]? |= .+1", json!("asdf"));

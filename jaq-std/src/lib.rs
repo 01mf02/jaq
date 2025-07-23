@@ -54,7 +54,10 @@ pub type Filter<F> = (&'static str, Box<[Bind]>, F);
     feature = "regex",
     feature = "time",
 ))]
-pub fn funs<D: for<'a> DataT<V<'a>: ValT>>() -> impl Iterator<Item = Filter<Native<D>>> {
+pub fn funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+where
+    for<'a> D::V<'a>: ValT,
+{
     base_funs().chain(extra_funs())
 }
 
@@ -64,7 +67,10 @@ pub fn funs<D: for<'a> DataT<V<'a>: ValT>>() -> impl Iterator<Item = Filter<Nati
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn base_funs<D: for<'a> DataT<V<'a>: ValT>>() -> impl Iterator<Item = Filter<Native<D>>> {
+pub fn base_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+where
+    for<'a> D::V<'a>: ValT,
+{
     let base_run = base_run().into_vec().into_iter().map(run);
     let base_paths = base_paths().into_vec().into_iter().map(paths);
     base_run.chain(base_paths).chain([upd(error())])
@@ -79,7 +85,10 @@ pub fn base_funs<D: for<'a> DataT<V<'a>: ValT>>() -> impl Iterator<Item = Filter
     feature = "regex",
     feature = "time",
 ))]
-pub fn extra_funs<D: for<'a> DataT<V<'a>: ValT>>() -> impl Iterator<Item = Filter<Native<D>>> {
+pub fn extra_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+where
+    for<'a> D::V<'a>: ValT,
+{
     [std(), format(), math(), regex(), time()]
         .into_iter()
         .flat_map(|fs| fs.into_vec().into_iter().map(run))
@@ -359,7 +368,10 @@ pub fn v(n: usize) -> Box<[Bind]> {
 }
 
 #[allow(clippy::unit_arg)]
-fn base_run<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPtr<D>>]> {
+fn base_run<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     let f = || [Bind::Fun(())].into();
     Box::new([
         ("path", f(), |mut cv| {
@@ -495,7 +507,10 @@ macro_rules! limit {
     };
 }
 
-fn base_paths<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPathsPtr<D>>]> {
+fn base_paths<D: DataT>() -> Box<[Filter<RunPathsPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     let f = || [Bind::Fun(())].into();
     let vf = || [Bind::Var(()), Bind::Fun(())].into();
     Box::new([
@@ -515,7 +530,10 @@ fn now<V: From<String>>() -> Result<f64, Error<V>> {
 }
 
 #[cfg(feature = "std")]
-fn std<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPtr<D>>]> {
+fn std<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     use std::env::vars;
     Box::new([
         ("env", v(0), |_| {
@@ -545,7 +563,10 @@ fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
 }
 
 #[cfg(feature = "format")]
-fn format<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPtr<D>>]> {
+fn format<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     Box::new([
         ("escape_html", v(0), |cv| {
             let pats = ["<", ">", "&", "\'", "\""];
@@ -584,7 +605,10 @@ fn format<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPtr<D>>]> {
 }
 
 #[cfg(feature = "math")]
-fn math<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPtr<D>>]> {
+fn math<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     let rename = |name, (_name, arity, f): Filter<RunPtr<D>>| (name, arity, f);
     Box::new([
         math::f_f!(acos),
@@ -678,7 +702,10 @@ fn regex<D: DataT>() -> Box<[Filter<RunPtr<D>>]> {
 }
 
 #[cfg(feature = "time")]
-fn time<D: for<'a> DataT<V<'a>: ValT>>() -> Box<[Filter<RunPtr<D>>]> {
+fn time<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     use chrono::{Local, Utc};
     Box::new([
         ("fromdateiso8601", v(0), |cv| {
