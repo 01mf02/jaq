@@ -95,14 +95,21 @@ where
         .chain([debug(), stderr()].map(upd))
 }
 
-/// Values that the core library can operate on.
+/// Values that the standard library can operate on.
 pub trait ValT: jaq_core::ValT + Ord + From<f64> {
     /// Convert an array into a sequence.
     ///
     /// This returns the original value as `Err` if it is not an array.
     fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self>;
 
-    /// Use the value as integer.
+    /// True if the value is integer.
+    fn is_int(&self) -> bool;
+
+    /// Use the value as machine-sized integer.
+    ///
+    /// If this function returns `Some(_)`, then [`Self::is_int`] must return true.
+    /// However, the other direction must not necessarily be the case, because
+    /// there may be integer values that are not representable by `isize`.
     fn as_isize(&self) -> Option<isize>;
 
     /// Use the value as floating-point number.
@@ -173,11 +180,22 @@ trait ValTx: ValT + Sized {
     }
 
     fn round(self, f: impl FnOnce(f64) -> f64) -> ValR<Self> {
-        if self.as_isize().is_some() {
-            Ok(self)
+        Ok(if self.is_int() {
+            self
         } else {
-            Ok(Self::from(f(self.as_f64()?) as isize))
-        }
+            let f = f(self.as_f64()?);
+            if f.is_finite() {
+                if isize::MIN as f64 <= f && f <= isize::MAX as f64 {
+                    Self::from(f as isize)
+                } else {
+                    // print floating-point number without decimal places,
+                    // i.e. like an integer
+                    Self::from_num(&alloc::format!("{f:.0}"))?
+                }
+            } else {
+                Self::from(f)
+            }
+        })
     }
 }
 impl<T: ValT> ValTx for T {}

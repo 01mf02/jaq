@@ -54,7 +54,7 @@ where
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     use yansi::Paint;
     match v {
-        Val::Null | Val::Bool(_) | Val::Int(_) | Val::Float(_) | Val::Num(_) => v.fmt(f),
+        Val::Null | Val::Bool(_) | Val::Num(_) => v.fmt(f),
         Val::Str(_) => write!(f, "{}", v.green()),
         Val::Arr(a) => {
             '['.bold().fmt(f)?;
@@ -65,12 +65,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         }
         Val::Obj(o) => {
             '{'.bold().fmt(f)?;
-            let kv = |f: &mut Formatter, (k, val): (&std::rc::Rc<String>, &Val)| {
-                write!(f, "{}:", Val::Str(k.clone()).bold())?;
+            let kv = |f: &mut Formatter, (k, v)| {
+                fmt_val(f, opts, level + 1, k)?;
+                write!(f, ":")?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
-                fmt_val(f, opts, level + 1, val)
+                fmt_val(f, opts, level + 1, v)
             };
             if !o.is_empty() {
                 if opts.sort_keys {
