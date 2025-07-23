@@ -11,6 +11,7 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
+use core::hash::{Hash, Hasher};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
@@ -837,6 +838,30 @@ impl Ord for Val {
             (_, Self::Str(_)) => Greater,
             (Self::Arr(_), _) => Less,
             (_, Self::Arr(_)) => Greater,
+        }
+    }
+}
+
+impl Hash for Val {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        fn hash_with(u: u8, x: impl Hash, state: &mut impl Hasher) {
+            state.write_u8(u);
+            x.hash(state)
+        }
+        match self {
+            Self::Num(n) => n.hash(state),
+            // Num::hash() starts its hash with a 0 or 1, so we start with 2 here
+            Self::Null => state.write_u8(2),
+            Self::Bool(b) => state.write_u8(if *b { 3 } else { 4 }),
+            Self::Str(s) => hash_with(5, s, state),
+            Self::Arr(a) => hash_with(6, a, state),
+            Self::Obj(o) => {
+                state.write_u8(7);
+                // this is similar to what happens in `Val::cmp`
+                let mut kvs: Vec<_> = o.iter().collect();
+                kvs.sort_by_key(|(k, _v)| *k);
+                kvs.iter().for_each(|(k, v)| (k, v).hash(state));
+            }
         }
     }
 }
