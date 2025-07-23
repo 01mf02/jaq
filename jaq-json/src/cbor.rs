@@ -15,7 +15,7 @@ use ciborium_ll::{simple, tag, Decoder, Error, Header};
 
 /// Parse a single CBOR value from a byte slice.
 pub fn parse_slice(slice: &[u8]) -> Result<Val, Error<EndOfFile>> {
-    let mut decoder = Decoder::from(&slice[..]);
+    let mut decoder = Decoder::from(slice);
     let header = decoder.pull()?;
     parse(header, &mut decoder)
 }
@@ -72,9 +72,7 @@ fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, Error
             let o = with_size(size, decoder, |h, d| {
                 Ok((parse(h, d)?, parse(d.pull()?, d)?))
             })?;
-            std::dbg!(o);
-            // TODO!
-            Ok(Val::Null)
+            Ok(Val::obj(o.into_iter().collect()))
         }
         _ => panic!("received unexpected value"),
     }
