@@ -65,12 +65,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         }
         Val::Obj(o) => {
             '{'.bold().fmt(f)?;
-            let kv = |f: &mut Formatter, (k, val): (&std::rc::Rc<String>, &Val)| {
-                write!(f, "{}:", Val::Str(k.clone()).bold())?;
+            let kv = |f: &mut Formatter, (k, v)| {
+                fmt_val(f, opts, level + 1, k)?;
+                write!(f, ":")?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
-                fmt_val(f, opts, level + 1, val)
+                fmt_val(f, opts, level + 1, v)
             };
             if !o.is_empty() {
                 if opts.sort_keys {

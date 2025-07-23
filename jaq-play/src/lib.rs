@@ -98,13 +98,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
         Val::Obj(o) => {
             write!(f, "{{")?;
-            fmt_seq(f, opts, level, &**o, |f, (k, val)| {
-                span(f, "key", display(k))?;
+            fmt_seq(f, opts, level, &**o, |f, (k, v)| {
+                fmt_val(f, opts, level + 1, k)?;
                 write!(f, ":")?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
-                fmt_val(f, opts, level + 1, val)
+                fmt_val(f, opts, level + 1, v)
             })?;
             write!(f, "}}")
         }
