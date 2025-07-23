@@ -71,13 +71,22 @@ impl<T> List<T> {
         cur
     }
 
-    #[cfg(test)]
-    fn iter(&self) -> impl Iterator<Item = &T> {
-        use alloc::boxed::Box;
-        match &*self.0 {
-            Node::Cons(x, xs) => Box::new(core::iter::once(x).chain(xs.iter())),
-            Node::Nil => Box::new(core::iter::empty()) as Box<dyn Iterator<Item = _>>,
-        }
+    pub fn iter(&self) -> Iter<T> {
+        Iter(self)
+    }
+}
+
+pub struct Iter<'a, T>(&'a List<T>);
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+    fn next(&mut self) -> Option<Self::Item> {
+        let (x, xs) = match &*self.0 .0 {
+            Node::Cons(x, xs) => (x, xs),
+            Node::Nil => return None,
+        };
+        self.0 = xs;
+        Some(x)
     }
 }
 

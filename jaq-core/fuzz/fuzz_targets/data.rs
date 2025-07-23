@@ -1,7 +1,7 @@
 #![no_main]
 
 use jaq_core::load::{Arena, File, Loader};
-use jaq_core::{Compiler, Ctx, Native, RcIter};
+use jaq_core::{data, Compiler, Ctx, Vars};
 
 use libfuzzer_sys::fuzz_target;
 
@@ -16,10 +16,7 @@ fuzz_target!(|data: String| {
 
     let modules = loader.load(&arena, program).unwrap();
 
-    let filter = Compiler::<_, Native<_>>::default()
-        .compile(modules)
-        .unwrap();
-
-    let inputs = RcIter::new(core::iter::empty());
-    let _ = filter.run((Ctx::new([], &inputs), jaq_json::Val::from(data)));
+    let filter = Compiler::default().compile(modules).unwrap();
+    let ctx = Ctx::<data::JustLut<_>>::new(&filter.lut, Vars::new([]));
+    let _ = filter.id.run((ctx, jaq_json::Val::from(data)));
 });

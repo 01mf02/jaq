@@ -1,25 +1,21 @@
-//! JSON query language interpreter.
+//! jq language parser, compiler, and interpreter.
 //!
-//! This crate allows you to execute jq-like filters.
+//! This crate allows you to parse, compile, and execute jq-like filters.
 //!
 //! The example below demonstrates how to use this crate.
-//! See the implementation in the `jaq` crate if you are interested in how to:
-//!
-//! * enable usage of the standard library,
-//! * load JSON files lazily,
-//! * handle errors etc.
+//! See the implementation in the `jaq` crate if you are interested in
+//! more complex use cases, such as lazy JSON file loading, error handling etc.
 //!
 //! (This example requires enabling the `serde_json` feature for `jaq-json`.)
 //!
 //! ~~~
-//! use jaq_core::{load, Compiler, Ctx, Error, FilterT, RcIter};
+//! use jaq_core::{data, unwrap_valr, Compiler, Ctx, Vars};
+//! use jaq_core::load::{Arena, File, Loader};
 //! use jaq_json::Val;
 //! use serde_json::{json, Value};
 //!
 //! let input = json!(["Hello", "world"]);
 //! let program = File { code: ".[]", path: () };
-//!
-//! use load::{Arena, File, Loader};
 //!
 //! let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
 //! let arena = Arena::default();
@@ -33,10 +29,10 @@
 //!     .compile(modules)
 //!     .unwrap();
 //!
-//! let inputs = RcIter::new(core::iter::empty());
-//!
+//! // context for filter execution
+//! let ctx = Ctx::<data::JustLut<Val>>::new(&filter.lut, Vars::new([]));
 //! // iterator over the output values
-//! let mut out = filter.run((Ctx::new([], &inputs), Val::from(input)));
+//! let mut out = filter.id.run((ctx, Val::from(input))).map(unwrap_valr);
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
@@ -52,6 +48,7 @@ extern crate std;
 
 pub mod box_iter;
 pub mod compile;
+pub mod data;
 mod exn;
 mod filter;
 mod fold;
@@ -59,23 +56,18 @@ mod into_iter;
 pub mod load;
 pub mod ops;
 pub mod path;
-mod rc_iter;
 mod rc_lazy_list;
 mod rc_list;
 mod stack;
 pub mod val;
 
-pub use compile::Compiler;
+pub use data::DataT;
 pub use exn::{Error, Exn};
-pub use filter::{Ctx, Cv, FilterT, Native, RunPtr, UpdatePtr};
-pub use rc_iter::RcIter;
-pub use val::{ValR, ValT, ValX, ValXs};
+pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
+pub use val::{unwrap_valr, ValR, ValT, ValX, ValXs};
 
-use alloc::string::String;
 use rc_list::List as RcList;
 use stack::Stack;
-
-type Inputs<'i, V> = RcIter<dyn Iterator<Item = Result<V, String>> + 'i>;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
 ///
@@ -118,24 +110,20 @@ impl<T> Bind<T, T> {
     }
 }
 
+/// jq program compiler.
+pub type Compiler<S, D> = compile::Compiler<S, Native<D>>;
 /// Function from a value to a stream of value results.
-#[derive(Debug, Clone)]
-pub struct Filter<F>(compile::TermId, compile::Lut<F>);
+pub type Filter<D> = compile::Filter<Native<D>>;
+/// Lookup table for terms and functions.
+pub type Lut<D> = compile::Lut<Native<D>>;
 
-impl<F: FilterT> Filter<F> {
-    /// Run a filter on given input, yielding output values.
-    pub fn run<'a>(&'a self, cv: Cv<'a, F::V>) -> impl Iterator<Item = ValR<F::V>> + 'a {
-        self.0
-            .run(&self.1, cv)
-            .map(|v| v.map_err(|e| e.get_err().ok().unwrap()))
-    }
-
+impl<V: ValT + 'static> Filter<data::JustLut<V>> {
     /// Run a filter on given input, panic if it does not yield the given output.
     ///
     /// This is for testing purposes.
-    pub fn yields(&self, x: F::V, ys: impl Iterator<Item = ValR<F::V>>) {
-        let inputs = RcIter::new(core::iter::empty());
-        let out = self.run((Ctx::new([], &inputs), x));
+    pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
+        let ctx = Ctx::<data::JustLut<V>>::new(&self.lut, Vars::new([]));
+        let out = self.id.run((ctx, x)).map(unwrap_valr);
         assert!(out.eq(ys));
     }
 }

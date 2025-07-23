@@ -10,7 +10,7 @@ use alloc::{boxed::Box, rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_core::{load, ops, path, Exn, Native, RunPtr};
+use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
 
 #[cfg(feature = "hifijson")]
@@ -88,7 +88,7 @@ pub type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
 pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-pub type ValX<'a> = jaq_core::ValX<'a, Val>;
+pub type ValX = jaq_core::ValX<Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -105,6 +105,16 @@ impl jaq_core::ValT for Val {
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
         let iter = iter.into_iter().map(|(k, v)| Ok((k.into_str()?, v)));
         Ok(Self::obj(iter.collect::<Result<_, _>>()?))
+    }
+
+    fn key_values(self) -> Box<dyn Iterator<Item = Result<(Val, Val), Error>>> {
+        let arr_idx = |(i, x)| Ok((Self::Int(i as isize), x));
+        let obj_idx = |(k, v)| Ok((Self::Str(k), v));
+        match self {
+            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().enumerate().map(arr_idx)),
+            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(obj_idx)),
+            _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
+        }
     }
 
     fn values(self) -> Box<dyn Iterator<Item = ValR>> {
@@ -155,11 +165,7 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        opt: path::Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    fn map_values<I: Iterator<Item = ValX>>(self, opt: path::Opt, f: impl Fn(Self) -> I) -> ValX {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -174,12 +180,12 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
+    fn map_index<I: Iterator<Item = ValX>>(
         mut self,
         index: &Self,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    ) -> ValX {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
@@ -228,12 +234,12 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
+    fn map_range<I: Iterator<Item = ValX>>(
         mut self,
         range: jaq_core::val::Range<&Self>,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    ) -> ValX {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
             let from = range.start.as_ref().map(|i| i.as_int()).transpose();
@@ -352,50 +358,34 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
-pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base_funs().chain([run(parse_fun())])
 }
 
 /// Minimal set of filters for JSON values.
-pub fn base_funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base().into_vec().into_iter().map(run)
 }
 
-fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX<'a>> {
+fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
     box_once(r.map_err(Exn::from))
 }
 
-fn base() -> Box<[Filter<RunPtr<Val>>]> {
+fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
-        ("tojson", v(0), |_, cv| {
-            box_once(Ok(cv.1.to_string().into()))
-        }),
-        ("length", v(0), |_, cv| box_once_err(cv.1.length())),
-        ("path_values", v(0), |_, cv| {
-            let pair = |(p, v)| Ok([p, v].into_iter().collect());
-            Box::new(cv.1.path_values(Vec::new()).skip(1).map(pair))
-        }),
-        ("paths", v(0), |_, cv| {
-            Box::new(cv.1.path_values(Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
-        }),
-        ("keys_unsorted", v(0), |_, cv| {
-            let keys = cv.1.key_values().map(|kvs| kvs.map(|(k, _v)| k).collect());
-            let err = || Error::typ(cv.1.clone(), Type::Iter.as_str());
-            box_once_err(keys.ok_or_else(err))
-        }),
-        ("contains", v(1), |_, cv| {
+        ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
+        ("length", v(0), |cv| box_once_err(cv.1.length())),
+        ("contains", v(1), |cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
         }),
-        ("has", v(1), |_, cv| {
-            unary(cv, |v, k| v.has(&k).map(Val::from))
-        }),
-        ("indices", v(1), |_, cv| {
+        ("has", v(1), |cv| unary(cv, |v, k| v.has(&k).map(Val::from))),
+        ("indices", v(1), |cv| {
             let to_int = |i: usize| Val::Int(i.try_into().unwrap());
             unary(cv, move |x, v| {
                 x.indices(&v).map(|idxs| idxs.map(to_int).collect())
             })
         }),
-        ("bsearch", v(1), |_, cv| {
+        ("bsearch", v(1), |cv| {
             let to_idx = |r: Result<_, _>| r.map_or_else(|i| -1 - i as isize, |i| i as isize);
             unary(cv, move |a, x| {
                 a.as_arr().map(|a| Val::Int(to_idx(a.binary_search(&x))))
@@ -415,9 +405,11 @@ fn from_json(s: &str) -> ValR {
 }
 
 #[cfg(feature = "parse")]
-fn parse_fun() -> Filter<RunPtr<Val>> {
-    ("fromjson", v(0), |_, cv| {
-        box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
+fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
+    ("fromjson", v(0), |cv| {
+        use jaq_core::ValT;
+        let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+        box_once_err(cv.1.as_str().ok_or_else(fail).and_then(from_json))
     })
 }
 
@@ -491,15 +483,6 @@ impl Val {
         }
     }
 
-    #[cfg(feature = "parse")]
-    /// If the value is a string, return it, else fail.
-    fn as_str(&self) -> Result<&Rc<String>, Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
-        }
-    }
-
     /// If the value is an array, return it, else fail.
     fn into_arr(self) -> Result<Rc<Vec<Self>>, Error> {
         match self {
@@ -529,28 +512,6 @@ impl Val {
             (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
             _ => Err(Error::index(self.clone(), key.clone())),
         }
-    }
-
-    /// Return any `key` for which `value | .[key]` is defined, as well as its output.
-    ///
-    /// Return `None` for values that are neither arrays nor objects.
-    fn key_values(&self) -> Option<BoxIter<(Val, &Val)>> {
-        let arr_idx = |(i, x)| (Self::Int(i as isize), x);
-        Some(match self {
-            Self::Arr(a) => Box::new(a.iter().enumerate().map(arr_idx)),
-            Self::Obj(o) => Box::new(o.iter().map(|(k, v)| (Self::Str(Rc::clone(k)), v))),
-            _ => return None,
-        })
-    }
-
-    /// Return all path-value pairs `($p, $v)`, such that `getpath($p) = $v`.
-    fn path_values<'a>(self, path: Vec<Val>) -> BoxIter<'a, (Val, Val)> {
-        let head = (path.iter().cloned().collect(), self.clone());
-        let f = move |k| path.iter().cloned().chain([k]).collect();
-        let kvs = self.key_values().into_iter().flatten();
-        let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
-        let tail = kvs.into_iter().flat_map(move |(k, v)| v.path_values(f(k)));
-        Box::new(core::iter::once(head).chain(tail))
     }
 
     /// `a` contains `b` iff either
@@ -681,6 +642,14 @@ impl From<f64> for Val {
 impl From<String> for Val {
     fn from(s: String) -> Self {
         Self::Str(Rc::new(s))
+    }
+}
+
+impl From<val::Range<Val>> for Val {
+    fn from(r: val::Range<Val>) -> Self {
+        let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_string().into(), v));
+        let kvs = [("start", r.start), ("end", r.end)];
+        Val::obj(kvs.into_iter().flat_map(kv).collect())
     }
 }
 
