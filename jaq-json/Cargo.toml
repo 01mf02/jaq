@@ -25,6 +25,7 @@ yaml = ["saphyr-parser"]
 jaq-core = { version = "2.1.0", path = "../jaq-core" }
 jaq-std  = { version = "2.1.0", path = "../jaq-std" }
 
+bytes = "1"
 foldhash = { version = "0.1", default-features = false }
 indexmap = { version = "2.0", default-features = false }
 num-bigint = { version = "0.4.6", default-features = false }

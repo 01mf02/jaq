@@ -56,6 +56,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
     match v {
         Val::Null | Val::Bool(_) | Val::Num(_) => v.fmt(f),
         Val::Str(_) => write!(f, "{}", v.green()),
+        Val::Bin(_) => write!(f, "{}", v.red()),
         Val::Arr(a) => {
             '['.bold().fmt(f)?;
             if !a.is_empty() {

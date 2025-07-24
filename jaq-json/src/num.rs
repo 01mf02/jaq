@@ -220,6 +220,8 @@ impl Hash for Num {
             // TODO: use this also for `round()`?
             Self::Float(f) if f.is_finite() => big(&BigInt::from_f64(*f).unwrap(), state),
             // hash all remaining floats, like NaN and infinity, to the same
+            // note that `Val::hash` assumes that `Num::hash` always starts
+            // with `state.write_u8(n)`, where `n < 2`
             Self::Float(_) => state.write_u8(1),
             Self::Dec(d) => Self::from_dec_str(d).hash(state),
         }

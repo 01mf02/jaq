@@ -366,6 +366,7 @@ impl TryFrom<&Val> for XmlVal {
                 }
             }
             Val::Null | Val::Bool(_) | Val::Num(_) => Ok(Self::Str(v.to_string().into())),
+            Val::Bin(_) => todo!(),
         }
     }
 }
