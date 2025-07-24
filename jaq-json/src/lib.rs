@@ -8,7 +8,8 @@ extern crate alloc;
 mod num;
 
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
+use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
@@ -43,6 +44,8 @@ pub enum Val {
     Num(Num),
     /// String
     Str(Rc<String>),
+    /// Binary array
+    Bin(Bytes),
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Object
@@ -110,7 +113,9 @@ impl jaq_core::ValT for Val {
 
     fn key_values(self) -> Box<dyn Iterator<Item = Result<(Val, Val), Error>>> {
         let arr_idx = |(i, x)| Ok((Self::from(i as isize), x));
+        let bin_idx = |(i, u)| Ok((Self::from(i as isize), Self::from(u as isize)));
         match self {
+            Self::Bin(b) => Box::new(b.into_iter().enumerate().map(bin_idx)),
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().enumerate().map(arr_idx)),
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(Ok)),
             _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
@@ -119,6 +124,7 @@ impl jaq_core::ValT for Val {
 
     fn values(self) -> Box<dyn Iterator<Item = ValR>> {
         match self {
+            Self::Bin(b) => Box::new(b.into_iter().map(|u| Ok((u as isize).into()))),
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
@@ -127,49 +133,36 @@ impl jaq_core::ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
+            (Val::Bin(a), Val::Num(Num::Int(i))) => {
+                Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| Val::from(a[i] as isize)))
+            }
             (Val::Arr(a), Val::Num(Num::Int(i))) => {
                 Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
             }
-            (a @ Val::Arr(_), Val::Num(Num::BigInt(i))) => {
+            (a @ (Val::Bin(_) | Val::Arr(_)), Val::Num(Num::BigInt(i))) => {
                 a.index(&Val::Num(Num::Int(bigint_to_int_saturated(i))))
             }
             (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
-            (s @ Val::Arr(_), _) => Err(Error::index(s, index.clone())),
+            (s @ (Val::Bin(_) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
             (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
         }
     }
 
     fn range(self, range: jaq_core::val::Range<&Self>) -> ValR {
-        let (from, upto) = (range.start, range.end);
         match self {
-            Val::Arr(a) => {
-                let len = a.len();
-                let from = from.as_ref().map(|i| i.as_isize()).transpose();
-                let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
-                from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-                    let from = abs_bound(from, len, 0);
-                    let upto = abs_bound(upto, len, len);
-                    let (skip, take) = skip_take(from, upto);
-                    a.iter().skip(skip).take(take).cloned().collect()
-                })
-            }
-            Val::Str(s) => {
-                let len = s.chars().count();
-                let from = from.as_ref().map(|i| i.as_isize()).transpose();
-                let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
-                from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-                    let from = abs_bound(from, len, 0);
-                    let upto = abs_bound(upto, len, len);
-                    let (skip, take) = skip_take(from, upto);
-                    Val::from(s.chars().skip(skip).take(take).collect::<String>())
-                })
-            }
+            Val::Str(s) => Self::skip_take(range, s.chars().count())
+                .map(|(skip, take)| Val::from(s.chars().skip(skip).take(take).collect::<String>())),
+            Val::Bin(b) => Self::skip_take(range, b.len())
+                .map(|(skip, take)| Val::Bin(b.slice(skip..skip + take))),
+            Val::Arr(a) => Self::skip_take(range, a.len())
+                .map(|(skip, take)| a.iter().skip(skip).take(take).cloned().collect()),
             _ => Err(Error::typ(self, Type::Range.as_str())),
         }
     }
 
     fn map_values<I: Iterator<Item = ValX>>(self, opt: path::Opt, f: impl Fn(Self) -> I) -> ValX {
         match self {
+            // TODO: what to do here for binary data?
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
                 Ok(iter.collect::<Result<_, _>>()?)
@@ -319,6 +312,7 @@ impl Val {
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
             Val::Num(n) => Ok(Val::Num(n.length())),
             Val::Str(s) => Ok(Val::from(s.chars().count() as isize)),
+            Val::Bin(b) => Ok(Val::from(b.len() as isize)),
             Val::Arr(a) => Ok(Val::from(a.len() as isize)),
             Val::Obj(o) => Ok(Val::from(o.len() as isize)),
         }
@@ -328,10 +322,15 @@ impl Val {
     fn indices<'a>(&'a self, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
         match (self, y) {
             (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
+            (Val::Bin(_), Val::Bin(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
             (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
             (Val::Str(x), Val::Str(y)) => {
                 let iw = str_windows(x, y.chars().count()).enumerate();
                 Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
+            }
+            (Val::Bin(x), Val::Bin(y)) => {
+                let iw = x.windows(y.len()).enumerate();
+                Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
             }
             (Val::Arr(x), Val::Arr(y)) => {
                 let iw = x.windows(y.len()).enumerate();
@@ -342,6 +341,36 @@ impl Val {
                 Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
             }
             (x, y) => Err(Error::index(x.clone(), y.clone())),
+        }
+    }
+
+    fn skip_take(range: jaq_core::val::Range<&Self>, len: usize) -> Result<(usize, usize), Error> {
+        let (from, upto) = (range.start, range.end);
+        let from = from.as_ref().map(|i| i.as_isize()).transpose();
+        let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
+        from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+            let from = abs_bound(from, len, 0);
+            let upto = abs_bound(upto, len, len);
+            skip_take(from, upto)
+        })
+    }
+
+    fn to_bytes(&self) -> Result<Bytes, Error> {
+        let add = |acc, x| {
+            let mut buf = BytesMut::from(acc);
+            buf.put(x?);
+            Ok(buf.into())
+        };
+        match self {
+            Val::Num(n) => n
+                .as_isize()
+                .and_then(|i| u8::try_from(i).ok())
+                .map(|u| Bytes::from(Vec::from([u])))
+                .ok_or_else(|| todo!()),
+            Val::Bin(b) => Ok(b.clone()),
+            Val::Str(s) => Ok(s.as_bytes().to_owned().into()),
+            Val::Arr(a) => a.iter().map(Val::to_bytes).try_fold(Bytes::new(), add),
+            _ => todo!(),
         }
     }
 }
@@ -373,6 +402,9 @@ fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
 fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
+        ("tobytes", v(0), |cv| {
+            box_once_err(cv.1.to_bytes().map(Val::Bin))
+        }),
         ("length", v(0), |cv| box_once_err(cv.1.length())),
         ("contains", v(1), |cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
@@ -483,12 +515,13 @@ impl Val {
 
     /// Return true if `value | .[key]` is defined.
     ///
-    /// Fail on values that are neither arrays nor objects.
+    /// Fail on values that are neither binaries, arrays nor objects.
     fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
+            (Self::Bin(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
             (Self::Arr(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
-            (Self::Arr(a), Self::Num(Num::BigInt(i))) if !i.is_negative() => {
-                Ok(i.to_usize().map_or(false, |i| i < a.len()))
+            (a @ (Self::Bin(_) | Self::Arr(_)), Self::Num(Num::BigInt(i))) => {
+                a.has(&Self::from(bigint_to_int_saturated(i)))
             }
             (Self::Obj(o), k) => Ok(o.contains_key(k)),
             _ => Err(Error::index(self.clone(), key.clone())),
@@ -504,6 +537,7 @@ impl Val {
     fn contains(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.contains(&**r),
+            (Self::Bin(_l), Self::Bin(_r)) => todo!(),
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
@@ -628,7 +662,7 @@ impl From<String> for Val {
 
 impl From<val::Range<Val>> for Val {
     fn from(r: val::Range<Val>) -> Self {
-        let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_string().into(), v));
+        let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_owned().into(), v));
         let kvs = [("start", r.start), ("end", r.end)];
         Val::obj(kvs.into_iter().flat_map(kv).collect())
     }
@@ -657,6 +691,11 @@ impl core::ops::Add for Val {
             (Str(mut l), Str(r)) => {
                 Rc::make_mut(&mut l).push_str(&r);
                 Ok(Str(l))
+            }
+            (Bin(l), Bin(r)) => {
+                let mut buf = BytesMut::from(l);
+                buf.put(r);
+                Ok(Bin(buf.into()))
             }
             (Arr(mut l), Arr(r)) => {
                 //std::dbg!(Rc::strong_count(&l));
@@ -786,6 +825,7 @@ impl Ord for Val {
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Num(x), Self::Num(y)) => x.cmp(y),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
+            (Self::Bin(x), Self::Bin(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
                 (0, 0) => Equal,
@@ -817,6 +857,8 @@ impl Ord for Val {
             // etc.
             (Self::Str(_), _) => Less,
             (_, Self::Str(_)) => Greater,
+            (Self::Bin(_), _) => Less,
+            (_, Self::Bin(_)) => Greater,
             (Self::Arr(_), _) => Less,
             (_, Self::Arr(_)) => Greater,
         }
@@ -835,9 +877,10 @@ impl Hash for Val {
             Self::Null => state.write_u8(2),
             Self::Bool(b) => state.write_u8(if *b { 3 } else { 4 }),
             Self::Str(s) => hash_with(5, s, state),
-            Self::Arr(a) => hash_with(6, a, state),
+            Self::Bin(b) => hash_with(6, b, state),
+            Self::Arr(a) => hash_with(7, a, state),
             Self::Obj(o) => {
-                state.write_u8(7);
+                state.write_u8(8);
                 // this is similar to what happens in `Val::cmp`
                 let mut kvs: Vec<_> = o.iter().collect();
                 kvs.sort_by_key(|(k, _v)| *k);
@@ -874,6 +917,7 @@ impl fmt::Display for Val {
             Self::Bool(b) => write!(f, "{b}"),
             Self::Num(n) => write!(f, "{n}"),
             Self::Str(s) => fmt_str(f, s),
+            Self::Bin(b) => fmt_str(f, &b.iter().copied().map(char::from).collect::<String>()),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();

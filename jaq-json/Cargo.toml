@@ -19,6 +19,7 @@ parse = ["hifijson"]
 jaq-core = { version = "2.1.0", path = "../jaq-core" }
 jaq-std  = { version = "2.1.0", path = "../jaq-std" }
 
+bytes = "1"
 foldhash = { version = "0.1", default-features = false }
 hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }
 indexmap = { version = "2.0", default-features = false }

@@ -89,6 +89,11 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Bool(b) => span(f, "boolean", b),
         Val::Num(n) => span(f, "number", n),
         Val::Str(s) => span(f, "string", display(s)),
+        Val::Bin(b) => span(
+            f,
+            "binary",
+            display(&b.iter().copied().map(char::from).collect::<String>()),
+        ),
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;
