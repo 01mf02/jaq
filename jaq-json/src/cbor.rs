@@ -81,10 +81,7 @@ fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, Error
             }
             Ok(Val::from(s))
         }
-        Header::Bytes(len) => {
-            let _b = parse_bytes(len, decoder)?;
-            todo!("bytes")
-        }
+        Header::Bytes(len) => Ok(Val::Bin(parse_bytes(len, decoder)?.into())),
         Header::Simple(simple::NULL | simple::UNDEFINED) => Ok(Val::Null),
         Header::Simple(simple::FALSE) => Ok(Val::Bool(false)),
         Header::Simple(simple::TRUE) => Ok(Val::Bool(true)),
