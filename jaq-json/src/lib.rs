@@ -576,6 +576,7 @@ impl From<Val> for serde_json::Value {
             */
             Val::Num(n) => Number(serde_json::Number::from_str(&n.to_string()).unwrap()),
             Val::Str(s) => String((*s).clone()),
+            Val::Bin(b) => String(b.iter().copied().map(char::from).collect()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
             // TODO: how to deal with non-string keys?
             Val::Obj(o) => Object(
