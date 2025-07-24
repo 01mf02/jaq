@@ -19,7 +19,7 @@ std = []
 cbor = ["ciborium-ll", "ciborium-io"]
 json = ["hifijson"]
 xml = ["xmlparser"]
-yaml = ["saphyr-parser"]
+yaml = ["saphyr-parser", "base64"]
 
 [dependencies]
 jaq-core = { version = "2.1.0", path = "../jaq-core" }
@@ -33,6 +33,7 @@ num-traits = { version = "0.2.19", default-features = false }
 serde_json = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
 
 # parsers
+base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true }
 ciborium-ll = { version = "0.2.2", optional = true }
 hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }

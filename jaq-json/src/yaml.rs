@@ -104,8 +104,8 @@ impl<'input, T: Input> State<'input, T> {
             (Event::Scalar(s, ScalarStyle::Plain, anchor_id, tag), span) => {
                 (parse_plain_scalar(s, tag.as_ref(), span)?, anchor_id)
             }
-            (Event::Scalar(s, _style, anchor_id, _tag), _) => {
-                (Val::Str(s.into_owned().into()), anchor_id)
+            (Event::Scalar(s, _style, anchor_id, tag), span) => {
+                (parse_string_scalar(s, tag.as_ref(), span)?, anchor_id)
             }
             (Event::SequenceStart(anchor_id, _tag), _) => {
                 let iter = core::iter::from_fn(|| self.parse_seq_entry());
@@ -205,6 +205,14 @@ fn parse_float(s: &str) -> Option<Val> {
     }
 }
 
+fn parse_string_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, Error> {
+    match tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix)) {
+        None | Some("str") => Ok(Val::Str(s.into_owned().into())),
+        Some("binary") => parse_plain_scalar(s, tag, span),
+        Some(tag) => todo!("invalid tag {tag}"),
+    }
+}
+
 fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, Error> {
     // if the tag starts with "!!"
     let tag = tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix));
@@ -228,10 +236,17 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
         (".nan" | ".NaN" | ".NAN", None | Some("float")) => Val::from(f64::NAN),
         (_, Some("int")) => parse_int(&s).ok_or_else(|| err(s, "int"))?,
         (_, Some("float")) => parse_float(&s).ok_or_else(|| err(s, "float"))?,
+        (_, Some("str")) => Val::Str(s.into_owned().into()),
+        (_, Some("binary")) => {
+            use base64::{engine::general_purpose::STANDARD, Engine};
+            let no_ws: String = s.chars().filter(|c| !c.is_whitespace()).collect();
+            Val::Bin(STANDARD.decode(no_ws).map_err(|_| err(s, "binary"))?.into())
+        }
         // Is it an int? Is it a float? No, it's ... a string!
-        _ => parse_int(&s)
+        (_, None) => parse_int(&s)
             .or_else(|| parse_float(&s))
             .unwrap_or_else(|| Val::Str(s.into_owned().into())),
+        (_, Some(tag)) => todo!("invalid tag {tag}"),
     })
 }
 
