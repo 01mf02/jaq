@@ -195,3 +195,9 @@ Finally, I came up with the following command to construct
 pairs of JSON and corresponding CBOR data:
 
     jaq '.. | select(.t? == "tr").c | [.[].c?[]]' examples/cbor-examples.xhtml
+
+We can create a series of tests with the following call:
+
+    jaq '.. | select(.t? == "tr").c | [.[].c?[]] | @json "jc(\(.[0]), \(.[1][2:]));"' examples/cbor-examples.xhtml -r
+
+This has been used to create a draft for jaq's CBOR parsing test suite.

@@ -126,7 +126,7 @@ fn encode<W: Write>(v: &Val, encoder: &mut Encoder<W>) -> Result<(), W::Error> {
             if let Ok(p) = u64::try_from(*i) {
                 encoder.push(Header::Positive(p))
             } else if let Some(Ok(n)) = neg_succ(*i).map(u64::try_from) {
-                encoder.push(Header::Positive(n))
+                encoder.push(Header::Negative(n))
             } else {
                 encode(&Val::Num(Num::big_int((*i).into())), encoder)
             }
