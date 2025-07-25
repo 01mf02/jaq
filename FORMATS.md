@@ -183,3 +183,15 @@ Running `jaq . test.xhtml` yields the following output:
   ]
 }
 ~~~
+
+### CBOR example
+
+I wanted to extract the
+[list of examples from the CBOR specification](https://www.rfc-editor.org/rfc/rfc8949.html#name-examples-of-encoded-cbor-da),
+in order to create a test suite for the CBOR encoder/decoder in jaq.
+For this, I copied the relevant section from the HTML source code and
+pasted it into `examples/cbor-examples.xhtml`.
+Finally, I came up with the following command to construct
+pairs of JSON and corresponding CBOR data:
+
+    jaq '.. | select(.t? == "tr").c | [.[].c?[]]' examples/cbor-examples.xhtml
