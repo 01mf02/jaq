@@ -1,19 +1,20 @@
 use crate::{invalid_data, BoxError, Format, Val};
+use bytes::Bytes;
 use hifijson::{token::Lex, IterLexer, SliceLexer};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_json::{cbor, json, xml::parse_str as parse_xml, yaml::parse_str as parse_yaml};
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Read};
 use std::path::Path;
 
 type Vals<'a> = BoxIter<'a, io::Result<Val>>;
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
-pub fn load_file(path: impl AsRef<Path>) -> io::Result<Box<dyn core::ops::Deref<Target = [u8]>>> {
+pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
     let file = std::fs::File::open(path.as_ref())?;
-    match unsafe { memmap2::Mmap::map(&file) } {
-        Ok(mmap) => Ok(Box::new(mmap)),
-        Err(_) => Ok(Box::new(std::fs::read(path)?)),
-    }
+    Ok(match unsafe { memmap2::Mmap::map(&file) } {
+        Ok(mmap) => Bytes::from_owner(mmap),
+        Err(_) => Bytes::from(std::fs::read(path)?),
+    })
 }
 
 fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
@@ -44,7 +45,7 @@ pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
 /// This has to be synchronised with [`from_stdin`].
 pub fn stdin_string(fmt: Format) -> io::Result<String> {
     Ok(match fmt {
-        Format::Raw | Format::Json | Format::Cbor => String::new(),
+        Format::Binary | Format::Raw | Format::Json | Format::Cbor => String::new(),
         Format::Xml | Format::Yaml => io::read_to_string(io::stdin().lock())?,
     })
 }
@@ -54,7 +55,7 @@ pub fn stdin_string(fmt: Format) -> io::Result<String> {
 /// This has to be synchronised with [`from_file`].
 pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
     Ok(match fmt {
-        Format::Raw | Format::Json | Format::Cbor => "",
+        Format::Binary | Format::Raw | Format::Json | Format::Cbor => "",
         Format::Xml | Format::Yaml => core::str::from_utf8(bytes).map_err(invalid_data)?,
     })
 }
@@ -62,6 +63,11 @@ pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
 pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals {
     let stdin = || io::stdin().lock();
     match fmt {
+        Format::Binary => {
+            let mut buf = Vec::new();
+            let result = stdin().read_to_end(&mut buf);
+            box_once(result.map(|_| Val::Bin(buf.into())))
+        }
         Format::Raw => Box::new(raw_input(slurp, stdin()).map(|r| r.map(Val::from))),
         Format::Cbor => todo!(),
         Format::Json => collect_if(slurp, json_read(stdin())),
@@ -70,10 +76,11 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals {
     }
 }
 
-pub fn from_file<'a>(fmt: Format, bytes: &'a [u8], s: &'a str, slurp: bool) -> Vals<'a> {
+pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals<'a> {
     match fmt {
+        Format::Binary => box_once(Ok(Val::Bin(bytes.clone()))),
         Format::Raw => {
-            let read = io::BufReader::new(bytes);
+            let read = io::BufReader::new(&**bytes);
             Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
         }
         Format::Json => collect_if(slurp, json_slice(bytes)),

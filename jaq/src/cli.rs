@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Format {
+    Binary,
     /// When the option `--slurp` is used additionally,
     /// then the whole input is read into a single string.
     Raw,
@@ -14,6 +15,8 @@ pub enum Format {
     Xml,
     Yaml,
 }
+
+const FMTS: &str = "binary, raw, json, cbor, xml, yaml";
 
 impl Format {
     /// Determine a file format from a path.
@@ -30,6 +33,7 @@ impl Format {
     /// Parse a format name.
     fn from_str(s: &str) -> Option<Self> {
         match s {
+            "binary" => Some(Format::Binary),
             "cbor" => Some(Format::Cbor),
             "raw" => Some(Format::Raw),
             "json" => Some(Format::Json),
@@ -244,14 +248,13 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let fmts = "raw, json, xml, yaml";
         match self {
             Self::Flag(s) => write!(f, "unknown flag: {s}"),
             Self::Utf8(s) => write!(f, "invalid UTF-8: {s:?}"),
             Self::KeyValue(o) => write!(f, "{o} expects a key and a value"),
             Self::Int(o) => write!(f, "{o} expects an integer"),
             Self::Path(o) => write!(f, "{o} expects a path"),
-            Self::Format(o) => write!(f, "{o} expects a data format (possible values: {fmts})"),
+            Self::Format(o) => write!(f, "{o} expects a data format (possible values: {FMTS})"),
         }
     }
 }
