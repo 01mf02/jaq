@@ -1,6 +1,7 @@
 use crate::{invalid_data, Cli, Format, Val};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
+use jaq_json::cbor;
 use std::io::{self, Write};
 
 struct FormatterFn<F>(F);
@@ -110,7 +111,7 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
     match (val, format) {
         (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
         (Val::Bin(b), Format::Binary) => w.write_all(b)?,
-        (_, Format::Cbor) => todo!(),
+        (_, Format::Cbor) => cbor::write_one(val, &mut *w)?,
         (_, Format::Json | Format::Yaml | Format::Binary | Format::Raw) => {
             write!(w, "{}", FormatterFn(fmt_json))?
         }
@@ -121,7 +122,7 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
         }
     };
 
-    if cli.join_output {
+    if cli.join_output || matches!(format, Format::Cbor) {
         // when running `jaq -jn '"prompt> " | (., input)'`,
         // this flush is necessary to make "prompt> " appear first
         w.flush()
