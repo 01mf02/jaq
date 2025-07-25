@@ -16,13 +16,14 @@ use ciborium_io::{Read, Write};
 use ciborium_ll::{simple, tag, Decoder, Encoder, Error, Header};
 use num_bigint::{BigInt, BigUint};
 
-/// Parse a single CBOR value from a reader.
+/// Decode a single CBOR value.
 pub fn parse_one<R: Read>(read: R) -> Result<Val, Error<R::Error>> {
     let mut decoder = Decoder::from(read);
     let header = decoder.pull()?;
     parse(header, &mut decoder)
 }
 
+/// Encode a single value to CBOR.
 pub fn write_one<W: Write>(v: &Val, write: W) -> Result<(), W::Error> {
     let mut encoder = Encoder::from(write);
     encode(v, &mut encoder)
