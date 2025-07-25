@@ -351,6 +351,7 @@ name = "jaq"
 version = "2.3.0"
 dependencies = [
  "bytes",
+ "ciborium-io",
  "codesnake",
  "dirs",
  "env_logger",

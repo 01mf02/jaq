@@ -3,7 +3,7 @@
 //! We can test this as follows:
 //!
 //! ~~~ text
-//! cargo run -- --from cbor . <(echo 0x826161a161626163 | xxd -r)
+//! echo 0x826161a161626163 | xxd -r | cargo run -- --from cbor
 //! ~~~
 //!
 //! The [examples](https://www.rfc-editor.org/rfc/rfc8949.html#section-appendix.a)
@@ -12,13 +12,13 @@
 use crate::{Num, Val};
 use alloc::string::String;
 use alloc::vec::Vec;
-use ciborium_io::{EndOfFile, Read};
+use ciborium_io::Read;
 use ciborium_ll::{simple, tag, Decoder, Error, Header};
 use num_bigint::{BigInt, BigUint};
 
-/// Parse a single CBOR value from a byte slice.
-pub fn parse_slice(slice: &[u8]) -> Result<Val, Error<EndOfFile>> {
-    let mut decoder = Decoder::from(slice);
+/// Parse a single CBOR value from a reader.
+pub fn parse_one<R: Read>(read: R) -> Result<Val, Error<R::Error>> {
+    let mut decoder = Decoder::from(read);
     let header = decoder.pull()?;
     parse(header, &mut decoder)
 }

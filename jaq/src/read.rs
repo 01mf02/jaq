@@ -69,7 +69,7 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals {
             box_once(result.map(|_| Val::Bin(buf.into())))
         }
         Format::Raw => Box::new(raw_input(slurp, stdin()).map(|r| r.map(Val::from))),
-        Format::Cbor => todo!(),
+        Format::Cbor => box_once(cbor::parse_one(stdin()).map_err(|_| todo!())),
         Format::Json => collect_if(slurp, json_read(stdin())),
         Format::Xml => collect_if(slurp, parse_xml(s).map(map_invalid_data)),
         Format::Yaml => collect_if(slurp, parse_yaml(s).map(map_invalid_data)),
@@ -84,7 +84,7 @@ pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> 
             Box::new(raw_input(slurp, read).map(|r| r.map(Val::from)))
         }
         Format::Json => collect_if(slurp, json_slice(bytes)),
-        Format::Cbor => box_once(cbor::parse_slice(bytes).map_err(|_| todo!())),
+        Format::Cbor => box_once(cbor::parse_one(&**bytes).map_err(|_| todo!())),
         Format::Xml => collect_if(slurp, parse_xml(s).map(map_invalid_data)),
         Format::Yaml => collect_if(slurp, parse_yaml(s).map(map_invalid_data)),
     }
