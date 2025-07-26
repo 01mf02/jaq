@@ -46,7 +46,7 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let no_color = std::env::var("NO_COLOR").map_or(false, |v| !v.is_empty());
+    let no_color = std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
     let set_color = |on| {
         if on {
             yansi::enable();

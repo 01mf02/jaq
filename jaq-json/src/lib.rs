@@ -281,7 +281,7 @@ impl jaq_std::ValT for Val {
     }
 
     fn is_int(&self) -> bool {
-        self.as_num().map_or(false, Num::is_int)
+        self.as_num().is_some_and(Num::is_int)
     }
 
     fn as_isize(&self) -> Option<isize> {
@@ -541,7 +541,7 @@ impl Val {
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
-                .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
+                .all(|(k, r)| l.get(k).is_some_and(|l| l.contains(r))),
             _ => self == other,
         }
     }

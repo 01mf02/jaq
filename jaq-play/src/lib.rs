@@ -4,9 +4,9 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Vars};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Native, Lut, Vars};
 use jaq_json::{fmt_str, Val};
-use jaq_std::input::{HasInputs, Inputs, RcIter};
+use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
 struct DataKind;
@@ -292,6 +292,13 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     Ok(())
 }
 
+fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
+    let run = jaq_std::run::<DataKind>;
+    let std = jaq_std::funs::<DataKind>();
+    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    std.chain(jaq_json::funs()).chain(input)
+}
+
 fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
     use compile::Compiler;
     use jaq_core::load::{import, Arena, File, Loader};
@@ -306,9 +313,8 @@ fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileRepo
     let vals = Vec::new();
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
-    let input_funs = IntoIterator::into_iter(jaq_std::input::funs()).map(jaq_std::run);
     let compiler = Compiler::default()
-        .with_funs(jaq_std::funs().chain(jaq_json::funs()).chain(input_funs))
+        .with_funs(funs())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))
