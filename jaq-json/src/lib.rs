@@ -26,6 +26,8 @@ use num_traits::{cast::ToPrimitive, Signed};
 pub mod cbor;
 #[cfg(feature = "json")]
 pub mod json;
+#[cfg(feature = "toml")]
+pub mod toml;
 #[cfg(feature = "xml")]
 pub mod xml;
 #[cfg(feature = "yaml")]

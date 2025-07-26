@@ -1,7 +1,7 @@
 use crate::{invalid_data, Cli, Format, Val};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
-use jaq_json::{cbor, yaml};
+use jaq_json::{cbor, toml, yaml};
 use std::io::{self, Write};
 
 struct FormatterFn<F>(F);
@@ -113,6 +113,10 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
         (Val::Bin(b), Format::Binary) => w.write_all(b)?,
         (Val::Bin(b), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
         (_, Format::Cbor) => cbor::write_one(val, &mut *w)?,
+        (_, Format::Toml) => {
+            let enc = toml::encode_val(val).map_err(|e| invalid_data(e.to_string()))?;
+            write!(w, "{enc}")?
+        }
         (_, Format::Json | Format::Yaml | Format::Binary | Format::Raw) => {
             write!(w, "{}", FormatterFn(fmt_json))?
         }
