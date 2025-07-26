@@ -1,6 +1,7 @@
-use crate::{Cli, Val};
+use crate::{invalid_data, Cli, Format, Val};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
+use jaq_json::{cbor, yaml};
 use std::io::{self, Write};
 
 struct FormatterFn<F>(F);
@@ -89,32 +90,53 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 }
 
 pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> {
-    let f = |f: &mut Formatter| {
-        let opts = PpOpts {
-            compact: cli.compact_output,
-            indent: if cli.tab {
-                String::from("\t")
-            } else {
-                " ".repeat(cli.indent())
-            },
-            sort_keys: cli.sort_keys,
-        };
-        fmt_val(f, &opts, 0, val)
+    let opts = || PpOpts {
+        compact: cli.compact_output,
+        indent: if cli.tab {
+            String::from("\t")
+        } else {
+            " ".repeat(cli.indent())
+        },
+        sort_keys: cli.sort_keys,
     };
 
-    match val {
-        Val::Str(s) if cli.raw_output || cli.join_output => write!(w, "{s}")?,
-        _ => write!(w, "{}", FormatterFn(f))?,
+    let fmt_json = |f: &mut Formatter| fmt_val(f, &opts(), 0, val);
+    let format = cli.to.unwrap_or(Format::Json);
+
+    if matches!(format, Format::Yaml) {
+        // start of YAML document
+        writeln!(w, "---")?;
+    }
+
+    match (val, format) {
+        (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
+        (Val::Bin(b), Format::Binary) => w.write_all(b)?,
+        (Val::Bin(b), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
+        (_, Format::Cbor) => cbor::write_one(val, &mut *w)?,
+        (_, Format::Json | Format::Yaml | Format::Binary | Format::Raw) => {
+            write!(w, "{}", FormatterFn(fmt_json))?
+        }
+        (_, Format::Xml) => {
+            use jaq_json::xml::XmlVal;
+            let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;
+            write!(w, "{xml}")?
+        }
     };
 
-    if cli.join_output {
+    if cli.join_output || matches!(format, Format::Cbor) {
         // when running `jaq -jn '"prompt> " | (., input)'`,
         // this flush is necessary to make "prompt> " appear first
         w.flush()
     } else {
         // this also flushes output, because stdout is line-buffered in Rust
         writeln!(w)
+    }?;
+
+    if matches!(format, Format::Yaml) {
+        // end of YAML document
+        writeln!(w, "...")?;
     }
+    Ok(())
 }
 
 pub fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {

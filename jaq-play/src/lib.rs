@@ -4,8 +4,8 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Native, Lut, Vars};
-use jaq_json::{fmt_str, Val};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
+use jaq_json::{fmt_str, json, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
@@ -250,7 +250,7 @@ fn json_slice(slice: &[u8]) -> impl Iterator<Item = Result<Val, String>> + '_ {
     let mut lexer = hifijson::SliceLexer::new(slice);
     core::iter::from_fn(move || {
         use hifijson::token::Lex;
-        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
+        Some(json::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
     })
 }
 
