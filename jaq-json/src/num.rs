@@ -311,7 +311,7 @@ impl fmt::Display for Num {
         match self {
             Self::Int(i) => write!(f, "{i}"),
             Self::BigInt(i) => write!(f, "{i}"),
-            Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
+            Self::Float(x) if x.is_finite() => ryu::Buffer::new().format_finite(*x).fmt(f),
             Self::Float(_) => write!(f, "null"),
             Self::Dec(n) => write!(f, "{n}"),
         }

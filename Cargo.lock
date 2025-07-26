@@ -342,6 +342,7 @@ dependencies = [
  "jaq-std",
  "num-bigint",
  "num-traits",
+ "ryu",
  "serde_json",
 ]
 
