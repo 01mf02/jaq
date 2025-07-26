@@ -1,6 +1,7 @@
 //! YAML parsing.
 use crate::{Num, Val};
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
 
@@ -238,9 +239,8 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
         (_, Some("float")) => parse_float(&s).ok_or_else(|| err(s, "float"))?,
         (_, Some("str")) => Val::Str(s.into_owned().into()),
         (_, Some("binary")) => {
-            use base64::{engine::general_purpose::STANDARD, Engine};
             let no_ws: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            Val::Bin(STANDARD.decode(no_ws).map_err(|_| err(s, "binary"))?.into())
+            Val::Bin(BASE64.decode(no_ws).map_err(|_| err(s, "binary"))?.into())
         }
         // Is it an int? Is it a float? No, it's ... a string!
         (_, None) => parse_int(&s)
@@ -255,4 +255,11 @@ pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     let mut st = State::new(Parser::new_from_str(s));
     assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
     core::iter::from_fn(move || st.parse_stream_entry())
+}
+
+/// Encode binary data with base64.
+///
+/// To print binary data as YAML, this function's output must be prefixed with "!!binary".
+pub fn encode_bin(b: &[u8]) -> String {
+    BASE64.encode(b)
 }
