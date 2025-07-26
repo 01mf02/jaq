@@ -20,19 +20,13 @@ jobs:
         key: cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: cargo-
 
-    - uses: dtolnay/rust-toolchain@1.63
-    - name: Check jaq-core
-      working-directory: jaq-core
+    - uses: dtolnay/rust-toolchain@1.69
+    - name: Check jaq-std
+      working-directory: jaq-std
       run: cargo check
 
-    - uses: dtolnay/rust-toolchain@1.65
-    - name: Check jaq-json
-      working-directory: jaq-json
-      run: cargo check
-
-    - uses: dtolnay/rust-toolchain@1.66
-    - name: Check jaq
-      working-directory: jaq
+    - uses: dtolnay/rust-toolchain@1.70
+    - name: Check
       run: cargo check
     - name: Build
       run: cargo build --verbose

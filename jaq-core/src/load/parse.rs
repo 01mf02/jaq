@@ -814,7 +814,6 @@ pub(crate) struct Module<S, B> {
 /// def map(f): [.[] | f];
 /// def recurse(f; cond): recurse(f | select(cond));
 /// ~~~
-// TODO v3.0: Make this just a tuple?
 pub struct Def<S, F = Term<S>> {
     /// name, e.g. `"double"` or `"map"`
     pub name: S,
@@ -824,7 +823,11 @@ pub struct Def<S, F = Term<S>> {
     pub body: F,
 }
 
-// required for Haskell interop
+/// Print definition like a tuple.
+///
+/// This is required for Haskell's
+/// [`Read`](<https://hackage.haskell.org/package/base/docs/Text-Read.html>)
+/// class to deserialise definitions.
 impl<S: Debug, F: Debug> Debug for Def<S, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "({:?}, {:?}, {:?})", self.name, self.args, self.body)

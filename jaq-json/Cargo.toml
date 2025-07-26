@@ -9,7 +9,7 @@ description = "JSON values for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["data-structures"]
-rust-version = "1.65"
+rust-version = "1.70"
 
 [features]
 default = ["parse"]
@@ -19,7 +19,11 @@ parse = ["hifijson"]
 jaq-core = { version = "2.1.0", path = "../jaq-core" }
 jaq-std  = { version = "2.1.0", path = "../jaq-std" }
 
+bytes = "1"
 foldhash = { version = "0.1", default-features = false }
 hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }
 indexmap = { version = "2.0", default-features = false }
+num-bigint = { version = "0.4.6", default-features = false }
+num-traits = { version = "0.2.19", default-features = false }
 serde_json = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
+ryu = "1.0.20"

@@ -4,11 +4,36 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, load, Ctx, Native, RcIter};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Native, Lut, Vars};
 use jaq_json::{fmt_str, Val};
+use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
-type Filter = jaq_core::Filter<Native<Val>>;
+struct DataKind;
+
+impl DataT for DataKind {
+    type V<'a> = Val;
+    type Data<'a> = Data<'a>;
+}
+
+#[derive(Clone)]
+struct Data<'a> {
+    lut: &'a Lut<DataKind>,
+    inputs: Inputs<'a, Val>,
+}
+
+impl<'a> data::HasLut<'a, DataKind> for Data<'a> {
+    fn lut(&self) -> &'a Lut<DataKind> {
+        self.lut
+    }
+}
+impl<'a> HasInputs<'a, Val> for Data<'a> {
+    fn inputs(&self) -> Inputs<'a, Val> {
+        self.inputs
+    }
+}
+
+type Filter = jaq_core::Filter<DataKind>;
 
 struct FormatterFn<F>(F);
 
@@ -62,11 +87,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
-        Val::Int(i) => span(f, "number", i),
-        Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
-        Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
         Val::Str(s) => span(f, "string", display(s)),
+        Val::Bin(b) => span(
+            f,
+            "binary",
+            display(&b.iter().copied().map(char::from).collect::<String>()),
+        ),
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;
@@ -76,13 +103,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
         Val::Obj(o) => {
             write!(f, "{{")?;
-            fmt_seq(f, opts, level, &**o, |f, (k, val)| {
-                span(f, "key", display(k))?;
+            fmt_seq(f, opts, level, &**o, |f, (k, v)| {
+                fmt_val(f, opts, level + 1, k)?;
                 write!(f, ":")?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
-                fmt_val(f, opts, level + 1, val)
+                fmt_val(f, opts, level + 1, v)
             })?;
             write!(f, "}}")
         }
@@ -91,10 +118,6 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 
 fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
-}
-
-fn span_dbg(f: &mut Formatter, cls: &str, el: impl Debug) -> fmt::Result {
-    write!(f, "<span class=\"{cls}\">{el:?}</span>")
 }
 
 fn escape(s: &str) -> String {
@@ -243,23 +266,37 @@ fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
 }
 
 fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let (_vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
+    let (vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
 
     let inputs = read_str(settings, input);
 
-    let inputs = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
+    let iter = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    let inputs = RcIter::new(inputs);
-    let null = RcIter::new(null);
+    let iter: Inputs<_> = &RcIter::new(iter);
+    let null: Inputs<_> = &RcIter::new(null);
 
-    for x in if settings.null_input { &null } else { &inputs } {
+    let data = Data {
+        inputs: iter,
+        lut: &filter.lut,
+    };
+    let vars = Vars::new(vals);
+    let ctx = Ctx::<DataKind>::new(data, vars);
+
+    for x in if settings.null_input { null } else { iter } {
         let x = x.map_err(Error::Hifijson)?;
-        for y in filter.run((Ctx::new([], &inputs), x)) {
-            f(y.map_err(Error::Jaq)?);
+        for y in filter.id.run((ctx.clone(), x)) {
+            f(unwrap_valr(y).map_err(Error::Jaq)?);
         }
     }
     Ok(())
+}
+
+fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
+    let run = jaq_std::run::<DataKind>;
+    let std = jaq_std::funs::<DataKind>();
+    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    std.chain(jaq_json::funs()).chain(input)
 }
 
 fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
@@ -277,7 +314,7 @@ fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileRepo
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
     let compiler = Compiler::default()
-        .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+        .with_funs(funs())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))

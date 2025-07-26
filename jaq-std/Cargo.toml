@@ -8,7 +8,7 @@ readme = "../README.md"
 description = "Standard library for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
-rust-version = "1.65"
+rust-version = "1.69"
 
 [features]
 default = ["std", "format", "log", "math", "regex", "time"]
