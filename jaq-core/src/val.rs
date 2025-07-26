@@ -13,11 +13,24 @@ use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
 use core::str::FromStr;
 
 /// Value or eRror.
-pub type ValR<V> = Result<V, crate::Error<V>>;
+pub type ValR<T, V = T> = Result<T, crate::Error<V>>;
+/// Stream of values and eRrors.
+pub type ValRs<'a, T, V = T> = BoxIter<'a, ValR<T, V>>;
 /// Value or eXception.
-pub type ValX<'a, V> = Result<V, crate::Exn<'a, V>>;
+pub type ValX<T, V = T> = Result<T, crate::Exn<V>>;
 /// Stream of values and eXceptions.
-pub type ValXs<'a, V> = BoxIter<'a, ValX<'a, V>>;
+pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<T, V>>;
+
+/// Convert a value exception [`ValX`] into a value result [`ValR`].
+///
+/// This should always succeed when called on results of a main filter.
+/// For any other filter, this may not succeed, i.e. panic.
+///
+/// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
+/// do not use this function on outputs of `fi`!
+pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
+    v.map_err(|e| e.get_err().ok().unwrap())
+}
 
 /// Range of options, used for iteration operations.
 pub type Range<V> = core::ops::Range<Option<V>>;
@@ -31,6 +44,7 @@ pub trait ValT:
     + From<bool>
     + From<isize>
     + From<alloc::string::String>
+    + From<Range<Self>>
     + FromIterator<Self>
     + PartialEq
     + PartialOrd
@@ -50,6 +64,13 @@ pub trait ValT:
     ///
     /// This is used when creating values with the syntax `{k: v}`.
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR<Self>;
+
+    /// Yield the key-value pairs of a value.
+    ///
+    /// This is used to collect the paths of `.[]`.
+    /// It should yield any `key` for which `value | .[key]` is defined,
+    /// as well as its output.
+    fn key_values(self) -> BoxIter<'static, ValR<(Self, Self), Self>>;
 
     /// Yield the children of a value.
     ///
@@ -78,35 +99,35 @@ pub trait ValT:
     ///
     /// - If `opt` is [`Opt::Essential`], return an error.
     /// - If `opt` is [`Opt::Optional`] , return the input value.
-    fn map_values<'a, I: Iterator<Item = ValX<'a, Self>>>(
+    fn map_values<I: Iterator<Item = ValX<Self>>>(
         self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a, Self>;
+    ) -> ValX<Self>;
 
     /// Map a function over the child of the value at the given index.
     ///
     /// This is used by `.[k] |= f`.
     ///
     /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_index<'a, I: Iterator<Item = ValX<'a, Self>>>(
+    fn map_index<I: Iterator<Item = ValX<Self>>>(
         self,
         index: &Self,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a, Self>;
+    ) -> ValX<Self>;
 
     /// Map a function over the slice of the value with the given range.
     ///
     /// This is used by `.[s:e] |= f`, `.[s:] |= f`, and `.[:e] |= f`.
     ///
     /// See [`Self::map_values`] for the behaviour of `opt`.
-    fn map_range<'a, I: Iterator<Item = ValX<'a, Self>>>(
+    fn map_range<I: Iterator<Item = ValX<Self>>>(
         self,
         range: Range<&Self>,
         opt: Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a, Self>;
+    ) -> ValX<Self>;
 
     /// Return a boolean representation of the value.
     ///

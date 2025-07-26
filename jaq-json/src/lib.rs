@@ -4,17 +4,34 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
+mod num;
 
 use alloc::string::{String, ToString};
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
+use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
 use core::fmt::{self, Debug};
+use core::hash::{Hash, Hasher};
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_core::{load, ops, path, Exn, Native, RunPtr};
+use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
 use jaq_std::{run, unary, v, Filter};
+pub use num::Num;
+use num_bigint::BigInt;
+use num_traits::{cast::ToPrimitive, Signed};
 
-#[cfg(feature = "hifijson")]
-use hifijson::{LexAlloc, Token};
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "json")]
+pub mod json;
+#[cfg(feature = "toml")]
+pub mod toml;
+#[cfg(feature = "xml")]
+pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
 
 /// JSON value with sharing.
 ///
@@ -26,25 +43,23 @@ use hifijson::{LexAlloc, Token};
 /// Operations on numbers follow a few principles:
 /// * The sum, difference, product, and remainder of two integers is integer.
 /// * Any other operation between two numbers yields a float.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Val {
     #[default]
     /// Null
     Null,
     /// Boolean
     Bool(bool),
-    /// Integer
-    Int(isize),
-    /// Floating-point number
-    Float(f64),
-    /// Floating-point number or integer not fitting into `Int`
-    Num(Rc<String>),
+    /// Number
+    Num(Num),
     /// String
     Str(Rc<String>),
+    /// Binary array
+    Bin(Bytes),
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Object
-    Obj(Rc<Map<Rc<String>, Val>>),
+    Obj(Rc<Map<Val, Val>>),
 }
 
 /// Types and sets of types.
@@ -81,14 +96,14 @@ impl Type {
 }
 
 /// Order-preserving map
-type Map<K, V> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
+type Map<K = Val, V = K> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 /// Error that can occur during filter execution.
 pub type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
 pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-pub type ValX<'a> = jaq_core::ValX<'a, Val>;
+pub type ValX = jaq_core::ValX<Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -99,16 +114,27 @@ fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
 
 impl jaq_core::ValT for Val {
     fn from_num(n: &str) -> ValR {
-        Ok(Val::Num(Rc::new(n.to_string())))
+        Ok(Self::Num(Num::from_str(n)))
     }
 
     fn from_map<I: IntoIterator<Item = (Self, Self)>>(iter: I) -> ValR {
-        let iter = iter.into_iter().map(|(k, v)| Ok((k.into_str()?, v)));
-        Ok(Self::obj(iter.collect::<Result<_, _>>()?))
+        Ok(Self::obj(iter.into_iter().collect()))
+    }
+
+    fn key_values(self) -> Box<dyn Iterator<Item = Result<(Val, Val), Error>>> {
+        let arr_idx = |(i, x)| Ok((Self::from(i as isize), x));
+        let bin_idx = |(i, u)| Ok((Self::from(i as isize), Self::from(u as isize)));
+        match self {
+            Self::Bin(b) => Box::new(b.into_iter().enumerate().map(bin_idx)),
+            Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().enumerate().map(arr_idx)),
+            Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(Ok)),
+            _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
+        }
     }
 
     fn values(self) -> Box<dyn Iterator<Item = ValR>> {
         match self {
+            Self::Bin(b) => Box::new(b.into_iter().map(|u| Ok((u as isize).into()))),
             Self::Arr(a) => Box::new(rc_unwrap_or_clone(a).into_iter().map(Ok)),
             Self::Obj(o) => Box::new(rc_unwrap_or_clone(o).into_iter().map(|(_k, v)| Ok(v))),
             _ => box_once(Err(Error::typ(self, Type::Iter.as_str()))),
@@ -117,50 +143,36 @@ impl jaq_core::ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
-            (Val::Arr(a), Val::Int(i)) => {
+            (Val::Bin(a), Val::Num(Num::Int(i))) => {
+                Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| Val::from(a[i] as isize)))
+            }
+            (Val::Arr(a), Val::Num(Num::Int(i))) => {
                 Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
             }
-            (Val::Obj(o), Val::Str(s)) => Ok(o.get(s).cloned().unwrap_or(Val::Null)),
-            (s @ (Val::Arr(_) | Val::Obj(_)), _) => Err(Error::index(s, index.clone())),
+            (a @ (Val::Bin(_) | Val::Arr(_)), Val::Num(Num::BigInt(i))) => {
+                a.index(&Val::Num(Num::Int(bigint_to_int_saturated(i))))
+            }
+            (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
+            (s @ (Val::Bin(_) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
             (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
         }
     }
 
     fn range(self, range: jaq_core::val::Range<&Self>) -> ValR {
-        let (from, upto) = (range.start, range.end);
         match self {
-            Val::Arr(a) => {
-                let len = a.len();
-                let from = from.as_ref().map(|i| i.as_int()).transpose();
-                let upto = upto.as_ref().map(|i| i.as_int()).transpose();
-                from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-                    let from = abs_bound(from, len, 0);
-                    let upto = abs_bound(upto, len, len);
-                    let (skip, take) = skip_take(from, upto);
-                    a.iter().skip(skip).take(take).cloned().collect()
-                })
-            }
-            Val::Str(s) => {
-                let len = s.chars().count();
-                let from = from.as_ref().map(|i| i.as_int()).transpose();
-                let upto = upto.as_ref().map(|i| i.as_int()).transpose();
-                from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-                    let from = abs_bound(from, len, 0);
-                    let upto = abs_bound(upto, len, len);
-                    let (skip, take) = skip_take(from, upto);
-                    Val::from(s.chars().skip(skip).take(take).collect::<String>())
-                })
-            }
+            Val::Str(s) => Self::skip_take(range, s.chars().count())
+                .map(|(skip, take)| Val::from(s.chars().skip(skip).take(take).collect::<String>())),
+            Val::Bin(b) => Self::skip_take(range, b.len())
+                .map(|(skip, take)| Val::Bin(b.slice(skip..skip + take))),
+            Val::Arr(a) => Self::skip_take(range, a.len())
+                .map(|(skip, take)| a.iter().skip(skip).take(take).cloned().collect()),
             _ => Err(Error::typ(self, Type::Range.as_str())),
         }
     }
 
-    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
-        self,
-        opt: path::Opt,
-        f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    fn map_values<I: Iterator<Item = ValX>>(self, opt: path::Opt, f: impl Fn(Self) -> I) -> ValX {
         match self {
+            // TODO: what to do here for binary data?
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
                 Ok(iter.collect::<Result<_, _>>()?)
@@ -174,21 +186,17 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
+    fn map_index<I: Iterator<Item = ValX>>(
         mut self,
         index: &Self,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    ) -> ValX {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
                 let o = Rc::make_mut(o);
-                let i = match index {
-                    Val::Str(s) => s,
-                    i => return opt.fail(self, |v| Exn::from(Error::index(v, i.clone()))),
-                };
-                match o.entry(Rc::clone(i)) {
+                match o.entry(index.clone()) {
                     Occupied(mut e) => {
                         let v = core::mem::take(e.get_mut());
                         match f(v).next().transpose()? {
@@ -211,7 +219,7 @@ impl jaq_core::ValT for Val {
                 let abs_or = |i| {
                     abs_index(i, a.len()).ok_or(Error::str(format_args!("index {i} out of bounds")))
                 };
-                let i = match index.as_int().and_then(abs_or) {
+                let i = match index.as_isize().and_then(abs_or) {
                     Ok(i) => i,
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
@@ -228,16 +236,16 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
+    fn map_range<I: Iterator<Item = ValX>>(
         mut self,
         range: jaq_core::val::Range<&Self>,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX<'a> {
+    ) -> ValX {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
-            let from = range.start.as_ref().map(|i| i.as_int()).transpose();
-            let upto = range.end.as_ref().map(|i| i.as_int()).transpose();
+            let from = range.start.as_ref().map(|i| i.as_isize()).transpose();
+            let upto = range.end.as_ref().map(|i| i.as_isize()).transpose();
             let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
                 Ok(from_upto) => from_upto,
                 Err(e) => return opt.fail(self, |_| Exn::from(e)),
@@ -282,15 +290,17 @@ impl jaq_std::ValT for Val {
         }
     }
 
+    fn is_int(&self) -> bool {
+        self.as_num().is_some_and(Num::is_int)
+    }
+
     fn as_isize(&self) -> Option<isize> {
-        match self {
-            Self::Int(i) => Some(*i),
-            _ => None,
-        }
+        self.as_num().and_then(Num::as_isize)
     }
 
     fn as_f64(&self) -> Result<f64, Error> {
-        Self::as_float(self)
+        let fail = || Error::typ(self.clone(), Type::Float.as_str());
+        self.as_num().and_then(Num::as_f64).ok_or_else(fail)
     }
 }
 
@@ -308,14 +318,13 @@ impl Val {
     /// Fail on booleans.
     fn length(&self) -> ValR {
         match self {
-            Val::Null => Ok(Val::Int(0)),
+            Val::Null => Ok(Val::from(0)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
-            Val::Int(i) => Ok(Val::Int(i.abs())),
-            Val::Num(n) => Val::from_dec_str(n).length(),
-            Val::Float(f) => Ok(Val::Float(f.abs())),
-            Val::Str(s) => Ok(Val::Int(s.chars().count() as isize)),
-            Val::Arr(a) => Ok(Val::Int(a.len() as isize)),
-            Val::Obj(o) => Ok(Val::Int(o.len() as isize)),
+            Val::Num(n) => Ok(Val::Num(n.length())),
+            Val::Str(s) => Ok(Val::from(s.chars().count() as isize)),
+            Val::Bin(b) => Ok(Val::from(b.len() as isize)),
+            Val::Arr(a) => Ok(Val::from(a.len() as isize)),
+            Val::Obj(o) => Ok(Val::from(o.len() as isize)),
         }
     }
 
@@ -323,10 +332,15 @@ impl Val {
     fn indices<'a>(&'a self, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
         match (self, y) {
             (Val::Str(_), Val::Str(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
+            (Val::Bin(_), Val::Bin(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
             (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
             (Val::Str(x), Val::Str(y)) => {
                 let iw = str_windows(x, y.chars().count()).enumerate();
                 Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
+            }
+            (Val::Bin(x), Val::Bin(y)) => {
+                let iw = x.windows(y.len()).enumerate();
+                Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
             }
             (Val::Arr(x), Val::Arr(y)) => {
                 let iw = x.windows(y.len()).enumerate();
@@ -337,6 +351,36 @@ impl Val {
                 Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
             }
             (x, y) => Err(Error::index(x.clone(), y.clone())),
+        }
+    }
+
+    fn skip_take(range: jaq_core::val::Range<&Self>, len: usize) -> Result<(usize, usize), Error> {
+        let (from, upto) = (range.start, range.end);
+        let from = from.as_ref().map(|i| i.as_isize()).transpose();
+        let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
+        from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+            let from = abs_bound(from, len, 0);
+            let upto = abs_bound(upto, len, len);
+            skip_take(from, upto)
+        })
+    }
+
+    fn to_bytes(&self) -> Result<Bytes, Error> {
+        let add = |acc, x| {
+            let mut buf = BytesMut::from(acc);
+            buf.put(x?);
+            Ok(buf.into())
+        };
+        match self {
+            Val::Num(n) => n
+                .as_isize()
+                .and_then(|i| u8::try_from(i).ok())
+                .map(|u| Bytes::from(Vec::from([u])))
+                .ok_or_else(|| todo!()),
+            Val::Bin(b) => Ok(b.clone()),
+            Val::Str(s) => Ok(s.as_bytes().to_owned().into()),
+            Val::Arr(a) => a.iter().map(Val::to_bytes).try_fold(Bytes::new(), add),
+            _ => todo!(),
         }
     }
 }
@@ -352,72 +396,51 @@ fn str_windows(line: &str, n: usize) -> impl Iterator<Item = &str> {
 
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
-pub fn funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base_funs().chain([run(parse_fun())])
 }
 
 /// Minimal set of filters for JSON values.
-pub fn base_funs() -> impl Iterator<Item = Filter<Native<Val>>> {
+pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base().into_vec().into_iter().map(run)
 }
 
-fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX<'a>> {
+fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
     box_once(r.map_err(Exn::from))
 }
 
-fn base() -> Box<[Filter<RunPtr<Val>>]> {
+fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
-        ("tojson", v(0), |_, cv| {
-            box_once(Ok(cv.1.to_string().into()))
+        ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
+        ("tobytes", v(0), |cv| {
+            box_once_err(cv.1.to_bytes().map(Val::Bin))
         }),
-        ("length", v(0), |_, cv| box_once_err(cv.1.length())),
-        ("path_values", v(0), |_, cv| {
-            let pair = |(p, v)| Ok([p, v].into_iter().collect());
-            Box::new(cv.1.path_values(Vec::new()).skip(1).map(pair))
-        }),
-        ("paths", v(0), |_, cv| {
-            Box::new(cv.1.path_values(Vec::new()).skip(1).map(|(p, _v)| Ok(p)))
-        }),
-        ("keys_unsorted", v(0), |_, cv| {
-            let keys = cv.1.key_values().map(|kvs| kvs.map(|(k, _v)| k).collect());
-            let err = || Error::typ(cv.1.clone(), Type::Iter.as_str());
-            box_once_err(keys.ok_or_else(err))
-        }),
-        ("contains", v(1), |_, cv| {
+        ("length", v(0), |cv| box_once_err(cv.1.length())),
+        ("contains", v(1), |cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
         }),
-        ("has", v(1), |_, cv| {
-            unary(cv, |v, k| v.has(&k).map(Val::from))
-        }),
-        ("indices", v(1), |_, cv| {
-            let to_int = |i: usize| Val::Int(i.try_into().unwrap());
+        ("has", v(1), |cv| unary(cv, |v, k| v.has(&k).map(Val::from))),
+        ("indices", v(1), |cv| {
+            let to_int = |i: usize| Val::from(i as isize);
             unary(cv, move |x, v| {
                 x.indices(&v).map(|idxs| idxs.map(to_int).collect())
             })
         }),
-        ("bsearch", v(1), |_, cv| {
+        ("bsearch", v(1), |cv| {
             let to_idx = |r: Result<_, _>| r.map_or_else(|i| -1 - i as isize, |i| i as isize);
             unary(cv, move |a, x| {
-                a.as_arr().map(|a| Val::Int(to_idx(a.binary_search(&x))))
+                a.as_arr().map(|a| Val::from(to_idx(a.binary_search(&x))))
             })
         }),
     ])
 }
 
 #[cfg(feature = "parse")]
-/// Convert string to a single JSON value.
-fn from_json(s: &str) -> ValR {
-    use hifijson::token::Lex;
-    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
-    lexer
-        .exactly_one(Val::parse)
-        .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
-}
-
-#[cfg(feature = "parse")]
-fn parse_fun() -> Filter<RunPtr<Val>> {
-    ("fromjson", v(0), |_, cv| {
-        box_once_err(cv.1.as_str().and_then(|s| from_json(s)))
+fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
+    ("fromjson", v(0), |cv| {
+        use jaq_core::ValT;
+        let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+        box_once_err(cv.1.as_str().ok_or_else(fail).and_then(json::from_str))
     })
 }
 
@@ -458,46 +481,21 @@ fn wrap_test() {
 
 impl Val {
     /// Construct an object value.
-    pub fn obj(m: Map<Rc<String>, Self>) -> Self {
+    pub fn obj(m: Map) -> Self {
         Self::Obj(m.into())
     }
 
-    /// If the value is integer, return it, else fail.
-    fn as_int(&self) -> Result<isize, Error> {
+    fn as_num(&self) -> Option<&Num> {
         match self {
-            Self::Int(i) => Ok(*i),
-            _ => Err(Error::typ(self.clone(), Type::Int.as_str())),
+            Self::Num(n) => Some(n),
+            _ => None,
         }
     }
 
-    /// If the value is or can be converted to float, return it, else
-    /// fail.
-    fn as_float(&self) -> Result<f64, Error> {
-        match self {
-            Self::Int(n) => Ok(*n as f64),
-            Self::Float(n) => Ok(*n),
-            Self::Num(n) => n
-                .parse()
-                .or(Err(Error::typ(self.clone(), Type::Float.as_str()))),
-            _ => Err(Error::typ(self.clone(), Type::Float.as_str())),
-        }
-    }
-
-    /// If the value is a string, return it, else fail.
-    fn into_str(self) -> Result<Rc<String>, Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(Error::typ(self, Type::Str.as_str())),
-        }
-    }
-
-    #[cfg(feature = "parse")]
-    /// If the value is a string, return it, else fail.
-    fn as_str(&self) -> Result<&Rc<String>, Error> {
-        match self {
-            Self::Str(s) => Ok(s),
-            _ => Err(Error::typ(self.clone(), Type::Str.as_str())),
-        }
+    /// If the value is a machine-sized integer, return it, else fail.
+    fn as_isize(&self) -> Result<isize, Error> {
+        let fail = || Error::typ(self.clone(), Type::Int.as_str());
+        self.as_num().and_then(Num::as_isize).ok_or_else(fail)
     }
 
     /// If the value is an array, return it, else fail.
@@ -515,42 +513,19 @@ impl Val {
         }
     }
 
-    /// Try to parse a string to a [`Self::Float`], else return [`Self::Null`].
-    fn from_dec_str(n: &str) -> Self {
-        n.parse().map_or(Self::Null, Self::Float)
-    }
-
     /// Return true if `value | .[key]` is defined.
     ///
-    /// Fail on values that are neither arrays nor objects.
+    /// Fail on values that are neither binaries, arrays nor objects.
     fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
-            (Self::Arr(a), Self::Int(i)) if *i >= 0 => Ok((*i as usize) < a.len()),
-            (Self::Obj(o), Self::Str(s)) => Ok(o.contains_key(&**s)),
+            (Self::Bin(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
+            (Self::Arr(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
+            (a @ (Self::Bin(_) | Self::Arr(_)), Self::Num(Num::BigInt(i))) => {
+                a.has(&Self::from(bigint_to_int_saturated(i)))
+            }
+            (Self::Obj(o), k) => Ok(o.contains_key(k)),
             _ => Err(Error::index(self.clone(), key.clone())),
         }
-    }
-
-    /// Return any `key` for which `value | .[key]` is defined, as well as its output.
-    ///
-    /// Return `None` for values that are neither arrays nor objects.
-    fn key_values(&self) -> Option<BoxIter<(Val, &Val)>> {
-        let arr_idx = |(i, x)| (Self::Int(i as isize), x);
-        Some(match self {
-            Self::Arr(a) => Box::new(a.iter().enumerate().map(arr_idx)),
-            Self::Obj(o) => Box::new(o.iter().map(|(k, v)| (Self::Str(Rc::clone(k)), v))),
-            _ => return None,
-        })
-    }
-
-    /// Return all path-value pairs `($p, $v)`, such that `getpath($p) = $v`.
-    fn path_values<'a>(self, path: Vec<Val>) -> BoxIter<'a, (Val, Val)> {
-        let head = (path.iter().cloned().collect(), self.clone());
-        let f = move |k| path.iter().cloned().chain([k]).collect();
-        let kvs = self.key_values().into_iter().flatten();
-        let kvs: Vec<_> = kvs.map(|(k, v)| (k, v.clone())).collect();
-        let tail = kvs.into_iter().flat_map(move |(k, v)| v.path_values(f(k)));
-        Box::new(core::iter::once(head).chain(tail))
     }
 
     /// `a` contains `b` iff either
@@ -562,60 +537,12 @@ impl Val {
     fn contains(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.contains(&**r),
+            (Self::Bin(_l), Self::Bin(_r)) => todo!(),
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
-                .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
+                .all(|(k, r)| l.get(k).is_some_and(|l| l.contains(r))),
             _ => self == other,
-        }
-    }
-
-    /// Parse at least one JSON value, given an initial token and a lexer.
-    ///
-    /// If the underlying lexer reads input fallibly (for example `IterLexer`),
-    /// the error returned by this function might be misleading.
-    /// In that case, always check whether the lexer contains an error.
-    #[cfg(feature = "hifijson")]
-    pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Self, hifijson::Error> {
-        use hifijson::{token, Error};
-        match token {
-            Token::Null => Ok(Self::Null),
-            Token::True => Ok(Self::Bool(true)),
-            Token::False => Ok(Self::Bool(false)),
-            Token::DigitOrMinus => {
-                let (num, parts) = lexer.num_string()?;
-                // if we are dealing with an integer ...
-                if parts.dot.is_none() && parts.exp.is_none() {
-                    // ... that fits into an isize
-                    if let Ok(i) = num.parse() {
-                        return Ok(Self::Int(i));
-                    }
-                }
-                Ok(Self::Num(Rc::new(num.to_string())))
-            }
-            Token::Quote => Ok(Self::from(lexer.str_string()?.to_string())),
-            Token::LSquare => Ok(Self::Arr({
-                let mut arr = Vec::new();
-                lexer.seq(Token::RSquare, |token, lexer| {
-                    arr.push(Self::parse(token, lexer)?);
-                    Ok::<_, hifijson::Error>(())
-                })?;
-                arr.into()
-            })),
-            Token::LCurly => Ok(Self::obj({
-                let mut obj = Map::default();
-                lexer.seq(Token::RCurly, |token, lexer| {
-                    let key =
-                        lexer.str_colon(token, |lexer| lexer.str_string().map_err(Error::Str))?;
-
-                    let token = lexer.ws_token().ok_or(token::Expect::Value)?;
-                    let value = Self::parse(token, lexer)?;
-                    obj.insert(Rc::new(key.to_string()), value);
-                    Ok::<_, Error>(())
-                })?;
-                obj
-            })),
-            _ => Err(token::Expect::Value)?,
         }
     }
 }
@@ -627,13 +554,10 @@ impl From<serde_json::Value> for Val {
         match v {
             Null => Self::Null,
             Bool(b) => Self::Bool(b),
-            Number(n) => n
-                .to_string()
-                .parse()
-                .map_or_else(|_| Self::Num(Rc::new(n.to_string())), Self::Int),
+            Number(n) => Self::Num(Num::from_str(&n.to_string())),
             String(s) => Self::from(s),
             Array(a) => a.into_iter().map(Self::from).collect(),
-            Object(o) => Self::obj(o.into_iter().map(|(k, v)| (Rc::new(k), v.into())).collect()),
+            Object(o) => Self::obj(o.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
         }
     }
 }
@@ -642,18 +566,24 @@ impl From<serde_json::Value> for Val {
 impl From<Val> for serde_json::Value {
     fn from(v: Val) -> Self {
         use core::str::FromStr;
+        use jaq_core::ValT;
         use serde_json::Value::*;
         match v {
             Val::Null => Null,
             Val::Bool(b) => Bool(b),
+            /*
             Val::Int(i) => Number(i.into()),
+            Val::BigInt(i) => Number(serde_json::Number::from_str(&i.to_string()).unwrap()),
             Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
-            Val::Num(n) => Number(serde_json::Number::from_str(&n).unwrap()),
+            */
+            Val::Num(n) => Number(serde_json::Number::from_str(&n.to_string()).unwrap()),
             Val::Str(s) => String((*s).clone()),
+            Val::Bin(b) => String(b.iter().copied().map(char::from).collect()),
             Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
+            // TODO: how to deal with non-string keys?
             Val::Obj(o) => Object(
                 o.iter()
-                    .map(|(k, v)| ((**k).clone(), v.clone().into()))
+                    .map(|(k, v)| (k.as_str().unwrap().to_string(), v.clone().into()))
                     .collect(),
             ),
         }
@@ -668,13 +598,13 @@ impl From<bool> for Val {
 
 impl From<isize> for Val {
     fn from(i: isize) -> Self {
-        Self::Int(i)
+        Self::Num(Num::Int(i))
     }
 }
 
 impl From<f64> for Val {
     fn from(f: f64) -> Self {
-        Self::Float(f)
+        Self::Num(Num::Float(f))
     }
 }
 
@@ -684,10 +614,24 @@ impl From<String> for Val {
     }
 }
 
+impl From<val::Range<Val>> for Val {
+    fn from(r: val::Range<Val>) -> Self {
+        let kv = |(k, v): (&str, Option<_>)| v.map(|v| (k.to_owned().into(), v));
+        let kvs = [("start", r.start), ("end", r.end)];
+        Val::obj(kvs.into_iter().flat_map(kv).collect())
+    }
+}
+
 impl FromIterator<Self> for Val {
     fn from_iter<T: IntoIterator<Item = Self>>(iter: T) -> Self {
         Self::Arr(Rc::new(iter.into_iter().collect()))
     }
+}
+
+fn bigint_to_int_saturated(i: &BigInt) -> isize {
+    let (min, max) = (isize::MIN, isize::MAX);
+    i.to_isize()
+        .unwrap_or_else(|| if i.is_negative() { min } else { max })
 }
 
 impl core::ops::Add for Val {
@@ -697,14 +641,15 @@ impl core::ops::Add for Val {
         match (self, rhs) {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
-            (Int(x), Int(y)) => Ok(Int(x + y)),
-            (Int(i), Float(f)) | (Float(f), Int(i)) => Ok(Float(f + i as f64)),
-            (Float(x), Float(y)) => Ok(Float(x + y)),
-            (Num(n), r) => Self::from_dec_str(&n) + r,
-            (l, Num(n)) => l + Self::from_dec_str(&n),
+            (Num(x), Num(y)) => Ok(Num(x + y)),
             (Str(mut l), Str(r)) => {
                 Rc::make_mut(&mut l).push_str(&r);
                 Ok(Str(l))
+            }
+            (Bin(l), Bin(r)) => {
+                let mut buf = BytesMut::from(l);
+                buf.put(r);
+                Ok(Bin(buf.into()))
             }
             (Arr(mut l), Arr(r)) => {
                 //std::dbg!(Rc::strong_count(&l));
@@ -723,25 +668,19 @@ impl core::ops::Add for Val {
 impl core::ops::Sub for Val {
     type Output = ValR;
     fn sub(self, rhs: Self) -> Self::Output {
-        use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Int(x - y)),
-            (Float(f), Int(i)) => Ok(Float(f - i as f64)),
-            (Int(i), Float(f)) => Ok(Float(i as f64 - f)),
-            (Float(x), Float(y)) => Ok(Float(x - y)),
-            (Num(n), r) => Self::from_dec_str(&n) - r,
-            (l, Num(n)) => l - Self::from_dec_str(&n),
-            (Arr(mut l), Arr(r)) => {
+            (Self::Num(x), Self::Num(y)) => Ok(Self::Num(x - y)),
+            (Self::Arr(mut l), Self::Arr(r)) => {
                 let r = r.iter().collect::<alloc::collections::BTreeSet<_>>();
                 Rc::make_mut(&mut l).retain(|x| !r.contains(x));
-                Ok(Arr(l))
+                Ok(Self::Arr(l))
             }
             (l, r) => Err(Error::math(l, ops::Math::Sub, r)),
         }
     }
 }
 
-fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
+fn obj_merge(l: &mut Rc<Map>, r: Rc<Map>) {
     let l = Rc::make_mut(l);
     let r = rc_unwrap_or_clone(r).into_iter();
     r.for_each(|(k, v)| match (l.get_mut(&k), v) {
@@ -756,17 +695,19 @@ fn obj_merge(l: &mut Rc<Map<Rc<String>, Val>>, r: Rc<Map<Rc<String>, Val>>) {
 impl core::ops::Mul for Val {
     type Output = ValR;
     fn mul(self, rhs: Self) -> Self::Output {
+        use crate::Num::{BigInt, Int};
         use Val::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Int(x * y)),
-            (Float(f), Int(i)) | (Int(i), Float(f)) => Ok(Float(f * i as f64)),
-            (Float(x), Float(y)) => Ok(Float(x * y)),
-            (Str(s), Int(i)) | (Int(i), Str(s)) if i > 0 => Ok(Self::from(s.repeat(i as usize))),
+            (Num(x), Num(y)) => Ok(Num(x * y)),
+            (s @ Str(_), Num(BigInt(i))) | (Num(BigInt(i)), s @ Str(_)) => {
+                s * Num(Int(bigint_to_int_saturated(&i)))
+            }
+            (Str(s), Num(Int(i))) | (Num(Int(i)), Str(s)) if i > 0 => {
+                Ok(Self::from(s.repeat(i as usize)))
+            }
             // string multiplication with negatives or 0 results in null
             // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
-            (Str(_), Int(_)) | (Int(_), Str(_)) => Ok(Null),
-            (Num(n), r) => Self::from_dec_str(&n) * r,
-            (l, Num(n)) => l * Self::from_dec_str(&n),
+            (Str(_), Num(Int(_))) | (Num(Int(_)), Str(_)) => Ok(Null),
             (Obj(mut l), Obj(r)) => {
                 obj_merge(&mut l, r);
                 Ok(Obj(l))
@@ -793,14 +734,9 @@ fn split<'a>(s: &'a str, sep: &'a str) -> Box<dyn Iterator<Item = String> + 'a> 
 impl core::ops::Div for Val {
     type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
-        use Val::{Float, Int, Num, Str};
+        use Val::{Num, Str};
         match (self, rhs) {
-            (Int(x), Int(y)) => Ok(Float(x as f64 / y as f64)),
-            (Float(f), Int(i)) => Ok(Float(f / i as f64)),
-            (Int(i), Float(f)) => Ok(Float(i as f64 / f)),
-            (Float(x), Float(y)) => Ok(Float(x / y)),
-            (Num(n), r) => Self::from_dec_str(&n) / r,
-            (l, Num(n)) => l / Self::from_dec_str(&n),
+            (Num(x), Num(y)) => Ok(Num(x / y)),
             (Str(x), Str(y)) => Ok(split(&x, &y).map(Val::from).collect()),
             (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
@@ -810,14 +746,10 @@ impl core::ops::Div for Val {
 impl core::ops::Rem for Val {
     type Output = ValR;
     fn rem(self, rhs: Self) -> Self::Output {
-        use Val::{Float, Int, Num};
         match (self, rhs) {
-            (Int(x), Int(y)) if y != 0 => Ok(Int(x % y)),
-            (Float(f), Int(i)) => Ok(Float(f % i as f64)),
-            (Int(i), Float(f)) => Ok(Float(i as f64 % f)),
-            (Float(x), Float(y)) => Ok(Float(x % y)),
-            (Num(n), r) => Self::from_dec_str(&n) % r,
-            (l, Num(n)) => l % Self::from_dec_str(&n),
+            (Self::Num(x), Self::Num(y)) if !(x.is_int() && y.is_int() && y == Num::Int(0)) => {
+                Ok(Self::Num(x % y))
+            }
             (l, r) => Err(Error::math(l, ops::Math::Rem, r)),
         }
     }
@@ -826,38 +758,12 @@ impl core::ops::Rem for Val {
 impl core::ops::Neg for Val {
     type Output = ValR;
     fn neg(self) -> Self::Output {
-        use Val::*;
         match self {
-            Int(x) => Ok(Int(-x)),
-            Float(x) => Ok(Float(-x)),
-            Num(n) => -Self::from_dec_str(&n),
+            Self::Num(n) => Ok(Self::Num(-n)),
             x => Err(Error::typ(x, Type::Num.as_str())),
         }
     }
 }
-
-impl PartialEq for Val {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Null, Self::Null) => true,
-            (Self::Bool(x), Self::Bool(y)) => x == y,
-            (Self::Int(x), Self::Int(y)) => x == y,
-            (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
-                float_eq(*i as f64, *f)
-            }
-            (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
-            (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => true,
-            (Self::Num(n), y) => &Self::from_dec_str(n) == y,
-            (x, Self::Num(n)) => x == &Self::from_dec_str(n),
-            (Self::Str(x), Self::Str(y)) => x == y,
-            (Self::Arr(x), Self::Arr(y)) => x == y,
-            (Self::Obj(x), Self::Obj(y)) => x == y,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Val {}
 
 impl PartialOrd for Val {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -871,14 +777,9 @@ impl Ord for Val {
         match (self, other) {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
-            (Self::Int(x), Self::Int(y)) => x.cmp(y),
-            (Self::Int(i), Self::Float(f)) => float_cmp(*i as f64, *f),
-            (Self::Float(f), Self::Int(i)) => float_cmp(*f, *i as f64),
-            (Self::Float(x), Self::Float(y)) => float_cmp(*x, *y),
-            (Self::Num(x), Self::Num(y)) if Rc::ptr_eq(x, y) => Equal,
-            (Self::Num(n), y) => Self::from_dec_str(n).cmp(y),
-            (x, Self::Num(n)) => x.cmp(&Self::from_dec_str(n)),
+            (Self::Num(x), Self::Num(y)) => x.cmp(y),
             (Self::Str(x), Self::Str(y)) => x.cmp(y),
+            (Self::Bin(x), Self::Bin(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
                 (0, 0) => Equal,
@@ -905,35 +806,41 @@ impl Ord for Val {
             (Self::Bool(_), _) => Less,
             (_, Self::Bool(_)) => Greater,
             // numbers are smaller than anything else, except for nulls and bools
-            (Self::Int(_) | Self::Float(_), _) => Less,
-            (_, Self::Int(_) | Self::Float(_)) => Greater,
+            (Self::Num(_), _) => Less,
+            (_, Self::Num(_)) => Greater,
             // etc.
             (Self::Str(_), _) => Less,
             (_, Self::Str(_)) => Greater,
+            (Self::Bin(_), _) => Less,
+            (_, Self::Bin(_)) => Greater,
             (Self::Arr(_), _) => Less,
             (_, Self::Arr(_)) => Greater,
         }
     }
 }
 
-fn float_eq(left: f64, right: f64) -> bool {
-    float_cmp(left, right) == Ordering::Equal
-}
-
-fn float_cmp(left: f64, right: f64) -> Ordering {
-    if left == 0. && right == 0. {
-        // consider negative and positive 0 as equal
-        Ordering::Equal
-    } else if left.is_nan() {
-        // there are more than 50 shades of NaN, and which of these
-        // you strike when you perform a calculation is not deterministic (!),
-        // therefore `total_cmp` may yield different results for the same calculation
-        // so we bite the bullet and handle this like in jq
-        Ordering::Less
-    } else if right.is_nan() {
-        Ordering::Greater
-    } else {
-        f64::total_cmp(&left, &right)
+impl Hash for Val {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        fn hash_with(u: u8, x: impl Hash, state: &mut impl Hasher) {
+            state.write_u8(u);
+            x.hash(state)
+        }
+        match self {
+            Self::Num(n) => n.hash(state),
+            // Num::hash() starts its hash with a 0 or 1, so we start with 2 here
+            Self::Null => state.write_u8(2),
+            Self::Bool(b) => state.write_u8(if *b { 3 } else { 4 }),
+            Self::Str(s) => hash_with(5, s, state),
+            Self::Bin(b) => hash_with(6, b, state),
+            Self::Arr(a) => hash_with(7, a, state),
+            Self::Obj(o) => {
+                state.write_u8(8);
+                // this is similar to what happens in `Val::cmp`
+                let mut kvs: Vec<_> = o.iter().collect();
+                kvs.sort_by_key(|(k, _v)| *k);
+                kvs.iter().for_each(|(k, v)| (k, v).hash(state));
+            }
+        }
     }
 }
 
@@ -962,11 +869,9 @@ impl fmt::Display for Val {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "{b}"),
-            Self::Int(i) => write!(f, "{i}"),
-            Self::Float(x) if x.is_finite() => write!(f, "{x:?}"),
-            Self::Float(_) => write!(f, "null"),
             Self::Num(n) => write!(f, "{n}"),
             Self::Str(s) => fmt_str(f, s),
+            Self::Bin(b) => fmt_str(f, &b.iter().copied().map(char::from).collect::<String>()),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();
@@ -978,7 +883,7 @@ impl fmt::Display for Val {
             }
             Self::Obj(o) => {
                 write!(f, "{{")?;
-                let mut iter = o.iter().map(|(k, v)| (Val::Str(k.clone()), v));
+                let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
                     write!(f, "{k}:{v}")?;
                 }

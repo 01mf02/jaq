@@ -1,7 +1,7 @@
 //! Program compilation.
 
 use crate::load::{self, lex, parse};
-use crate::{ops, Bind as Arg, Filter};
+use crate::{ops, Bind as Arg};
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::{boxed::Box, string::String, vec::Vec};
 
@@ -10,6 +10,15 @@ type ModId = usize;
 type VarId = usize;
 type VarSkip = usize;
 type Arity = usize;
+
+/// Function from a value to a stream of value results.
+#[derive(Debug, Clone)]
+pub struct Filter<F> {
+    /// Program graph, implemented as lookup table
+    pub lut: Lut<F>,
+    /// Entry point into the program graph
+    pub id: TermId,
+}
 
 /// Index of a term in the look-up table.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -34,7 +43,10 @@ impl<F> Default for Lut<F> {
 
 impl<F> Default for Filter<F> {
     fn default() -> Self {
-        Self(TermId(0), Lut::new([Term::Id].into()))
+        Self {
+            id: TermId(0),
+            lut: Lut::new([Term::Id].into()),
+        }
     }
 }
 
@@ -544,7 +556,10 @@ impl<'s, F> Compiler<&'s str, F> {
             assert!(main_sig.matches("main", &[]));
             assert!(!main_def.rec && main_def.tailrec);
             //std::println!("main: {:?}", main_def.id);
-            Ok(Filter(main_def.id, self.lut.map_funs(|(_sig, f)| f)))
+            Ok(Filter {
+                id: main_def.id,
+                lut: self.lut.map_funs(|(_sig, f)| f),
+            })
         } else {
             Err(errs)
         }

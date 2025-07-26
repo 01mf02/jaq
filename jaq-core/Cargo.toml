@@ -9,7 +9,7 @@ description = "Interpreter for the jaq language"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["parser-implementations", "compilers"]
-rust-version = "1.63"
+rust-version = "1.69"
 
 [features]
 default = ["std"]

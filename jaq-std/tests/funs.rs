@@ -2,7 +2,7 @@
 
 pub mod common;
 
-use common::{give, gives};
+use common::{fail, give, gives, Error, Val};
 use serde_json::json;
 
 yields!(repeat, "def r(f): f, r(f); [limit(3; r(1, 2))]", [1, 2, 1]);
@@ -139,6 +139,16 @@ fn group_by() {
     );
 }
 
+#[test]
+fn keys_unsorted() {
+    give(json!([0, null, "a"]), "keys_unsorted", json!([0, 1, 2]));
+    give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
+
+    let err = |v| Error::typ(v, "iterable (array or object)");
+    fail(json!(0), "keys_unsorted", err(Val::from(0)));
+    fail(json!(null), "keys_unsorted", err(Val::Null));
+}
+
 yields!(utf8bytelength_foo1, r#""foo" | utf8bytelength"#, 3);
 yields!(utf8bytelength_foo2, r#""ƒoo" | utf8bytelength"#, 4);
 yields!(utf8bytelength_namaste, r#""नमस्ते" | utf8bytelength"#, 18);
@@ -244,6 +254,14 @@ yields!(round_floor, "-1.4 | round", -1);
 yields!(floor_floor, "-1.4 | floor", -2);
 yields!(ceili_floor, "-1.4 | ceil ", -1);
 
+yields!(round_nan, "nan | round | isnan", true);
+yields!(round_inf, "infinite | round | isinfinite", true);
+yields!(
+    round_large,
+    "2e22 | round | tostring",
+    "20000000000000000000000"
+);
+
 yields!(
     sort_break_out,
     "[1, 2] | (label $x | sort_by(label $y | ., break $x)), 3",
@@ -322,3 +340,9 @@ fn rtrim() {
     give(json!("  foo"), "rtrim", json!("  foo"));
     give(json!(" اَلْعَرَبِيَّةُ "), "rtrim", json!(" اَلْعَرَبِيَّةُ"));
 }
+
+yields!(
+    path_values,
+    "[{a: 1, b: [2, 3]} | path_values]",
+    json!([[["a"], 1], [["b"], [2, 3]], [["b", 0], 2], [["b", 1], 3]])
+);
