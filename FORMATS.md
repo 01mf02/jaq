@@ -14,8 +14,18 @@ e.g. `--from xml`.
 
 ## JSON
 
-jaq reads JSON data as specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
+jaq reads and writes JSON data as specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
 A good overview of the syntax is given at <https://www.json.org>.
+
+jaq diverges in one point from JSON:
+Where JSON limits object keys to strings,
+jaq allows arbitrary values as object keys.
+For example, the following is invalid JSON, but is allowed in jaq:
+
+    {null: 1, true: 2, 3: 4, "5": 6, [7]: 8}
+
+This change simplifies parsing and makes jaq more flexible,
+because it allows using objects as hash maps for arbitrary keys.
 
 ## XML
 

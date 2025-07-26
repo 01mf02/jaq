@@ -1,7 +1,8 @@
 //! JSON parsing.
 use crate::{Error, Map, Num, Val, ValR};
 use alloc::{string::ToString, vec::Vec};
-use hifijson::{LexAlloc, Token};
+use hifijson::token::{Expect, Lex, Token};
+use hifijson::{LexAlloc, SliceLexer};
 
 /// Parse at least one JSON value, given an initial token and a lexer.
 ///
@@ -9,7 +10,6 @@ use hifijson::{LexAlloc, Token};
 /// the error returned by this function might be misleading.
 /// In that case, always check whether the lexer contains an error.
 pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::Error> {
-    use hifijson::{token, Error};
     match token {
         Token::Null => Ok(Val::Null),
         Token::True => Ok(Val::Bool(true)),
@@ -35,24 +35,22 @@ pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::E
         Token::LCurly => Ok(Val::obj({
             let mut obj = Map::default();
             lexer.seq(Token::RCurly, |token, lexer| {
-                let key = lexer.str_colon(token, |lexer| lexer.str_string().map_err(Error::Str))?;
-
-                let token = lexer.ws_token().ok_or(token::Expect::Value)?;
-                let value = parse(token, lexer)?;
-                obj.insert(key.to_string().into(), value);
-                Ok::<_, Error>(())
+                let is_colon = |t: &Token| *t == Token::Colon;
+                let key = parse(token, lexer)?;
+                lexer.ws_token().filter(is_colon).ok_or(Expect::Colon)?;
+                let value = parse(lexer.ws_token().ok_or(Expect::Value)?, lexer)?;
+                obj.insert(key, value);
+                Ok::<_, hifijson::Error>(())
             })?;
             obj
         })),
-        _ => Err(token::Expect::Value)?,
+        _ => Err(Expect::Value)?,
     }
 }
 
 /// Convert string to a single JSON value.
 pub(crate) fn from_str(s: &str) -> ValR {
-    use hifijson::token::Lex;
-    let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
-    lexer
-        .exactly_one(parse)
-        .map_err(|e| Error::str(format_args!("cannot parse {s} as JSON: {e}")))
+    let fail = |e| Error::str(format_args!("cannot parse {s} as JSON: {e}"));
+    let mut lexer = SliceLexer::new(s.as_bytes());
+    lexer.exactly_one(parse).map_err(fail)
 }
