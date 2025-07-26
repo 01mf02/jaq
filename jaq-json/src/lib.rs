@@ -526,7 +526,7 @@ impl Val {
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
-                .all(|(k, r)| l.get(k).map_or(false, |l| l.contains(r))),
+                .all(|(k, r)| l.get(k).is_some_and(|l| l.contains(r))),
             _ => self == other,
         }
     }
