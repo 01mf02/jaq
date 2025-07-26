@@ -12,17 +12,19 @@ pub enum Format {
     Raw,
     Json,
     Cbor,
+    Toml,
     Xml,
     Yaml,
 }
 
-const FMTS: &str = "binary, raw, json, cbor, xml, yaml";
+const FMTS: &str = "binary, raw, json, cbor, toml, xml, yaml";
 
 impl Format {
     /// Determine a file format from a path.
     pub fn determine(path: &Path) -> Option<Self> {
         match path.extension()?.to_str()? {
             "cbor" => Some(Format::Cbor),
+            "toml" => Some(Format::Toml),
             "xml" | "xhtml" => Some(Format::Xml),
             "yml" | "yaml" => Some(Format::Yaml),
             "json" => Some(Format::Json),
@@ -37,6 +39,7 @@ impl Format {
             "cbor" => Some(Format::Cbor),
             "raw" => Some(Format::Raw),
             "json" => Some(Format::Json),
+            "toml" => Some(Format::Toml),
             "xml" => Some(Format::Xml),
             "yaml" => Some(Format::Yaml),
             _ => None,

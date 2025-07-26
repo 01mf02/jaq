@@ -113,6 +113,7 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
         (Val::Bin(b), Format::Binary) => w.write_all(b)?,
         (Val::Bin(b), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
         (_, Format::Cbor) => cbor::write_one(val, &mut *w)?,
+        (_, Format::Toml) => todo!(),
         (_, Format::Json | Format::Yaml | Format::Binary | Format::Raw) => {
             write!(w, "{}", FormatterFn(fmt_json))?
         }
