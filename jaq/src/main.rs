@@ -1,14 +1,14 @@
 mod cli;
 mod filter;
+mod funs;
 mod read;
-mod repl;
 mod write;
 
 use cli::Cli;
 use core::fmt::{self, Display, Formatter};
 use filter::{run, FileReports, Filter};
 use is_terminal::IsTerminal;
-use jaq_core::{load, Ctx, RcIter};
+use jaq_core::{load, unwrap_valr, Vars};
 use jaq_json::Val;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -46,7 +46,7 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let no_color = std::env::var("NO_COLOR").map_or(false, |v| !v.is_empty());
+    let no_color = std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
     let set_color = |on| {
         if on {
             yansi::enable();
@@ -233,8 +233,10 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     let (ctx, filter) =
         filter::parse_compile(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
 
-    let inputs = RcIter::new(Box::new(core::iter::empty()));
-    let ctx = Ctx::new(ctx, &inputs);
+    let vars = Vars::new(ctx);
+    let inputs = &jaq_std::input::RcIter::new(Box::new(core::iter::empty()));
+    let data = funs::Data::new(&filter.lut, inputs);
+    let ctx = filter::Ctx::new(&data, vars);
 
     let json = |s: String| {
         use hifijson::token::Lex;
@@ -244,8 +246,8 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     };
     let input = json(test.input)?;
     let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
-    let obtain: Result<Val, _> = filter.run((ctx, input)).collect();
-    Ok((expect?, obtain.map_err(Error::Jaq)?))
+    let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();
+    Ok((expect?, unwrap_valr(obtain).map_err(Error::Jaq)?))
 }
 
 fn run_tests(read: impl BufRead) -> ExitCode {
