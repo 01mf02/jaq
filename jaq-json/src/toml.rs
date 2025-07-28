@@ -1,17 +1,9 @@
 //! TOML decoding.
 use crate::{Map, Num, Val};
-use alloc::{string::String, vec::Vec};
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use toml_edit::{Document, DocumentMut, Formatted, Item, Table, Value};
-
-/// Decoding error.
-#[derive(Debug)]
-pub enum DError {
-    /// date-time value encountered (not supported in jaq right now)
-    Datetime,
-    /// parse error
-    Parse(PError),
-}
 
 /// Encoding error.
 #[derive(Debug)]
@@ -34,22 +26,19 @@ impl fmt::Display for EError {
     }
 }
 
-/// Parse error.
+/// Decoding error.
 #[derive(Debug)]
-pub struct PError(toml_edit::TomlError);
+pub struct DError(toml_edit::TomlError);
 
 impl From<toml_edit::TomlError> for DError {
     fn from(e: toml_edit::TomlError) -> Self {
-        Self::Parse(PError(e))
+        Self(e)
     }
 }
 
 impl fmt::Display for DError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::Parse(e) => e.0.fmt(f),
-            Self::Datetime => write!(f, "date-time values not supported in jaq"),
-        }
+        self.0.fmt(f)
     }
 }
 
@@ -67,7 +56,7 @@ fn value(v: Value) -> Result<Val, DError> {
         Value::Boolean(b) => Val::Bool(b.into_value()),
         Value::Array(a) => return a.into_iter().map(value).collect(),
         Value::InlineTable(t) => return table(t.into_table()),
-        Value::Datetime(_) => Err(DError::Datetime)?,
+        Value::Datetime(d) => Val::Str(d.into_value().to_string().into()),
     })
 }
 
