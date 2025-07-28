@@ -1,7 +1,8 @@
-use crate::{invalid_data, Cli, Format, Val};
+use crate::{invalid_data, Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use is_terminal::IsTerminal;
 use jaq_json::{cbor, toml, yaml};
+use jaq_json::{Tag, Val};
 use std::io::{self, Write};
 
 struct FormatterFn<F>(F);
@@ -53,11 +54,13 @@ where
 }
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
+    use bstr::BStr;
     use yansi::Paint;
     match v {
         Val::Null | Val::Bool(_) | Val::Num(_) => v.fmt(f),
-        Val::Str(_) => write!(f, "{}", v.green()),
-        Val::Bin(_) => write!(f, "{}", v.red()),
+        Val::Str2(_, Tag::Utf8) => write!(f, "{}", v.green()),
+        Val::Str2(_, Tag::Bytes) => write!(f, "{}", v.red()),
+        Val::Str2(s, Tag::Inline) => write!(f, "{}", BStr::new(s)),
         Val::Arr(a) => {
             '['.bold().fmt(f)?;
             if !a.is_empty() {
@@ -109,17 +112,15 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
     }
 
     match (val, format) {
-        (Val::Str(s), Format::Raw) => write!(w, "{s}")?,
-        (Val::Bin(b), Format::Binary) => w.write_all(b)?,
-        (Val::Bin(b), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
+        (Val::Str2(b, _), Format::Raw) => w.write_all(b)?,
+        // TODO: move this to fmt_val!
+        (Val::Str2(b, Tag::Bytes), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
         (_, Format::Cbor) => cbor::write_one(val, &mut *w)?,
         (_, Format::Toml) => {
             let enc = toml::encode_val(val).map_err(|e| invalid_data(e.to_string()))?;
             write!(w, "{enc}")?
         }
-        (_, Format::Json | Format::Yaml | Format::Binary | Format::Raw) => {
-            write!(w, "{}", FormatterFn(fmt_json))?
-        }
+        (_, Format::Json | Format::Yaml | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
         (_, Format::Xml) => {
             use jaq_json::xml::XmlVal;
             let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;

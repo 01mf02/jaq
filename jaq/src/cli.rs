@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 
 #[derive(Copy, Clone, Debug)]
 pub enum Format {
-    Binary,
     /// When the option `--slurp` is used additionally,
     /// then the whole input is read into a single string.
     Raw,
@@ -17,7 +16,7 @@ pub enum Format {
     Yaml,
 }
 
-const FMTS: &str = "binary, raw, json, cbor, toml, xml, yaml";
+const FMTS: &str = "raw, json, cbor, toml, xml, yaml";
 
 impl Format {
     /// Determine a file format from a path.
@@ -35,7 +34,6 @@ impl Format {
     /// Parse a format name.
     fn from_str(s: &str) -> Option<Self> {
         match s {
-            "binary" => Some(Format::Binary),
             "cbor" => Some(Format::Cbor),
             "raw" => Some(Format::Raw),
             "json" => Some(Format::Json),

@@ -48,9 +48,14 @@ pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::E
     }
 }
 
-/// Convert string to a single JSON value.
-pub(crate) fn from_str(s: &str) -> ValR {
-    let fail = |e| Error::str(format_args!("cannot parse {s} as JSON: {e}"));
-    let mut lexer = SliceLexer::new(s.as_bytes());
+/// Convert bytes to a single JSON value.
+pub(crate) fn from_bytes(s: &[u8]) -> ValR {
+    let fail = |e| {
+        Error::str(format_args!(
+            "cannot parse {} as JSON: {e}",
+            bstr::BStr::new(s)
+        ))
+    };
+    let mut lexer = SliceLexer::new(s);
     lexer.exactly_one(parse).map_err(fail)
 }

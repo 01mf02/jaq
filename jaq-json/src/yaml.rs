@@ -208,7 +208,7 @@ fn parse_float(s: &str) -> Option<Val> {
 
 fn parse_string_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, Error> {
     match tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix)) {
-        None | Some("str") => Ok(Val::Str(s.into_owned().into())),
+        None | Some("str") => Ok(Val::utf8_str(s.into_owned())),
         Some("binary") => parse_plain_scalar(s, tag, span),
         Some(tag) => todo!("invalid tag {tag}"),
     }
@@ -237,15 +237,15 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
         (".nan" | ".NaN" | ".NAN", None | Some("float")) => Val::from(f64::NAN),
         (_, Some("int")) => parse_int(&s).ok_or_else(|| err(s, "int"))?,
         (_, Some("float")) => parse_float(&s).ok_or_else(|| err(s, "float"))?,
-        (_, Some("str")) => Val::Str(s.into_owned().into()),
+        (_, Some("str")) => Val::utf8_str(s.into_owned()),
         (_, Some("binary")) => {
             let no_ws: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            Val::Bin(BASE64.decode(no_ws).map_err(|_| err(s, "binary"))?.into())
+            Val::byte_str(BASE64.decode(no_ws).map_err(|_| err(s, "binary"))?)
         }
         // Is it an int? Is it a float? No, it's ... a string!
         (_, None) => parse_int(&s)
             .or_else(|| parse_float(&s))
-            .unwrap_or_else(|| Val::Str(s.into_owned().into())),
+            .unwrap_or_else(|| Val::utf8_str(s.into_owned())),
         (_, Some(tag)) => todo!("invalid tag {tag}"),
     })
 }

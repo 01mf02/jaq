@@ -26,7 +26,8 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, vec::Vec};
+use bstr::{BStr, ByteSlice};
 use jaq_core::box_iter::{box_once, then, BoxIter};
 use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValT as _, ValX, ValXs};
 
@@ -118,32 +119,20 @@ pub trait ValT: jaq_core::ValT + Ord + From<f64> {
     /// because the value may either be
     /// not a number or a number that does not fit into [`f64`].
     fn as_f64(&self) -> Result<f64, Error<Self>>;
+
+    /// If the value is interpreted as UTF-8 string, return its bytes.
+    fn as_utf8_str(&self) -> Option<&[u8]>;
+
+    /// If the value is a string and `sub` points to a slice of the string,
+    /// shorten the string to `sub`, else panic.
+    fn as_sub_str(&self, sub: &[u8]) -> Self;
+
+    /// Interpret bytes as UTF-8 string value.
+    fn from_utf8_string(b: impl AsRef<[u8]> + Send + 'static) -> Self;
+
+    /// If both input values are of the same string type, return their bytes.
+    fn as_same_strs<'a, 'b>(&'a self, other: &'b Self) -> Option<(&'a [u8], &'b [u8])>;
 }
-
-trait ValTS: jaq_core::ValT {
-    fn try_as_str(&self) -> Result<&str, Error<Self>> {
-        self.as_str()
-            .ok_or_else(|| Error::typ(self.clone(), "string"))
-    }
-
-    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR<Self> {
-        let mut s = self.try_as_str()?.to_owned();
-        f(&mut s);
-        Ok(Self::from(s))
-    }
-
-    fn trim_with(self, f: impl FnOnce(&str) -> &str) -> ValR<Self> {
-        let s = self.try_as_str()?;
-        let t = f(s);
-        Ok(if core::ptr::eq(s, t) {
-            // the input was already trimmed, so do not allocate new memory
-            self
-        } else {
-            t.to_string().into()
-        })
-    }
-}
-impl<T: jaq_core::ValT> ValTS for T {}
 
 /// Convenience trait for implementing the core functions.
 trait ValTx: ValT + Sized {
@@ -196,6 +185,47 @@ trait ValTx: ValT + Sized {
                 Self::from(f)
             }
         })
+    }
+
+    fn try_as_utf8_str(&self) -> Result<&[u8], Error<Self>> {
+        self.as_utf8_str().ok_or_else(|| self.fail_str())
+    }
+
+    fn try_as_same_strs<'a, 'b>(
+        &'a self,
+        other: &'b Self,
+    ) -> Result<(&'a [u8], &'b [u8]), Error<Self>> {
+        self.as_same_strs(other).ok_or_else(|| todo!())
+    }
+
+    fn try_as_str2(&self) -> Result<Cow<str>, Error<Self>> {
+        self.try_as_utf8_str().map(String::from_utf8_lossy)
+    }
+
+    fn map_utf8_str<B>(self, f: impl FnOnce(&[u8]) -> B) -> ValR<Self>
+    where
+        B: AsRef<[u8]> + Send + 'static,
+    {
+        Ok(Self::from_utf8_string(f(self.try_as_utf8_str()?)))
+    }
+
+    fn trim_utf8_with(&self, f: impl FnOnce(&[u8]) -> &[u8]) -> ValR<Self> {
+        Ok(self.as_sub_str(f(self.as_utf8_str().ok_or_else(|| self.fail_str())?)))
+    }
+
+    fn strip_fix<F>(self, fix: &Self, f: F) -> Result<Self, Error<Self>>
+    where
+        F: for<'a> FnOnce(&'a [u8], &[u8]) -> Option<&'a [u8]>,
+    {
+        let (s, fix) = self.try_as_same_strs(fix)?;
+        Ok(match f(s, fix) {
+            Some(sub) => self.as_sub_str(sub),
+            None => self,
+        })
+    }
+
+    fn fail_str(&self) -> Error<Self> {
+        Error::typ(self.clone(), "string")
     }
 }
 impl<T: ValT> ValTx for T {}
@@ -298,7 +328,7 @@ where
 }
 
 /// Convert a string into an array of its Unicode codepoints.
-fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR<V>> + '_ {
+fn explode<V: ValT>(s: &[u8]) -> impl Iterator<Item = ValR<V>> + '_ {
     // conversion from u32 to isize may fail on 32-bit systems for high values of c
     let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
     s.chars().map(conv)
@@ -389,19 +419,19 @@ where
         ("round", v(0), |cv| bome(cv.1.round(f64::round))),
         ("ceil", v(0), |cv| bome(cv.1.round(f64::ceil))),
         ("utf8bytelength", v(0), |cv| {
-            bome(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
+            bome(cv.1.try_as_utf8_str().map(|s| (s.len() as isize).into()))
         }),
         ("explode", v(0), |cv| {
-            bome(cv.1.try_as_str().and_then(|s| explode(s).collect()))
+            bome(cv.1.try_as_utf8_str().and_then(|s| explode(s).collect()))
         }),
         ("implode", v(0), |cv| {
             bome(cv.1.into_vec().and_then(|s| implode(&s)).map(D::V::from))
         }),
         ("ascii_downcase", v(0), |cv| {
-            bome(cv.1.mutate_str(str::make_ascii_lowercase))
+            bome(cv.1.map_utf8_str(ByteSlice::to_ascii_lowercase))
         }),
         ("ascii_upcase", v(0), |cv| {
-            bome(cv.1.mutate_str(str::make_ascii_uppercase))
+            bome(cv.1.map_utf8_str(ByteSlice::to_ascii_uppercase))
         }),
         ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
         ("keys_unsorted", v(0), |cv| {
@@ -443,36 +473,40 @@ where
         }),
         ("startswith", v(1), |cv| {
             unary(cv, |v, s| {
-                Ok(v.try_as_str()?.starts_with(s.try_as_str()?).into())
+                v.try_as_same_strs(&s).map(|(v, s)| v.starts_with(s).into())
             })
         }),
         ("endswith", v(1), |cv| {
             unary(cv, |v, s| {
-                Ok(v.try_as_str()?.ends_with(s.try_as_str()?).into())
+                v.try_as_same_strs(&s).map(|(v, s)| v.ends_with(s).into())
             })
         }),
         ("ltrimstr", v(1), |cv| {
-            unary(cv, |v, pre| {
-                Ok(v.try_as_str()?
-                    .strip_prefix(pre.try_as_str()?)
-                    .map_or_else(|| v.clone(), |s| D::V::from(s.to_owned())))
-            })
+            unary(cv, |v, pre| v.strip_fix(&pre, <[u8]>::strip_prefix))
         }),
         ("rtrimstr", v(1), |cv| {
-            unary(cv, |v, suf| {
-                Ok(v.try_as_str()?
-                    .strip_suffix(suf.try_as_str()?)
-                    .map_or_else(|| v.clone(), |s| D::V::from(s.to_owned())))
-            })
+            unary(cv, |v, suf| v.strip_fix(&suf, <[u8]>::strip_suffix))
         }),
-        ("trim", v(0), |cv| bome(cv.1.trim_with(str::trim))),
-        ("ltrim", v(0), |cv| bome(cv.1.trim_with(str::trim_start))),
-        ("rtrim", v(0), |cv| bome(cv.1.trim_with(str::trim_end))),
+        ("trim", v(0), |cv| {
+            bome(cv.1.trim_utf8_with(ByteSlice::trim))
+        }),
+        ("ltrim", v(0), |cv| {
+            bome(cv.1.trim_utf8_with(ByteSlice::trim_start))
+        }),
+        ("rtrim", v(0), |cv| {
+            bome(cv.1.trim_utf8_with(ByteSlice::trim_end))
+        }),
         ("escape_csv", v(0), |cv| {
-            bome(cv.1.try_as_str().map(|s| s.replace('"', "\"\"").into()))
+            bome(
+                cv.1.try_as_utf8_str()
+                    .map(|s| ValT::from_utf8_string(s.replace(b"\"", b"\"\""))),
+            )
         }),
         ("escape_sh", v(0), |cv| {
-            bome(cv.1.try_as_str().map(|s| s.replace('\'', r"'\''").into()))
+            bome(
+                cv.1.try_as_utf8_str()
+                    .map(|s| ValT::from_utf8_string(s.replace(b"'", b"'\\''"))),
+            )
         }),
     ])
 }
@@ -545,8 +579,8 @@ where
         ("halt", v(0), |_| std::process::exit(0)),
         ("halt_error", v(1), |mut cv| {
             bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
-                if let Some(s) = cv.1.as_str() {
-                    std::print!("{s}");
+                if let Some(s) = cv.1.as_utf8_str() {
+                    std::print!("{}", BStr::new(s));
                 } else {
                     std::println!("{}", cv.1);
                 }
@@ -557,9 +591,9 @@ where
 }
 
 #[cfg(feature = "format")]
-fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
+fn replace(s: &[u8], patterns: &[&str], replacements: &[&str]) -> Vec<u8> {
     let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
-    ac.replace_all(s, replacements)
+    ac.replace_all_bytes(s, replacements)
 }
 
 #[cfg(feature = "format")]
@@ -571,34 +605,30 @@ where
         ("escape_html", v(0), |cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-            bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
+            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
         }),
         ("escape_tsv", v(0), |cv| {
             let pats = ["\n", "\r", "\t", "\\", "\0"];
             let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
-            bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
+            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
         }),
         ("encode_uri", v(0), |cv| {
-            use urlencoding::encode;
-            bome(cv.1.try_as_str().map(|s| encode(s).into_owned().into()))
+            bome(cv.1.map_utf8_str(|s| urlencoding::encode_binary(s).to_string()))
         }),
         ("decode_uri", v(0), |cv| {
-            use urlencoding::decode;
-            bome(cv.1.try_as_str().and_then(|s| {
-                let d = decode(s).map_err(Error::str)?;
-                Ok(d.into_owned().into())
-            }))
+            bome(cv.1.map_utf8_str(|s| urlencoding::decode_binary(s).to_vec()))
         }),
         ("encode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            bome(cv.1.try_as_str().map(|s| STANDARD.encode(s).into()))
+            bome(cv.1.map_utf8_str(|s| STANDARD.encode(s)))
         }),
         ("decode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            use core::str::from_utf8;
-            bome(cv.1.try_as_str().and_then(|s| {
-                let d = STANDARD.decode(s).map_err(Error::str)?;
-                Ok(from_utf8(&d).map_err(Error::str)?.to_owned().into())
+            bome(cv.1.try_as_utf8_str().and_then(|s| {
+                STANDARD
+                    .decode(s)
+                    .map_err(Error::str)
+                    .map(ValT::from_utf8_string)
             }))
         }),
     ])
@@ -673,7 +703,10 @@ where
 }
 
 #[cfg(feature = "regex")]
-fn re<'a, D: DataT>(s: bool, m: bool, mut cv: Cv<'a, D>) -> ValR<D::V<'a>> {
+fn re<'a, D: DataT>(s: bool, m: bool, mut cv: Cv<'a, D>) -> ValR<D::V<'a>>
+where
+    D::V<'a>: ValT,
+{
     let flags = cv.0.pop_var();
     let re = cv.0.pop_var();
 
@@ -681,18 +714,25 @@ fn re<'a, D: DataT>(s: bool, m: bool, mut cv: Cv<'a, D>) -> ValR<D::V<'a>> {
     let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
     let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
 
-    let flags = regex::Flags::new(flags.try_as_str()?).map_err(fail_flag)?;
-    let re = flags.regex(re.try_as_str()?).map_err(fail_re)?;
-    let out = regex::regex(cv.1.try_as_str()?, &re, flags, (s, m));
+    let flags = regex::Flags::new(&flags.try_as_str2()?).map_err(fail_flag)?;
+    let re = flags.regex(&re.try_as_str2()?).map_err(fail_re)?;
+    let out = regex::regex(cv.1.try_as_utf8_str()?, &re, flags, (s, m));
+    let sub = |s| cv.1.as_sub_str(s);
     let out = out.into_iter().map(|out| match out {
-        Matches(ms) => ms.into_iter().map(|m| D::V::from_map(m.fields())).collect(),
-        Mismatch(s) => Ok(D::V::from(s.to_string())),
+        Matches(ms) => ms
+            .into_iter()
+            .map(|m| D::V::from_map(m.fields(sub)))
+            .collect(),
+        Mismatch(s) => Ok(sub(s)),
     });
     out.collect()
 }
 
 #[cfg(feature = "regex")]
-fn regex<D: DataT>() -> Box<[Filter<RunPtr<D>>]> {
+fn regex<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     let vv = || [Bind::Var(()), Bind::Var(())].into();
     Box::new([
         ("matches", vv(), |cv| bome(re(false, true, cv))),
@@ -709,22 +749,22 @@ where
     use chrono::{Local, Utc};
     Box::new([
         ("fromdateiso8601", v(0), |cv| {
-            bome(cv.1.try_as_str().and_then(time::from_iso8601))
+            bome(cv.1.try_as_str2().and_then(|s| time::from_iso8601(&s)))
         }),
         ("todateiso8601", v(0), |cv| {
             bome(time::to_iso8601(&cv.1).map(D::V::from))
         }),
         ("strftime", v(1), |cv| {
-            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Utc))
+            unary(cv, |v, fmt| time::strftime(&v, &fmt.try_as_str2()?, Utc))
         }),
         ("strflocaltime", v(1), |cv| {
-            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Local))
+            unary(cv, |v, fmt| time::strftime(&v, &fmt.try_as_str2()?, Local))
         }),
         ("gmtime", v(0), |cv| bome(time::gmtime(&cv.1, Utc))),
         ("localtime", v(0), |cv| bome(time::gmtime(&cv.1, Local))),
         ("strptime", v(1), |cv| {
             unary(cv, |v, fmt| {
-                time::strptime(v.try_as_str()?, fmt.try_as_str()?)
+                time::strptime(&v.try_as_str2()?, &fmt.try_as_str2()?)
             })
         }),
         ("mktime", v(0), |cv| bome(time::mktime(&cv.1))),
@@ -770,10 +810,13 @@ fn debug<D: DataT>() -> Filter<RunPathsUpdatePtr<D>> {
 }
 
 #[cfg(feature = "log")]
-fn stderr<D: DataT>() -> Filter<RunPathsUpdatePtr<D>> {
-    fn eprint_raw<V: jaq_core::ValT>(v: &V) {
-        if let Some(s) = v.as_str() {
-            log::error!("{s}")
+fn stderr<D: DataT>() -> Filter<RunPathsUpdatePtr<D>>
+where
+    for<'a> D::V<'a>: ValT,
+{
+    fn eprint_raw<V: ValT>(v: &V) {
+        if let Some(s) = v.as_utf8_str() {
+            log::error!("{}", BStr::new(s))
         } else {
             log::error!("{v}")
         }

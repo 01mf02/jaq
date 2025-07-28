@@ -9,7 +9,7 @@
 //! The [examples](https://www.rfc-editor.org/rfc/rfc8949.html#section-appendix.a)
 //! from the CBOR specification are quite helpful here.
 //! They can be pasted directly into the command above.
-use crate::{Num, Val};
+use crate::{Num, Tag, Val};
 use alloc::string::String;
 use alloc::vec::Vec;
 use ciborium_io::{Read, Write};
@@ -126,7 +126,7 @@ fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, Error
             }
             Ok(Val::from(s))
         }
-        Header::Bytes(len) => Ok(Val::Bin(parse_bytes(len, decoder)?.into())),
+        Header::Bytes(len) => Ok(Val::byte_str(parse_bytes(len, decoder)?)),
         Header::Simple(simple::NULL | simple::UNDEFINED) => Ok(Val::Null),
         Header::Simple(simple::FALSE) => Ok(Val::Bool(false)),
         Header::Simple(simple::TRUE) => Ok(Val::Bool(true)),
@@ -180,8 +180,9 @@ fn encode<W: Write>(v: &Val, encoder: &mut Encoder<W>) -> Result<(), W::Error> {
         }
         Val::Num(Num::Float(f)) => encoder.push(Header::Float(*f)),
         Val::Num(Num::Dec(d)) => encode(&Val::Num(Num::from_dec_str(d)), encoder),
-        Val::Str(s) => encoder.text(s, None),
-        Val::Bin(b) => encoder.bytes(b, None),
+        Val::Str2(s, Tag::Utf8) => encoder.text(&String::from_utf8_lossy(s), None),
+        Val::Str2(b, Tag::Bytes) => encoder.bytes(b, None),
+        Val::Str2(b, Tag::Inline) => encoder.write_all(b),
         Val::Arr(a) => {
             encoder.push(Header::Array(Some(a.len())))?;
             a.iter().try_for_each(|x| encode(x, encoder))

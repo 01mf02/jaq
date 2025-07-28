@@ -1,5 +1,5 @@
 //! TOML decoding.
-use crate::{Map, Num, Val};
+use crate::{Map, Num, Tag, Val};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
@@ -50,13 +50,13 @@ impl std::error::Error for EError {}
 
 fn value(v: Value) -> Result<Val, DError> {
     Ok(match v {
-        Value::String(s) => Val::Str(s.into_value().into()),
+        Value::String(s) => Val::Str2(s.into_value().into(), Tag::Utf8),
         Value::Integer(i) => Val::Num(Num::from_integral(i.into_value())),
         Value::Float(f) => Val::Num(Num::Float(f.into_value())),
         Value::Boolean(b) => Val::Bool(b.into_value()),
         Value::Array(a) => return a.into_iter().map(value).collect(),
         Value::InlineTable(t) => return table(t.into_table()),
-        Value::Datetime(d) => Val::Str(d.into_value().to_string().into()),
+        Value::Datetime(d) => Val::Str2(d.into_value().to_string().into(), Tag::Utf8),
     })
 }
 
@@ -78,10 +78,10 @@ fn table(t: Table) -> Result<Val, DError> {
 }
 
 fn obj_table(o: &Map) -> Result<Table, EError> {
-    use jaq_core::ValT;
+    use jaq_std::ValT;
     let kvs = o.iter().map(|(k, v)| {
-        let k = k.as_str().ok_or_else(|| EError::Key(k.clone()))?;
-        Ok((k, val_item(v)?))
+        let k = k.as_utf8_str().ok_or_else(|| EError::Key(k.clone()))?;
+        Ok((String::from_utf8_lossy(k).into_owned(), val_item(v)?))
     });
     kvs.collect::<Result<_, _>>()
 }
@@ -110,10 +110,13 @@ fn val_value(v: &Val) -> Result<Value, EError> {
     Ok(match v {
         Val::Null => Err(fail())?,
         Val::Bool(b) => Value::Boolean(Formatted::new(*b)),
-        Val::Str(s) => Value::String(Formatted::new((**s).clone())),
-        Val::Bin(b) => Value::String(Formatted::new(
+        Val::Str2(b, Tag::Bytes) => Value::String(Formatted::new(
             b.iter().copied().map(char::from).collect::<String>(),
         )),
+        Val::Str2(s, Tag::Utf8) => {
+            Value::String(Formatted::new(String::from_utf8_lossy(s).into_owned()))
+        }
+        Val::Str2(_s, Tag::Inline) => todo!(),
         Val::Num(Num::Float(f)) => Value::Float(Formatted::new(*f)),
         Val::Num(Num::Dec(n)) => val_value(&Val::Num(Num::from_dec_str(n)))?,
         Val::Num(n @ (Num::Int(_) | Num::BigInt(_))) => {

@@ -144,7 +144,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let arg = cli.arg.iter().map(|(k, s)| {
         let s = s.to_owned();
-        Ok((k.to_owned(), Val::Str(s.into())))
+        Ok((k.to_owned(), Val::utf8_str(s)))
     });
     let argjson = cli.argjson.iter().map(|(k, s)| {
         use hifijson::token::Lex;
@@ -154,7 +154,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
-        Ok((k.to_owned(), Val::Str(s?.into())))
+        Ok((k.to_owned(), Val::utf8_str(s?)))
     });
     let slurpfile = cli.slurpfile.iter().map(|(k, path)| {
         let a = read::json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
