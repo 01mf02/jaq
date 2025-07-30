@@ -9,7 +9,7 @@ description = "JSON values for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
 categories = ["data-structures"]
-rust-version = "1.65"
+rust-version = "1.70"
 
 [features]
 default = ["parse"]
