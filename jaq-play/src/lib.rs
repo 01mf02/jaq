@@ -4,8 +4,8 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Native, Lut, Vars};
-use jaq_json::{fmt_str, Val};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
+use jaq_json::{fmt_str, json, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
@@ -87,11 +87,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
-        Val::Int(i) => span(f, "number", i),
-        Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
-        Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
         Val::Str(s) => span(f, "string", display(s)),
+        Val::Bin(b) => span(
+            f,
+            "binary",
+            display(&b.iter().copied().map(char::from).collect::<String>()),
+        ),
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;
@@ -101,13 +103,13 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
         Val::Obj(o) => {
             write!(f, "{{")?;
-            fmt_seq(f, opts, level, &**o, |f, (k, val)| {
-                span(f, "key", display(k))?;
+            fmt_seq(f, opts, level, &**o, |f, (k, v)| {
+                fmt_val(f, opts, level + 1, k)?;
                 write!(f, ":")?;
                 if !opts.compact {
                     write!(f, " ")?;
                 }
-                fmt_val(f, opts, level + 1, val)
+                fmt_val(f, opts, level + 1, v)
             })?;
             write!(f, "}}")
         }
@@ -116,10 +118,6 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
 
 fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
-}
-
-fn span_dbg(f: &mut Formatter, cls: &str, el: impl Debug) -> fmt::Result {
-    write!(f, "<span class=\"{cls}\">{el:?}</span>")
 }
 
 fn escape(s: &str) -> String {
@@ -252,7 +250,7 @@ fn json_slice(slice: &[u8]) -> impl Iterator<Item = Result<Val, String>> + '_ {
     let mut lexer = hifijson::SliceLexer::new(slice);
     core::iter::from_fn(move || {
         use hifijson::token::Lex;
-        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
+        Some(json::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
     })
 }
 

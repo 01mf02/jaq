@@ -4,12 +4,12 @@ mod funs;
 mod read;
 mod write;
 
-use cli::Cli;
+use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use filter::{run, FileReports, Filter};
 use is_terminal::IsTerminal;
 use jaq_core::{load, unwrap_valr, Vars};
-use jaq_json::Val;
+use jaq_json::{json, Val};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -55,12 +55,12 @@ fn main() -> ExitCode {
         }
     };
 
-    set_color(!cli.in_place && cli.color_if(|| std::io::stdout().is_terminal() && !no_color));
+    set_color(!cli.in_place && cli.color_if(|| io::stdout().is_terminal() && !no_color));
 
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            set_color(cli.color_if(|| std::io::stderr().is_terminal() && !no_color));
+            set_color(cli.color_if(|| io::stderr().is_terminal() && !no_color));
             eprint!("{e}");
             e.report()
         }
@@ -90,16 +90,22 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
+    let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or(Format::Json);
     let last = if cli.files.is_empty() {
-        let inputs = read::buffered(cli, io::stdin().lock());
+        let format = unwrap_or_json(cli.from);
+        let s = read::stdin_string(format)?;
+        let inputs = read::from_stdin(format, &s, cli.slurp);
         with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
     } else {
         let mut last = None;
         for file in &cli.files {
             let path = Path::new(file);
-            let file = read::load_file(path)
+            let bytes = read::load_file(path)
                 .map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
-            let inputs = read::slice(cli, &file);
+            let format = unwrap_or_json(cli.from.or_else(|| Format::determine(path)));
+            let s = read::file_str(format, &bytes)?;
+            let inputs = read::from_file(format, &bytes, s, cli.slurp);
+
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -112,7 +118,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 })?;
 
                 // replace the input file with the temporary file
-                std::mem::drop(file);
+                std::mem::drop(bytes);
                 let perms = std::fs::metadata(path)?.permissions();
                 tmp.persist(path).map_err(Error::Persist)?;
                 std::fs::set_permissions(path, perms)?;
@@ -144,7 +150,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         use hifijson::token::Lex;
         let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
         let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
-        Ok((k.to_owned(), lexer.exactly_one(Val::parse).map_err(err)?))
+        Ok((k.to_owned(), lexer.exactly_one(json::parse).map_err(err)?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
@@ -177,6 +183,12 @@ fn args(positional: &[Val], named: &[(String, Val)]) -> Val {
         (key("named"), Val::obj(named.collect())),
     ];
     Val::obj(obj.into_iter().collect())
+}
+
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+fn invalid_data(e: impl Into<BoxError>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
 #[derive(Debug)]
@@ -238,12 +250,7 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     let data = funs::Data::new(&filter.lut, inputs);
     let ctx = filter::Ctx::new(&data, vars);
 
-    let json = |s: String| {
-        use hifijson::token::Lex;
-        hifijson::SliceLexer::new(s.as_bytes())
-            .exactly_one(Val::parse)
-            .map_err(read::invalid_data)
-    };
+    let json = |s: String| read::json_single(s.as_bytes());
     let input = json(test.input)?;
     let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
     let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();

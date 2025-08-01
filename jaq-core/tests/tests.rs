@@ -245,13 +245,13 @@ yields!(
 
 yields!(
     try_catch_short_circuit,
-    "[try (\"1\", \"2\", {}[0], \"4\") catch .]",
-    ["1", "2", "cannot index {} with 0"]
+    r#"[try ("1", "2", []["3"], "4") catch .]"#,
+    ["1", "2", r#"cannot index [] with "3""#]
 );
 yields!(
     try_catch_nested,
-    "try try {}[0] catch {}[1] catch .",
-    "cannot index {} with 1"
+    r#"try try []["a"] catch []["b"] catch ."#,
+    r#"cannot index [] with "b""#
 );
 yields!(
     try_catch_multi_valued,

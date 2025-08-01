@@ -145,7 +145,7 @@ fn keys_unsorted() {
     give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
 
     let err = |v| Error::typ(v, "iterable (array or object)");
-    fail(json!(0), "keys_unsorted", err(Val::Int(0)));
+    fail(json!(0), "keys_unsorted", err(Val::from(0)));
     fail(json!(null), "keys_unsorted", err(Val::Null));
 }
 
@@ -253,6 +253,14 @@ yields!(ceili_mid, "-1.5 | ceil ", -1);
 yields!(round_floor, "-1.4 | round", -1);
 yields!(floor_floor, "-1.4 | floor", -2);
 yields!(ceili_floor, "-1.4 | ceil ", -1);
+
+yields!(round_nan, "nan | round | isnan", true);
+yields!(round_inf, "infinite | round | isinfinite", true);
+yields!(
+    round_large,
+    "2e22 | round | tostring",
+    "20000000000000000000000"
+);
 
 yields!(
     sort_break_out,
