@@ -16,11 +16,50 @@ use ciborium_io::{Read, Write};
 use ciborium_ll::{simple, tag, Decoder, Encoder, Error, Header};
 use num_bigint::{BigInt, BigUint};
 
+/// Error that may indicate end of file.
+pub trait IsEof {
+    /// Is the error caused by EOF?
+    fn is_eof(&self) -> bool;
+}
+
+// TODO: implement IsEof for EndOfFile, which is only visible when
+// `ciborium_io` is compiled without the `std` feature
+impl IsEof for std::io::Error {
+    fn is_eof(&self) -> bool {
+        matches!(self.kind(), std::io::ErrorKind::UnexpectedEof)
+    }
+}
+
 /// Decode a single CBOR value.
 pub fn parse_one<R: Read>(read: R) -> Result<Val, Error<R::Error>> {
     let mut decoder = Decoder::from(read);
     let header = decoder.pull()?;
     parse(header, &mut decoder)
+}
+
+/// Decode a sequence of CBOR values.
+pub fn parse_many<R: Read>(read: R) -> impl Iterator<Item = Result<Val, Error<R::Error>>>
+where
+    R::Error: IsEof,
+{
+    let mut decoder = Decoder::from(read);
+    core::iter::from_fn(move || {
+        let offset = decoder.offset();
+        match decoder.pull() {
+            Ok(header) => Some(parse(header, &mut decoder)),
+            // The following is a hack which is unfortunately necessary because
+            // ciborium does not currently give us any means of checking for EOF
+            // (<https://github.com/enarx/ciborium/issues/159>).
+            // I found that an impartial header, such as triggered by 0x18,
+            // advances the offset, so by negation, I conclude that
+            // if the offset has remained the same after header decoding
+            // AND the error is EOF, that means that there was no input.
+            // Note that we cannot omit the EOF check, because a different
+            // I/O error might have been triggered, and we should propagate that.
+            Err(Error::Io(e)) if e.is_eof() && offset == decoder.offset() => None,
+            Err(e) => Some(Err(e)),
+        }
+    })
 }
 
 /// Encode a single value to CBOR.
