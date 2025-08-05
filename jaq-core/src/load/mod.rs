@@ -29,6 +29,15 @@ extern crate std;
 #[derive(Default)]
 pub struct Arena(typed_arena::Arena<String>);
 
+impl Arena {
+    /// Access the inner arena to, for example, allocate
+    /// a String for the source code of your program, sharing
+    /// it's lifetime with the rest of the definition
+    pub fn inner(&self) -> &typed_arena::Arena<String> {
+        &self.0
+    }
+}
+
 /// Combined file loader, lexer, and parser for multiple modules.
 pub struct Loader<S, P, R> {
     #[allow(clippy::type_complexity)]
