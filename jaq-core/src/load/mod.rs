@@ -11,6 +11,7 @@ use crate::{ops, path};
 #[cfg(feature = "std")]
 use alloc::boxed::Box;
 use alloc::{string::String, vec::Vec};
+use core::borrow::Borrow;
 pub use lex::Lexer;
 use lex::Token;
 pub use parse::Parser;
@@ -345,14 +346,14 @@ impl<'s, P: Clone + Eq, R: FnMut(Import<&'s str, P>) -> ReadResult<P>> Loader<&'
     /// Load a set of modules, starting from a given file.
     pub fn load(
         mut self,
-        arena: &'s Arena,
+        arena: impl Borrow<&'s Arena>,
         file: File<&'s str, P>,
     ) -> Result<Modules<&'s str, P>, Errors<&'s str, P>> {
         let result = parse_main(file.code)
             .and_then(|m| {
                 m.map(|path, meta| {
                     let (parent, meta) = (&file.path, &meta);
-                    self.find(arena, Import { parent, path, meta })
+                    self.find(arena.borrow(), Import { parent, path, meta })
                 })
             })
             .map(|m| m.map_body(|body| Vec::from([Def::new("main", Vec::new(), body)])));
