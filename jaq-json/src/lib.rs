@@ -932,7 +932,7 @@ pub fn fmt_str(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
 /// "will automatically convert invalid UTF-8 to the Unicode replacement codepoint, U+FFFD, which looks like this: �".
 pub fn fmt_utf8(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
     write!(f, "\"")?;
-    let is_special = |c| c < b' ' || c == b'\\' || c == b'"';
+    let is_special = |c| c < b' ' || c == b'\\' || c == b'"' || c == 0x7f;
     for s in s.split_inclusive(|c| is_special(*c)) {
         match s.split_last() {
             Some((last, init)) if is_special(*last) => {
@@ -947,8 +947,10 @@ pub fn fmt_utf8(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
 
 fn fmt_char(f: &mut fmt::Formatter, c: char) -> fmt::Result {
     match c {
+        '\u{8}' => write!(f, "\\b"),
+        '\u{c}' => write!(f, "\\f"),
         '\t' | '\n' | '\r' | '\\' | '"' => write!(f, "{}", c.escape_default()),
-        _ if c < ' ' => write!(f, "\\u{:04x}", c as u8),
+        _ if c < ' ' || c == '\u{7f}'  => write!(f, "\\u{:04x}", c as u8),
         _ => write!(f, "{c}"),
     }
 }
