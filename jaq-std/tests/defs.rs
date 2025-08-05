@@ -378,8 +378,3 @@ yields!(
     r#"["abc%F0%9F%91%8D%20%2B%26%3F%2F", "", null, 123, [], {} | try @urid catch .]"#,
     ["abc👍 +&?/", "", "null", "123", "[]", "{}"]
 );
-yields!(
-    format_urid_invalid,
-    r#""%FF" | try @urid catch ."#,
-    "invalid utf-8 sequence of 1 bytes from index 0"
-);

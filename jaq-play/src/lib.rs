@@ -5,7 +5,7 @@ use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
-use jaq_json::{fmt_str, json, Val};
+use jaq_json::{bstr, fmt_utf8, json, Tag, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
@@ -83,17 +83,17 @@ where
 }
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
-    let display = |s| FormatterFn(move |f: &mut Formatter| fmt_str(f, &escape(s)));
+    let display = |s| FormatterFn(move |f: &mut Formatter| fmt_utf8(f, &escape(s)));
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s) => span(f, "string", display(s)),
-        Val::Bin(b) => span(
-            f,
-            "binary",
-            display(&b.iter().copied().map(char::from).collect::<String>()),
-        ),
+        Val::Str(s, Tag::Utf8) => span(f, "string", display(s)),
+        Val::Str(s, Tag::Inline) => write!(f, "{}", bstr(&escape(s))),
+        Val::Str(s, Tag::Bytes) => {
+            let s = s.iter().copied().map(char::from).collect::<String>();
+            span(f, "bytes", display(s.as_bytes()))
+        }
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;
@@ -120,12 +120,12 @@ fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
 }
 
-fn escape(s: &str) -> String {
+fn escape(s: &[u8]) -> Vec<u8> {
     use aho_corasick::AhoCorasick;
     let patterns = &["&", "<", ">"];
     let replaces = &["&amp;", "&lt;", "&gt;"];
     let ac = AhoCorasick::new(patterns).unwrap();
-    ac.replace_all(s, replaces)
+    ac.replace_all_bytes(s, replaces)
 }
 
 #[allow(dead_code)]
@@ -190,7 +190,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 
     let post_value = |y| {
         let s = FormatterFn(|f: &mut Formatter| match &y {
-            Val::Str(s) if settings.raw_output => span(f, "string", escape(s)),
+            Val::Str(s, _) if settings.raw_output => span(f, "string", bstr(&escape(s))),
             y => fmt_val(f, &pp_opts, 0, y),
         });
         scope.post_message(&s.to_string().into()).unwrap();

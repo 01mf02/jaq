@@ -34,6 +34,9 @@ pub mod xml;
 #[cfg(feature = "yaml")]
 pub mod yaml;
 
+#[cfg(feature = "serde_json")]
+mod serde_json;
+
 /// JSON value with sharing.
 ///
 /// The speciality of this type is that numbers are distinguished into
@@ -54,9 +57,7 @@ pub enum Val {
     /// Number
     Num(Num),
     /// String
-    //Str(Rc<String>),
-    /// String
-    Str2(Bytes, Tag),
+    Str(Bytes, Tag),
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Object
@@ -152,29 +153,31 @@ impl jaq_core::ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
-            (Val::Str2(a, Tag::Bytes), Val::Num(Num::Int(i))) => {
+            (Val::Str(a, Tag::Bytes), Val::Num(Num::Int(i))) => {
                 Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| Val::from(a[i] as isize)))
             }
             (Val::Arr(a), Val::Num(Num::Int(i))) => {
                 Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
             }
-            (a @ (Val::Str2(_, Tag::Bytes) | Val::Arr(_)), Val::Num(Num::BigInt(i))) => {
+            (a @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), Val::Num(Num::BigInt(i))) => {
                 a.index(&Val::Num(Num::Int(bigint_to_int_saturated(i))))
             }
             (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
-            (s @ (Val::Str2(_, Tag::Bytes) | Val::Arr(_)), _) => {
-                Err(Error::index(s, index.clone()))
-            }
+            (s @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
             (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
         }
     }
 
     fn range(self, range: jaq_core::val::Range<&Self>) -> ValR {
-        use bstr::{Chars};
+        use bstr::Chars;
         match self {
-            Val::Str2(b, t @ Tag::Bytes) => Self::skip_take(range, b.len())
-                .map(|(skip, take)| Val::Str2(b.slice(skip..skip + take), t)),
-            Val::Str2(s, Tag::Utf8) => {
+            Val::Str(b, t @ Tag::Bytes) => Self::skip_take(range, b.len())
+                .map(|(skip, take)| Val::Str(b.slice(skip..skip + take), t)),
+            // TODO: This is very inefficient, because
+            // we traverse the whole string regardless of the requested range.
+            // It would be better to create a special case for when
+            // all range bounds are positive.
+            Val::Str(s, Tag::Utf8) => {
                 Self::skip_take(range, s.chars().count()).map(|(skip, take)| {
                     let advance = |chars: &mut Chars, n| {
                         for _ in 0..n {
@@ -186,7 +189,7 @@ impl jaq_core::ValT for Val {
                     let mut tk = sk.clone();
                     advance(&mut tk, take);
                     let slice = &sk.as_bytes()[..sk.as_bytes().len() - tk.as_bytes().len()];
-                    Val::Str2(s.slice_ref(slice), Tag::Utf8)
+                    Val::Str(s.slice_ref(slice), Tag::Utf8)
                 })
             }
             Val::Arr(a) => Self::skip_take(range, a.len())
@@ -293,22 +296,11 @@ impl jaq_core::ValT for Val {
         !matches!(self, Self::Null | Self::Bool(false))
     }
 
-    /*
-    /// If the value is a string, return it, else fail.
-    fn as_str(&self) -> Option<&str> {
-        if let Self::Str(s) = self {
-            Some(s)
-        } else {
-            None
-        }
-    }
-    */
-
     fn into_string(self) -> Self {
-        if let Self::Str2(b, _tag) = self {
-            Self::Str2(b, Tag::Utf8)
+        if let Self::Str(b, _tag) = self {
+            Self::Str(b, Tag::Utf8)
         } else {
-            Self::Str2(self.to_string().into(), Tag::Utf8)
+            Self::Str(self.to_string().into(), Tag::Utf8)
         }
     }
 }
@@ -338,7 +330,7 @@ impl jaq_std::ValT for Val {
     }
 
     fn as_utf8_str(&self) -> Option<&[u8]> {
-        if let Self::Str2(b, Tag::Utf8) = self {
+        if let Self::Str(b, Tag::Utf8) = self {
             Some(b)
         } else {
             None
@@ -347,18 +339,18 @@ impl jaq_std::ValT for Val {
 
     fn as_sub_str(&self, sub: &[u8]) -> Self {
         match self {
-            Self::Str2(b, tag) => Self::Str2(b.slice_ref(sub), *tag),
+            Self::Str(b, tag) => Self::Str(b.slice_ref(sub), *tag),
             _ => panic!(),
         }
     }
 
     fn from_utf8_string(b: impl AsRef<[u8]> + Send + 'static) -> Self {
-        Self::Str2(Bytes::from_owner(b), Tag::Utf8)
+        Self::Str(Bytes::from_owner(b), Tag::Utf8)
     }
 
     fn as_same_strs<'a, 'b>(&'a self, other: &'b Self) -> Option<(&'a [u8], &'b [u8])> {
         match (self, other) {
-            (Self::Str2(x, tx), Self::Str2(y, ty)) if tx == ty => Some((x, y)),
+            (Self::Str(x, tag), Self::Str(y, tag_)) if tag == tag_ => Some((x, y)),
             _ => None,
         }
     }
@@ -380,8 +372,8 @@ impl Val {
         match self {
             Val::Null => Ok(Val::from(0)),
             Val::Num(n) => Ok(Val::Num(n.length())),
-            Val::Str2(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
-            Val::Str2(b, Tag::Bytes | Tag::Inline) => Ok(Val::from(b.len() as isize)),
+            Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
+            Val::Str(b, Tag::Bytes | Tag::Inline) => Ok(Val::from(b.len() as isize)),
             Val::Arr(a) => Ok(Val::from(a.len() as isize)),
             Val::Obj(o) => Ok(Val::from(o.len() as isize)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
@@ -391,18 +383,18 @@ impl Val {
     /// Return the indices of `y` in `self`.
     fn indices<'a>(&'a self, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
         match (self, y) {
-            (Val::Str2(_, tag @ (Tag::Bytes | Tag::Utf8)), Val::Str2(y, tag_))
+            (Val::Str(_, tag @ (Tag::Bytes | Tag::Utf8)), Val::Str(y, tag_))
                 if tag == tag_ && y.is_empty() =>
             {
                 Ok(Box::new(core::iter::empty()))
             }
             (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
-            (Val::Str2(x, Tag::Utf8), Val::Str2(y, Tag::Utf8)) => {
+            (Val::Str(x, Tag::Utf8), Val::Str(y, Tag::Utf8)) => {
                 let index = |(i, _, _)| x.get(i..i + y.len());
                 let iw = x.char_indices().map_while(index).enumerate();
                 Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
             }
-            (Val::Str2(x, tag @ Tag::Bytes), Val::Str2(y, tag_)) if tag == tag_ => {
+            (Val::Str(x, tag @ Tag::Bytes), Val::Str(y, tag_)) if tag == tag_ => {
                 let iw = x.windows(y.len()).enumerate();
                 Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
             }
@@ -441,7 +433,7 @@ impl Val {
                 .and_then(|i| u8::try_from(i).ok())
                 .map(|u| Bytes::from(Vec::from([u])))
                 .ok_or_else(|| todo!()),
-            Val::Str2(b, _) => Ok(b.clone()),
+            Val::Str(b, _) => Ok(b.clone()),
             Val::Arr(a) => a.iter().map(Val::to_bytes).try_fold(Bytes::new(), add),
             _ => todo!(),
         }
@@ -467,7 +459,13 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
         ("tobytes", v(0), |cv| {
-            box_once_err(cv.1.to_bytes().map(|b| Val::Str2(b, Tag::Bytes)))
+            box_once_err(cv.1.to_bytes().map(|b| Val::Str(b, Tag::Bytes)))
+        }),
+        ("torawstring", v(0), |cv| {
+            box_once(Ok(match cv.1 {
+                Val::Str(s, _) => Val::Str(s, Tag::Inline),
+                v => Val::Str(v.to_string().into(), Tag::Inline),
+            }))
         }),
         ("length", v(0), |cv| box_once_err(cv.1.length())),
         ("contains", v(1), |cv| {
@@ -545,12 +543,12 @@ impl Val {
 
     /// Construct a string that is interpreted as UTF-8.
     pub fn utf8_str(s: impl Into<Bytes>) -> Self {
-        Self::Str2(s.into(), Tag::Utf8)
+        Self::Str(s.into(), Tag::Utf8)
     }
 
     /// Construct a string that is interpreted as bytes.
     pub fn byte_str(s: impl Into<Bytes>) -> Self {
-        Self::Str2(s.into(), Tag::Bytes)
+        Self::Str(s.into(), Tag::Bytes)
     }
 
     fn as_num(&self) -> Option<&Num> {
@@ -586,11 +584,11 @@ impl Val {
     /// Fail on values that are neither binaries, arrays nor objects.
     fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
-            (Self::Str2(a, Tag::Bytes), Self::Num(Num::Int(i))) if *i >= 0 => {
+            (Self::Str(a, Tag::Bytes), Self::Num(Num::Int(i))) if *i >= 0 => {
                 Ok((*i as usize) < a.len())
             }
             (Self::Arr(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
-            (a @ (Self::Str2(_, Tag::Bytes) | Self::Arr(_)), Self::Num(Num::BigInt(i))) => {
+            (a @ (Self::Str(_, Tag::Bytes) | Self::Arr(_)), Self::Num(Num::BigInt(i))) => {
                 a.has(&Self::from(bigint_to_int_saturated(i)))
             }
             (Self::Obj(o), k) => Ok(o.contains_key(k)),
@@ -606,55 +604,12 @@ impl Val {
     /// * `a` equals `b`.
     fn contains(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Str2(l, tag), Self::Str2(r, tag_)) if tag == tag_ => l.contains_str(r),
+            (Self::Str(l, tag), Self::Str(r, tag_)) if tag == tag_ => l.contains_str(r),
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
                 .all(|(k, r)| l.get(k).is_some_and(|l| l.contains(r))),
             _ => self == other,
-        }
-    }
-}
-
-#[cfg(feature = "serde_json")]
-impl From<serde_json::Value> for Val {
-    fn from(v: serde_json::Value) -> Self {
-        use serde_json::Value::*;
-        match v {
-            Null => Self::Null,
-            Bool(b) => Self::Bool(b),
-            Number(n) => Self::Num(Num::from_str(&n.to_string())),
-            String(s) => Self::from(s),
-            Array(a) => a.into_iter().map(Self::from).collect(),
-            Object(o) => Self::obj(o.into_iter().map(|(k, v)| (k.into(), v.into())).collect()),
-        }
-    }
-}
-
-#[cfg(feature = "serde_json")]
-impl From<Val> for serde_json::Value {
-    fn from(v: Val) -> Self {
-        use core::str::FromStr;
-        use jaq_core::ValT;
-        use serde_json::Value::*;
-        match v {
-            Val::Null => Null,
-            Val::Bool(b) => Bool(b),
-            /*
-            Val::Int(i) => Number(i.into()),
-            Val::BigInt(i) => Number(serde_json::Number::from_str(&i.to_string()).unwrap()),
-            Val::Float(f) => serde_json::Number::from_f64(f).map_or(Null, Number),
-            */
-            Val::Num(n) => Number(serde_json::Number::from_str(&n.to_string()).unwrap()),
-            Val::Str(s) => String((*s).clone()),
-            Val::Bin(b) => String(b.iter().copied().map(char::from).collect()),
-            Val::Arr(a) => Array(a.iter().map(|x| x.clone().into()).collect()),
-            // TODO: how to deal with non-string keys?
-            Val::Obj(o) => Object(
-                o.iter()
-                    .map(|(k, v)| (k.as_str().unwrap().to_string(), v.clone().into()))
-                    .collect(),
-            ),
         }
     }
 }
@@ -679,7 +634,7 @@ impl From<f64> for Val {
 
 impl From<String> for Val {
     fn from(s: String) -> Self {
-        Self::Str2(Bytes::from_owner(s), Tag::Utf8)
+        Self::Str(Bytes::from_owner(s), Tag::Utf8)
     }
 }
 
@@ -711,10 +666,10 @@ impl core::ops::Add for Val {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
             (Num(x), Num(y)) => Ok(Num(x + y)),
-            (Str2(l, tag), Str2(r, tag_)) if tag == tag_ => {
+            (Str(l, tag), Str(r, tag_)) if tag == tag_ => {
                 let mut buf = BytesMut::from(l);
                 buf.put(r);
-                Ok(Str2(buf.into(), tag))
+                Ok(Str(buf.into(), tag))
             }
             (Arr(mut l), Arr(r)) => {
                 //std::dbg!(Rc::strong_count(&l));
@@ -764,15 +719,15 @@ impl core::ops::Mul for Val {
         use Val::*;
         match (self, rhs) {
             (Num(x), Num(y)) => Ok(Num(x * y)),
-            (s @ Str2(..), Num(BigInt(i))) | (Num(BigInt(i)), s @ Str2(..)) => {
+            (s @ Str(..), Num(BigInt(i))) | (Num(BigInt(i)), s @ Str(..)) => {
                 s * Num(Int(bigint_to_int_saturated(&i)))
             }
-            (Str2(s, tag), Num(Int(i))) | (Num(Int(i)), Str2(s, tag)) if i > 0 => {
-                Ok(Self::Str2(s.repeat(i as usize).into(), tag))
+            (Str(s, tag), Num(Int(i))) | (Num(Int(i)), Str(s, tag)) if i > 0 => {
+                Ok(Self::Str(s.repeat(i as usize).into(), tag))
             }
             // string multiplication with negatives or 0 results in null
             // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
-            (Str2(..), Num(Int(_))) | (Num(Int(_)), Str2(..)) => Ok(Null),
+            (Str(..), Num(Int(_))) | (Num(Int(_)), Str(..)) => Ok(Null),
             (Obj(mut l), Obj(r)) => {
                 obj_merge(&mut l, r);
                 Ok(Obj(l))
@@ -801,8 +756,8 @@ impl core::ops::Div for Val {
     fn div(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Self::Num(x), Self::Num(y)) => Ok(Self::Num(x / y)),
-            (Self::Str2(x, tag), Self::Str2(y, tag_)) if tag == tag_ => Ok(split(&x, &y)
-                .map(|s| Val::Str2(x.slice_ref(s), tag))
+            (Self::Str(x, tag), Self::Str(y, tag_)) if tag == tag_ => Ok(split(&x, &y)
+                .map(|s| Val::Str(x.slice_ref(s), tag))
                 .collect()),
             (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
@@ -844,7 +799,7 @@ impl Ord for Val {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Num(x), Self::Num(y)) => x.cmp(y),
-            (Self::Str2(x, _), Self::Str2(y, _)) => x.cmp(y),
+            (Self::Str(x, _), Self::Str(y, _)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
                 (0, 0) => Equal,
@@ -874,8 +829,8 @@ impl Ord for Val {
             (Self::Num(_), _) => Less,
             (_, Self::Num(_)) => Greater,
             // etc.
-            (Self::Str2(..), _) => Less,
-            (_, Self::Str2(..)) => Greater,
+            (Self::Str(..), _) => Less,
+            (_, Self::Str(..)) => Greater,
             (Self::Arr(_), _) => Less,
             (_, Self::Arr(_)) => Greater,
         }
@@ -893,7 +848,7 @@ impl Hash for Val {
             // Num::hash() starts its hash with a 0 or 1, so we start with 2 here
             Self::Null => state.write_u8(2),
             Self::Bool(b) => state.write_u8(if *b { 3 } else { 4 }),
-            Self::Str2(b, _) => hash_with(5, b, state),
+            Self::Str(b, _) => hash_with(5, b, state),
             Self::Arr(a) => hash_with(6, a, state),
             Self::Obj(o) => {
                 state.write_u8(7);
@@ -904,26 +859,6 @@ impl Hash for Val {
             }
         }
     }
-}
-
-/// Format a string as valid JSON string, including leading and trailing quotes.
-pub fn fmt_str(f: &mut fmt::Formatter, s: &str) -> fmt::Result {
-    write!(f, "\"")?;
-    for s in s.split_inclusive(|c| c < ' ' || c == '\\' || c == '"') {
-        // split s into last character and everything before (init)
-        let mut chars = s.chars();
-        let last = chars.next_back();
-        let init = chars.as_str();
-
-        match last {
-            Some(last @ ('\t' | '\n' | '\r' | '\\' | '"')) => {
-                write!(f, "{init}{}", last.escape_default())
-            }
-            Some(last) if last < ' ' => write!(f, "{init}\\u{:04x}", last as u8),
-            _ => write!(f, "{s}"),
-        }?;
-    }
-    write!(f, "\"")
 }
 
 /// Format a UTF-8 string as valid JSON string, including leading and trailing quotes.
@@ -968,15 +903,20 @@ fn fmt_bytes(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
     write!(f, "\"")
 }
 
+/// Display bytes as UTF-8 string.
+pub fn bstr(s: &impl core::convert::AsRef<[u8]>) -> impl fmt::Display + '_ {
+    BStr::new(s)
+}
+
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "{b}"),
             Self::Num(n) => write!(f, "{n}"),
-            Self::Str2(s, Tag::Inline) => write!(f, "{}", BStr::new(s)),
-            Self::Str2(s, Tag::Bytes) => fmt_bytes(f, s),
-            Self::Str2(s, Tag::Utf8) => fmt_utf8(f, s),
+            Self::Str(s, Tag::Inline) => write!(f, "{}", bstr(s)),
+            Self::Str(s, Tag::Bytes) => fmt_bytes(f, s),
+            Self::Str(s, Tag::Utf8) => fmt_utf8(f, s),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();

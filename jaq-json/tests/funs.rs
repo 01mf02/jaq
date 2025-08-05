@@ -163,3 +163,9 @@ fn math_rem() {
     give(json!(null), "2000000001 % 3", json!(0));
     give(json!(null), "2000000001 % 2000000001", json!(0));
 }
+
+yields!(
+    format_urid_invalid,
+    r#"("%FF" | @urid) == ([255] | tobytes | tostring)"#,
+    true
+);

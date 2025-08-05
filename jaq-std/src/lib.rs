@@ -345,7 +345,7 @@ fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
     // conversion from isize to u32 may fail on 64-bit systems for high values of c
     let u = u32::try_from(i).map_err(Error::str)?;
     // may fail e.g. on `[1114112] | implode`
-    char::from_u32(u).ok_or_else(|| Error::str(format_args!("cannot use {u} as character")))
+    Ok(char::from_u32(u).unwrap_or(char::REPLACEMENT_CHARACTER))
 }
 
 /// This implements a ~10x faster version of:

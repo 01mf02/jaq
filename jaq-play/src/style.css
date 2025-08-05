@@ -99,7 +99,7 @@ textarea {
 }
 
 .string  { color: green; }
-.binary  { color: red; }
+.bytes   { color: red; }
 .number  { color: darkorange; }
 .boolean { color: blue; }
 .null    { color: magenta; }

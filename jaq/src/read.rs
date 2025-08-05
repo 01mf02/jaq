@@ -89,9 +89,9 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals {
 pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals<'a> {
     use bstr::ByteSlice;
     match fmt {
-        Format::Raw if slurp => box_once(Ok(Val::Str2(bytes.clone(), Tag::Utf8))),
+        Format::Raw if slurp => box_once(Ok(Val::Str(bytes.clone(), Tag::Utf8))),
         Format::Raw => Box::new(
-            ByteSlice::lines(&**bytes).map(|line| Ok(Val::Str2(bytes.slice_ref(line), Tag::Utf8))),
+            ByteSlice::lines(&**bytes).map(|line| Ok(Val::Str(bytes.slice_ref(line), Tag::Utf8))),
         ),
         Format::Json => collect_if(slurp, json_slice(bytes)),
         Format::Cbor => collect_if(

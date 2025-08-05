@@ -1,9 +1,7 @@
 //! XML parsing.
-use crate::{Map, Val};
+use crate::{bstr, Map, Val};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
-use bstr::BStr;
-use bytes::Bytes;
 use core::fmt::{self, Formatter};
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
@@ -245,7 +243,7 @@ impl fmt::Display for Serror {
 impl std::error::Error for Serror {}
 
 /// XML value.
-pub enum XmlVal<S = Bytes> {
+pub enum XmlVal<S> {
     /// XML declaration, e.g. `<?xml version='1.0' encoding='UTF-8' standalone='yes'?>`
     XmlDecl(Vec<(S, S)>),
     /// DOCTYPE directive, e.g. `<!DOCTYPE greeting SYSTEM "hello.dtd" [...]>`
@@ -271,50 +269,50 @@ pub enum XmlVal<S = Bytes> {
     /// A sequence of XML values, e.g. `Hello<br />World`
     Seq(Vec<Self>),
     /// A string, e.g. `Hello world`
-    Str(S),
+    Scalar(Val),
     /// CDATA, e.g. `<![CDATA[text]]>`
     Cdata(S),
     /// Comment, e.g. `<!-- text -->`
     Comment(S),
 }
 
-impl TryFrom<&Val> for XmlVal {
+impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
     type Error = Serror;
-    fn try_from(v: &Val) -> Result<Self, Self::Error> {
+    fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
         use jaq_std::ValT;
-        let from_kv = |(k, v): (&_, &_)| match (k, v) {
-            (Val::Str2(k, _), Val::Str2(v, _)) => Ok((k.clone(), v.clone())),
+        let from_kv = |(k, v): (&'a _, &'a _)| match (k, v) {
+            (Val::Str(k, _), Val::Str(v, _)) => Ok((&**k, &**v)),
             _ => Err(Serror::InvalidEntry("attribute", k.clone(), v.clone())),
         };
-        let from_kvs = |a: &Map| a.iter().map(from_kv).collect::<Result<_, _>>();
+        let from_kvs = |a: &'a Map| a.iter().map(from_kv).collect::<Result<_, _>>();
 
-        let from_tac = |o: &Map| {
-            let mut t = Bytes::default();
+        let from_tac = |o: &'a Map| {
+            let mut t = &b""[..];
             let mut a = Vec::new();
             let mut c = None;
             for (k, v) in o.iter() {
                 let fail = || Serror::InvalidEntry("tac", k.clone(), v.clone());
                 let k = k.as_utf8_str().ok_or_else(fail)?;
                 match (k, v) {
-                    (b"t", Val::Str2(s, _)) => t = s.clone(),
+                    (b"t", Val::Str(s, _)) => t = s,
                     (b"a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
                     (b"c", v) => c = Some(Box::new(v.try_into()?)),
                     _ => Err(fail())?,
                 }
             }
-            Ok(Self::Tac(t.clone(), a, c))
+            Ok(Self::Tac(t, a, c))
         };
-        let from_dt = |o: &Map| {
-            let mut name = Bytes::default();
+        let from_dt = |o: &'a Map| {
+            let mut name = &b""[..];
             let mut external = None;
             let mut internal = None;
             for (k, v) in o.iter() {
                 let fail = || Serror::InvalidEntry("doctype", k.clone(), v.clone());
                 let k = k.as_utf8_str().ok_or_else(fail)?;
                 match (k, v) {
-                    (b"name", Val::Str2(s, _)) => name = s.clone(),
-                    (b"external", Val::Str2(s, _)) => external = Some(s.clone()),
-                    (b"internal", Val::Str2(s, _)) => internal = Some(s.clone()),
+                    (b"name", Val::Str(s, _)) => name = s,
+                    (b"external", Val::Str(s, _)) => external = Some(&**s),
+                    (b"internal", Val::Str(s, _)) => internal = Some(&**s),
                     _ => Err(fail())?,
                 }
             }
@@ -324,15 +322,15 @@ impl TryFrom<&Val> for XmlVal {
                 internal,
             })
         };
-        let from_pi = |o: &Map| {
-            let mut target = Bytes::default();
+        let from_pi = |o: &'a Map| {
+            let mut target = &b""[..];
             let mut content = None;
             for (k, v) in o.iter() {
                 let fail = || Serror::InvalidEntry("pi", k.clone(), v.clone());
                 let k = k.as_utf8_str().ok_or_else(fail)?;
                 match (k, v) {
-                    (b"target", Val::Str2(s, _)) => target = s.clone(),
-                    (b"content", Val::Str2(s, _)) => content = Some(s.clone()),
+                    (b"target", Val::Str(s, _)) => target = s,
+                    (b"content", Val::Str(s, _)) => content = Some(&**s),
                     _ => Err(fail())?,
                 }
             }
@@ -340,7 +338,6 @@ impl TryFrom<&Val> for XmlVal {
         };
         let contains_key = |o: &Map, k: &str| o.contains_key(&Val::from(k.to_string()));
         match v {
-            Val::Str2(s, _) => Ok(Self::Str(s.clone())),
             Val::Arr(a) => a
                 .iter()
                 .map(TryInto::try_into)
@@ -358,31 +355,32 @@ impl TryFrom<&Val> for XmlVal {
                 match (k, v) {
                     (b"xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
                     (b"doctype", Val::Obj(o)) if contains_key(o, "name") => from_dt(o),
-                    (b"cdata", Val::Str2(s, _)) => Ok(Self::Cdata(s.clone())),
-                    (b"comment", Val::Str2(s, _)) => Ok(Self::Comment(s.clone())),
+                    (b"cdata", Val::Str(s, _)) => Ok(Self::Cdata(s)),
+                    (b"comment", Val::Str(s, _)) => Ok(Self::Comment(s)),
                     (b"pi", Val::Obj(o)) if contains_key(o, "target") => from_pi(o),
                     _ => Err(fail())?,
                 }
             }
-            Val::Null | Val::Bool(_) | Val::Num(_) => Ok(Self::Str(v.to_string().into())),
+            Val::Null | Val::Bool(_) | Val::Num(_) | Val::Str(..) => Ok(Self::Scalar(v.clone())),
         }
     }
 }
 
-impl fmt::Display for XmlVal {
+impl fmt::Display for XmlVal<&[u8]> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let write_kvs = |f: &mut Formatter, a: &Vec<_>| {
             a.iter()
-                .try_for_each(|(k, v)| write!(f, " {}=\"{}\"", BStr::new(k), BStr::new(v)))
+                .try_for_each(|(k, v)| write!(f, " {}=\"{}\"", bstr(k), bstr(v)))
         };
         match self {
-            Self::Str(s) => write!(f, "{}", BStr::new(s)),
+            Self::Scalar(Val::Str(s, _)) => write!(f, "{}", bstr(s)),
+            Self::Scalar(v) => write!(f, "{v}"),
             Self::Seq(a) => a.iter().try_for_each(|v| v.fmt(f)),
             Self::Tac(t, a, c) => {
-                write!(f, "<{}", BStr::new(t))?;
+                write!(f, "<{}", bstr(t))?;
                 write_kvs(f, a)?;
                 if let Some(c) = c {
-                    write!(f, ">{c}</{}>", BStr::new(t))
+                    write!(f, ">{c}</{}>", bstr(t))
                 } else {
                     write!(f, "/>")
                 }
@@ -397,21 +395,21 @@ impl fmt::Display for XmlVal {
                 external,
                 internal,
             } => {
-                write!(f, "<!DOCTYPE {}", BStr::new(name))?;
+                write!(f, "<!DOCTYPE {}", bstr(name))?;
                 if let Some(s) = external {
-                    write!(f, " {}", BStr::new(s))?;
+                    write!(f, " {}", bstr(s))?;
                 }
                 if let Some(s) = internal {
-                    write!(f, " [{}]", BStr::new(s))?;
+                    write!(f, " [{}]", bstr(s))?;
                 }
                 write!(f, ">")
             }
-            Self::Cdata(s) => write!(f, "<![CDATA[{}]]>", BStr::new(s)),
-            Self::Comment(s) => write!(f, "<!--{}-->", BStr::new(s)),
+            Self::Cdata(s) => write!(f, "<![CDATA[{}]]>", bstr(s)),
+            Self::Comment(s) => write!(f, "<!--{}-->", bstr(s)),
             Self::Pi { target, content } => {
-                write!(f, "<?{}", BStr::new(target))?;
+                write!(f, "<?{}", bstr(target))?;
                 if let Some(s) = content {
-                    write!(f, " {}", BStr::new(s))?;
+                    write!(f, " {}", bstr(s))?;
                 }
                 write!(f, ">")
             }
