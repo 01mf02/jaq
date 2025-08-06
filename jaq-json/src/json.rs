@@ -2,7 +2,19 @@
 use crate::{Error, Map, Num, Val, ValR};
 use alloc::{string::ToString, vec::Vec};
 use hifijson::token::{Expect, Lex, Token};
-use hifijson::{LexAlloc, SliceLexer};
+use hifijson::{str, LexAlloc, SliceLexer};
+
+fn parse_string<L: LexAlloc>(lexer: &mut L) -> Result<Vec<u8>, hifijson::Error> {
+    let on_string = |bytes: &mut L::Bytes, out: &mut Vec<u8>| {
+        out.extend(bytes.iter());
+        Ok(())
+    };
+    lexer.str_fold(Vec::new(), on_string, |lexer, escape, out| {
+        let c = lexer.escape_char(escape).map_err(str::Error::Escape)?;
+        out.extend(c.encode_utf8(&mut [0; 4]).as_bytes());
+        Ok(())
+    })
+}
 
 /// Parse at least one JSON value, given an initial token and a lexer.
 ///
@@ -23,7 +35,7 @@ pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::E
                 Num::Dec(num.to_string().into())
             }
         })),
-        Token::Quote => Ok(Val::from(lexer.str_string()?.to_string())),
+        Token::Quote => Ok(Val::utf8_str(parse_string(lexer)?)),
         Token::LSquare => Ok(Val::Arr({
             let mut arr = Vec::new();
             lexer.seq(Token::RSquare, |token, lexer| {
