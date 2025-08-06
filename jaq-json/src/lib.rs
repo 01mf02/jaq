@@ -880,12 +880,18 @@ pub fn fmt_utf8(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
     write!(f, "\"")
 }
 
+/// Format a UTF-8 character.
+///
+/// This is especially useful to pretty-print control characters, such as
+/// `'\n'` (U+000A), but also all other control characters.
 fn fmt_char(f: &mut fmt::Formatter, c: char) -> fmt::Result {
     match c {
-        '\u{8}' => write!(f, "\\b"),
-        '\u{c}' => write!(f, "\\f"),
+        // Rust does not recognise the following two character escapes
+        '\u{08}' => write!(f, "\\b"),
+        '\u{0c}' => write!(f, "\\f"),
         '\t' | '\n' | '\r' | '\\' | '"' => write!(f, "{}", c.escape_default()),
-        _ if c < ' ' || c == '\u{7f}'  => write!(f, "\\u{:04x}", c as u8),
+        // remaining control characters
+        '\u{00}' .. '\u{20}' | '\u{7F}' .. '\u{A0}'  => write!(f, "\\u{:04x}", c as u8),
         _ => write!(f, "{c}"),
     }
 }
