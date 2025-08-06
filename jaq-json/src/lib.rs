@@ -867,12 +867,12 @@ impl Hash for Val {
 /// "will automatically convert invalid UTF-8 to the Unicode replacement codepoint, U+FFFD, which looks like this: �".
 pub fn fmt_utf8(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
     write!(f, "\"")?;
-    let is_special = |c| c < b' ' || c == b'\\' || c == b'"' || c == 0x7f;
+    let is_special = |c| c < 0x20 || c == b'\\' || c == b'"' || c == 0x7f;
     for s in s.split_inclusive(|c| is_special(*c)) {
         match s.split_last() {
             Some((last, init)) if is_special(*last) => {
                 write!(f, "{}", BStr::new(init))?;
-                fmt_char(f, char::from(*last))?
+                fmt_byte(f, ByteEscape::Utf, *last)?
             }
             _ => write!(f, "{}", BStr::new(s))?,
         }
@@ -880,19 +880,29 @@ pub fn fmt_utf8(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
     write!(f, "\"")
 }
 
-/// Format a UTF-8 character.
+/// How to print bytes that represent either ASCII control characters or not ASCII.
+enum ByteEscape {
+    /// Print as `\u00XX`, e.g. `\u001a`
+    Utf,
+    /// Print as   `\xXX`, e.g.   `\x1a`
+    Hex,
+}
+
+/// Format a byte.
 ///
 /// This is especially useful to pretty-print control characters, such as
 /// `'\n'` (U+000A), but also all other control characters.
-fn fmt_char(f: &mut fmt::Formatter, c: char) -> fmt::Result {
+fn fmt_byte(f: &mut fmt::Formatter, e: ByteEscape, c: u8) -> fmt::Result {
     match c {
         // Rust does not recognise the following two character escapes
-        '\u{08}' => write!(f, "\\b"),
-        '\u{0c}' => write!(f, "\\f"),
-        '\t' | '\n' | '\r' | '\\' | '"' => write!(f, "{}", c.escape_default()),
-        // remaining control characters
-        '\u{00}' .. '\u{20}' | '\u{7F}' .. '\u{A0}'  => write!(f, "\\u{:04x}", c as u8),
-        _ => write!(f, "{c}"),
+        0x08 => write!(f, "\\b"),
+        0x0c => write!(f, "\\f"),
+        b'\t' | b'\n' | b'\r' | b'\\' | b'"' => write!(f, "{}", char::from(c).escape_default()),
+        0x00..0x20 | 0x7F..=0xFF => match e {
+            ByteEscape::Utf => write!(f, "\\u{:04x}", c),
+            ByteEscape::Hex => write!(f, "\\x{:02x}", c),
+        },
+        _ => write!(f, "{}", char::from(c)),
     }
 }
 
@@ -903,9 +913,8 @@ fn fmt_char(f: &mut fmt::Formatter, c: char) -> fmt::Result {
 /// mapping bytes 0..255 to U+0000..U+00FF.
 fn fmt_bytes(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
     write!(f, "\"")?;
-    for c in s.iter().copied().map(char::from) {
-        fmt_char(f, c)?;
-    }
+    s.iter()
+        .try_for_each(|c| fmt_byte(f, ByteEscape::Hex, *c))?;
     write!(f, "\"")
 }
 
