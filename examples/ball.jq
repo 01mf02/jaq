@@ -1,8 +1,10 @@
 # Run `ball.sh` to create a little animation using these functions
 
 # Create scene data for ball animation
-def animate_ball($frames): foreach range($frames) as $t (.;
-  .vy -= 2 | .x += .vx | .y += .vy | if .y < .r then .y = .r*2 - .y | .vy *= -0.9 end
+def animate_ball($steps; $dt): foreach range($steps) as $step (.;
+  .step = $step | .vy -= 2*$dt | .x += .vx*$dt | .y += .vy*$dt |
+  # collision with the floor
+  if .y < .r then .y = .r*2 - .y | .vy *= -0.9 end
 );
 
 # Render ball to RGB bitmap
