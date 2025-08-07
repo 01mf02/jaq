@@ -14,13 +14,14 @@ impl DataT for DataKind {
 }
 
 pub struct Data<'a> {
+    cli: &'a Cli,
     lut: &'a Lut<DataKind>,
     inputs: Inputs<'a, Val>,
 }
 
 impl<'a> Data<'a> {
-    pub fn new(lut: &'a Lut<DataKind>, inputs: Inputs<'a, Val>) -> Self {
-        Self { lut, inputs }
+    pub fn new(cli: &'a Cli, lut: &'a Lut<DataKind>, inputs: Inputs<'a, Val>) -> Self {
+        Self { cli, lut, inputs }
     }
 }
 
@@ -52,7 +53,8 @@ static REPL_KILL_DEPTH: AtomicUsize = AtomicUsize::new(0);
 pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
         let depth = REPL_DEPTH.fetch_add(1, Ordering::Relaxed);
-        repl_with(depth, |s| match eval(s, cv.1.clone()) {
+        let cli = cv.0.data().cli;
+        repl_with(cli, depth, |s| match eval(cli, s, cv.1.clone()) {
             Ok(()) => (),
             Err(e) => eprint!("{e}"),
         })
@@ -63,16 +65,15 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
     })
 }
 
-fn eval(code: String, input: Val) -> Result<(), Error> {
+fn eval(cli: &Cli, code: String, input: Val) -> Result<(), Error> {
     let (ctx, filter) =
         filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
-    let cli = &Cli::default();
     let inputs = core::iter::once(Ok(input));
     crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| write::print(out, cli, &v)))?;
     Ok(())
 }
 
-fn repl_with(depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
+fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     use rustyline::config::{Behavior, Config};
     use yansi::Paint;
     let config = Config::builder()

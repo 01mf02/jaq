@@ -246,8 +246,9 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
         filter::parse_compile(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
 
     let vars = Vars::new(ctx);
+    let cli = Cli::default();
     let inputs = &jaq_std::input::RcIter::new(Box::new(core::iter::empty()));
-    let data = funs::Data::new(&filter.lut, inputs);
+    let data = funs::Data::new(&cli, &filter.lut, inputs);
     let ctx = filter::Ctx::new(&data, vars);
 
     let json = |s: String| read::json_single(s.as_bytes());
