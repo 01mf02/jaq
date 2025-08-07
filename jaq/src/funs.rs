@@ -1,4 +1,4 @@
-use crate::{filter, run, write, Cli, Error, Val};
+use crate::{filter, run, style, write, Cli, Error, Val};
 use jaq_core::{data, DataT, Lut, Native, RunPtr};
 use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
@@ -75,15 +75,17 @@ fn eval(cli: &Cli, code: String, input: Val) -> Result<(), Error> {
 
 fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     use rustyline::config::{Behavior, Config};
-    use yansi::Paint;
+    use style::ANSI;
     let config = Config::builder()
         .behavior(Behavior::PreferTerm)
         .auto_add_history(true)
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
     let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
+    let style = cli.color_stdout().then_some(ANSI).unwrap_or_default();
     let _ = history.iter().try_for_each(|h| rl.load_history(h));
-    let prompt = format!("{}{} ", str::repeat("  ", depth), '>'.bold());
+    let prompt = style.display(style.bold, '>');
+    let prompt = format!("{}{} ", str::repeat("  ", depth), prompt);
     let mut first = true;
     loop {
         use core::cmp::Ordering::{Equal, Greater, Less};

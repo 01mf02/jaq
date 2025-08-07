@@ -2,12 +2,12 @@ mod cli;
 mod filter;
 mod funs;
 mod read;
+mod style;
 mod write;
 
 use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use filter::{run, FileReports, Filter};
-use is_terminal::IsTerminal;
 use jaq_core::{load, unwrap_valr, Vars};
 use jaq_json::{json, Val};
 use std::io::{self, BufRead, Write};
@@ -46,21 +46,16 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    let no_color = std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
-    let set_color = |on| {
-        if on {
-            yansi::enable();
-        } else {
-            yansi::disable();
-        }
+    // yansi may only be used for writing to stderr
+    if cli.color_stdio(io::stderr()) {
+        yansi::enable();
+    } else {
+        yansi::disable();
     };
-
-    set_color(!cli.in_place && cli.color_if(|| io::stdout().is_terminal() && !no_color));
 
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            set_color(cli.color_if(|| io::stderr().is_terminal() && !no_color));
             eprint!("{e}");
             e.report()
         }

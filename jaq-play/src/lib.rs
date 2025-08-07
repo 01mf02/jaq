@@ -5,7 +5,7 @@ use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
-use jaq_json::{bstr, fmt_utf8, json, Tag, Val};
+use jaq_json::{bstr, json, write_byte, write_bytes, write_utf8, Tag, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
@@ -83,16 +83,20 @@ where
 }
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
-    let display = |s| FormatterFn(move |f: &mut Formatter| fmt_utf8(f, &escape(s)));
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s, Tag::Utf8) => span(f, "string", display(s)),
-        Val::Str(s, Tag::Inline) => write!(f, "{}", bstr(&escape(s))),
-        Val::Str(s, Tag::Bytes) => {
-            let s = s.iter().copied().map(char::from).collect::<String>();
-            span(f, "bytes", display(s.as_bytes()))
+        Val::Str(s, Tag::Inline) => write!(f, "{}", bstr(&escape_bytes(s))),
+        Val::Str(b, Tag::Bytes) => {
+            let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
+            span(f, "bytes", escape_str(&fun.to_string()))
+        }
+        Val::Str(s, Tag::Utf8) => {
+            let fun = FormatterFn(move |f: &mut Formatter| {
+                write_utf8!(f, s, |part| bstr(&escape_bytes(part)).fmt(f))
+            });
+            span(f, "string", fun)
         }
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
@@ -120,12 +124,16 @@ fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
 }
 
-fn escape(s: &[u8]) -> Vec<u8> {
-    use aho_corasick::AhoCorasick;
-    let patterns = &["&", "<", ">"];
-    let replaces = &["&amp;", "&lt;", "&gt;"];
-    let ac = AhoCorasick::new(patterns).unwrap();
-    ac.replace_all_bytes(s, replaces)
+const AC_PATTERNS: &[&str] = &["&", "<", ">"];
+const AC_REPLACES: &[&str] = &["&amp;", "&lt;", "&gt;"];
+
+fn escape_bytes(s: &[u8]) -> Vec<u8> {
+    let ac = aho_corasick::AhoCorasick::new(AC_PATTERNS).unwrap();
+    ac.replace_all_bytes(s, AC_REPLACES)
+}
+fn escape_str(s: &str) -> String {
+    let ac = aho_corasick::AhoCorasick::new(AC_PATTERNS).unwrap();
+    ac.replace_all(s, AC_REPLACES)
 }
 
 #[allow(dead_code)]
@@ -190,7 +198,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 
     let post_value = |y| {
         let s = FormatterFn(|f: &mut Formatter| match &y {
-            Val::Str(s, _) if settings.raw_output => span(f, "string", bstr(&escape(s))),
+            Val::Str(s, _) if settings.raw_output => span(f, "string", bstr(&escape_bytes(s))),
             y => fmt_val(f, &pp_opts, 0, y),
         });
         scope.post_message(&s.to_string().into()).unwrap();

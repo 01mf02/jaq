@@ -95,6 +95,8 @@ pub struct Cli {
     pub exit_status: bool,
     pub version: bool,
     pub help: bool,
+
+    color_stdout: std::cell::OnceCell<bool>,
 }
 
 #[derive(Debug)]
@@ -230,6 +232,16 @@ impl Cli {
         } else {
             f()
         }
+    }
+
+    pub fn color_stdio(&self, io: impl std::io::IsTerminal) -> bool {
+        let no_color = || std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
+        self.color_if(|| io.is_terminal() && !no_color())
+    }
+
+    pub fn color_stdout(&self) -> bool {
+        let init = || self.color_stdio(std::io::stdin());
+        *self.color_stdout.get_or_init(init)
     }
 
     pub fn indent(&self) -> usize {

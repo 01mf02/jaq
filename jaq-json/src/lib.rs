@@ -861,61 +861,58 @@ impl Hash for Val {
     }
 }
 
-/// Format a UTF-8 string as valid JSON string, including leading and trailing quotes.
-///
-/// Inheriting from the [`bstr`] crate, this
-/// "will automatically convert invalid UTF-8 to the Unicode replacement codepoint, U+FFFD, which looks like this: �".
-pub fn fmt_utf8(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
-    write!(f, "\"")?;
-    let is_special = |c| c < 0x20 || c == b'\\' || c == b'"' || c == 0x7f;
-    for s in s.split_inclusive(|c| is_special(*c)) {
-        match s.split_last() {
-            Some((last, init)) if is_special(*last) => {
-                write!(f, "{}", BStr::new(init))?;
-                fmt_byte(f, ByteEscape::Utf, *last)?
-            }
-            _ => write!(f, "{}", BStr::new(s))?,
-        }
-    }
-    write!(f, "\"")
-}
-
-/// How to print bytes that represent either ASCII control characters or not ASCII.
-enum ByteEscape {
-    /// Print as `\u00XX`, e.g. `\u001a`
-    Utf,
-    /// Print as   `\xXX`, e.g.   `\x1a`
-    Hex,
-}
-
 /// Format a byte.
 ///
 /// This is especially useful to pretty-print control characters, such as
 /// `'\n'` (U+000A), but also all other control characters.
-fn fmt_byte(f: &mut fmt::Formatter, e: ByteEscape, c: u8) -> fmt::Result {
-    match c {
-        // Rust does not recognise the following two character escapes
-        0x08 => write!(f, "\\b"),
-        0x0c => write!(f, "\\f"),
-        b'\t' | b'\n' | b'\r' | b'\\' | b'"' => write!(f, "{}", char::from(c).escape_default()),
-        0x00..0x20 | 0x7F..=0xFF => match e {
-            ByteEscape::Utf => write!(f, "\\u{:04x}", c),
-            ByteEscape::Hex => write!(f, "\\x{:02x}", c),
-        },
-        _ => write!(f, "{}", char::from(c)),
-    }
+#[macro_export]
+macro_rules! write_byte {
+    ($w:ident, $c:expr, $f:expr) => {{
+        match $c {
+            // Rust does not recognise the following two character escapes
+            0x08 => write!($w, "\\b"),
+            0x0c => write!($w, "\\f"),
+            c @ (b'\t' | b'\n' | b'\r' | b'\\' | b'"') => {
+                write!($w, "{}", char::from(c).escape_default())
+            }
+            0x00..=0x1F | 0x7F..=0xFF => $f,
+            c => write!($w, "{}", char::from(c)),
+        }
+    }};
 }
 
-/// Format a byte string as JSON string, including leading and trailing quotes.
+/// Format a UTF-8 string as JSON string, including leading and trailing quotes.
 ///
-/// This uses an encoding that
-/// ["IANA calls ISO-8859-1"](https://doc.rust-lang.org/std/primitive.char.html#impl-From%3Cu8%3E-for-char),
-/// mapping bytes 0..255 to U+0000..U+00FF.
-fn fmt_bytes(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
-    write!(f, "\"")?;
-    s.iter()
-        .try_for_each(|c| fmt_byte(f, ByteEscape::Hex, *c))?;
-    write!(f, "\"")
+/// This uses `$f` to format byte slices that do not need to be escaped.
+#[macro_export]
+macro_rules! write_utf8 {
+    ($w:ident, $s:ident, $f:expr) => {{
+        write!($w, "\"")?;
+        let is_special = |c| matches!(c, 0x00..=0x1F | b'\\' | b'"' | 0x7F);
+        for s in $s.split_inclusive(|c| is_special(*c)) {
+            match s.split_last() {
+                Some((last, init)) if is_special(*last) => {
+                    $f(init)?;
+                    write_byte!($w, *last, write!($w, "\\u{last:04x}"))?
+                }
+                _ => $f(s)?,
+            }
+        }
+        write!($w, "\"")
+    }};
+}
+
+/// Format a byte string, including leading and trailing quotes.
+///
+/// This maps all non-ASCII `u8`s to `\xXX`.
+#[macro_export]
+macro_rules! write_bytes {
+    ($w:ident, $s: ident) => {{
+        write!($w, "\"")?;
+        $s.iter()
+            .try_for_each(|c| write_byte!($w, *c, write!($w, "\\x{c:02x}")))?;
+        write!($w, "\"")
+    }};
 }
 
 /// Display bytes as UTF-8 string.
@@ -930,8 +927,8 @@ impl fmt::Display for Val {
             Self::Bool(b) => write!(f, "{b}"),
             Self::Num(n) => write!(f, "{n}"),
             Self::Str(s, Tag::Inline) => write!(f, "{}", bstr(s)),
-            Self::Str(s, Tag::Bytes) => fmt_bytes(f, s),
-            Self::Str(s, Tag::Utf8) => fmt_utf8(f, s),
+            Self::Str(b, Tag::Bytes) => write_bytes!(f, b),
+            Self::Str(s, Tag::Utf8) => write_utf8!(f, s, |part| bstr(part).fmt(f)),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();

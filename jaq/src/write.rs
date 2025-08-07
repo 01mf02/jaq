@@ -1,98 +1,97 @@
+use crate::style::{Style, ANSI};
 use crate::{invalid_data, Cli, Format};
-use core::fmt::{self, Display, Formatter};
-use is_terminal::IsTerminal;
-use jaq_json::{bstr, cbor, toml, yaml};
-use jaq_json::{Tag, Val};
-use std::io::{self, Write};
+use jaq_json::{cbor, toml, yaml};
+use jaq_json::{write_byte, write_bytes, write_utf8, Tag, Val};
+use std::io::{self, IsTerminal, Write};
 
-struct FormatterFn<F>(F);
+type Result = io::Result<()>;
 
-impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.0(f)
-    }
-}
-
-struct PpOpts {
+/// Pretty printer.
+struct Pp {
     compact: bool,
     indent: String,
     sort_keys: bool,
+    style: Style,
 }
 
-impl PpOpts {
-    fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
+impl Pp {
+    fn indent(&self, w: &mut dyn Write, level: usize) -> Result {
         if !self.compact {
-            write!(f, "{}", self.indent.repeat(level))?;
+            write!(w, "{}", self.indent.repeat(level))?;
         }
         Ok(())
     }
 
-    fn newline(&self, f: &mut Formatter) -> fmt::Result {
+    fn newline(&self, w: &mut dyn Write) -> Result {
         if !self.compact {
-            writeln!(f)?;
+            writeln!(w)?;
         }
         Ok(())
     }
-}
 
-fn fmt_seq<T, I, F>(fmt: &mut Formatter, opts: &PpOpts, level: usize, xs: I, f: F) -> fmt::Result
-where
-    I: IntoIterator<Item = T>,
-    F: Fn(&mut Formatter, T) -> fmt::Result,
-{
-    opts.newline(fmt)?;
-    let mut iter = xs.into_iter().peekable();
-    while let Some(x) = iter.next() {
-        opts.indent(fmt, level + 1)?;
-        f(fmt, x)?;
-        if iter.peek().is_some() {
-            write!(fmt, ",")?;
-        }
-        opts.newline(fmt)?;
-    }
-    opts.indent(fmt, level)
-}
-
-fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
-    use yansi::Paint;
-    match v {
-        Val::Null | Val::Bool(_) | Val::Num(_) => v.fmt(f),
-        Val::Str(_, Tag::Utf8) => write!(f, "{}", v.green()),
-        Val::Str(_, Tag::Bytes) => write!(f, "{}", v.red()),
-        Val::Str(s, Tag::Inline) => write!(f, "{}", bstr(s)),
-        Val::Arr(a) => {
-            '['.bold().fmt(f)?;
-            if !a.is_empty() {
-                fmt_seq(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
+    fn write_seq<T, I, F>(&self, w: &mut dyn Write, level: usize, xs: I, f: F) -> Result
+    where
+        I: IntoIterator<Item = T>,
+        F: Fn(&mut dyn Write, T) -> Result,
+    {
+        self.newline(w)?;
+        let mut iter = xs.into_iter().peekable();
+        while let Some(x) = iter.next() {
+            self.indent(w, level + 1)?;
+            f(w, x)?;
+            if iter.peek().is_some() {
+                write!(w, ",")?;
             }
-            ']'.bold().fmt(f)
+            self.newline(w)?;
+        }
+        self.indent(w, level)
+    }
+}
+
+fn write_val(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
+    let style = &pp.style;
+    let rec = |w: &mut dyn Write, level, v| write_val(w, pp, level, v);
+    let bold = |w: &mut dyn Write, c| style.write(w, style.bold, |w| write!(w, "{}", c));
+    match v {
+        Val::Null | Val::Bool(_) | Val::Num(_) => write!(w, "{v}"),
+        Val::Str(s, Tag::Utf8) => style.write(w, style.green, |w| {
+            write_utf8!(w, s, |part| w.write_all(part))
+        }),
+        Val::Str(b, Tag::Bytes) => style.write(w, style.red, |w| write_bytes!(w, b)),
+        Val::Str(s, Tag::Inline) => w.write_all(s),
+        Val::Arr(a) => {
+            bold(w, '[')?;
+            if !a.is_empty() {
+                pp.write_seq(w, level, &**a, |w, x| rec(w, level + 1, x))?;
+            }
+            bold(w, ']')
         }
         Val::Obj(o) => {
-            '{'.bold().fmt(f)?;
-            let kv = |f: &mut Formatter, (k, v)| {
-                fmt_val(f, opts, level + 1, k)?;
-                write!(f, ":")?;
-                if !opts.compact {
-                    write!(f, " ")?;
+            bold(w, '{')?;
+            let kv = |w: &mut dyn Write, (k, v)| {
+                rec(w, level + 1, k)?;
+                write!(w, ":")?;
+                if !pp.compact {
+                    write!(w, " ")?;
                 }
-                fmt_val(f, opts, level + 1, v)
+                rec(w, level + 1, v)
             };
             if !o.is_empty() {
-                if opts.sort_keys {
+                if pp.sort_keys {
                     let mut o: Vec<_> = o.iter().collect();
                     o.sort_by_key(|(k, _v)| *k);
-                    fmt_seq(f, opts, level, o, kv)
+                    pp.write_seq(w, level, o, kv)
                 } else {
-                    fmt_seq(f, opts, level, &**o, kv)
+                    pp.write_seq(w, level, &**o, kv)
                 }?
             }
-            '}'.bold().fmt(f)
+            bold(w, '}')
         }
     }
 }
 
-pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<()> {
-    let opts = || PpOpts {
+pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
+    let pp = || Pp {
         compact: cli.compact_output,
         indent: if cli.tab {
             String::from("\t")
@@ -100,9 +99,9 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
             " ".repeat(cli.indent())
         },
         sort_keys: cli.sort_keys,
+        style: cli.color_stdout().then_some(ANSI).unwrap_or_default(),
     };
 
-    let fmt_json = |f: &mut Formatter| fmt_val(f, &opts(), 0, val);
     let format = cli.to.unwrap_or(Format::Json);
 
     if matches!(format, Format::Yaml) {
@@ -119,7 +118,7 @@ pub fn print(w: &mut (impl Write + ?Sized), cli: &Cli, val: &Val) -> io::Result<
             let enc = toml::encode_val(val).map_err(|e| invalid_data(e.to_string()))?;
             write!(w, "{enc}")?
         }
-        (_, Format::Json | Format::Yaml | Format::Raw) => write!(w, "{}", FormatterFn(fmt_json))?,
+        (_, Format::Json | Format::Yaml | Format::Raw) => write_val(w, &pp(), 0, val)?,
         (_, Format::Xml) => {
             use jaq_json::xml::XmlVal;
             let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;
