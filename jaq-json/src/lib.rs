@@ -919,7 +919,7 @@ fn fmt_bytes(f: &mut fmt::Formatter, s: &[u8]) -> fmt::Result {
 }
 
 /// Display bytes as UTF-8 string.
-pub fn bstr(s: &impl core::convert::AsRef<[u8]>) -> impl fmt::Display + '_ {
+pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display + '_ {
     BStr::new(s)
 }
 

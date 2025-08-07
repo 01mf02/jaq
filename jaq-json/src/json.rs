@@ -1,5 +1,5 @@
 //! JSON parsing.
-use crate::{Error, Map, Num, Val, ValR};
+use crate::{bstr, Error, Map, Num, Val, ValR};
 use alloc::{string::ToString, vec::Vec};
 use hifijson::token::{Expect, Lex, Token};
 use hifijson::{str, LexAlloc, SliceLexer};
@@ -62,12 +62,7 @@ pub fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::E
 
 /// Convert bytes to a single JSON value.
 pub(crate) fn from_bytes(s: &[u8]) -> ValR {
-    let fail = |e| {
-        Error::str(format_args!(
-            "cannot parse {} as JSON: {e}",
-            bstr::BStr::new(s)
-        ))
-    };
+    let fail = |e| Error::str(format_args!("cannot parse {} as JSON: {e}", bstr(s)));
     let mut lexer = SliceLexer::new(s);
     lexer.exactly_one(parse).map_err(fail)
 }
