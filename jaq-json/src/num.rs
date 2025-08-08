@@ -4,7 +4,7 @@ use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use num_bigint::{BigInt, Sign};
-use num_traits::cast::{FromPrimitive, ToPrimitive};
+use num_traits::cast::ToPrimitive;
 
 /// Arbitrary-precision number.
 #[derive(Clone, Debug)]
@@ -198,32 +198,29 @@ impl core::ops::Neg for Num {
     }
 }
 
-/// Hash a number.
-///
-/// This hasher maps all finite numbers to integers.
-/// For floating-point numbers, this creates many hash collisions,
-/// because e.g. 0.2 and 0.4 yield the same hash value.
-/// However, it makes it easy to uphold the property that
-/// for each number `n` and `m`, if `n == m`, then `n.hash() == m.hash()`.
-/// In any case, a hash map with floating-point numbers as keys is pure madness,
-/// so it's not something that we should encourage with high performance.
 impl Hash for Num {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let big = |i: &BigInt, state: &mut H| {
-            state.write_u8(0);
-            i.hash(state)
-        };
         match self {
-            Self::BigInt(i) => big(i, state),
-            Self::Int(i) => big(&(*i).into(), state),
-            // SAFETY: this should always succeed
-            // TODO: use this also for `round()`?
-            Self::Float(f) if f.is_finite() => big(&BigInt::from_f64(*f).unwrap(), state),
-            // hash all remaining floats, like NaN and infinity, to the same
+            // hash machine-sized integers like floating-point numbers,
+            // because they are also compared for equality that way
+            Self::Int(i) => Self::Float(*i as f64).hash(state),
+            // hash all non-finite floats, like NaN and infinity, to the same
             // note that `Val::hash` assumes that `Num::hash` always starts
             // with `state.write_u8(n)`, where `n < 2`
-            Self::Float(_) => state.write_u8(1),
+            Self::Float(f) => {
+                state.write_u8(0);
+                if f.is_finite() {
+                    f.to_ne_bytes().hash(state);
+                }
+            }
             Self::Dec(d) => Self::from_dec_str(d).hash(state),
+            Self::BigInt(i) => match i.to_isize() {
+                None => {
+                    state.write_u8(1);
+                    i.hash(state)
+                }
+                Some(i) => Self::Int(i).hash(state),
+            },
         }
     }
 }
@@ -234,11 +231,12 @@ fn hash_nums() {
     let h = |n| foldhash::fast::FixedState::with_seed(42).hash_one(n);
 
     assert_eq!(h(Num::Int(4096)), h(Num::big_int(4096.into())));
-    assert_eq!(h(Num::Float(0.2)), h(Num::Float(0.4)));
     assert_eq!(h(Num::Float(0.0)), h(Num::Int(0)));
-    assert_eq!(h(Num::Float(3.1415)), h(Num::big_int(3.into())));
+    assert_eq!(h(Num::Float(3.0)), h(Num::big_int(3.into())));
     assert_eq!(h(Num::Float(f64::NAN)), h(Num::Float(0.0 / 0.0)));
 
+    assert_ne!(h(Num::Float(0.2)), h(Num::Float(0.4)));
+    assert_ne!(h(Num::Float(3.1415)), h(Num::big_int(3.into())));
     assert_ne!(h(Num::Float(0.2)), h(Num::Int(1)));
     assert_ne!(h(Num::Int(1)), h(Num::Int(2)));
 }
@@ -255,7 +253,9 @@ impl PartialEq for Num {
                 **b == BigInt::from(*i)
             }
             (Self::BigInt(i), Self::Float(f)) | (Self::Float(f), Self::BigInt(i)) => {
-                float_eq(i.to_f64().unwrap(), *f)
+                // integers that cannot be represented by machine-sized integers
+                // are considered unequal to any float
+                i.to_isize().is_some_and(|i| float_eq(i as f64, *f))
             }
             (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
             (Self::Dec(x), Self::Dec(y)) if Rc::ptr_eq(x, y) => true,
