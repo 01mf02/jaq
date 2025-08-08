@@ -82,7 +82,7 @@ fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), Readline
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
     let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
-    let style = cli.color_stdout().then_some(ANSI).unwrap_or_default();
+    let style = ANSI.if_color(cli.color_stdout());
     let _ = history.iter().try_for_each(|h| rl.load_history(h));
     let prompt = style.display(style.bold, '>');
     let prompt = format!("{}{} ", str::repeat("  ", depth), prompt);

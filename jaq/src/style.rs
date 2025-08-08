@@ -19,6 +19,14 @@ pub const ANSI: Style = Style {
 };
 
 impl Style {
+    pub fn if_color(self, color: bool) -> Self {
+        if color {
+            self
+        } else {
+            Self::default()
+        }
+    }
+
     pub fn write<F>(&self, w: &mut dyn Write, open: &str, f: F) -> io::Result<()>
     where
         F: Fn(&mut dyn Write) -> io::Result<()>,

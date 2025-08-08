@@ -198,7 +198,7 @@ trait ValTx: ValT + Sized {
         self.as_same_strs(other).ok_or_else(|| todo!())
     }
 
-    fn try_as_str2(&self) -> Result<Cow<str>, Error<Self>> {
+    fn try_as_str(&self) -> Result<Cow<'_, str>, Error<Self>> {
         self.try_as_utf8_str().map(String::from_utf8_lossy)
     }
 
@@ -714,8 +714,8 @@ where
     let fail_flag = |e| Error::str(format_args!("invalid regex flag: {e}"));
     let fail_re = |e| Error::str(format_args!("invalid regex: {e}"));
 
-    let flags = regex::Flags::new(&flags.try_as_str2()?).map_err(fail_flag)?;
-    let re = flags.regex(&re.try_as_str2()?).map_err(fail_re)?;
+    let flags = regex::Flags::new(&flags.try_as_str()?).map_err(fail_flag)?;
+    let re = flags.regex(&re.try_as_str()?).map_err(fail_re)?;
     let out = regex::regex(cv.1.try_as_utf8_str()?, &re, flags, (s, m));
     let sub = |s| cv.1.as_sub_str(s);
     let out = out.into_iter().map(|out| match out {
@@ -749,22 +749,22 @@ where
     use chrono::{Local, Utc};
     Box::new([
         ("fromdateiso8601", v(0), |cv| {
-            bome(cv.1.try_as_str2().and_then(|s| time::from_iso8601(&s)))
+            bome(cv.1.try_as_str().and_then(|s| time::from_iso8601(&s)))
         }),
         ("todateiso8601", v(0), |cv| {
             bome(time::to_iso8601(&cv.1).map(D::V::from))
         }),
         ("strftime", v(1), |cv| {
-            unary(cv, |v, fmt| time::strftime(&v, &fmt.try_as_str2()?, Utc))
+            unary(cv, |v, fmt| time::strftime(&v, &fmt.try_as_str()?, Utc))
         }),
         ("strflocaltime", v(1), |cv| {
-            unary(cv, |v, fmt| time::strftime(&v, &fmt.try_as_str2()?, Local))
+            unary(cv, |v, fmt| time::strftime(&v, &fmt.try_as_str()?, Local))
         }),
         ("gmtime", v(0), |cv| bome(time::gmtime(&cv.1, Utc))),
         ("localtime", v(0), |cv| bome(time::gmtime(&cv.1, Local))),
         ("strptime", v(1), |cv| {
             unary(cv, |v, fmt| {
-                time::strptime(&v.try_as_str2()?, &fmt.try_as_str2()?)
+                time::strptime(&v.try_as_str()?, &fmt.try_as_str()?)
             })
         }),
         ("mktime", v(0), |cv| bome(time::mktime(&cv.1))),

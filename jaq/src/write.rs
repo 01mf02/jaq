@@ -51,7 +51,7 @@ impl Pp {
 fn write_val(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
     let style = &pp.style;
     let rec = |w: &mut dyn Write, level, v| write_val(w, pp, level, v);
-    let bold = |w: &mut dyn Write, c| style.write(w, style.bold, |w| write!(w, "{}", c));
+    let bold = |w: &mut dyn Write, c| style.write(w, style.bold, |w| write!(w, "{c}"));
     match v {
         Val::Null | Val::Bool(_) | Val::Num(_) => write!(w, "{v}"),
         Val::Str(s, Tag::Utf8) => style.write(w, style.green, |w| {
@@ -99,7 +99,7 @@ pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
             " ".repeat(cli.indent())
         },
         sort_keys: cli.sort_keys,
-        style: cli.color_stdout().then_some(ANSI).unwrap_or_default(),
+        style: ANSI.if_color(cli.color_stdout()),
     };
 
     let format = cli.to.unwrap_or(Format::Json);

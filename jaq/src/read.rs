@@ -65,7 +65,7 @@ pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
     })
 }
 
-pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals {
+pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     let stdin = || io::stdin().lock();
     use bstr::io::BufReadExt;
     match fmt {
