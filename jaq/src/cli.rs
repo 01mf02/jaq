@@ -4,7 +4,7 @@ use std::env::ArgsOs;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Cli {
     // Input options
     pub null_input: bool,
@@ -15,6 +15,8 @@ pub struct Cli {
     /// jaq yields an array for each file, whereas
     /// jq produces only a single array.
     pub slurp: bool,
+
+    pub bson_input: bool,
 
     // Output options
     pub compact_output: bool,
@@ -58,7 +60,7 @@ pub struct Cli {
     pub help: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Filter {
     Inline(String),
     FromFile(PathBuf),
@@ -91,6 +93,7 @@ impl Cli {
             "null-input" => self.short('n', args)?,
             "raw-input" => self.short('R', args)?,
             "slurp" => self.short('s', args)?,
+            "bson-input" => self.bson_input = true,
 
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
@@ -133,6 +136,7 @@ impl Cli {
             'n' => self.null_input = true,
             'R' => self.raw_input = true,
             's' => self.slurp = true,
+            'b' => self.bson_input = true,
 
             'c' => self.compact_output = true,
             'r' => self.raw_output = true,

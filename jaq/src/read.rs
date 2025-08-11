@@ -1,4 +1,6 @@
-use crate::{Cli, Val};
+use crate::bson::bson_stream;
+use crate::cli::Cli;
+use jaq_json::Val;
 use std::io::{self, BufRead};
 use std::path::Path;
 
@@ -33,13 +35,21 @@ fn json_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val
 }
 
 pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
-    json_slice(&load_file(path.as_ref())?).collect()
+    let bytes = load_file(path.as_ref())?;
+    json_slice(&*bytes).collect()
 }
 
 pub fn buffered<'a, R>(cli: &Cli, read: R) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a>
 where
     R: BufRead + 'a,
 {
+    if cli.bson_input {
+        let mut bytes = Vec::new();
+        let mut reader = read;
+        reader.read_to_end(&mut bytes).unwrap();
+        let results: Vec<_> = bson_stream(&bytes).collect();
+        return Box::new(collect_if(cli.slurp, results.into_iter()));
+    }
     if cli.raw_input {
         Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
     } else {
@@ -48,6 +58,10 @@ where
 }
 
 pub fn slice<'a>(cli: &Cli, slice: &'a [u8]) -> Box<dyn Iterator<Item = io::Result<Val>> + 'a> {
+    if cli.bson_input {
+        let results: Vec<_> = bson_stream(slice).collect();
+        return Box::new(collect_if(cli.slurp, results.into_iter()));
+    }
     if cli.raw_input {
         let read = io::BufReader::new(slice);
         Box::new(raw_input(cli.slurp, read).map(|r| r.map(Val::from)))
