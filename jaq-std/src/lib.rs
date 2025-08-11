@@ -120,18 +120,18 @@ pub trait ValT: jaq_core::ValT + Ord + From<f64> {
     /// not a number or a number that does not fit into [`f64`].
     fn as_f64(&self) -> Result<f64, Error<Self>>;
 
+    /// If the value is a string (whatever its interpretation), return its bytes.
+    fn as_bytes(&self) -> Option<&[u8]>;
+
     /// If the value is interpreted as UTF-8 string, return its bytes.
-    fn as_utf8_str(&self) -> Option<&[u8]>;
+    fn as_utf8_bytes(&self) -> Option<&[u8]>;
 
     /// If the value is a string and `sub` points to a slice of the string,
     /// shorten the string to `sub`, else panic.
     fn as_sub_str(&self, sub: &[u8]) -> Self;
 
     /// Interpret bytes as UTF-8 string value.
-    fn from_utf8_string(b: impl AsRef<[u8]> + Send + 'static) -> Self;
-
-    /// If both input values are of the same string type, return their bytes.
-    fn as_same_strs<'a, 'b>(&'a self, other: &'b Self) -> Option<(&'a [u8], &'b [u8])>;
+    fn from_utf8_bytes(b: impl AsRef<[u8]> + Send + 'static) -> Self;
 }
 
 /// Convenience trait for implementing the core functions.
@@ -187,38 +187,35 @@ trait ValTx: ValT + Sized {
         })
     }
 
-    fn try_as_utf8_str(&self) -> Result<&[u8], Error<Self>> {
-        self.as_utf8_str().ok_or_else(|| self.fail_str())
+    fn try_as_bytes(&self) -> Result<&[u8], Error<Self>> {
+        self.as_bytes().ok_or_else(|| self.fail_str())
     }
 
-    fn try_as_same_strs<'a, 'b>(
-        &'a self,
-        other: &'b Self,
-    ) -> Result<(&'a [u8], &'b [u8]), Error<Self>> {
-        self.as_same_strs(other).ok_or_else(|| todo!())
+    fn try_as_utf8_bytes(&self) -> Result<&[u8], Error<Self>> {
+        self.as_utf8_bytes().ok_or_else(|| self.fail_str())
     }
 
     fn try_as_str(&self) -> Result<Cow<'_, str>, Error<Self>> {
-        self.try_as_utf8_str().map(String::from_utf8_lossy)
+        self.try_as_utf8_bytes().map(String::from_utf8_lossy)
     }
 
     fn map_utf8_str<B>(self, f: impl FnOnce(&[u8]) -> B) -> ValR<Self>
     where
         B: AsRef<[u8]> + Send + 'static,
     {
-        Ok(Self::from_utf8_string(f(self.try_as_utf8_str()?)))
+        Ok(Self::from_utf8_bytes(f(self.try_as_utf8_bytes()?)))
     }
 
     fn trim_utf8_with(&self, f: impl FnOnce(&[u8]) -> &[u8]) -> ValR<Self> {
-        Ok(self.as_sub_str(f(self.as_utf8_str().ok_or_else(|| self.fail_str())?)))
+        Ok(self.as_sub_str(f(self.as_utf8_bytes().ok_or_else(|| self.fail_str())?)))
     }
 
+    /// Helper function to strip away the prefix or suffix of a string.
     fn strip_fix<F>(self, fix: &Self, f: F) -> Result<Self, Error<Self>>
     where
         F: for<'a> FnOnce(&'a [u8], &[u8]) -> Option<&'a [u8]>,
     {
-        let (s, fix) = self.try_as_same_strs(fix)?;
-        Ok(match f(s, fix) {
+        Ok(match f(self.try_as_bytes()?, fix.try_as_bytes()?) {
             Some(sub) => self.as_sub_str(sub),
             None => self,
         })
@@ -419,10 +416,10 @@ where
         ("round", v(0), |cv| bome(cv.1.round(f64::round))),
         ("ceil", v(0), |cv| bome(cv.1.round(f64::ceil))),
         ("utf8bytelength", v(0), |cv| {
-            bome(cv.1.try_as_utf8_str().map(|s| (s.len() as isize).into()))
+            bome(cv.1.try_as_utf8_bytes().map(|s| (s.len() as isize).into()))
         }),
         ("explode", v(0), |cv| {
-            bome(cv.1.try_as_utf8_str().and_then(|s| explode(s).collect()))
+            bome(cv.1.try_as_utf8_bytes().and_then(|s| explode(s).collect()))
         }),
         ("implode", v(0), |cv| {
             bome(cv.1.into_vec().and_then(|s| implode(&s)).map(D::V::from))
@@ -473,12 +470,12 @@ where
         }),
         ("startswith", v(1), |cv| {
             unary(cv, |v, s| {
-                v.try_as_same_strs(&s).map(|(v, s)| v.starts_with(s).into())
+                Ok(v.try_as_bytes()?.starts_with(s.try_as_bytes()?).into())
             })
         }),
         ("endswith", v(1), |cv| {
             unary(cv, |v, s| {
-                v.try_as_same_strs(&s).map(|(v, s)| v.ends_with(s).into())
+                Ok(v.try_as_bytes()?.ends_with(s.try_as_bytes()?).into())
             })
         }),
         ("ltrimstr", v(1), |cv| {
@@ -498,14 +495,14 @@ where
         }),
         ("escape_csv", v(0), |cv| {
             bome(
-                cv.1.try_as_utf8_str()
-                    .map(|s| ValT::from_utf8_string(s.replace(b"\"", b"\"\""))),
+                cv.1.try_as_utf8_bytes()
+                    .map(|s| ValT::from_utf8_bytes(s.replace(b"\"", b"\"\""))),
             )
         }),
         ("escape_sh", v(0), |cv| {
             bome(
-                cv.1.try_as_utf8_str()
-                    .map(|s| ValT::from_utf8_string(s.replace(b"'", b"'\\''"))),
+                cv.1.try_as_utf8_bytes()
+                    .map(|s| ValT::from_utf8_bytes(s.replace(b"'", b"'\\''"))),
             )
         }),
     ])
@@ -579,7 +576,7 @@ where
         ("halt", v(0), |_| std::process::exit(0)),
         ("halt_error", v(1), |mut cv| {
             bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
-                if let Some(s) = cv.1.as_utf8_str() {
+                if let Some(s) = cv.1.as_utf8_bytes() {
                     std::print!("{}", BStr::new(s));
                 } else {
                     std::println!("{}", cv.1);
@@ -624,11 +621,11 @@ where
         }),
         ("decode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            bome(cv.1.try_as_utf8_str().and_then(|s| {
+            bome(cv.1.try_as_utf8_bytes().and_then(|s| {
                 STANDARD
                     .decode(s)
                     .map_err(Error::str)
-                    .map(ValT::from_utf8_string)
+                    .map(ValT::from_utf8_bytes)
             }))
         }),
     ])
@@ -716,7 +713,7 @@ where
 
     let flags = regex::Flags::new(&flags.try_as_str()?).map_err(fail_flag)?;
     let re = flags.regex(&re.try_as_str()?).map_err(fail_re)?;
-    let out = regex::regex(cv.1.try_as_utf8_str()?, &re, flags, (s, m));
+    let out = regex::regex(cv.1.try_as_utf8_bytes()?, &re, flags, (s, m));
     let sub = |s| cv.1.as_sub_str(s);
     let out = out.into_iter().map(|out| match out {
         Matches(ms) => ms
@@ -815,7 +812,7 @@ where
     for<'a> D::V<'a>: ValT,
 {
     fn eprint_raw<V: ValT>(v: &V) {
-        if let Some(s) = v.as_utf8_str() {
+        if let Some(s) = v.as_utf8_bytes() {
             log::error!("{}", BStr::new(s))
         } else {
             log::error!("{v}")

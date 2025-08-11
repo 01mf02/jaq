@@ -329,12 +329,17 @@ impl jaq_std::ValT for Val {
         self.as_num().and_then(Num::as_f64).ok_or_else(fail)
     }
 
-    fn as_utf8_str(&self) -> Option<&[u8]> {
-        if let Self::Str(b, Tag::Utf8) = self {
+    fn as_bytes(&self) -> Option<&[u8]> {
+        if let Self::Str(b, _) = self {
             Some(b)
         } else {
             None
         }
+    }
+
+    fn as_utf8_bytes(&self) -> Option<&[u8]> {
+        self.as_bytes()
+            .filter(|_| matches!(self, Self::Str(_, Tag::Utf8)))
     }
 
     fn as_sub_str(&self, sub: &[u8]) -> Self {
@@ -344,15 +349,8 @@ impl jaq_std::ValT for Val {
         }
     }
 
-    fn from_utf8_string(b: impl AsRef<[u8]> + Send + 'static) -> Self {
+    fn from_utf8_bytes(b: impl AsRef<[u8]> + Send + 'static) -> Self {
         Self::Str(Bytes::from_owner(b), Tag::Utf8)
-    }
-
-    fn as_same_strs<'a, 'b>(&'a self, other: &'b Self) -> Option<(&'a [u8], &'b [u8])> {
-        match (self, other) {
-            (Self::Str(x, tag), Self::Str(y, tag_)) if tag == tag_ => Some((x, y)),
-            _ => None,
-        }
     }
 }
 
@@ -505,7 +503,7 @@ fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
         use jaq_std::ValT;
         let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
         box_once_err(
-            cv.1.as_utf8_str()
+            cv.1.as_utf8_bytes()
                 .ok_or_else(fail)
                 .and_then(json::from_bytes),
         )

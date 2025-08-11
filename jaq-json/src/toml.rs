@@ -80,7 +80,7 @@ fn table(t: Table) -> Result<Val, DError> {
 fn obj_table(o: &Map) -> Result<Table, EError> {
     use jaq_std::ValT;
     let kvs = o.iter().map(|(k, v)| {
-        let k = k.as_utf8_str().ok_or_else(|| EError::Key(k.clone()))?;
+        let k = k.as_utf8_bytes().ok_or_else(|| EError::Key(k.clone()))?;
         Ok((String::from_utf8_lossy(k).into_owned(), val_item(v)?))
     });
     kvs.collect::<Result<_, _>>()

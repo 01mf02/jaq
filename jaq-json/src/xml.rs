@@ -292,7 +292,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
             let mut c = None;
             for (k, v) in o.iter() {
                 let fail = || Serror::InvalidEntry("tac", k.clone(), v.clone());
-                let k = k.as_utf8_str().ok_or_else(fail)?;
+                let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"t", Val::Str(s, _)) => t = s,
                     (b"a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
@@ -308,7 +308,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
             let mut internal = None;
             for (k, v) in o.iter() {
                 let fail = || Serror::InvalidEntry("doctype", k.clone(), v.clone());
-                let k = k.as_utf8_str().ok_or_else(fail)?;
+                let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"name", Val::Str(s, _)) => name = s,
                     (b"external", Val::Str(s, _)) => external = Some(&**s),
@@ -327,7 +327,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
             let mut content = None;
             for (k, v) in o.iter() {
                 let fail = || Serror::InvalidEntry("pi", k.clone(), v.clone());
-                let k = k.as_utf8_str().ok_or_else(fail)?;
+                let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"target", Val::Str(s, _)) => target = s,
                     (b"content", Val::Str(s, _)) => content = Some(&**s),
@@ -351,7 +351,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
                     _ => Err(Serror::SingletonObj(v.clone()))?,
                 };
                 let fail = || Serror::InvalidEntry("unknown", k.clone(), v.clone());
-                let k = k.as_utf8_str().ok_or_else(fail)?;
+                let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
                     (b"doctype", Val::Obj(o)) if contains_key(o, "name") => from_dt(o),

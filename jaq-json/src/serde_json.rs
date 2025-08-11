@@ -28,7 +28,7 @@ pub enum DError {
 }
 
 fn from_key(k: &Val) -> Result<&[u8], DError> {
-    k.as_utf8_str().ok_or_else(|| DError::Key(k.clone()))
+    k.as_utf8_bytes().ok_or_else(|| DError::Key(k.clone()))
 }
 
 impl TryFrom<&Val> for serde_json::Value {
