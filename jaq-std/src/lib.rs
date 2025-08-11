@@ -27,7 +27,7 @@ mod time;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::Cow, boxed::Box, vec::Vec};
-use bstr::{BStr, ByteSlice};
+use bstr::{BStr, ByteSlice, ByteVec};
 use jaq_core::box_iter::{box_once, then, BoxIter};
 use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValT as _, ValX, ValXs};
 
@@ -326,25 +326,53 @@ where
     Ok(Some(mx))
 }
 
-/// Convert a string into an array of its Unicode codepoints.
+/// Convert a string into an array of its Unicode codepoints (with negative integers representing UTF-8 errors).
 fn explode<V: ValT>(s: &[u8]) -> impl Iterator<Item = ValR<V>> + '_ {
-    // conversion from u32 to isize may fail on 32-bit systems for high values of c
-    let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
-    s.chars().map(conv)
+    let conv = |c: isize| Ok(c.into());
+    struct LosslessChars<'a> {
+        bs: &'a [u8],
+    }
+    impl Iterator for LosslessChars<'_> {
+        type Item = isize;
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.bs.is_empty() {
+                return None;
+            }
+            let (i, size) = match bstr::decode_utf8(self.bs) {
+                // valid UTF-8 sequence, emit code point
+                (Some(c), size) => (c as isize, size),
+                // invalid UTF-8 sequence, emit current byte negated, continue to next byte
+                _ => (-(self.bs[0] as isize), 1),
+            };
+            self.bs = &self.bs[size..];
+            Some(i)
+        }
+    }
+    LosslessChars { bs: s }.map(conv)
 }
 
-/// Convert an array of Unicode codepoints into a string.
-fn implode<V: ValT>(xs: &[V]) -> Result<String, Error<V>> {
-    xs.iter().map(as_codepoint).collect()
+/// Convert an array of Unicode codepoints (with negative integers representing UTF-8 errors) into a string.
+fn implode<V: ValT>(xs: &[V]) -> Result<Vec<u8>, Error<V>> {
+    let mut out = Vec::new();
+    for x in xs {
+        push_as_codepoint(&mut out, x)?;
+    }
+    Ok(out)
 }
 
 /// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
-fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
+fn push_as_codepoint<V: ValT>(out: &mut Vec<u8>, v: &V) -> Result<(), Error<V>> {
     let i = v.try_as_isize()?;
-    // conversion from isize to u32 may fail on 64-bit systems for high values of c
-    let u = u32::try_from(i).map_err(Error::str)?;
-    // may fail e.g. on `[1114112] | implode`
-    Ok(char::from_u32(u).unwrap_or(char::REPLACEMENT_CHARACTER))
+    if i >= -0xFF && i < 0 {
+        // reconstruct binary data
+        out.push_byte((-i) as u8);
+    } else {
+        // conversion from isize to u32 may fail on 64-bit systems for high values of c
+        let u = u32::try_from(i).map_err(Error::str)?;
+        // may fail e.g. on `[1114112] | implode`
+        out.push_char(char::from_u32(u).unwrap_or(char::REPLACEMENT_CHARACTER));
+    }
+    Ok(())
 }
 
 /// This implements a ~10x faster version of:
@@ -424,7 +452,7 @@ where
             bome(cv.1.try_as_utf8_bytes().and_then(|s| explode(s).collect()))
         }),
         ("implode", v(0), |cv| {
-            bome(cv.1.into_vec().and_then(|s| implode(&s)).map(D::V::from))
+            bome(cv.1.into_vec().and_then(|s| implode(&s)).map(D::V::from_utf8_bytes))
         }),
         ("ascii_downcase", v(0), |cv| {
             bome(cv.1.map_utf8_str(ByteSlice::to_ascii_lowercase))
