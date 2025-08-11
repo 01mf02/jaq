@@ -467,6 +467,18 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
                 v => Val::Str(v.to_string().into(), Tag::Inline),
             }))
         }),
+        ("byteoffset", v(1), |mut cv| match (cv.1, cv.0.pop_var()) {
+            (Val::Str(v, _), Val::Str(x, _)) => {
+                let v_start = v.as_ptr() as usize;
+                let x_start = x.as_ptr() as usize;
+                let off = v_start
+                    .checked_sub(x_start)
+                    .filter(|_| v_start <= x_start + x.len())
+                    .map(|off| Ok(Val::Num(Num::from_integral(off))));
+                Box::new(off.into_iter())
+            }
+            _ => Box::new(core::iter::empty()),
+        }),
         ("length", v(0), |cv| box_once_err(cv.1.length())),
         ("contains", v(1), |cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
