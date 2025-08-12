@@ -127,6 +127,18 @@ const ONE23: &str = "One\nTwo\nThree\n";
 test!(raw_input_slurp, &["-Rs"], ONE23, r#""One\nTwo\nThree\n""#);
 
 test!(
+    rawfile,
+    &[
+        "--rawfile",
+        "a",
+        "tests/256.bin",
+        "($a | tobytes) == ([range(256)] | tobytes)"
+    ],
+    "0",
+    "true"
+);
+
+test!(
     raw_input,
     &["-R"],
     ONE23,

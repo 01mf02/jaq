@@ -148,7 +148,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         Ok((k.to_owned(), lexer.exactly_one(json::parse).map_err(err)?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
-        let s = std::fs::read_to_string(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
+        let s = read::load_file(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
         Ok((k.to_owned(), Val::utf8_str(s?)))
     });
     let slurpfile = cli.slurpfile.iter().map(|(k, path)| {
