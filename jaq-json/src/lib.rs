@@ -47,7 +47,7 @@ mod serde_json;
 /// Operations on numbers follow a few principles:
 /// * The sum, difference, product, and remainder of two integers is integer.
 /// * Any other operation between two numbers yields a float.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default)]
 pub enum Val {
     #[default]
     /// Null
@@ -861,6 +861,22 @@ impl Ord for Val {
         }
     }
 }
+
+impl PartialEq for Val {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::Bool(x), Self::Bool(y)) => x == y,
+            (Self::Num(x), Self::Num(y)) => x == y,
+            (Self::Str(x, _tag), Self::Str(y, _tag)) => x == y,
+            (Self::Arr(x), Self::Arr(y)) => x == y,
+            (Self::Obj(x), Self::Obj(y)) => x == y,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Val {}
 
 impl Hash for Val {
     fn hash<H: Hasher>(&self, state: &mut H) {
