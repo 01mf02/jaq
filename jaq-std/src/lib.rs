@@ -195,6 +195,8 @@ trait ValTx: ValT + Sized {
         self.as_utf8_bytes().ok_or_else(|| self.fail_str())
     }
 
+    /// If the value is interpreted as UTF-8 string,
+    /// return its `str` representation, replacing invalid characters.
     fn try_as_str(&self) -> Result<Cow<'_, str>, Error<Self>> {
         self.try_as_utf8_bytes().map(String::from_utf8_lossy)
     }

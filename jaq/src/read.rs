@@ -1,3 +1,4 @@
+//! Reading input.
 use crate::{invalid_data, BoxError, Format};
 use bytes::Bytes;
 use jaq_core::box_iter::{box_once, BoxIter};

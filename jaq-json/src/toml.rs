@@ -1,13 +1,24 @@
-//! TOML decoding.
+//! TOML support.
 use crate::{Map, Num, Tag, Val};
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use toml_edit::{Document, DocumentMut, Formatted, Item, Table, Value};
 
+/// Parse a TOML document from a string.
+pub fn parse(s: &str) -> Result<Val, PError> {
+    table(s.parse::<Document<String>>()?.into_table())
+}
+
+/// Serialise a value as a TOML document.
+pub fn serialise(v: &Val) -> Result<impl Display, impl Display> {
+    let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
+    obj.and_then(obj_table).map(DocumentMut::from)
+}
+
 /// Serialisation error.
 #[derive(Debug)]
-pub enum SError {
+enum SError {
     /// non-string key in object
     Key(Val),
     /// non-table value as root
@@ -116,7 +127,7 @@ fn val_value(v: &Val) -> Result<Value, SError> {
         Val::Str(s, Tag::Utf8) => {
             Value::String(Formatted::new(String::from_utf8_lossy(s).into_owned()))
         }
-        Val::Str(_s, Tag::Inline) => todo!(),
+        Val::Str(_s, Tag::Raw) => todo!(),
         Val::Num(Num::Float(f)) => Value::Float(Formatted::new(*f)),
         Val::Num(Num::Dec(n)) => val_value(&Val::Num(Num::from_dec_str(n)))?,
         Val::Num(n @ (Num::Int(_) | Num::BigInt(_))) => {
@@ -130,15 +141,4 @@ fn val_value(v: &Val) -> Result<Value, SError> {
             .map(Value::Array)?,
         Val::Obj(o) => obj_table(o).map(|t| Value::InlineTable(Table::into_inline_table(t)))?,
     })
-}
-
-/// Decode a TOML document from a string.
-pub fn parse(s: &str) -> Result<Val, PError> {
-    table(s.parse::<Document<String>>()?.into_table())
-}
-
-/// Encode a value as a TOML document.
-pub fn serialise(v: &Val) -> Result<impl Display, SError> {
-    let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
-    obj.and_then(obj_table).map(DocumentMut::from)
 }

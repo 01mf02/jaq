@@ -1,4 +1,8 @@
-//! JSON values with reference-counted sharing.
+//! JSON superset with binary data and non-string object keys.
+//!
+//! This crate provides a few macros for formatting / writing;
+//! this is done in order to function with both
+//! [`core::fmt::Write`] and [`std::io::Write`].
 #![no_std]
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -14,7 +18,7 @@ use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
-use core::fmt::{self, Debug};
+use core::fmt::{self, Debug, Formatter};
 use core::hash::{Hash, Hasher};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
@@ -37,16 +41,9 @@ pub mod yaml;
 #[cfg(feature = "serde_json")]
 mod serde_json;
 
-/// JSON value with sharing.
+/// JSON superset with binary data and non-string object keys.
 ///
-/// The speciality of this type is that numbers are distinguished into
-/// machine-sized integers and 64-bit floating-point numbers.
-/// This allows using integers to index arrays,
-/// while using floating-point numbers to do general math.
-///
-/// Operations on numbers follow a few principles:
-/// * The sum, difference, product, and remainder of two integers is integer.
-/// * Any other operation between two numbers yields a float.
+/// This is the default value type for jaq.
 #[derive(Clone, Debug, Default)]
 pub enum Val {
     #[default]
@@ -65,13 +62,21 @@ pub enum Val {
 }
 
 /// Interpretation of a string.
+///
+/// This influences the outcome of a few operations (e.g. slicing)
+/// as well as how a string is printed.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Tag {
     /// Sequence of bytes, not to be escaped
-    Inline,
+    Raw,
     /// Sequence of bytes, to be escaped
     Bytes,
     /// Sequence of UTF-8 code points
+    ///
+    /// Note that this does not require the actual bytes to be all valid UTF-8;
+    /// this just means that the bytes are interpreted as UTF-8.
+    /// An effort is made to preserve invalid UTF-8 as is, else
+    /// replace invalid UTF-8 by the Unicode replacement character.
     Utf8,
 }
 
@@ -112,11 +117,11 @@ impl Type {
 type Map<K = Val, V = K> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 /// Error that can occur during filter execution.
-pub type Error = jaq_core::Error<Val>;
+type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
-pub type ValR = jaq_core::ValR<Val>;
+type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-pub type ValX = jaq_core::ValX<Val>;
+type ValX = jaq_core::ValX<Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -298,9 +303,9 @@ impl jaq_core::ValT for Val {
 
     fn into_string(self) -> Self {
         if let Self::Str(b, _tag) = self {
-            Self::Str(b, Tag::Utf8)
+            Self::utf8_str(b)
         } else {
-            Self::Str(self.to_string().into(), Tag::Utf8)
+            Self::utf8_str(self.to_string())
         }
     }
 }
@@ -371,7 +376,7 @@ impl Val {
             Val::Null => Ok(Val::from(0)),
             Val::Num(n) => Ok(Val::Num(n.length())),
             Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
-            Val::Str(b, Tag::Bytes | Tag::Inline) => Ok(Val::from(b.len() as isize)),
+            Val::Str(b, Tag::Bytes | Tag::Raw) => Ok(Val::from(b.len() as isize)),
             Val::Arr(a) => Ok(Val::from(a.len() as isize)),
             Val::Obj(o) => Ok(Val::from(o.len() as isize)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
@@ -441,10 +446,10 @@ impl Val {
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
 pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
-    base_funs().chain(parse_fun().into_vec().into_iter().map(run))
+    base_funs().chain(parse_funs().into_vec().into_iter().map(run))
 }
 
-/// Minimal set of filters for JSON values.
+/// Minimal set of filters.
 pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base().into_vec().into_iter().map(run)
 }
@@ -461,8 +466,8 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         }),
         ("torawstring", v(0), |cv| {
             box_once(Ok(match cv.1 {
-                Val::Str(s, _) => Val::Str(s, Tag::Inline),
-                v => Val::Str(v.to_string().into(), Tag::Inline),
+                Val::Str(s, _) => Val::Str(s, Tag::Raw),
+                v => Val::Str(v.to_string().into(), Tag::Raw),
             }))
         }),
         ("byteoffset", v(1), |mut cv| match (cv.1, cv.0.pop_var()) {
@@ -497,12 +502,16 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     ])
 }
 
-fn parse_fail(i: &impl fmt::Display, fmt: &str, e: BoxError) -> Error {
+fn parse_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Error {
     Error::str(format_args!("cannot parse {i} as {fmt}: {e}"))
 }
 
+fn serialise_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Error {
+    Error::str(format_args!("cannot serialise {i} as {fmt}: {e}"))
+}
+
 #[cfg(feature = "parse")]
-fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
+fn parse_funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("fromjson", v(0), |cv| {
             use jaq_std::ValT;
@@ -517,10 +526,43 @@ fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             let parse = |b| cbor::parse_single(b).map_err(|e| parse_fail(&cv.1, "CBOR", e));
             box_once_err(cv.1.as_bytes().ok_or_else(fail).and_then(parse))
         }),
+        ("fromyaml", v(0), |cv| {
+            use jaq_std::ValT;
+            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+            let parse = |b: &str| yaml::parse_single(b).map_err(|e| parse_fail(&cv.1, "YAML", e));
+            let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
+            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&*s)))
+        }),
+        ("fromtoml", v(0), |cv| {
+            use jaq_std::ValT;
+            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+            let parse = |b: &str| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
+            let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
+            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&*s)))
+        }),
+        ("fromxml", v(0), |cv| {
+            use jaq_std::ValT;
+            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+            let parse = |b: &str| xml::parse_collect(b).map_err(|e| parse_fail(&cv.1, "XML", e));
+            let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
+            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&*s)))
+        }),
         ("tocbor", v(0), |cv| {
             let mut b = Vec::new();
             cbor::serialise(&cv.1, &mut b);
-            box_once_err(Ok(Val::Str(b.into(), Tag::Bytes)))
+            box_once_err(Ok(Val::byte_str(b)))
+        }),
+        ("toyaml", v(0), |cv| {
+            let fmt = FormatterFn(|f: &mut Formatter| yaml::format(&cv.1, f));
+            box_once_err(Ok(Val::utf8_str(fmt.to_string())))
+        }),
+        ("totoml", v(0), |cv| {
+            let ser = toml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "TOML", e));
+            box_once_err(ser.map(|ser| Val::utf8_str(ser.to_string())))
+        }),
+        ("toxml", v(0), |cv| {
+            let ser = xml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "XML", e));
+            box_once_err(ser.map(|ser| Val::utf8_str(ser.to_string())))
         }),
     ])
 }
@@ -868,7 +910,7 @@ impl PartialEq for Val {
             (Self::Null, Self::Null) => true,
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Num(x), Self::Num(y)) => x == y,
-            (Self::Str(x, _tag), Self::Str(y, _tag)) => x == y,
+            (Self::Str(x, _tag), Self::Str(y, _)) => x == y,
             (Self::Arr(x), Self::Arr(y)) => x == y,
             (Self::Obj(x), Self::Obj(y)) => x == y,
             _ => false,
@@ -902,7 +944,9 @@ impl Hash for Val {
     }
 }
 
-/// Format a byte.
+/// Write a byte.
+///
+/// This uses `$f` to write bytes not corresponding to normal ASCII characters.
 ///
 /// This is especially useful to pretty-print control characters, such as
 /// `'\n'` (U+000A), but also all other control characters.
@@ -922,7 +966,7 @@ macro_rules! write_byte {
     }};
 }
 
-/// Format a UTF-8 string as JSON string, including leading and trailing quotes.
+/// Write a UTF-8 string as JSON string, including leading and trailing quotes.
 ///
 /// This uses `$f` to format byte slices that do not need to be escaped.
 #[macro_export]
@@ -943,7 +987,7 @@ macro_rules! write_utf8 {
     }};
 }
 
-/// Format a byte string, including leading and trailing quotes.
+/// Write a byte string, including leading and trailing quotes.
 ///
 /// This maps all non-ASCII `u8`s to `\xXX`.
 #[macro_export]
@@ -956,39 +1000,61 @@ macro_rules! write_bytes {
     }};
 }
 
-/// Display bytes as UTF-8 string.
+/// Display bytes as valid UTF-8 string.
+///
+/// This maps invalid UTF-8 to the Unicode replacement character.
 pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display + '_ {
     BStr::new(s)
 }
 
-impl fmt::Display for Val {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+struct FormatterFn<F>(F);
+
+impl<F: Fn(&mut Formatter) -> fmt::Result> fmt::Display for FormatterFn<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.0(f)
+    }
+}
+
+type ValFormatterFn = fn(&Val, &mut fmt::Formatter) -> fmt::Result;
+
+impl Val {
+    /// Format a value as compact JSON, using a custom function to format child values.
+    ///
+    /// This is useful to override how certain values are printed, e.g. for YAML.
+    fn fmt_rec(&self, f: &mut fmt::Formatter, rec: ValFormatterFn) -> fmt::Result {
+        let rec = |v| FormatterFn(move |f: &mut Formatter| rec(v, f));
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "{b}"),
             Self::Num(n) => write!(f, "{n}"),
-            Self::Str(s, Tag::Inline) => write!(f, "{}", bstr(s)),
+            Self::Str(s, Tag::Raw) => write!(f, "{}", bstr(s)),
             Self::Str(b, Tag::Bytes) => write_bytes!(f, b),
-            Self::Str(s, Tag::Utf8) => write_utf8!(f, s, |part| bstr(part).fmt(f)),
+            Self::Str(s, Tag::Utf8) => write_utf8!(f, s, |part| write!(f, "{}", bstr(part))),
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();
                 if let Some(first) = iter.next() {
                     write!(f, "{first}")?;
                 };
-                iter.try_for_each(|x| write!(f, ",{x}"))?;
+                iter.try_for_each(|x| write!(f, ",{}", rec(x)))?;
                 write!(f, "]")
             }
             Self::Obj(o) => {
                 write!(f, "{{")?;
                 let mut iter = o.iter();
                 if let Some((k, v)) = iter.next() {
-                    write!(f, "{k}:{v}")?;
+                    write!(f, "{}:{}", rec(k), rec(v))?;
                 }
-                iter.try_for_each(|(k, v)| write!(f, ",{k}:{v}"))?;
+                iter.try_for_each(|(k, v)| write!(f, ",{}:{}", rec(k), rec(v)))?;
                 write!(f, "}}")
             }
         }
+    }
+}
+
+impl fmt::Display for Val {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt_rec(f, |v, f| write!(f, "{v}"))
     }
 }
 

@@ -1,10 +1,12 @@
-use crate::style::{Style, ANSI};
+//! Writing output.
+use crate::style::{FormatterFn, Style, ANSI};
 use crate::{invalid_data, Cli, Format};
+use core::fmt::Formatter;
 use jaq_json::{cbor, toml, xml, yaml};
 use jaq_json::{write_byte, write_bytes, write_utf8, Tag, Val};
 use std::io::{self, IsTerminal, Write};
 
-type Result = io::Result<()>;
+type Result<T = (), E = io::Error> = core::result::Result<T, E>;
 
 /// Pretty printer.
 struct Pp {
@@ -48,9 +50,22 @@ impl Pp {
     }
 }
 
-fn write_val(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
+type WriteFn = fn(&mut dyn Write, &Pp, usize, &Val) -> Result;
+
+fn write_json(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
+    write_rec(w, pp, level, v, write_json)
+}
+
+fn write_yaml(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
+    if let Val::Str(_, Tag::Bytes) = v {
+        write!(w, "{}", FormatterFn(|f: &mut Formatter| yaml::format(v, f)))
+    } else {
+        write_rec(w, pp, level, v, write_yaml)
+    }
+}
+
+fn write_rec(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, rec: WriteFn) -> Result {
     let style = &pp.style;
-    let rec = |w: &mut dyn Write, level, v| write_val(w, pp, level, v);
     let bold = |w: &mut dyn Write, c| style.write(w, style.bold, |w| write!(w, "{c}"));
     match v {
         Val::Null | Val::Bool(_) | Val::Num(_) => write!(w, "{v}"),
@@ -58,23 +73,23 @@ fn write_val(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
             write_utf8!(w, s, |part| w.write_all(part))
         }),
         Val::Str(b, Tag::Bytes) => style.write(w, style.red, |w| write_bytes!(w, b)),
-        Val::Str(s, Tag::Inline) => w.write_all(s),
+        Val::Str(s, Tag::Raw) => w.write_all(s),
         Val::Arr(a) => {
             bold(w, '[')?;
             if !a.is_empty() {
-                pp.write_seq(w, level, &**a, |w, x| rec(w, level + 1, x))?;
+                pp.write_seq(w, level, &**a, |w, x| rec(w, pp, level + 1, x))?;
             }
             bold(w, ']')
         }
         Val::Obj(o) => {
             bold(w, '{')?;
             let kv = |w: &mut dyn Write, (k, v)| {
-                rec(w, level + 1, k)?;
+                rec(w, pp, level + 1, k)?;
                 write!(w, ":")?;
                 if !pp.compact {
                     write!(w, " ")?;
                 }
-                rec(w, level + 1, v)
+                rec(w, pp, level + 1, v)
             };
             if !o.is_empty() {
                 if pp.sort_keys {
@@ -88,6 +103,10 @@ fn write_val(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
             bold(w, '}')
         }
     }
+}
+
+fn map_err_to_string<T, E: core::fmt::Display>(r: Result<T, E>) -> Result<T> {
+    r.map_err(|e| invalid_data(e.to_string()))
 }
 
 pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
@@ -111,18 +130,11 @@ pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
 
     match (val, format) {
         (Val::Str(b, _), Format::Raw) => w.write_all(b)?,
-        // TODO: move this to fmt_val!
-        (Val::Str(b, Tag::Bytes), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
         (_, Format::Cbor) => cbor::write(val, &mut *w)?,
-        (_, Format::Toml) => {
-            let ser = toml::serialise(val).map_err(|e| invalid_data(e.to_string()))?;
-            write!(w, "{ser}")?
-        }
-        (_, Format::Json | Format::Yaml | Format::Raw) => write_val(w, &pp(), 0, val)?,
-        (_, Format::Xml) => {
-            let ser = xml::serialise(val).map_err(|e| invalid_data(e.to_string()))?;
-            write!(w, "{ser}")?
-        }
+        (_, Format::Json | Format::Raw) => write_json(w, &pp(), 0, val)?,
+        (_, Format::Yaml) => write_yaml(w, &pp(), 0, val)?,
+        (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::serialise(val))?)?,
+        (_, Format::Xml) => write!(w, "{}", map_err_to_string(xml::serialise(val))?)?,
     };
 
     if cli.join_output || matches!(format, Format::Cbor) {

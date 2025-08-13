@@ -1,9 +1,34 @@
-//! YAML parsing.
+//! YAML support.
 use crate::{Num, Val};
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
+
+/// Parse a stream of YAML documents.
+pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
+    let mut st = State::new(Parser::new_from_str(s));
+    assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
+    core::iter::from_fn(move || st.parse_stream_entry())
+}
+
+/// Parse exactly one YAML document.
+pub fn parse_single(s: &str) -> Result<Val, PError> {
+    let mut st = State::new(Parser::new_from_str(s));
+    assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
+    // TODO: report error on empty input
+    let ev = st.next()?;
+    st.parse_doc(ev)
+    // TODO: check that we get a StreamEnd here
+}
+
+/// Format a value as YAML document, without explicit document start/end markers.
+pub fn format(v: &Val, f: &mut Formatter) -> fmt::Result {
+    match v {
+        Val::Str(b, crate::Tag::Bytes) => write!(f, "!!binary {}", BASE64.encode(b)),
+        _ => v.fmt_rec(f, format),
+    }
+}
 
 /// Lex error.
 #[derive(Debug)]
@@ -248,18 +273,4 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
             .unwrap_or_else(|| Val::utf8_str(s.into_owned())),
         (_, Some(tag)) => todo!("invalid tag {tag}"),
     })
-}
-
-/// Parse a stream of YAML documents.
-pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
-    let mut st = State::new(Parser::new_from_str(s));
-    assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
-    core::iter::from_fn(move || st.parse_stream_entry())
-}
-
-/// Encode binary data with base64.
-///
-/// To print binary data as YAML, this function's output must be prefixed with "!!binary".
-pub fn encode_bin(b: &[u8]) -> String {
-    BASE64.encode(b)
 }

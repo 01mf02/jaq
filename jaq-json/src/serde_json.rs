@@ -1,3 +1,4 @@
+//! [`serde_json::Value`] support.
 use crate::{Num, Tag, Val};
 use alloc::string::ToString;
 use bytes::Bytes;
@@ -47,7 +48,7 @@ impl TryFrom<&Val> for serde_json::Value {
             ),
             Val::Str(s, Tag::Utf8) => String(from_utf8(&*s)),
             Val::Str(s, Tag::Bytes) => String(s.iter().copied().map(char::from).collect()),
-            Val::Str(s, Tag::Inline) => Err(SError::Raw(s.clone()))?,
+            Val::Str(s, Tag::Raw) => Err(SError::Raw(s.clone()))?,
             Val::Arr(a) => Array(a.iter().map(TryInto::try_into).collect::<Result<_, _>>()?),
             Val::Obj(o) => Object(
                 o.iter()

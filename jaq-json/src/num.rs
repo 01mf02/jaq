@@ -1,3 +1,4 @@
+//! Integer / decimal numbers.
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use core::cmp::Ordering;
@@ -6,7 +7,16 @@ use core::hash::{Hash, Hasher};
 use num_bigint::{BigInt, Sign};
 use num_traits::cast::ToPrimitive;
 
-/// Arbitrary-precision number.
+/// Integer / decimal number.
+///
+/// The speciality of this type is that numbers are distinguished into
+/// integers and 64-bit floating-point numbers.
+/// This allows using integers to index arrays,
+/// while using floating-point numbers to do general math.
+///
+/// Operations on numbers follow a few principles:
+/// * The sum, difference, product, and remainder of two integers is integer.
+/// * Any other operation between two numbers yields a float.
 #[derive(Clone, Debug)]
 pub enum Num {
     /// Machine-size integer

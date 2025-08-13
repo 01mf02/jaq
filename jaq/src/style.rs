@@ -41,7 +41,7 @@ impl Style {
     }
 }
 
-struct FormatterFn<F>(F);
+pub struct FormatterFn<F>(pub F);
 
 impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {

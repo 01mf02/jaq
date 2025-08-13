@@ -1,8 +1,8 @@
-//! XML parsing.
+//! XML support.
 use crate::{bstr, Map, Val};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
-use core::fmt::{self, Formatter};
+use core::fmt::{self, Display, Formatter};
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
 /// Parse a stream of root XML values.
@@ -11,8 +11,13 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
     core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
 }
 
+/// Parse a stream of root XML values and collect it into an array.
+pub(crate) fn parse_collect(s: &str) -> Result<Val, PError> {
+    parse_many(s).collect()
+}
+
 /// Serialise a value to an XML value.
-pub fn serialise<'a>(v: &'a Val) -> Result<impl fmt::Display + 'a, SError> {
+pub fn serialise<'a>(v: &'a Val) -> Result<impl Display + 'a, impl Display> {
     XmlVal::try_from(v)
 }
 
@@ -54,13 +59,13 @@ impl fmt::Display for TagPos {
 
 /// Lex error.
 #[derive(Debug)]
-pub struct Lerror(xmlparser::Error);
+pub struct LError(xmlparser::Error);
 
 /// Parse error.
 #[derive(Debug)]
 pub enum PError {
     /// Lex error
-    Lex(Lerror),
+    Lex(LError),
     /// Unmatched closing tag, e.g. `<a></b>`
     Unmatched(TagPos, TagPos),
     /// Unclosed tag, e.g. `<a>`
@@ -70,7 +75,7 @@ pub enum PError {
 impl fmt::Display for PError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Lex(Lerror(e)) => e.fmt(f),
+            Self::Lex(LError(e)) => e.fmt(f),
             Self::Unmatched(open, close) => {
                 write!(f, "expected closing tag for {open}, found {close}")
             }
@@ -83,7 +88,7 @@ impl fmt::Display for PError {
 
 impl From<xmlparser::Error> for PError {
     fn from(e: xmlparser::Error) -> Self {
-        Self::Lex(Lerror(e))
+        Self::Lex(LError(e))
     }
 }
 
@@ -226,7 +231,7 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, PError> {
 
 /// Serialisation error.
 #[derive(Debug)]
-pub enum SError {
+enum SError {
     /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
     InvalidEntry(&'static str, Val, Val),
     /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`

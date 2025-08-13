@@ -87,7 +87,7 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s, Tag::Inline) => write!(f, "{}", bstr(&escape_bytes(s))),
+        Val::Str(s, Tag::Raw) => write!(f, "{}", bstr(&escape_bytes(s))),
         Val::Str(b, Tag::Bytes) => {
             let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
             span(f, "bytes", escape_str(&fun.to_string()))
@@ -241,7 +241,7 @@ fn read_str<'a>(
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
-        let vals = json_slice(input.as_bytes());
+        let vals = json::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
         Box::new(collect_if(settings.slurp, vals))
     }
 }
@@ -252,14 +252,6 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     } else {
         Box::new(input.lines()) as Box<dyn Iterator<Item = _>>
     }
-}
-
-fn json_slice(slice: &[u8]) -> impl Iterator<Item = Result<Val, String>> + '_ {
-    let mut lexer = hifijson::SliceLexer::new(slice);
-    core::iter::from_fn(move || {
-        use hifijson::token::Lex;
-        Some(json::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
-    })
 }
 
 fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
