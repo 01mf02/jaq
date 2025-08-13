@@ -6,7 +6,7 @@ use jaq_json::{
     cbor, json, toml::decode_str as parse_toml, xml::parse_str as parse_xml,
     yaml::parse_str as parse_yaml, Tag, Val,
 };
-use std::io::{self, BufRead, Read};
+use std::io::{self, Read};
 use std::path::Path;
 
 type Vals<'a> = BoxIter<'a, io::Result<Val>>;
@@ -27,7 +27,7 @@ fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
     })
 }
 
-fn json_read<'a>(read: impl BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
+fn json_read<'a>(read: impl Read + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
     let mut lexer = IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
         let v = json::parse(lexer.ws_token()?, &mut lexer);
