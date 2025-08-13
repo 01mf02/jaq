@@ -21,11 +21,9 @@ jaq-json = { version = "1.1.1", path = "../jaq-json" }
 
 bstr = "1"
 bytes = "1.10.1"
-ciborium-io = { version = "0.2.2", features = ["std"] }
 codesnake = { version = "0.2" }
 dirs = { version = "6.0" }
 env_logger = { version = "0.10.0", default-features = false }
-hifijson = "0.2.0"
 log = { version = "0.4.17" }
 memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }

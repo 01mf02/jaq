@@ -441,7 +441,7 @@ impl Val {
 /// Functions of the standard library.
 #[cfg(feature = "parse")]
 pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
-    base_funs().chain([run(parse_fun())])
+    base_funs().chain(parse_fun().into_vec().into_iter().map(run))
 }
 
 /// Minimal set of filters for JSON values.
@@ -497,17 +497,32 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     ])
 }
 
+fn parse_fail(i: &impl fmt::Display, fmt: &str, e: BoxError) -> Error {
+    Error::str(format_args!("cannot parse {i} as {fmt}: {e}"))
+}
+
 #[cfg(feature = "parse")]
-fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Filter<RunPtr<D>> {
-    ("fromjson", v(0), |cv| {
-        use jaq_std::ValT;
-        let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
-        box_once_err(
-            cv.1.as_utf8_bytes()
-                .ok_or_else(fail)
-                .and_then(json::from_bytes),
-        )
-    })
+fn parse_fun<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
+    Box::new([
+        ("fromjson", v(0), |cv| {
+            use jaq_std::ValT;
+            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+            let parse = |s| json::parse_single(s).map_err(|e| parse_fail(&cv.1, "JSON", e));
+
+            box_once_err(cv.1.as_utf8_bytes().ok_or_else(fail).and_then(parse))
+        }),
+        ("fromcbor", v(0), |cv| {
+            use jaq_std::ValT;
+            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
+            let parse = |b| cbor::parse_single(b).map_err(|e| parse_fail(&cv.1, "CBOR", e));
+            box_once_err(cv.1.as_bytes().ok_or_else(fail).and_then(parse))
+        }),
+        ("tocbor", v(0), |cv| {
+            let mut b = Vec::new();
+            cbor::serialise(&cv.1, &mut b);
+            box_once_err(Ok(Val::Str(b.into(), Tag::Bytes)))
+        }),
+    ])
 }
 
 fn skip_take(from: usize, until: usize) -> (usize, usize) {
@@ -959,4 +974,12 @@ impl fmt::Display for Val {
             }
         }
     }
+}
+
+#[cfg(feature = "parse")]
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+#[cfg(feature = "parse")]
+fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }

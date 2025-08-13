@@ -346,11 +346,9 @@ version = "2.3.0"
 dependencies = [
  "bstr",
  "bytes",
- "ciborium-io",
  "codesnake",
  "dirs",
  "env_logger",
- "hifijson",
  "jaq-core",
  "jaq-json",
  "jaq-std",

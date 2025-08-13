@@ -9,12 +9,14 @@
 //! The [examples](https://www.rfc-editor.org/rfc/rfc8949.html#section-appendix.a)
 //! from the CBOR specification are quite helpful here.
 //! They can be pasted directly into the command above.
-use crate::{Num, Tag, Val};
+use crate::{invalid_data, BoxError, Num, Tag, Val};
 use alloc::string::String;
 use alloc::vec::Vec;
 use ciborium_io::{Read, Write};
 use ciborium_ll::{simple, tag, Decoder, Encoder, Error, Header};
+use core::fmt::{self, Formatter};
 use num_bigint::{BigInt, BigUint};
+use std::io;
 
 /// Error that may indicate end of file.
 pub trait IsEof {
@@ -30,15 +32,84 @@ impl IsEof for std::io::Error {
     }
 }
 
+/// Parse error.
+#[derive(Debug)]
+enum PError<E> {
+    /// Lex error, coming from ciborium
+    Lex(Error<E>),
+    /// unsupported simple value
+    Simple(u8),
+    /// unsupported tag
+    Tag(u64),
+    /// unexpected break
+    Break,
+}
+
+impl<E: fmt::Debug + fmt::Display> std::error::Error for PError<E> {}
+
+impl<E> From<Error<E>> for PError<E> {
+    fn from(e: Error<E>) -> Self {
+        Self::Lex(e)
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for PError<E> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Lex(Error::Io(e)) => e.fmt(f),
+            Self::Lex(Error::Syntax(offset)) => write!(f, "lexing failed at byte {offset}"),
+            Self::Simple(s) => write!(f, "unsupported simple value: {s}"),
+            Self::Tag(t) => write!(f, "unsupported tag: {t}"),
+            Self::Break => write!(f, "unexpected break"),
+        }
+    }
+}
+
+impl Into<io::Error> for PError<io::Error> {
+    fn into(self) -> io::Error {
+        match self {
+            Self::Lex(Error::Io(e)) => e,
+            e => invalid_data(e),
+        }
+    }
+}
+
+/// Parse exactly one CBOR value.
+pub fn parse_single(b: &[u8]) -> Result<Val, BoxError> {
+    parse_one(b).map_err(Into::into)
+}
+
+/// Parse a sequence of CBOR values.
+pub fn parse_many(b: &[u8]) -> impl Iterator<Item = Result<Val, BoxError>> + '_ {
+    decode_many(b).map(|r| r.map_err(Into::into))
+}
+
+/// Read a sequence of CBOR values.
+pub fn read_many(read: impl io::Read) -> impl Iterator<Item = io::Result<Val>> {
+    decode_many(read).map(|r| r.map_err(Into::into))
+}
+
+/// Serialise a CBOR value.
+pub fn serialise(v: &Val, b: &mut Vec<u8>) {
+    // SAFETY: this should always succeed, because
+    // we are writing to non-fallible output
+    write_one(v, b).unwrap()
+}
+
+/// Write a CBOR value.
+pub fn write(v: &Val, write: impl io::Write) -> io::Result<()> {
+    write_one(v, write)
+}
+
 /// Decode a single CBOR value.
-pub fn parse_one<R: Read>(read: R) -> Result<Val, Error<R::Error>> {
+fn parse_one<R: Read>(read: R) -> Result<Val, PError<R::Error>> {
     let mut decoder = Decoder::from(read);
     let header = decoder.pull()?;
     parse(header, &mut decoder)
 }
 
 /// Decode a sequence of CBOR values.
-pub fn parse_many<R: Read>(read: R) -> impl Iterator<Item = Result<Val, Error<R::Error>>>
+fn decode_many<R: Read>(read: R) -> impl Iterator<Item = Result<Val, PError<R::Error>>>
 where
     R::Error: IsEof,
 {
@@ -57,13 +128,13 @@ where
             // Note that we cannot omit the EOF check, because a different
             // I/O error might have been triggered, and we should propagate that.
             Err(Error::Io(e)) if e.is_eof() && offset == decoder.offset() => None,
-            Err(e) => Some(Err(e)),
+            Err(e) => Some(Err(e.into())),
         }
     })
 }
 
 /// Encode a single value to CBOR.
-pub fn write_one<W: Write>(v: &Val, write: W) -> Result<(), W::Error> {
+fn write_one<W: Write>(v: &Val, write: W) -> Result<(), W::Error> {
     let mut encoder = Encoder::from(write);
     encode(v, &mut encoder)
 }
@@ -71,8 +142,8 @@ pub fn write_one<W: Write>(v: &Val, write: W) -> Result<(), W::Error> {
 fn with_size<R: Read, T>(
     size: Option<usize>,
     decoder: &mut Decoder<R>,
-    f: impl Fn(Header, &mut Decoder<R>) -> Result<T, Error<R::Error>>,
-) -> Result<Vec<T>, Error<R::Error>> {
+    f: impl Fn(Header, &mut Decoder<R>) -> Result<T, PError<R::Error>>,
+) -> Result<Vec<T>, PError<R::Error>> {
     if let Some(size) = size {
         let mut a = Vec::with_capacity(size);
         for _ in 0..size {
@@ -113,7 +184,7 @@ fn biguint<R: Read>(decoder: &mut Decoder<R>) -> Result<BigUint, Error<R::Error>
     }
 }
 
-fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, Error<R::Error>> {
+fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, PError<R::Error>> {
     match header {
         Header::Text(len) => {
             let mut s = len.map_or_else(String::new, String::with_capacity);
@@ -130,14 +201,14 @@ fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, Error
         Header::Simple(simple::NULL | simple::UNDEFINED) => Ok(Val::Null),
         Header::Simple(simple::FALSE) => Ok(Val::Bool(false)),
         Header::Simple(simple::TRUE) => Ok(Val::Bool(true)),
-        Header::Simple(_) => panic!("simple"),
+        Header::Simple(simple) => Err(PError::Simple(simple)),
         Header::Tag(tag::BIGNEG) => {
-            biguint(decoder).map(|u| Val::Num(Num::big_int(-BigInt::from(u) - 1)))
+            Ok(biguint(decoder).map(|u| Val::Num(Num::big_int(-BigInt::from(u) - 1)))?)
         }
         Header::Tag(tag::BIGPOS) => {
-            biguint(decoder).map(|u| Val::Num(Num::big_int(BigInt::from(u))))
+            Ok(biguint(decoder).map(|u| Val::Num(Num::big_int(BigInt::from(u))))?)
         }
-        Header::Tag(_) => panic!("tag"),
+        Header::Tag(tag) => Err(PError::Tag(tag)),
         Header::Positive(pos) => Ok(Val::Num(Num::from_integral(pos))),
         Header::Negative(neg) => Ok(Val::Num(Num::from_integral(neg as i128 ^ !0))),
         Header::Float(f) => Ok(Val::from(f)),
@@ -150,7 +221,7 @@ fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, Error
             })?;
             Ok(Val::obj(o.into_iter().collect()))
         }
-        Header::Break => panic!("break"),
+        Header::Break => Err(PError::Break),
     }
 }
 

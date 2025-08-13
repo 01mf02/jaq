@@ -1,11 +1,7 @@
 use crate::{invalid_data, BoxError, Format};
 use bytes::Bytes;
-use hifijson::{token::Lex, IterLexer, SliceLexer};
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_json::{
-    cbor, json, toml::decode_str as parse_toml, xml::parse_str as parse_xml,
-    yaml::parse_str as parse_yaml, Tag, Val,
-};
+use jaq_json::{cbor, json, toml, xml, yaml, Tag, Val};
 use std::io::{self, Read};
 use std::path::Path;
 
@@ -20,27 +16,10 @@ pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
     })
 }
 
-fn json_slice(slice: &[u8]) -> impl Iterator<Item = io::Result<Val>> + '_ {
-    let mut lexer = SliceLexer::new(slice);
-    core::iter::from_fn(move || {
-        Some(json::parse(lexer.ws_token()?, &mut lexer).map_err(invalid_data))
-    })
-}
-
-fn json_read<'a>(read: impl Read + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    let mut lexer = IterLexer::new(read.bytes());
-    core::iter::from_fn(move || {
-        let v = json::parse(lexer.ws_token()?, &mut lexer);
-        Some(v.map_err(|e| core::mem::take(&mut lexer.error).unwrap_or_else(|| invalid_data(e))))
-    })
-}
-
-pub fn json_single(s: &[u8]) -> io::Result<Val> {
-    map_invalid_data(SliceLexer::new(s).exactly_one(json::parse))
-}
-
 pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
-    json_slice(&load_file(path.as_ref())?).collect()
+    json::parse_many(&load_file(path.as_ref())?)
+        .map(map_invalid_data)
+        .collect()
 }
 
 /// Load standard input to string for certain formats.
@@ -75,14 +54,11 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
             box_once(result.map(|_| Val::utf8_str(buf)))
         }
         Format::Raw => Box::new(stdin().byte_lines().map(|r| r.map(Val::utf8_str))),
-        Format::Cbor => collect_if(
-            slurp,
-            cbor::parse_many(stdin()).map(|r| r.map_err(|_| todo!())),
-        ),
-        Format::Json => collect_if(slurp, json_read(stdin())),
-        Format::Toml => box_once(parse_toml(s).map_err(invalid_data)),
-        Format::Xml => collect_if(slurp, parse_xml(s).map(map_invalid_data)),
-        Format::Yaml => collect_if(slurp, parse_yaml(s).map(map_invalid_data)),
+        Format::Cbor => collect_if(slurp, cbor::read_many(stdin())),
+        Format::Json => collect_if(slurp, json::read_many(stdin())),
+        Format::Toml => box_once(toml::parse(s).map_err(invalid_data)),
+        Format::Xml => collect_if(slurp, xml::parse_many(s).map(map_invalid_data)),
+        Format::Yaml => collect_if(slurp, yaml::parse_many(s).map(map_invalid_data)),
     }
 }
 
@@ -93,14 +69,9 @@ pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> 
         Format::Raw => Box::new(
             ByteSlice::lines(&**bytes).map(|line| Ok(Val::Str(bytes.slice_ref(line), Tag::Utf8))),
         ),
-        Format::Json => collect_if(slurp, json_slice(bytes)),
-        Format::Cbor => collect_if(
-            slurp,
-            cbor::parse_many(&**bytes).map(|r| r.map_err(|_| todo!())),
-        ),
-        Format::Toml => box_once(parse_toml(s).map_err(invalid_data)),
-        Format::Xml => collect_if(slurp, parse_xml(s).map(map_invalid_data)),
-        Format::Yaml => collect_if(slurp, parse_yaml(s).map(map_invalid_data)),
+        Format::Json => collect_if(slurp, json::parse_many(bytes).map(map_invalid_data)),
+        Format::Cbor => collect_if(slurp, cbor::parse_many(bytes).map(map_invalid_data)),
+        Format::Toml | Format::Xml | Format::Yaml => from_stdin(fmt, s, slurp),
     }
 }
 

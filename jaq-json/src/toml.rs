@@ -5,9 +5,9 @@ use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use toml_edit::{Document, DocumentMut, Formatted, Item, Table, Value};
 
-/// Encoding error.
+/// Serialisation error.
 #[derive(Debug)]
-pub enum EError {
+pub enum SError {
     /// non-string key in object
     Key(Val),
     /// non-table value as root
@@ -16,7 +16,7 @@ pub enum EError {
     Val(Val),
 }
 
-impl fmt::Display for EError {
+impl fmt::Display for SError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Key(v) => write!(f, "TOML keys must be strings, found: {v}"),
@@ -26,29 +26,29 @@ impl fmt::Display for EError {
     }
 }
 
-/// Decoding error.
+/// Parse error.
 #[derive(Debug)]
-pub struct DError(toml_edit::TomlError);
+pub struct PError(toml_edit::TomlError);
 
-impl From<toml_edit::TomlError> for DError {
+impl From<toml_edit::TomlError> for PError {
     fn from(e: toml_edit::TomlError) -> Self {
         Self(e)
     }
 }
 
-impl fmt::Display for DError {
+impl fmt::Display for PError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.0.fmt(f)
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for DError {}
+impl std::error::Error for PError {}
 
 #[cfg(feature = "std")]
-impl std::error::Error for EError {}
+impl std::error::Error for SError {}
 
-fn value(v: Value) -> Result<Val, DError> {
+fn value(v: Value) -> Result<Val, PError> {
     Ok(match v {
         Value::String(s) => Val::Str(s.into_value().into(), Tag::Utf8),
         Value::Integer(i) => Val::Num(Num::from_integral(i.into_value())),
@@ -60,7 +60,7 @@ fn value(v: Value) -> Result<Val, DError> {
     })
 }
 
-fn item(item: Item) -> Result<Val, DError> {
+fn item(item: Item) -> Result<Val, PError> {
     match item {
         // TODO: what is this? can this be triggered?
         Item::None => panic!(),
@@ -70,17 +70,17 @@ fn item(item: Item) -> Result<Val, DError> {
     }
 }
 
-fn table(t: Table) -> Result<Val, DError> {
+fn table(t: Table) -> Result<Val, PError> {
     t.into_iter()
         .map(|(k, v)| Ok((k.into(), item(v)?)))
         .collect::<Result<_, _>>()
         .map(Val::obj)
 }
 
-fn obj_table(o: &Map) -> Result<Table, EError> {
+fn obj_table(o: &Map) -> Result<Table, SError> {
     use jaq_std::ValT;
     let kvs = o.iter().map(|(k, v)| {
-        let k = k.as_utf8_bytes().ok_or_else(|| EError::Key(k.clone()))?;
+        let k = k.as_utf8_bytes().ok_or_else(|| SError::Key(k.clone()))?;
         Ok((String::from_utf8_lossy(k).into_owned(), val_item(v)?))
     });
     kvs.collect::<Result<_, _>>()
@@ -93,7 +93,7 @@ fn val_obj(v: &Val) -> Option<&Map> {
     }
 }
 
-fn val_item(v: &Val) -> Result<Item, EError> {
+fn val_item(v: &Val) -> Result<Item, SError> {
     if let Val::Obj(o) = v {
         return obj_table(o).map(Item::Table);
     } else if let Val::Arr(a) = v {
@@ -105,8 +105,8 @@ fn val_item(v: &Val) -> Result<Item, EError> {
     val_value(v).map(Item::Value)
 }
 
-fn val_value(v: &Val) -> Result<Value, EError> {
-    let fail = || EError::Val(v.clone());
+fn val_value(v: &Val) -> Result<Value, SError> {
+    let fail = || SError::Val(v.clone());
     Ok(match v {
         Val::Null => Err(fail())?,
         Val::Bool(b) => Value::Boolean(Formatted::new(*b)),
@@ -133,12 +133,12 @@ fn val_value(v: &Val) -> Result<Value, EError> {
 }
 
 /// Decode a TOML document from a string.
-pub fn decode_str(s: &str) -> Result<Val, DError> {
+pub fn parse(s: &str) -> Result<Val, PError> {
     table(s.parse::<Document<String>>()?.into_table())
 }
 
 /// Encode a value as a TOML document.
-pub fn encode_val(v: &Val) -> Result<impl Display, EError> {
-    let obj = val_obj(v).ok_or_else(|| EError::Root(v.clone()));
+pub fn serialise(v: &Val) -> Result<impl Display, SError> {
+    let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
     obj.and_then(obj_table).map(DocumentMut::from)
 }

@@ -18,14 +18,14 @@ fn jc(json: &str, cbor_hex: &str) {
 
     let cbor_bin = decode_hex(cbor_hex).unwrap();
     //dbg!(&cbor_bin);
-    let cbor_val = cbor::parse_one(&*cbor_bin).unwrap();
+    let cbor_val = cbor::parse_single(&*cbor_bin).unwrap();
     assert_eq!(json_val, cbor_val);
 
     let mut cbor_bin2 = Vec::new();
-    cbor::write_one(&cbor_val, ciborium_ll::Encoder::from(&mut cbor_bin2)).unwrap();
+    cbor::serialise(&cbor_val, &mut cbor_bin2);
     //dbg!(&cbor_bin2);
 
-    let cbor_val2 = cbor::parse_one(&*cbor_bin2).unwrap();
+    let cbor_val2 = cbor::parse_single(&*cbor_bin2).unwrap();
     assert_eq!(cbor_val, cbor_val2);
 }
 

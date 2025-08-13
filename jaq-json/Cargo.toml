@@ -37,7 +37,7 @@ serde_json = { version = "1.0.81", default-features = false, features = ["alloc"
 
 # parsers
 base64 = { version = "0.22", optional = true }
-ciborium-io = { version = "0.2.2", optional = true }
+ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }
 hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }
 saphyr-parser = { version = "0.0.6", optional = true }

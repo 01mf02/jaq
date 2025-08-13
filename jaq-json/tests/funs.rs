@@ -14,6 +14,11 @@ yields!(byteoff1, r#""asd" as $x | $x[1:] | byteoffset($x)  "#, 1);
 yields!(byteoff2, r#""asd" as $x |  "df"  | byteoffset($x) // 9"#, 9);
 yields!(byteoff3, r#""asd" as $x | $x | byteoffset($x[1:]) // 9"#, 9);
 
+// 41 = 0x29
+yields!(fromcbor1, "[41] | tobytes | fromcbor", -10);
+yields!(fromcbor2, "[99, 230, 176, 180] | tobytes | fromcbor", "水");
+yields!(tocbor, "-10 | tocbor | . == ([41] | tobytes)", true);
+
 #[test]
 fn has() {
     /* TODO: reenable these tests

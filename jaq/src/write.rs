@@ -1,6 +1,6 @@
 use crate::style::{Style, ANSI};
 use crate::{invalid_data, Cli, Format};
-use jaq_json::{cbor, toml, yaml};
+use jaq_json::{cbor, toml, xml, yaml};
 use jaq_json::{write_byte, write_bytes, write_utf8, Tag, Val};
 use std::io::{self, IsTerminal, Write};
 
@@ -113,16 +113,15 @@ pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
         (Val::Str(b, _), Format::Raw) => w.write_all(b)?,
         // TODO: move this to fmt_val!
         (Val::Str(b, Tag::Bytes), Format::Yaml) => write!(w, "!!binary {}", yaml::encode_bin(b))?,
-        (_, Format::Cbor) => cbor::write_one(val, &mut *w)?,
+        (_, Format::Cbor) => cbor::write(val, &mut *w)?,
         (_, Format::Toml) => {
-            let enc = toml::encode_val(val).map_err(|e| invalid_data(e.to_string()))?;
-            write!(w, "{enc}")?
+            let ser = toml::serialise(val).map_err(|e| invalid_data(e.to_string()))?;
+            write!(w, "{ser}")?
         }
         (_, Format::Json | Format::Yaml | Format::Raw) => write_val(w, &pp(), 0, val)?,
         (_, Format::Xml) => {
-            use jaq_json::xml::XmlVal;
-            let xml = XmlVal::try_from(val).map_err(|e| invalid_data(e.to_string()))?;
-            write!(w, "{xml}")?
+            let ser = xml::serialise(val).map_err(|e| invalid_data(e.to_string()))?;
+            write!(w, "{ser}")?
         }
     };
 

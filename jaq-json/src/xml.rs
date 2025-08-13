@@ -5,6 +5,17 @@ use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
 use core::fmt::{self, Formatter};
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
+/// Parse a stream of root XML values.
+pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
+    let mut tokens = Tokenizer::from(s);
+    core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
+}
+
+/// Serialise a value to an XML value.
+pub fn serialise<'a>(v: &'a Val) -> Result<impl fmt::Display + 'a, SError> {
+    XmlVal::try_from(v)
+}
+
 /// Prefix and local name of a tag.
 #[derive(Debug)]
 struct Tag<'a>(StrSpan<'a>, StrSpan<'a>);
@@ -47,7 +58,7 @@ pub struct Lerror(xmlparser::Error);
 
 /// Parse error.
 #[derive(Debug)]
-pub enum Error {
+pub enum PError {
     /// Lex error
     Lex(Lerror),
     /// Unmatched closing tag, e.g. `<a></b>`
@@ -56,7 +67,7 @@ pub enum Error {
     Unclosed(TagPos),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for PError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Lex(Lerror(e)) => e.fmt(f),
@@ -70,20 +81,20 @@ impl fmt::Display for Error {
     }
 }
 
-impl From<xmlparser::Error> for Error {
+impl From<xmlparser::Error> for PError {
     fn from(e: xmlparser::Error) -> Self {
         Self::Lex(Lerror(e))
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl std::error::Error for PError {}
 
-fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> {
+fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, PError> {
     let mut children = Vec::new();
     loop {
         let Some(tk) = tokens.next() else {
-            return Err(Error::Unclosed(tag.tag_pos(tokens)));
+            return Err(PError::Unclosed(tag.tag_pos(tokens)));
         };
         match tk? {
             Token::ElementEnd {
@@ -94,7 +105,7 @@ fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> 
                 if *tag == tag_ {
                     return Ok(children);
                 } else {
-                    Err(Error::Unmatched(tag.tag_pos(tokens), tag_.tag_pos(tokens)))?
+                    Err(PError::Unmatched(tag.tag_pos(tokens), tag_.tag_pos(tokens)))?
                 }
             }
             tk => children.push(parse(tk, tokens)?),
@@ -102,7 +113,7 @@ fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> 
     }
 }
 
-fn tac(tag: &Tag, tokens: &mut Tokenizer) -> Result<Val, Error> {
+fn tac(tag: &Tag, tokens: &mut Tokenizer) -> Result<Val, PError> {
     let mut attrs = Vec::new();
     let children = loop {
         // SAFETY: xmlparser returns an error instead of None
@@ -155,7 +166,7 @@ fn make_obj<T: Into<Val>, const N: usize>(arr: [(&str, Option<T>); N]) -> Val {
     Val::obj(iter.collect())
 }
 
-fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
+fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, PError> {
     let ss_val = |ss: StrSpan| ss.as_str().to_owned().into();
     let singleton = |k: &str, v| Val::obj(core::iter::once((k.to_string().into(), v)).collect());
 
@@ -199,7 +210,7 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
             let internal = loop {
                 let Some(tk) = tokens.next() else {
                     let pos = tokens.stream().gen_text_pos_from(span.start());
-                    Err(Error::Unclosed(TagPos("DOCTYPE".into(), pos)))?
+                    Err(PError::Unclosed(TagPos("DOCTYPE".into(), pos)))?
                 };
                 if let Token::DtdEnd { span: span_ } = tk? {
                     break &tokens.stream().span().as_str()[span.end()..span_.start()];
@@ -213,22 +224,16 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
     })
 }
 
-/// Parse a stream of root XML values.
-pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
-    let mut tokens = Tokenizer::from(s);
-    core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
-}
-
 /// Serialisation error.
 #[derive(Debug)]
-pub enum Serror {
+pub enum SError {
     /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
     InvalidEntry(&'static str, Val, Val),
     /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`
     SingletonObj(Val),
 }
 
-impl fmt::Display for Serror {
+impl fmt::Display for SError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::InvalidEntry(o, k, v) => {
@@ -240,10 +245,10 @@ impl fmt::Display for Serror {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Serror {}
+impl std::error::Error for SError {}
 
 /// XML value.
-pub enum XmlVal<S> {
+enum XmlVal<S> {
     /// XML declaration, e.g. `<?xml version='1.0' encoding='UTF-8' standalone='yes'?>`
     XmlDecl(Vec<(S, S)>),
     /// DOCTYPE directive, e.g. `<!DOCTYPE greeting SYSTEM "hello.dtd" [...]>`
@@ -277,12 +282,12 @@ pub enum XmlVal<S> {
 }
 
 impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
-    type Error = Serror;
+    type Error = SError;
     fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
         use jaq_std::ValT;
         let from_kv = |(k, v): (&'a _, &'a _)| match (k, v) {
             (Val::Str(k, _), Val::Str(v, _)) => Ok((&**k, &**v)),
-            _ => Err(Serror::InvalidEntry("attribute", k.clone(), v.clone())),
+            _ => Err(SError::InvalidEntry("attribute", k.clone(), v.clone())),
         };
         let from_kvs = |a: &'a Map| a.iter().map(from_kv).collect::<Result<_, _>>();
 
@@ -291,7 +296,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
             let mut a = Vec::new();
             let mut c = None;
             for (k, v) in o.iter() {
-                let fail = || Serror::InvalidEntry("tac", k.clone(), v.clone());
+                let fail = || SError::InvalidEntry("tac", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"t", Val::Str(s, _)) => t = s,
@@ -307,7 +312,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
             let mut external = None;
             let mut internal = None;
             for (k, v) in o.iter() {
-                let fail = || Serror::InvalidEntry("doctype", k.clone(), v.clone());
+                let fail = || SError::InvalidEntry("doctype", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"name", Val::Str(s, _)) => name = s,
@@ -326,7 +331,7 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
             let mut target = &b""[..];
             let mut content = None;
             for (k, v) in o.iter() {
-                let fail = || Serror::InvalidEntry("pi", k.clone(), v.clone());
+                let fail = || SError::InvalidEntry("pi", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"target", Val::Str(s, _)) => target = s,
@@ -348,9 +353,9 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
                 let mut o = o.iter();
                 let (k, v) = match (o.next(), o.next()) {
                     (Some(kv), None) => kv,
-                    _ => Err(Serror::SingletonObj(v.clone()))?,
+                    _ => Err(SError::SingletonObj(v.clone()))?,
                 };
-                let fail = || Serror::InvalidEntry("unknown", k.clone(), v.clone());
+                let fail = || SError::InvalidEntry("unknown", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),

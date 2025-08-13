@@ -142,10 +142,8 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
         Ok((k.to_owned(), Val::utf8_str(s)))
     });
     let argjson = cli.argjson.iter().map(|(k, s)| {
-        use hifijson::token::Lex;
-        let mut lexer = hifijson::SliceLexer::new(s.as_bytes());
         let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
-        Ok((k.to_owned(), lexer.exactly_one(json::parse).map_err(err)?))
+        Ok((k.to_owned(), json::parse_single(s.as_bytes()).map_err(err)?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = read::load_file(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
@@ -246,7 +244,7 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     let data = funs::Data::new(&cli, &filter.lut, inputs);
     let ctx = filter::Ctx::new(&data, vars);
 
-    let json = |s: String| read::json_single(s.as_bytes());
+    let json = |s: String| json::parse_single(s.as_bytes()).map_err(invalid_data);
     let input = json(test.input)?;
     let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
     let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();

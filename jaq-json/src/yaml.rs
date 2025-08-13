@@ -7,21 +7,21 @@ use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
 
 /// Lex error.
 #[derive(Debug)]
-pub struct Lerror(ScanError);
+pub struct LError(ScanError);
 
 /// Parse error.
 #[derive(Debug)]
-pub enum Error {
+pub enum PError {
     /// Lex error
-    Lex(Lerror),
+    Lex(LError),
     /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
     Scalar(&'static str, String, Span),
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for PError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Lex(Lerror(e)) => e.fmt(f),
+            Self::Lex(LError(e)) => e.fmt(f),
             Self::Scalar(typ, s, span) => {
                 let (line, col) = (span.start.line(), span.start.col());
                 write!(f, "scalar \"{s}\" is no {typ} ({line}:{col})")
@@ -30,14 +30,14 @@ impl fmt::Display for Error {
     }
 }
 
-impl From<ScanError> for Error {
+impl From<ScanError> for PError {
     fn from(e: ScanError) -> Self {
-        Self::Lex(Lerror(e))
+        Self::Lex(LError(e))
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for Error {}
+impl std::error::Error for PError {}
 
 type EventSpan<'input> = (Event<'input>, Span);
 
@@ -52,8 +52,8 @@ impl<'input, T: Input> State<'input, T> {
         Self { parser, aliases }
     }
 
-    fn next(&mut self) -> Result<EventSpan<'input>, Error> {
-        self.parser.next().unwrap().map_err(Error::from)
+    fn next(&mut self) -> Result<EventSpan<'input>, PError> {
+        self.parser.next().unwrap().map_err(PError::from)
     }
 
     fn push_alias(&mut self, val: Val, anchor_id: usize) {
@@ -65,7 +65,7 @@ impl<'input, T: Input> State<'input, T> {
         self.aliases[anchor_id - 1].clone()
     }
 
-    fn parse_doc(&mut self, ev: EventSpan) -> Result<Val, Error> {
+    fn parse_doc(&mut self, ev: EventSpan) -> Result<Val, PError> {
         assert!(matches!(ev, (Event::DocumentStart(..), _)));
         let next = self.next()?;
         let v = self.parse_val(next)?;
@@ -73,7 +73,7 @@ impl<'input, T: Input> State<'input, T> {
         Ok(v)
     }
 
-    fn parse_stream_entry(&mut self) -> Option<Result<Val, Error>> {
+    fn parse_stream_entry(&mut self) -> Option<Result<Val, PError>> {
         match self.next() {
             Ok((Event::StreamEnd, _)) => None,
             Ok(next) => Some(self.parse_doc(next)),
@@ -81,7 +81,7 @@ impl<'input, T: Input> State<'input, T> {
         }
     }
 
-    fn parse_seq_entry(&mut self) -> Option<Result<Val, Error>> {
+    fn parse_seq_entry(&mut self) -> Option<Result<Val, PError>> {
         match self.next() {
             Ok((Event::SequenceEnd, _)) => None,
             Ok(next) => Some(self.parse_val(next)),
@@ -89,7 +89,7 @@ impl<'input, T: Input> State<'input, T> {
         }
     }
 
-    fn parse_map_entry(&mut self) -> Option<Result<(Val, Val), Error>> {
+    fn parse_map_entry(&mut self) -> Option<Result<(Val, Val), PError>> {
         match self.next() {
             Ok((Event::MappingEnd, _)) => None,
             Ok((next, span)) => Some(self.parse_val((next, span)).and_then(|k| {
@@ -100,7 +100,7 @@ impl<'input, T: Input> State<'input, T> {
         }
     }
 
-    fn parse_val(&mut self, ev: EventSpan) -> Result<Val, Error> {
+    fn parse_val(&mut self, ev: EventSpan) -> Result<Val, PError> {
         let (val, anchor_id) = match ev {
             (Event::Scalar(s, ScalarStyle::Plain, anchor_id, tag), span) => {
                 (parse_plain_scalar(s, tag.as_ref(), span)?, anchor_id)
@@ -206,7 +206,7 @@ fn parse_float(s: &str) -> Option<Val> {
     }
 }
 
-fn parse_string_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, Error> {
+fn parse_string_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, PError> {
     match tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix)) {
         None | Some("str") => Ok(Val::utf8_str(s.into_owned())),
         Some("binary") => parse_plain_scalar(s, tag, span),
@@ -214,10 +214,10 @@ fn parse_string_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Resul
     }
 }
 
-fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, Error> {
+fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, PError> {
     // if the tag starts with "!!"
     let tag = tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix));
-    let err = |s: Cow<str>, typ| Error::Scalar(typ, s.into_owned(), span);
+    let err = |s: Cow<str>, typ| PError::Scalar(typ, s.into_owned(), span);
     Ok(match (&*s, tag) {
         ("null" | "Null" | "NULL" | "~", None | Some("null")) => Val::Null,
         /*
@@ -251,7 +251,7 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
 }
 
 /// Parse a stream of YAML documents.
-pub fn parse_str(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
+pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
     let mut st = State::new(Parser::new_from_str(s));
     assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
     core::iter::from_fn(move || st.parse_stream_entry())
