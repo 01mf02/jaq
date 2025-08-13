@@ -10,6 +10,7 @@ Input options:
   -n, --null-input          Use null as single input value
   -R, --raw-input           Read lines of the input as sequence of strings
   -s, --slurp               Read (slurp) all input values into one array
+      --from <FORMAT>       Read input in given format, e.g. yaml
 
 Output options:
   -c, --compact-output      Print JSON compactly, omitting whitespace
@@ -21,6 +22,7 @@ Output options:
   -M, --monochrome-output   Do not color output
       --tab                 Use tabs for indentation rather than spaces
       --indent <N>          Use N spaces for indentation [default: 2]
+      --to <FORMAT>         Write output in given format, e.g. cbor
 
 Compilation options:
   -f, --from-file           Read filter from a file given by filter argument
