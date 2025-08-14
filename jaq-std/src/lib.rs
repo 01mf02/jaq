@@ -1,4 +1,4 @@
-//! Standard library for a JSON query language.
+//! Standard library for the jq language.
 //!
 //! The standard library provides a set of filters.
 //! These filters are either implemented as definitions or as functions.
