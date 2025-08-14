@@ -117,11 +117,11 @@ impl Type {
 type Map<K = Val, V = K> = indexmap::IndexMap<K, V, foldhash::fast::RandomState>;
 
 /// Error that can occur during filter execution.
-type Error = jaq_core::Error<Val>;
+pub type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
-type ValR = jaq_core::ValR<Val>;
+pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-type ValX = jaq_core::ValX<Val>;
+pub type ValX = jaq_core::ValX<Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.

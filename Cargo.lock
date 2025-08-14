@@ -405,7 +405,6 @@ dependencies = [
  "codesnake",
  "console_log",
  "getrandom 0.2.16",
- "hifijson",
  "jaq-core",
  "jaq-json",
  "jaq-std",

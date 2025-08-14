@@ -1,5 +1,4 @@
 use core::num::ParseIntError;
-use hifijson::{token::Lex, SliceLexer};
 use jaq_json::{cbor, json};
 
 // Thanks to: <https://stackoverflow.com/a/52992629>
@@ -12,9 +11,7 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 
 fn jc(json: &str, cbor_hex: &str) {
     //dbg!(json);
-    let json_val = SliceLexer::new(json.as_bytes())
-        .exactly_one(json::parse)
-        .unwrap();
+    let json_val = json::parse_single(json.as_bytes()).unwrap();
 
     let cbor_bin = decode_hex(cbor_hex).unwrap();
     //dbg!(&cbor_bin);

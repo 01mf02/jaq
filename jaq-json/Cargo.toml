@@ -14,7 +14,7 @@ rust-version = "1.70"
 [features]
 default = ["parse", "std"]
 parse = ["cbor", "json", "toml", "xml", "yaml"]
-std = []
+std = ["hifijson/std"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
 json = ["hifijson"]

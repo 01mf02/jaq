@@ -27,7 +27,6 @@ jaq-json = { path = "../jaq-json" }
 
 aho-corasick = "1.1.2"
 codesnake = { version = "0.2" }
-hifijson = "0.2"
 log = "0.4.17"
 unicode-width = "0.1.13"
 
