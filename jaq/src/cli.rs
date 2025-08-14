@@ -240,7 +240,7 @@ impl Cli {
     }
 
     pub fn color_stdout(&self) -> bool {
-        let init = || self.color_stdio(std::io::stdin());
+        let init = || self.color_stdio(std::io::stdout());
         *self.color_stdout.get_or_init(init)
     }
 
