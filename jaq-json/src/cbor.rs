@@ -65,10 +65,10 @@ impl<E: fmt::Display> fmt::Display for PError<E> {
     }
 }
 
-impl Into<io::Error> for PError<io::Error> {
-    fn into(self) -> io::Error {
-        match self {
-            Self::Lex(Error::Io(e)) => e,
+impl From<PError<io::Error>> for io::Error {
+    fn from(e: PError<io::Error>) -> Self {
+        match e {
+            PError::Lex(Error::Io(e)) => e,
             e => invalid_data(e),
         }
     }

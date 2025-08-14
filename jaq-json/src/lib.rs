@@ -531,21 +531,21 @@ fn parse_funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b: &str| yaml::parse_single(b).map_err(|e| parse_fail(&cv.1, "YAML", e));
             let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&*s)))
+            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&s)))
         }),
         ("fromtoml", v(0), |cv| {
             use jaq_std::ValT;
             let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b: &str| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
             let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&*s)))
+            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&s)))
         }),
         ("fromxml", v(0), |cv| {
             use jaq_std::ValT;
             let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b: &str| xml::parse_collect(b).map_err(|e| parse_fail(&cv.1, "XML", e));
             let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&*s)))
+            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&s)))
         }),
         ("tocbor", v(0), |cv| {
             let mut b = Vec::new();

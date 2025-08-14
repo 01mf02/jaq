@@ -9,12 +9,12 @@ use std::io;
 /// Parse a sequence of JSON values.
 pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Error>> + '_ {
     let mut lexer = SliceLexer::new(slice);
-    core::iter::from_fn(move || Some(parse(lexer.ws_token()?, &mut lexer).map_err(Into::into)))
+    core::iter::from_fn(move || Some(parse(lexer.ws_token()?, &mut lexer)))
 }
 
 #[cfg(feature = "std")]
 /// Read a sequence of JSON values.
-pub fn read_many<'a>(read: impl io::Read + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
+pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
     use crate::invalid_data;
     let mut lexer = IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
@@ -25,7 +25,7 @@ pub fn read_many<'a>(read: impl io::Read + 'a) -> impl Iterator<Item = io::Resul
 
 /// Parse exactly one JSON value.
 pub fn parse_single(s: &[u8]) -> Result<Val, hifijson::Error> {
-    SliceLexer::new(s).exactly_one(parse).map_err(Into::into)
+    SliceLexer::new(s).exactly_one(parse)
 }
 
 /// Parse a JSON string as byte string, preserving invalid UTF-8 as-is.
