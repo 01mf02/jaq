@@ -328,23 +328,60 @@ where
 
 /// Convert a string into an array of its Unicode codepoints.
 fn explode<V: ValT>(s: &[u8]) -> impl Iterator<Item = ValR<V>> + '_ {
-    // conversion from u32 to isize may fail on 32-bit systems for high values of c
-    let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
-    s.chars().map(conv)
+    Explode {
+        chars: s.chars(),
+        bytes: [].iter(),
+    }
+    .map(|r| match r {
+        Err(b) => Ok((-(b as isize)).into()),
+        // conversion from u32 to isize may fail on 32-bit systems for high values of c
+        Ok(c) => Ok(isize::try_from(c as u32).map_err(Error::str)?.into()),
+    })
 }
 
-/// Convert an array of Unicode codepoints into a string.
-fn implode<V: ValT>(xs: &[V]) -> Result<String, Error<V>> {
-    xs.iter().map(as_codepoint).collect()
+struct Explode<'a> {
+    chars: bstr::Chars<'a>,
+    bytes: core::slice::Iter<'a, u8>,
 }
 
-/// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
-fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
-    let i = v.try_as_isize()?;
-    // conversion from isize to u32 may fail on 64-bit systems for high values of c
-    let u = u32::try_from(i).map_err(Error::str)?;
-    // may fail e.g. on `[1114112] | implode`
-    Ok(char::from_u32(u).unwrap_or(char::REPLACEMENT_CHARACTER))
+impl<'a> Iterator for Explode<'a> {
+    type Item = Result<char, u8>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.bytes.next().map(|next| Err(*next)).or_else(|| {
+            let prev = self.chars.as_bytes();
+            match self.chars.next()? {
+                char::REPLACEMENT_CHARACTER => {
+                    self.bytes = prev[..prev.len() - self.chars.as_bytes().len()].iter();
+                    self.next()
+                }
+                c => Some(Ok(c)),
+            }
+        })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (cmin, cmax) = self.chars.size_hint();
+        let (bmin, bmax) = self.bytes.size_hint();
+        (cmin + bmin, cmax.and_then(|m| Some(m + bmax?)))
+    }
+}
+
+/// Convert an array of Unicode codepoints into a string interpreted as UTF-8.
+fn implode<V: ValT>(xs: &[V]) -> Result<Vec<u8>, Error<V>> {
+    // every Unicode codepoint yields at most 4 bytes
+    let mut v = Vec::with_capacity(xs.len() * 4);
+    for x in xs {
+        let i = x.try_as_isize()?;
+        if let Ok(b) = u8::try_from(-i) {
+            v.push(b);
+        } else {
+            // conversion from isize to u32 may fail on 32-bit systems for high values of c
+            let u = u32::try_from(i).map_err(Error::str)?;
+            // may fail e.g. on `[1114112] | implode`
+            let c = char::from_u32(u).unwrap_or(char::REPLACEMENT_CHARACTER);
+            v.extend(c.encode_utf8(&mut [0; 4]).as_bytes())
+        }
+    }
+    Ok(v)
 }
 
 /// This implements a ~10x faster version of:
@@ -424,7 +461,8 @@ where
             bome(cv.1.try_as_utf8_bytes().and_then(|s| explode(s).collect()))
         }),
         ("implode", v(0), |cv| {
-            bome(cv.1.into_vec().and_then(|s| implode(&s)).map(D::V::from))
+            let implode = |s: Vec<_>| implode(&s);
+            bome(cv.1.into_vec().and_then(implode).map(D::V::from_utf8_bytes))
         }),
         ("ascii_downcase", v(0), |cv| {
             bome(cv.1.map_utf8_str(ByteSlice::to_ascii_lowercase))
