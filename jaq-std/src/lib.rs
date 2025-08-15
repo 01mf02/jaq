@@ -326,13 +326,10 @@ where
     Ok(Some(mx))
 }
 
-/// Convert a string into an array of its Unicode codepoints.
+/// Convert a string into an array of its Unicode codepoints (with negative integers representing UTF-8 errors).
 fn explode<V: ValT>(s: &[u8]) -> impl Iterator<Item = ValR<V>> + '_ {
-    Explode {
-        chars: s.chars(),
-        bytes: [].iter(),
-    }
-    .map(|r| match r {
+    let invalid = [].iter();
+    Explode { s, invalid }.map(|r| match r {
         Err(b) => Ok((-(b as isize)).into()),
         // conversion from u32 to isize may fail on 32-bit systems for high values of c
         Ok(c) => Ok(isize::try_from(c as u32).map_err(Error::str)?.into()),
@@ -340,44 +337,43 @@ fn explode<V: ValT>(s: &[u8]) -> impl Iterator<Item = ValR<V>> + '_ {
 }
 
 struct Explode<'a> {
-    chars: bstr::Chars<'a>,
-    bytes: core::slice::Iter<'a, u8>,
+    s: &'a [u8],
+    invalid: core::slice::Iter<'a, u8>,
 }
-
-impl<'a> Iterator for Explode<'a> {
+impl Iterator for Explode<'_> {
     type Item = Result<char, u8>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.bytes.next().map(|next| Err(*next)).or_else(|| {
-            let prev = self.chars.as_bytes();
-            match self.chars.next()? {
-                char::REPLACEMENT_CHARACTER => {
-                    self.bytes = prev[..prev.len() - self.chars.as_bytes().len()].iter();
-                    self.next()
-                }
-                c => Some(Ok(c)),
-            }
+        self.invalid.next().map(|next| Err(*next)).or_else(|| {
+            let (c, size) = bstr::decode_utf8(self.s);
+            let (consumed, rest) = self.s.split_at(size);
+            self.s = rest;
+            c.map(Ok).or_else(|| {
+                // invalid UTF-8 sequence, emit all invalid bytes
+                self.invalid = consumed.iter();
+                self.invalid.next().map(|next| Err(*next))
+            })
         })
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let (cmin, cmax) = self.chars.size_hint();
-        let (bmin, bmax) = self.bytes.size_hint();
-        (cmin + bmin, cmax.and_then(|m| Some(m + bmax?)))
+        let max = self.s.len();
+        let min = self.s.len() / 4;
+        let inv = self.invalid.as_slice().len();
+        (min + inv, Some(max + inv))
     }
 }
 
-/// Convert an array of Unicode codepoints into a string interpreted as UTF-8.
+/// Convert an array of Unicode codepoints (with negative integers representing UTF-8 errors) into a string.
 fn implode<V: ValT>(xs: &[V]) -> Result<Vec<u8>, Error<V>> {
-    // every Unicode codepoint yields at most 4 bytes
-    let mut v = Vec::with_capacity(xs.len() * 4);
+    let mut v = Vec::with_capacity(xs.len());
     for x in xs {
+        // on 32-bit systems, some high u32 values cannot be represented as isize
         let i = x.try_as_isize()?;
         if let Ok(b) = u8::try_from(-i) {
-            v.push(b);
+            v.push(b)
         } else {
-            // conversion from isize to u32 may fail on 32-bit systems for high values of c
-            let u = u32::try_from(i).map_err(Error::str)?;
             // may fail e.g. on `[1114112] | implode`
-            let c = char::from_u32(u).unwrap_or(char::REPLACEMENT_CHARACTER);
+            let c = u32::try_from(i).ok().and_then(char::from_u32);
+            let c = c.ok_or_else(|| Error::str(format_args!("cannot use {i} as character")))?;
             v.extend(c.encode_utf8(&mut [0; 4]).as_bytes())
         }
     }

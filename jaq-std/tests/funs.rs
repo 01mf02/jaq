@@ -100,9 +100,9 @@ fn explode_implode() {
 
     give(json!("❤ の"), "explode | implode", json!("❤ の"));
     give(json!("y̆"), "explode | implode", json!("y̆"));
-
-    give(json!([1114112]), "implode", json!("�"));
 }
+
+yields!(implode_invalid, "[1114112] | try implode catch -1", -1);
 
 yields!(first_empty, "[first({}[])]", json!([]));
 yields!(first_some, "first(1, 2, 3)", 1);
