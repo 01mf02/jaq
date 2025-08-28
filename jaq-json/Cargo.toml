@@ -21,6 +21,8 @@ toml = ["toml_edit"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser", "base64"]
 
+serde = ["dep:serde"]
+
 sync = []
 
 [dependencies]
@@ -35,6 +37,7 @@ num-bigint = { version = "0.4.6", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
 ryu = "1.0.20"
 self_cell = "1.2.0"
+serde = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
 serde_json = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
 
 # parsers

@@ -392,6 +392,7 @@ dependencies = [
  "ryu",
  "saphyr-parser",
  "self_cell",
+ "serde",
  "serde_json",
  "toml_edit",
  "xmlparser",
