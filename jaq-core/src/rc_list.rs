@@ -30,7 +30,7 @@ impl<T> List<T> {
         Self(Node::Cons(x, self).into())
     }
 
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter(&self) -> Iter<'_, T> {
         Iter(self)
     }
 }
