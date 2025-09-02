@@ -5,7 +5,7 @@ use crate::compile::{Bind, Fold, Pattern, Tailrec, Term as Ast, TermId as Id};
 use crate::data::{DataT, HasLut};
 use crate::fold::fold;
 use crate::val::{ValR, ValT, ValX, ValXs};
-use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, RcList};
+use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, RcList, RcTree};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
@@ -29,16 +29,16 @@ type BoxUpdate<'a, V> = Box<dyn Update<'a, V> + 'a>;
 
 /// List of bindings.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Vars<V>(RcList<Bind<V, usize, (Id, Self)>>);
+pub struct Vars<V>(RcTree<Bind<V, usize, (Id, Self)>>);
 
 impl<V> Vars<V> {
     /// Initialise new variables from values.
     pub fn new(vars: impl IntoIterator<Item = V>) -> Self {
-        Self(RcList::new().extend(vars.into_iter().map(Bind::Var)))
+        Self(RcTree::new().extend(vars.into_iter().map(Bind::Var)))
     }
 
     fn get(&self, i: usize) -> Option<&Bind<V, usize, (Id, Self)>> {
-        self.0.get(i)
+        self.0.lookup(self.0.size() - i - 1)
     }
 }
 
@@ -70,26 +70,27 @@ impl<'a, D: DataT> Ctx<'a, D> {
 
     /// Add a new variable binding.
     fn cons_var(mut self, x: D::V<'a>) -> Self {
-        self.vars.0 = self.vars.0.cons(Bind::Var(x));
+        self.vars.0 = self.vars.0.insert(Bind::Var(x));
         self
     }
 
     /// Add a new filter binding.
     fn cons_fun(mut self, (f, ctx): (Id, Self)) -> Self {
-        self.vars.0 = self.vars.0.cons(Bind::Fun((f, ctx.vars)));
+        self.vars.0 = self.vars.0.insert(Bind::Fun((f, ctx.vars)));
         self
     }
 
     fn cons_label(mut self) -> Self {
         self.labels += 1;
-        self.vars.0 = self.vars.0.cons(Bind::Label(self.labels));
+        self.vars.0 = self.vars.0.insert(Bind::Label(self.labels));
         self
     }
 
     /// Remove the `skip` most recent variable bindings.
     fn skip_vars(mut self, skip: usize) -> Self {
         if skip > 0 {
-            self.vars.0 = self.vars.0.skip(skip).clone();
+            //todo!()
+            //self.vars.0 = self.vars.0.skip(skip).clone();
         }
         self
     }

@@ -58,6 +58,7 @@ pub mod ops;
 pub mod path;
 mod rc_lazy_list;
 mod rc_list;
+mod rc_tree;
 mod stack;
 pub mod val;
 
@@ -67,6 +68,7 @@ pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
 pub use val::{unwrap_valr, ValR, ValT, ValX, ValXs};
 
 use rc_list::List as RcList;
+use rc_tree::Root as RcTree;
 use stack::Stack;
 
 /// Argument of a definition, such as `$v` or `f` in `def foo($v; f): ...`.
