@@ -4,7 +4,7 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Native, Lut, Vars};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
 use jaq_json::{fmt_str, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
