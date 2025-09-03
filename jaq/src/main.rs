@@ -1,3 +1,4 @@
+mod bson;
 mod cli;
 mod filter;
 mod funs;
@@ -97,9 +98,19 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         let mut last = None;
         for file in &cli.files {
             let path = Path::new(file);
-            let file = read::load_file(path)
+            let mut per_file_cli = cli.clone();
+
+            // Auto-detect .bson extension only if not explicitly overridden by the user.
+            if !per_file_cli.raw_input && !per_file_cli.bson_input {
+                if path.extension().map_or(false, |ext| ext == "bson") {
+                    per_file_cli.bson_input = true;
+                }
+            }
+
+            let file_bytes = read::load_file(path)
                 .map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
-            let inputs = read::slice(cli, &file);
+            let inputs = read::slice(&per_file_cli, &*file_bytes);
+
             if cli.in_place {
                 // create a temporary file where output is written to
                 let location = path.parent().unwrap();
@@ -112,7 +123,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 })?;
 
                 // replace the input file with the temporary file
-                std::mem::drop(file);
+                std::mem::drop(file_bytes);
                 let perms = std::fs::metadata(path)?.permissions();
                 tmp.persist(path).map_err(Error::Persist)?;
                 std::fs::set_permissions(path, perms)?;
