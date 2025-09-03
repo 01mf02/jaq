@@ -373,7 +373,7 @@ impl Val {
     /// Fail on booleans.
     fn length(&self) -> ValR {
         match self {
-            Val::Null => Ok(Val::from(0)),
+            Val::Null => Ok(Val::from(0usize)),
             Val::Num(n) => Ok(Val::Num(n.length())),
             Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
             Val::Str(b, Tag::Bytes | Tag::Raw) => Ok(Val::from(b.len() as isize)),
@@ -472,18 +472,6 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
                 Val::Str(s, _) => Val::Str(s, Tag::Raw),
                 v => Val::Str(v.to_string().into(), Tag::Raw),
             }))
-        }),
-        ("byteoffset", v(1), |mut cv| match (cv.1, cv.0.pop_var()) {
-            (Val::Str(v, _), Val::Str(x, _)) => {
-                let v_start = v.as_ptr() as usize;
-                let x_start = x.as_ptr() as usize;
-                let off = v_start
-                    .checked_sub(x_start)
-                    .filter(|_| v_start <= x_start + x.len())
-                    .map(|off| Ok(Val::Num(Num::from_integral(off))));
-                Box::new(off.into_iter())
-            }
-            _ => Box::new(core::iter::empty()),
         }),
         ("length", v(0), |cv| box_once_err(cv.1.length())),
         ("contains", v(1), |cv| {
@@ -693,6 +681,12 @@ impl From<bool> for Val {
 impl From<isize> for Val {
     fn from(i: isize) -> Self {
         Self::Num(Num::Int(i))
+    }
+}
+
+impl From<usize> for Val {
+    fn from(i: usize) -> Self {
+        Self::Num(Num::from_integral(i))
     }
 }
 

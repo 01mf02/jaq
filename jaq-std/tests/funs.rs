@@ -145,7 +145,7 @@ fn keys_unsorted() {
     give(json!({"a": 1, "b": 2}), "keys_unsorted", json!(["a", "b"]));
 
     let err = |v| Error::typ(v, "iterable (array or object)");
-    fail(json!(0), "keys_unsorted", err(Val::from(0)));
+    fail(json!(0), "keys_unsorted", err(Val::from(0usize)));
     fail(json!(null), "keys_unsorted", err(Val::Null));
 }
 

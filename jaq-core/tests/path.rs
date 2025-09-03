@@ -182,7 +182,7 @@ fn update_complex() {
     // in general, `a | a |= .`
     // works in jq when `a` is either null, a number, or a boolean --- it
     // does *not* work when `a` is a string, an array, or an object!
-    fail(json!(0), "0 |= .+1", Error::path_expr(Val::from(0)));
+    fail(json!(0), "0 |= .+1", Error::path_expr(Val::from(0usize)));
 }
 
 yields!(alt_update_l, "[1, 2] | .[] // . |= 3", [3, 3]);

@@ -97,7 +97,7 @@ where
 }
 
 /// Values that the standard library can operate on.
-pub trait ValT: jaq_core::ValT + Ord + From<f64> {
+pub trait ValT: jaq_core::ValT + Ord + From<f64> + From<usize> {
     /// Convert an array into a sequence.
     ///
     /// This returns the original value as `Err` if it is not an array.
@@ -390,7 +390,7 @@ fn implode<V: ValT>(xs: &[V]) -> Result<Vec<u8>, Error<V>> {
 /// ~~~
 fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
-    let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
+    let cmp = by.partial_cmp(&V::from(0usize)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
         Ok(x) => match cmp {
             Greater => x < to,
@@ -404,6 +404,23 @@ fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<
             Some(e)
         }
     })
+}
+
+fn byte_offset<V: ValT>(fixed: V, loose: V) -> ValR<V> {
+    let range = |v: &V| {
+        let b = v.try_as_bytes()?;
+        let start = b.as_ptr() as usize;
+        Ok(start..start + b.len())
+    };
+    let f = range(&fixed)?;
+    let l = range(&loose)?;
+    if f.start <= l.end && l.start <= f.end {
+        V::from(l.start) - V::from(f.start)
+    } else {
+        Err(Error::str(format_args!(
+            "{fixed} does not overlap with {loose}"
+        )))
+    }
 }
 
 fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Result<T, E>> {
@@ -465,6 +482,9 @@ where
         }),
         ("ascii_upcase", v(0), |cv| {
             bome(cv.1.map_utf8_str(ByteSlice::to_ascii_uppercase))
+        }),
+        ("byteoffset", v(1), |mut cv| {
+            bome(byte_offset(cv.0.pop_var(), cv.1))
         }),
         ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
         ("keys_unsorted", v(0), |cv| {
