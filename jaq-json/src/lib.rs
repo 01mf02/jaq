@@ -424,21 +424,22 @@ impl Val {
         })
     }
 
-    fn to_bytes(&self) -> Result<Bytes, Error> {
-        let add = |acc, x| {
-            let mut buf = BytesMut::from(acc);
-            buf.put(x?);
-            Ok(buf.into())
-        };
+    fn to_bytes(&self) -> Result<Bytes, Self> {
         match self {
             Val::Num(n) => n
                 .as_isize()
                 .and_then(|i| u8::try_from(i).ok())
                 .map(|u| Bytes::from(Vec::from([u])))
-                .ok_or_else(|| todo!()),
+                .ok_or_else(|| self.clone()),
             Val::Str(b, _) => Ok(b.clone()),
-            Val::Arr(a) => a.iter().map(Val::to_bytes).try_fold(Bytes::new(), add),
-            _ => todo!(),
+            Val::Arr(a) => {
+                let mut buf = BytesMut::new();
+                for x in a.iter() {
+                    buf.put(Val::to_bytes(x)?);
+                }
+                Ok(buf.into())
+            }
+            _ => Err(self.clone()),
         }
     }
 }
@@ -462,7 +463,9 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
         ("tobytes", v(0), |cv| {
-            box_once_err(cv.1.to_bytes().map(|b| Val::Str(b, Tag::Bytes)))
+            let pass = |b| Val::Str(b, Tag::Bytes);
+            let fail = |v| Error::str(format_args!("cannot convert {v} to bytes"));
+            box_once_err(cv.1.to_bytes().map(pass).map_err(fail))
         }),
         ("torawstring", v(0), |cv| {
             box_once(Ok(match cv.1 {
