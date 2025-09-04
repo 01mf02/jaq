@@ -26,6 +26,9 @@ pub fn parse_single(s: &str) -> Result<Val, PError> {
 pub fn format(v: &Val, f: &mut Formatter) -> fmt::Result {
     match v {
         Val::Str(b, crate::Tag::Bytes) => write!(f, "!!binary {}", BASE64.encode(b)),
+        Val::Num(Num::Float(f64::INFINITY)) => write!(f, ".inf"),
+        Val::Num(Num::Float(f64::NEG_INFINITY)) => write!(f, "-.inf"),
+        Val::Num(Num::Float(fl)) if fl.is_nan() => write!(f, ".nan"),
         _ => v.fmt_rec(f, format),
     }
 }

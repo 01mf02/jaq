@@ -57,10 +57,13 @@ fn write_json(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
 }
 
 fn write_yaml(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
-    if let Val::Str(_, Tag::Bytes) = v {
-        write!(w, "{}", FormatterFn(|f: &mut Formatter| yaml::format(v, f)))
-    } else {
-        write_rec(w, pp, level, v, write_yaml)
+    let style = &pp.style;
+    let yaml = FormatterFn(|f: &mut Formatter| yaml::format(v, f));
+    match v {
+        Val::Str(_, Tag::Bytes) => style.write(w, style.green, |w| write!(w, "{yaml}")),
+        // special handling for NaN & infinity
+        Val::Num(_) => write!(w, "{yaml}"),
+        _ => write_rec(w, pp, level, v, write_yaml),
     }
 }
 
