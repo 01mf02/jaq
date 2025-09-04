@@ -43,16 +43,20 @@ pub enum PError {
     /// Lex error
     Lex(LError),
     /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
-    Scalar(&'static str, String, Span),
+    Scalar(Cow<'static, str>, String, Span),
 }
 
 impl fmt::Display for PError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Lex(LError(e)) => e.fmt(f),
-            Self::Scalar(typ, s, span) => {
+            Self::Scalar(tag, s, span) => {
                 let (line, col) = (span.start.line(), span.start.col());
-                write!(f, "scalar \"{s}\" is no {typ} ({line}:{col})")
+                let msg = match tag {
+                    Cow::Borrowed(_) => "is incompatible with",
+                    Cow::Owned(_) => "encountered with unknown",
+                };
+                write!(f, "scalar \"{s}\" {msg} tag {tag} ({line}:{col})")
             }
         }
     }
@@ -238,14 +242,14 @@ fn parse_string_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Resul
     match tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix)) {
         None | Some("str") => Ok(Val::utf8_str(s.into_owned())),
         Some("binary") => parse_plain_scalar(s, tag, span),
-        Some(tag) => todo!("invalid tag {tag}"),
+        Some(tag) => Err(PError::Scalar(Cow::Owned(tag.into()), s.into_owned(), span)),
     }
 }
 
 fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result<Val, PError> {
     // if the tag starts with "!!"
     let tag = tag.and_then(|t| t.is_yaml_core_schema().then_some(&*t.suffix));
-    let err = |s: Cow<str>, typ| PError::Scalar(typ, s.into_owned(), span);
+    let err = |s: Cow<str>, typ| PError::Scalar(Cow::Borrowed(typ), s.into_owned(), span);
     Ok(match (&*s, tag) {
         ("null" | "Null" | "NULL" | "~", None | Some("null")) => Val::Null,
         /*
@@ -274,6 +278,6 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
         (_, None) => parse_int(&s)
             .or_else(|| parse_float(&s))
             .unwrap_or_else(|| Val::utf8_str(s.into_owned())),
-        (_, Some(tag)) => todo!("invalid tag {tag}"),
+        (_, Some(tag)) => Err(PError::Scalar(Cow::Owned(tag.into()), s.into_owned(), span))?,
     })
 }
