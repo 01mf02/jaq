@@ -252,17 +252,8 @@ fn parse_plain_scalar(s: Cow<str>, tag: Option<&Cow<Tag>>, span: Span) -> Result
     let err = |s: Cow<str>, typ| PError::Scalar(Cow::Borrowed(typ), s.into_owned(), span);
     Ok(match (&*s, tag) {
         ("null" | "Null" | "NULL" | "~", None | Some("null")) => Val::Null,
-        /*
-        ("y" | "Y" | "yes" | "Yes" | "YES", None | Some("bool")) => b(true),
-
-        ("n" | "N" | "no" | "No" | "NO", None | Some("bool")) => b(false),
-        */
         ("true" | "True" | "TRUE", None | Some("bool")) => Val::Bool(true),
         ("false" | "False" | "FALSE", None | Some("bool")) => Val::Bool(false),
-        /*
-        ("on" | "On" | "ON", None | Some("bool")) => b(true),
-        ("off" | "Off" | "OFF", None | Some("bool")) => b(false),
-        */
         (_, Some("null")) => Err(err(s, "null"))?,
         (_, Some("bool")) => Err(err(s, "bool"))?,
 
