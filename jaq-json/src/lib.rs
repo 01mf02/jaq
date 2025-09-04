@@ -1030,10 +1030,10 @@ impl Val {
             Self::Arr(a) => {
                 write!(f, "[")?;
                 let mut iter = a.iter();
-                if let Some(first) = iter.next() {
-                    write!(f, "{first}")?;
+                if let Some(v) = iter.next() {
+                    write!(f, "{}", rec(v))?;
                 };
-                iter.try_for_each(|x| write!(f, ",{}", rec(x)))?;
+                iter.try_for_each(|v| write!(f, ",{}", rec(v)))?;
                 write!(f, "]")
             }
             Self::Obj(o) => {
