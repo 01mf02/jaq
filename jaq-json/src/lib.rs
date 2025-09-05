@@ -89,8 +89,10 @@ enum Type {
     Float,
     /// `-"a"`, `"a" | round`
     Num,
+    /*
     /// `{(0): 1}` or `0 | fromjson` or `0 | explode` or `"a b c" | split(0)`
     Str,
+    */
     /// `0 | sort` or `0 | implode` or `[] | .[0:] = 0`
     Arr,
     /// `0 | .[]` or `0 | .[0]` or `0 | keys` (array or object)
@@ -105,7 +107,7 @@ impl Type {
             Self::Int => "integer",
             Self::Float => "floating-point number",
             Self::Num => "number",
-            Self::Str => "string",
+            //Self::Str => "string",
             Self::Arr => "array",
             Self::Iter => "iterable (array or object)",
             Self::Range => "rangeable (array or string)",
@@ -334,17 +336,16 @@ impl jaq_std::ValT for Val {
         self.as_num().and_then(Num::as_f64).ok_or_else(fail)
     }
 
+    fn is_utf8_str(&self) -> bool {
+        matches!(self, Self::Str(_, Tag::Utf8))
+    }
+
     fn as_bytes(&self) -> Option<&[u8]> {
         if let Self::Str(b, _) = self {
             Some(b)
         } else {
             None
         }
-    }
-
-    fn as_utf8_bytes(&self) -> Option<&[u8]> {
-        self.as_bytes()
-            .filter(|_| matches!(self, Self::Str(_, Tag::Utf8)))
     }
 
     fn as_sub_str(&self, sub: &[u8]) -> Self {
@@ -506,37 +507,32 @@ fn parse_funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("fromjson", v(0), |cv| {
             use jaq_std::ValT;
-            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |s| json::parse_single(s).map_err(|e| parse_fail(&cv.1, "JSON", e));
 
-            box_once_err(cv.1.as_utf8_bytes().ok_or_else(fail).and_then(parse))
+            box_once_err(cv.1.try_as_utf8_bytes().and_then(parse))
         }),
         ("fromcbor", v(0), |cv| {
             use jaq_std::ValT;
-            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b| cbor::parse_single(b).map_err(|e| parse_fail(&cv.1, "CBOR", e));
-            box_once_err(cv.1.as_bytes().ok_or_else(fail).and_then(parse))
+            box_once_err(cv.1.try_as_bytes().and_then(parse))
         }),
         ("fromyaml", v(0), |cv| {
             use jaq_std::ValT;
-            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b: &str| yaml::parse_single(b).map_err(|e| parse_fail(&cv.1, "YAML", e));
-            let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&s)))
+            let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
+            box_once_err(s.and_then(|s| parse(&s)))
         }),
         ("fromtoml", v(0), |cv| {
             use jaq_std::ValT;
-            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b: &str| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
-            let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&s)))
+            let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
+            box_once_err(s.and_then(|s| parse(&s)))
         }),
         ("fromxml", v(0), |cv| {
             use jaq_std::ValT;
-            let fail = || Error::typ(cv.1.clone(), Type::Str.as_str());
             let parse = |b: &str| xml::parse_collect(b).map_err(|e| parse_fail(&cv.1, "XML", e));
-            let s = cv.1.as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.ok_or_else(fail).and_then(|s| parse(&s)))
+            let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
+            box_once_err(s.and_then(|s| parse(&s)))
         }),
         ("tocbor", v(0), |cv| {
             let mut b = Vec::new();

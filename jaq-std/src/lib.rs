@@ -120,11 +120,26 @@ pub trait ValT: jaq_core::ValT + Ord + From<f64> + From<usize> {
     /// not a number or a number that does not fit into [`f64`].
     fn as_f64(&self) -> Result<f64, Error<Self>>;
 
+    /// True if the value is interpreted as UTF-8 string.
+    fn is_utf8_str(&self) -> bool;
+
     /// If the value is a string (whatever its interpretation), return its bytes.
     fn as_bytes(&self) -> Option<&[u8]>;
 
     /// If the value is interpreted as UTF-8 string, return its bytes.
-    fn as_utf8_bytes(&self) -> Option<&[u8]>;
+    fn as_utf8_bytes(&self) -> Option<&[u8]> {
+        self.is_utf8_str().then(|| self.as_bytes()).flatten()
+    }
+
+    /// If the value is a string (whatever its interpretation), return its bytes, else fail.
+    fn try_as_bytes(&self) -> Result<&[u8], Error<Self>> {
+        self.as_bytes().ok_or_else(|| self.fail_str())
+    }
+
+    /// If the value is interpreted as UTF-8 string, return its bytes, else fail.
+    fn try_as_utf8_bytes(&self) -> Result<&[u8], Error<Self>> {
+        self.as_utf8_bytes().ok_or_else(|| self.fail_str())
+    }
 
     /// If the value is a string and `sub` points to a slice of the string,
     /// shorten the string to `sub`, else panic.
@@ -187,14 +202,6 @@ trait ValTx: ValT + Sized {
         })
     }
 
-    fn try_as_bytes(&self) -> Result<&[u8], Error<Self>> {
-        self.as_bytes().ok_or_else(|| self.fail_str())
-    }
-
-    fn try_as_utf8_bytes(&self) -> Result<&[u8], Error<Self>> {
-        self.as_utf8_bytes().ok_or_else(|| self.fail_str())
-    }
-
     /// If the value is interpreted as UTF-8 string,
     /// return its `str` representation, replacing invalid characters.
     fn try_as_str(&self) -> Result<Cow<'_, str>, Error<Self>> {
@@ -209,7 +216,7 @@ trait ValTx: ValT + Sized {
     }
 
     fn trim_utf8_with(&self, f: impl FnOnce(&[u8]) -> &[u8]) -> ValR<Self> {
-        Ok(self.as_sub_str(f(self.as_utf8_bytes().ok_or_else(|| self.fail_str())?)))
+        Ok(self.as_sub_str(f(self.try_as_utf8_bytes()?)))
     }
 
     /// Helper function to strip away the prefix or suffix of a string.
