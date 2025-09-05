@@ -2,23 +2,62 @@
 use core::fmt;
 use std::env::ArgsOs;
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[derive(Copy, Clone, Debug)]
+pub enum Format {
+    /// When the option `--slurp` is used additionally,
+    /// then the whole input is read into a single string.
+    Raw,
+    Json,
+    Cbor,
+    Toml,
+    Xml,
+    Yaml,
+}
+
+const FMTS: &str = "raw, json, cbor, toml, xml, yaml";
+
+impl Format {
+    /// Determine a file format from a path.
+    pub fn determine(path: &Path) -> Option<Self> {
+        match path.extension()?.to_str()? {
+            "cbor" => Some(Format::Cbor),
+            "toml" => Some(Format::Toml),
+            "xml" | "xhtml" => Some(Format::Xml),
+            "yml" | "yaml" => Some(Format::Yaml),
+            "json" => Some(Format::Json),
+            _ => None,
+        }
+    }
+
+    /// Parse a format name.
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "cbor" => Some(Format::Cbor),
+            "raw" => Some(Format::Raw),
+            "json" => Some(Format::Json),
+            "toml" => Some(Format::Toml),
+            "xml" => Some(Format::Xml),
+            "yaml" => Some(Format::Yaml),
+            _ => None,
+        }
+    }
+}
 
 #[derive(Debug, Default)]
 pub struct Cli {
     // Input options
+    pub from: Option<Format>,
     pub null_input: bool,
-    /// When the option `--slurp` is used additionally,
-    /// then the whole input is read into a single string.
-    pub raw_input: bool,
     /// When input is read from files,
     /// jaq yields an array for each file, whereas
     /// jq produces only a single array.
     pub slurp: bool,
 
     // Output options
+    pub to: Option<Format>,
     pub compact_output: bool,
-    pub raw_output: bool,
     /// This flag enables `--raw-output`.
     pub join_output: bool,
     pub in_place: bool,
@@ -56,6 +95,8 @@ pub struct Cli {
     pub exit_status: bool,
     pub version: bool,
     pub help: bool,
+
+    color_stdout: std::cell::OnceCell<bool>,
 }
 
 #[derive(Debug)]
@@ -88,10 +129,12 @@ impl Cli {
             // handle all arguments after "--"
             "" => args.try_for_each(|arg| self.positional(mode, arg))?,
 
+            "from" => self.from = Some(parse_format("--from", args)?),
             "null-input" => self.short('n', args)?,
             "raw-input" => self.short('R', args)?,
             "slurp" => self.short('s', args)?,
 
+            "to" => self.to = Some(parse_format("--to", args)?),
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
             "join-output" => self.short('j', args)?,
@@ -130,13 +173,16 @@ impl Cli {
 
     fn short(&mut self, arg: char, args: &mut ArgsOs) -> Result<(), Error> {
         match arg {
+            'R' => self.from = Some(Format::Raw),
             'n' => self.null_input = true,
-            'R' => self.raw_input = true,
             's' => self.slurp = true,
 
+            'r' => self.to = Some(Format::Raw),
             'c' => self.compact_output = true,
-            'r' => self.raw_output = true,
-            'j' => self.join_output = true,
+            'j' => {
+                self.join_output = true;
+                self.short('r', args)?
+            }
             'i' => self.in_place = true,
             'S' => self.sort_keys = true,
             'C' => self.color_output = true,
@@ -188,6 +234,16 @@ impl Cli {
         }
     }
 
+    pub fn color_stdio(&self, io: impl std::io::IsTerminal) -> bool {
+        let no_color = || std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
+        self.color_if(|| io.is_terminal() && !no_color())
+    }
+
+    pub fn color_stdout(&self) -> bool {
+        let init = || self.color_stdio(std::io::stdout());
+        *self.color_stdout.get_or_init(init)
+    }
+
     pub fn indent(&self) -> usize {
         self.indent.unwrap_or(2)
     }
@@ -200,6 +256,7 @@ pub enum Error {
     KeyValue(&'static str),
     Int(&'static str),
     Path(&'static str),
+    Format(&'static str),
 }
 
 impl fmt::Display for Error {
@@ -210,6 +267,7 @@ impl fmt::Display for Error {
             Self::KeyValue(o) => write!(f, "{o} expects a key and a value"),
             Self::Int(o) => write!(f, "{o} expects an integer"),
             Self::Path(o) => write!(f, "{o} expects a path"),
+            Self::Format(o) => write!(f, "{o} expects a data format (possible values: {FMTS})"),
         }
     }
 }
@@ -219,6 +277,12 @@ impl From<OsString> for Error {
     fn from(e: OsString) -> Self {
         Self::Utf8(e)
     }
+}
+
+fn parse_format(arg: &'static str, args: &mut ArgsOs) -> Result<Format, Error> {
+    let err = || Error::Format(arg);
+    let fmt = args.next().and_then(|a| a.into_string().ok());
+    Format::from_str(&fmt.ok_or_else(err)?).ok_or_else(err)
 }
 
 fn parse_key_val(arg: &'static str, args: &mut ArgsOs) -> Result<(String, OsString), Error> {

@@ -449,15 +449,11 @@ impl<D: DataT> Native<D> {
 impl Id {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
     pub fn run<'a, D: DataT>(&self, cv: Cv<'a, D>) -> ValXs<'a, D::V<'a>> {
-        use alloc::string::ToString;
         use core::iter::once;
         match &cv.0.lut().terms[self.0] {
             Ast::Id => box_once(Ok(cv.1)),
             Ast::Recurse => recurse_run(cv.1, &|v| v.values()),
-            Ast::ToString => box_once(match cv.1.as_str() {
-                Some(_) => Ok(cv.1),
-                None => Ok(D::V::from(cv.1.to_string())),
-            }),
+            Ast::ToString => box_once(Ok(cv.1.into_string())),
             Ast::Int(n) => box_once(Ok(D::V::from(*n))),
             Ast::Num(x) => box_once(D::V::from_num(x).map_err(Exn::from)),
             Ast::Str(s) => box_once(Ok(D::V::from(s.clone()))),

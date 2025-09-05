@@ -2,7 +2,8 @@
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use regex_lite::{self as regex, Error, Regex, RegexBuilder};
+use bstr::ByteSlice;
+use regex_lite::bytes::{self as regex, Error, Regex, RegexBuilder};
 
 #[derive(Copy, Clone, Default)]
 pub struct Flags {
@@ -68,14 +69,14 @@ impl Flags {
 }
 
 type CharIndices<'a> =
-    core::iter::Chain<core::str::CharIndices<'a>, core::iter::Once<(usize, char)>>;
+    core::iter::Chain<bstr::CharIndices<'a>, core::iter::Once<(usize, usize, char)>>;
 
 /// Mapping between byte and character indices.
 pub struct ByteChar<'a>(core::iter::Peekable<core::iter::Enumerate<CharIndices<'a>>>);
 
 impl<'a> ByteChar<'a> {
-    pub fn new(s: &'a str) -> Self {
-        let last = core::iter::once((s.len(), '\0'));
+    pub fn new(s: &'a [u8]) -> Self {
+        let last = core::iter::once((s.len(), 0, '\0'));
         Self(s.char_indices().chain(last).enumerate().peekable())
     }
 
@@ -84,7 +85,7 @@ impl<'a> ByteChar<'a> {
     /// This needs to be called with monotonically increasing values of `byte_offset`.
     fn char_of_byte(&mut self, byte_offset: usize) -> Option<usize> {
         loop {
-            let (char_i, (byte_i, _char)) = self.0.peek()?;
+            let (char_i, (byte_i, _, _char)) = self.0.peek()?;
             if byte_offset == *byte_i {
                 return Some(*char_i);
             } else {
@@ -94,28 +95,31 @@ impl<'a> ByteChar<'a> {
     }
 }
 
-pub struct Match<S> {
+pub struct Match<B, S> {
     pub offset: usize,
     pub length: usize,
-    pub string: S,
+    pub string: B,
     pub name: Option<S>,
 }
 
-impl<'a> Match<&'a str> {
+impl<'a> Match<&'a [u8], &'a str> {
     pub fn new(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
         Self {
             offset: bc.char_of_byte(m.start()).unwrap(),
-            length: m.as_str().chars().count(),
-            string: m.as_str(),
+            length: m.as_bytes().chars().count(),
+            string: m.as_bytes(),
             name,
         }
     }
 
-    pub fn fields<T: From<isize> + From<String> + 'a>(&self) -> impl Iterator<Item = (T, T)> + '_ {
+    pub fn fields<T: From<isize> + From<String> + 'a>(
+        &self,
+        f: impl Fn(&'a [u8]) -> T,
+    ) -> impl Iterator<Item = (T, T)> + '_ {
         [
             ("offset", (self.offset as isize).into()),
             ("length", (self.length as isize).into()),
-            ("string", self.string.to_string().into()),
+            ("string", f(self.string)),
         ]
         .into_iter()
         .chain(self.name.iter().map(|n| ("name", (*n).to_string().into())))
@@ -123,9 +127,9 @@ impl<'a> Match<&'a str> {
     }
 }
 
-pub enum Part<S> {
-    Matches(Vec<Match<S>>),
-    Mismatch(S),
+pub enum Part<B, S> {
+    Matches(Vec<Match<B, S>>),
+    Mismatch(B),
 }
 
 /// Apply a regular expression to the given input value.
@@ -133,7 +137,12 @@ pub enum Part<S> {
 /// `sm` indicates whether to
 /// 1. output strings that do *not* match the regex, and
 /// 2. output the matches.
-pub fn regex<'a>(s: &'a str, re: &'a Regex, flags: Flags, sm: (bool, bool)) -> Vec<Part<&'a str>> {
+pub fn regex<'a>(
+    s: &'a [u8],
+    re: &'a Regex,
+    flags: Flags,
+    sm: (bool, bool),
+) -> Vec<Part<&'a [u8], &'a str>> {
     // mismatches & matches
     let (mi, ma) = sm;
 
@@ -143,7 +152,7 @@ pub fn regex<'a>(s: &'a str, re: &'a Regex, flags: Flags, sm: (bool, bool)) -> V
 
     for c in re.captures_iter(s) {
         let whole = c.get(0).unwrap();
-        if flags.ignore_empty() && whole.as_str().is_empty() {
+        if flags.ignore_empty() && whole.as_bytes().is_empty() {
             continue;
         }
         let match_names = c.iter().zip(re.capture_names());
