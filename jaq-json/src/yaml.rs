@@ -3,7 +3,7 @@ use crate::{Num, Val};
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
-use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Span, Tag};
+use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Tag};
 
 /// Parse a stream of YAML documents.
 pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
@@ -16,10 +16,16 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
 pub fn parse_single(s: &str) -> Result<Val, PError> {
     let mut st = State::new(Parser::new_from_str(s));
     assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
-    // TODO: report error on empty input
-    let ev = st.next()?;
-    st.parse_doc(ev)
-    // TODO: check that we get a StreamEnd here
+    let doc = match st.next()? {
+        (Event::StreamEnd, span) => Err(PError::Single(false, Span(span))),
+        next => st.parse_doc(next),
+    }?;
+    match st.next() {
+        Ok((Event::DocumentStart(_), span)) => Err(PError::Single(true, Span(span))),
+        Ok((Event::StreamEnd, _)) => Ok(doc),
+        // Can we somehow trigger this? If so, please report this!
+        _ => panic!(),
+    }
 }
 
 /// Format a value as YAML document, without explicit document start/end markers.
@@ -37,6 +43,17 @@ pub fn format(v: &Val, f: &mut Formatter) -> fmt::Result {
 #[derive(Debug)]
 pub struct LError(ScanError);
 
+/// Error span.
+#[derive(Copy, Clone, Debug)]
+pub struct Span(saphyr_parser::Span);
+
+impl fmt::Display for Span {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let (line, col) = (self.0.start.line(), self.0.start.col());
+        write!(f, "{line}:{col}")
+    }
+}
+
 /// Parse error.
 #[derive(Debug)]
 pub enum PError {
@@ -44,6 +61,8 @@ pub enum PError {
     Lex(LError),
     /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
     Scalar(Cow<'static, str>, String, Span),
+    /// Single value expected, found none if false and more than one if true
+    Single(bool, Span),
 }
 
 impl fmt::Display for PError {
@@ -51,13 +70,17 @@ impl fmt::Display for PError {
         match self {
             Self::Lex(LError(e)) => e.fmt(f),
             Self::Scalar(tag, s, span) => {
-                let (line, col) = (span.start.line(), span.start.col());
                 let msg = match tag {
                     Cow::Borrowed(_) => "is incompatible with",
                     Cow::Owned(_) => "encountered with unknown",
                 };
-                write!(f, "scalar \"{s}\" {msg} tag {tag} ({line}:{col})")
+                write!(f, "scalar \"{s}\" {msg} tag {tag} ({span})")
             }
+            Self::Single(some, span) => write!(
+                f,
+                "expected single YAML value, found {} ({span})",
+                if *some { "more than one" } else { "none" }
+            ),
         }
     }
 }
@@ -71,7 +94,7 @@ impl From<ScanError> for PError {
 #[cfg(feature = "std")]
 impl std::error::Error for PError {}
 
-type EventSpan<'input> = (Event<'input>, Span);
+type EventSpan<'input> = (Event<'input>, saphyr_parser::Span);
 
 struct State<'input, T: Input> {
     parser: Parser<'input, T>,
@@ -135,10 +158,10 @@ impl<'input, T: Input> State<'input, T> {
     fn parse_val(&mut self, ev: EventSpan) -> Result<Val, PError> {
         let (val, anchor_id) = match ev {
             (Event::Scalar(s, ScalarStyle::Plain, anchor_id, tag), span) => {
-                (parse_plain_scalar(s, tag.as_ref(), span)?, anchor_id)
+                (parse_plain_scalar(s, tag.as_ref(), Span(span))?, anchor_id)
             }
             (Event::Scalar(s, _style, anchor_id, tag), span) => {
-                (parse_string_scalar(s, tag.as_ref(), span)?, anchor_id)
+                (parse_string_scalar(s, tag.as_ref(), Span(span))?, anchor_id)
             }
             (Event::SequenceStart(anchor_id, _tag), _) => {
                 let iter = core::iter::from_fn(|| self.parse_seq_entry());
