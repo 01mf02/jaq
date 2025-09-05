@@ -1008,14 +1008,26 @@ impl<F: Fn(&mut Formatter) -> fmt::Result> fmt::Display for FormatterFn<F> {
     }
 }
 
-type ValFormatterFn = fn(&Val, &mut fmt::Formatter) -> fmt::Result;
+type ValFormatterFn = fn(&Val, &mut Formatter) -> fmt::Result;
+
+fn fmt_seq<T, F>(mut iter: impl Iterator<Item = T>, f: &mut Formatter, fmt: F) -> fmt::Result
+where
+    F: Fn(T, &mut Formatter) -> fmt::Result,
+{
+    if let Some(x) = iter.next() {
+        fmt(x, f)?;
+    }
+    iter.try_for_each(|x| {
+        write!(f, ",")?;
+        fmt(x, f)
+    })
+}
 
 impl Val {
     /// Format a value as compact JSON, using a custom function to format child values.
     ///
     /// This is useful to override how certain values are printed, e.g. for YAML.
-    fn fmt_rec(&self, f: &mut fmt::Formatter, rec: ValFormatterFn) -> fmt::Result {
-        let rec = |v| FormatterFn(move |f: &mut Formatter| rec(v, f));
+    fn fmt_rec(&self, f: &mut Formatter, rec: ValFormatterFn) -> fmt::Result {
         match self {
             Self::Null => write!(f, "null"),
             Self::Bool(b) => write!(f, "{b}"),
@@ -1025,20 +1037,24 @@ impl Val {
             Self::Str(s, Tag::Utf8) => write_utf8!(f, s, |part| write!(f, "{}", bstr(part))),
             Self::Arr(a) => {
                 write!(f, "[")?;
-                let mut iter = a.iter();
-                if let Some(v) = iter.next() {
-                    write!(f, "{}", rec(v))?;
-                };
-                iter.try_for_each(|v| write!(f, ",{}", rec(v)))?;
+                fmt_seq(a.iter(), f, rec)?;
                 write!(f, "]")
             }
             Self::Obj(o) => {
+                let kv = |(k, v), f: &mut Formatter| {
+                    use jaq_std::ValT;
+                    let v: &Val = v;
+                    rec(k, f)?;
+                    // YAML interprets {1:2}  as {"1:2": null}, whereas
+                    // it   interprets {1: 2} as {1: 2}
+                    // in order to keep compatibility with jq,
+                    // we add a space between ':' and the value
+                    // only if the key is a UTF-8 string
+                    write!(f, ":{}", if k.is_utf8_str() { "" } else { " " })?;
+                    rec(v, f)
+                };
                 write!(f, "{{")?;
-                let mut iter = o.iter();
-                if let Some((k, v)) = iter.next() {
-                    write!(f, "{}:{}", rec(k), rec(v))?;
-                }
-                iter.try_for_each(|(k, v)| write!(f, ",{}:{}", rec(k), rec(v)))?;
+                fmt_seq(o.iter(), f, kv)?;
                 write!(f, "}}")
             }
         }

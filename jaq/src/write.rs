@@ -87,9 +87,10 @@ fn write_rec(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, rec: WriteFn) ->
         Val::Obj(o) => {
             bold(w, '{')?;
             let kv = |w: &mut dyn Write, (k, v)| {
+                use jaq_std::ValT;
                 rec(w, pp, level + 1, k)?;
                 write!(w, ":")?;
-                if !pp.compact {
+                if !pp.compact || !k.is_utf8_str() {
                     write!(w, " ")?;
                 }
                 rec(w, pp, level + 1, v)

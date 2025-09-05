@@ -165,7 +165,7 @@ test!(
     non_str_key,
     &["-c"],
     r#"{1: 2, 3.1415: 4, ["foo"]: "bar", {true: false}: true}"#,
-    r#"{1:2,3.1415:4,["foo"]:"bar",{true:false}:true}"#
+    r#"{1: 2,3.1415: 4,["foo"]: "bar",{true: false}: true}"#
 );
 
 test!(surrogate_pair, &[], r#""\uD801\uDC37""#, r#""𐐷""#);

@@ -108,9 +108,10 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) => {
             write!(f, "{{")?;
             fmt_seq(f, opts, level, &**o, |f, (k, v)| {
+                use jaq_std::ValT;
                 fmt_val(f, opts, level + 1, k)?;
                 write!(f, ":")?;
-                if !opts.compact {
+                if !opts.compact || !k.is_utf8_str() {
                     write!(f, " ")?;
                 }
                 fmt_val(f, opts, level + 1, v)
