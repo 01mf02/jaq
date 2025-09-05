@@ -28,15 +28,27 @@ pub fn parse_single(s: &str) -> Result<Val, PError> {
     }
 }
 
+macro_rules! write_yaml {
+    ($w:ident, $v:ident, $f:expr) => {{
+        match $v {
+            Val::Str(b, crate::Tag::Bytes) => write!($w, "!!binary {}", BASE64.encode(b)),
+            Val::Num(Num::Float(f64::INFINITY)) => write!($w, ".inf"),
+            Val::Num(Num::Float(f64::NEG_INFINITY)) => write!($w, "-.inf"),
+            Val::Num(Num::Float(fl)) if fl.is_nan() => write!($w, ".nan"),
+            _ => $f,
+        }
+    }};
+}
+
 /// Format a value as YAML document, without explicit document start/end markers.
 pub fn format(v: &Val, f: &mut Formatter) -> fmt::Result {
-    match v {
-        Val::Str(b, crate::Tag::Bytes) => write!(f, "!!binary {}", BASE64.encode(b)),
-        Val::Num(Num::Float(f64::INFINITY)) => write!(f, ".inf"),
-        Val::Num(Num::Float(f64::NEG_INFINITY)) => write!(f, "-.inf"),
-        Val::Num(Num::Float(fl)) if fl.is_nan() => write!(f, ".nan"),
-        _ => v.fmt_rec(f, format),
-    }
+    write_yaml!(f, v, v.fmt_rec(f, format))
+}
+
+/// Write a value as YAML document, without explicit document start/end markers.
+pub fn write(mut w: impl std::io::Write, v: &Val) -> std::io::Result<()> {
+    let w = &mut w;
+    write_yaml!(w, v, v.write_with(w, |w, v| write(w, v)))
 }
 
 /// Lex error.

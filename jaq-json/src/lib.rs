@@ -462,7 +462,12 @@ fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
 
 fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
-        ("tojson", v(0), |cv| box_once(Ok(cv.1.to_string().into()))),
+        ("tojson", v(0), |cv| {
+            use jaq_std::ValT;
+            let mut buf = Vec::new();
+            cv.1.write(&mut buf).unwrap();
+            box_once(Ok(Val::from_utf8_bytes(buf)))
+        }),
         ("tobytes", v(0), |cv| {
             let pass = |b| Val::Str(b, Tag::Bytes);
             let fail = |v| Error::str(format_args!("cannot convert {v} to bytes"));
@@ -540,8 +545,10 @@ fn parse_funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             box_once_err(Ok(Val::byte_str(b)))
         }),
         ("toyaml", v(0), |cv| {
-            let fmt = FormatterFn(|f: &mut Formatter| yaml::format(&cv.1, f));
-            box_once_err(Ok(Val::utf8_str(fmt.to_string())))
+            use jaq_std::ValT;
+            let mut buf = Vec::new();
+            yaml::write(&mut buf, &cv.1).unwrap();
+            box_once(Ok(Val::from_utf8_bytes(buf)))
         }),
         ("totoml", v(0), |cv| {
             let ser = toml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "TOML", e));
@@ -993,6 +1000,53 @@ macro_rules! write_bytes {
     }};
 }
 
+macro_rules! write_seq {
+    ($w:ident, $iter:ident, $f:expr) => {{
+        if let Some(x) = $iter.next() {
+            $f(x)?;
+        }
+        $iter.try_for_each(|x| {
+            write!($w, ",")?;
+            $f(x)
+        })
+    }};
+}
+
+macro_rules! write_val {
+    ($w:ident, $v:ident, $f:expr) => {{
+        match $v {
+            Val::Null => write!($w, "null"),
+            Val::Bool(b) => write!($w, "{b}"),
+            Val::Num(n) => write!($w, "{n}"),
+            Val::Str(s, Tag::Raw) => write!($w, "{}", bstr(s)),
+            Val::Str(b, Tag::Bytes) => write_bytes!($w, b),
+            Val::Str(s, Tag::Utf8) => write_utf8!($w, s, |part| write!($w, "{}", bstr(part))),
+            Val::Arr(a) => {
+                write!($w, "[")?;
+                let mut iter = a.iter();
+                write_seq!($w, iter, $f)?;
+                write!($w, "]")
+            }
+            Val::Obj(o) => {
+                write!($w, "{{")?;
+                let mut iter = o.iter();
+                write_seq!($w, iter, |(k, v)| {
+                    use jaq_std::ValT;
+                    $f(k)?;
+                    // YAML interprets {1:2}  as {"1:2": null}, whereas
+                    // it   interprets {1: 2} as {1: 2}
+                    // in order to keep compatibility with jq,
+                    // we add a space between ':' and the value
+                    // only if the key is a UTF-8 string
+                    write!($w, ":{}", if k.is_utf8_str() { "" } else { " " })?;
+                    $f(v)
+                })?;
+                write!($w, "}}")
+            }
+        }
+    }};
+}
+
 /// Display bytes as valid UTF-8 string.
 ///
 /// This maps invalid UTF-8 to the Unicode replacement character.
@@ -1000,64 +1054,29 @@ pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display
     BStr::new(s)
 }
 
-struct FormatterFn<F>(F);
-
-impl<F: Fn(&mut Formatter) -> fmt::Result> fmt::Display for FormatterFn<F> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.0(f)
-    }
-}
-
 type ValFormatterFn = fn(&Val, &mut Formatter) -> fmt::Result;
 
-fn fmt_seq<T, F>(mut iter: impl Iterator<Item = T>, f: &mut Formatter, fmt: F) -> fmt::Result
-where
-    F: Fn(T, &mut Formatter) -> fmt::Result,
-{
-    if let Some(x) = iter.next() {
-        fmt(x, f)?;
-    }
-    iter.try_for_each(|x| {
-        write!(f, ",")?;
-        fmt(x, f)
-    })
-}
+type WriteFn<T> = fn(&mut dyn std::io::Write, &T) -> std::io::Result<()>;
 
 impl Val {
+    fn write_with(&self, w: &mut impl std::io::Write, f: WriteFn<Val>) -> std::io::Result<()> {
+        match self {
+            Val::Str(s, Tag::Raw) => w.write_all(s),
+            Val::Str(b, Tag::Bytes) => write_bytes!(w, b),
+            Val::Str(s, Tag::Utf8) => write_utf8!(w, s, |part| w.write_all(part)),
+            _ => write_val!(w, self, |v: &Val| f(w, v)),
+        }
+    }
+
+    fn write(&self, mut w: impl std::io::Write) -> std::io::Result<()> {
+        self.write_with(&mut w, |w, v| v.write(w))
+    }
+
     /// Format a value as compact JSON, using a custom function to format child values.
     ///
     /// This is useful to override how certain values are printed, e.g. for YAML.
     fn fmt_rec(&self, f: &mut Formatter, rec: ValFormatterFn) -> fmt::Result {
-        match self {
-            Self::Null => write!(f, "null"),
-            Self::Bool(b) => write!(f, "{b}"),
-            Self::Num(n) => write!(f, "{n}"),
-            Self::Str(s, Tag::Raw) => write!(f, "{}", bstr(s)),
-            Self::Str(b, Tag::Bytes) => write_bytes!(f, b),
-            Self::Str(s, Tag::Utf8) => write_utf8!(f, s, |part| write!(f, "{}", bstr(part))),
-            Self::Arr(a) => {
-                write!(f, "[")?;
-                fmt_seq(a.iter(), f, rec)?;
-                write!(f, "]")
-            }
-            Self::Obj(o) => {
-                let kv = |(k, v), f: &mut Formatter| {
-                    use jaq_std::ValT;
-                    let v: &Val = v;
-                    rec(k, f)?;
-                    // YAML interprets {1:2}  as {"1:2": null}, whereas
-                    // it   interprets {1: 2} as {1: 2}
-                    // in order to keep compatibility with jq,
-                    // we add a space between ':' and the value
-                    // only if the key is a UTF-8 string
-                    write!(f, ":{}", if k.is_utf8_str() { "" } else { " " })?;
-                    rec(v, f)
-                };
-                write!(f, "{{")?;
-                fmt_seq(o.iter(), f, kv)?;
-                write!(f, "}}")
-            }
-        }
+        write_val!(f, self, |v: &Val| rec(v, f))
     }
 }
 
