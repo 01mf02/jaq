@@ -1,9 +1,9 @@
 //! JSON support.
-use crate::{Map, Num, Val, Tag};
+use crate::{Map, Num, Tag, Val};
 use alloc::{string::ToString, vec::Vec};
+use core::fmt::{self, Formatter};
 use hifijson::token::{Expect, Lex, Token};
 use hifijson::{str, IterLexer, LexAlloc, SliceLexer};
-use core::fmt::{self, Formatter};
 #[cfg(feature = "std")]
 use std::io;
 
@@ -89,7 +89,7 @@ fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::Error
 type WriteFn<T> = fn(&mut dyn std::io::Write, &T) -> std::io::Result<()>;
 type FormatFn<T> = fn(&mut Formatter, &T) -> fmt::Result;
 
-pub(crate) fn write_with(w: &mut dyn std::io::Write, v: &Val, f: WriteFn<Val>) -> std::io::Result<()> {
+pub(crate) fn write_with(w: &mut dyn io::Write, v: &Val, f: WriteFn<Val>) -> io::Result<()> {
     match v {
         Val::Str(s, Tag::Raw) => w.write_all(s),
         Val::Str(b, Tag::Bytes) => write_bytes!(w, b),
@@ -125,7 +125,7 @@ pub(crate) fn write_with(w: &mut dyn std::io::Write, v: &Val, f: WriteFn<Val>) -
 /// jq may cause silent information loss, whereas
 /// jaq may yield invalid JSON values.
 /// Choose your poison.
-pub fn write(w: &mut dyn std::io::Write, v: &Val) -> std::io::Result<()> {
+pub fn write(w: &mut dyn io::Write, v: &Val) -> io::Result<()> {
     write_with(w, v, |w, v| write(w, v))
 }
 

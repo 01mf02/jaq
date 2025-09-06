@@ -1,5 +1,5 @@
 //! YAML support.
-use crate::{Num, Val, json};
+use crate::{json, Num, Val};
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
