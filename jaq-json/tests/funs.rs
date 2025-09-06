@@ -50,6 +50,11 @@ yields!(
     "{a: 1, (true): 2, (3): 4} | toyaml",
     "{\"a\":1,true: 2,3: 4}"
 );
+yields!(
+    toyaml_ff,
+    r"255 | tobytes | tostring | toyaml | explode",
+    [34, -255, 34]
+);
 
 #[test]
 fn has() {
