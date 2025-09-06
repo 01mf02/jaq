@@ -1,7 +1,6 @@
 //! Writing output.
-use crate::style::{FormatterFn, Style, ANSI};
+use crate::style::{Style, ANSI};
 use crate::{invalid_data, Cli, Format};
-use core::fmt::Formatter;
 use jaq_json::{cbor, toml, xml, yaml};
 use jaq_json::{write_byte, write_bytes, write_utf8, Tag, Val};
 use std::io::{self, IsTerminal, Write};
@@ -58,11 +57,10 @@ fn write_json(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
 
 fn write_yaml(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> Result {
     let style = &pp.style;
-    let yaml = FormatterFn(|f: &mut Formatter| yaml::format(v, f));
     match v {
-        Val::Str(_, Tag::Bytes) => style.write(w, style.green, |w| write!(w, "{yaml}")),
+        Val::Str(_, Tag::Bytes) => style.write(w, style.green, |w| yaml::write(w, v)),
         // special handling for NaN & infinity
-        Val::Num(_) => write!(w, "{yaml}"),
+        Val::Num(_) => yaml::write(w, v),
         _ => write_rec(w, pp, level, v, write_yaml),
     }
 }
@@ -134,7 +132,7 @@ pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
 
     match (val, format) {
         (Val::Str(b, _), Format::Raw) => w.write_all(b)?,
-        (_, Format::Cbor) => cbor::write(val, &mut *w)?,
+        (_, Format::Cbor) => cbor::write(w, val)?,
         (_, Format::Json | Format::Raw) => write_json(w, &pp(), 0, val)?,
         (_, Format::Yaml) => write_yaml(w, &pp(), 0, val)?,
         (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::serialise(val))?)?,

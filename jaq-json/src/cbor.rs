@@ -89,16 +89,9 @@ pub fn read_many(read: impl io::Read) -> impl Iterator<Item = io::Result<Val>> {
     decode_many(read).map(|r| r.map_err(Into::into))
 }
 
-/// Serialise a CBOR value.
-pub fn serialise(v: &Val, b: &mut Vec<u8>) {
-    // SAFETY: this should always succeed, because
-    // we are writing to non-fallible output
-    write_one(v, b).unwrap()
-}
-
-/// Write a CBOR value.
-pub fn write(v: &Val, write: impl io::Write) -> io::Result<()> {
-    write_one(v, write)
+/// Write a value as CBOR.
+pub fn write(w: &mut dyn io::Write, v: &Val) -> io::Result<()> {
+    write_one(v, w)
 }
 
 /// Decode a single CBOR value.

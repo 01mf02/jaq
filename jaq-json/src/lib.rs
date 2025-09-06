@@ -18,14 +18,17 @@ use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
-use core::fmt::{self, Debug, Formatter};
+use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
-use jaq_std::{run, unary, v, Filter};
+use jaq_std::{run, unary, v, Filter, ValT as _};
 pub use num::Num;
 use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
+
+#[macro_use]
+mod write;
 
 #[cfg(feature = "cbor")]
 pub mod cbor;
@@ -463,9 +466,8 @@ fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
 fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("tojson", v(0), |cv| {
-            use jaq_std::ValT;
             let mut buf = Vec::new();
-            cv.1.write(&mut buf).unwrap();
+            json::write(&mut buf, &cv.1).unwrap();
             box_once(Ok(Val::from_utf8_bytes(buf)))
         }),
         ("tobytes", v(0), |cv| {
@@ -511,41 +513,35 @@ fn serialise_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Err
 fn parse_funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("fromjson", v(0), |cv| {
-            use jaq_std::ValT;
             let parse = |s| json::parse_single(s).map_err(|e| parse_fail(&cv.1, "JSON", e));
 
             box_once_err(cv.1.try_as_utf8_bytes().and_then(parse))
         }),
         ("fromcbor", v(0), |cv| {
-            use jaq_std::ValT;
             let parse = |b| cbor::parse_single(b).map_err(|e| parse_fail(&cv.1, "CBOR", e));
             box_once_err(cv.1.try_as_bytes().and_then(parse))
         }),
         ("fromyaml", v(0), |cv| {
-            use jaq_std::ValT;
             let parse = |b: &str| yaml::parse_single(b).map_err(|e| parse_fail(&cv.1, "YAML", e));
             let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
             box_once_err(s.and_then(|s| parse(&s)))
         }),
         ("fromtoml", v(0), |cv| {
-            use jaq_std::ValT;
             let parse = |b: &str| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
             let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
             box_once_err(s.and_then(|s| parse(&s)))
         }),
         ("fromxml", v(0), |cv| {
-            use jaq_std::ValT;
             let parse = |b: &str| xml::parse_collect(b).map_err(|e| parse_fail(&cv.1, "XML", e));
             let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
             box_once_err(s.and_then(|s| parse(&s)))
         }),
         ("tocbor", v(0), |cv| {
-            let mut b = Vec::new();
-            cbor::serialise(&cv.1, &mut b);
-            box_once_err(Ok(Val::byte_str(b)))
+            let mut buf = Vec::new();
+            cbor::write(&mut buf, &cv.1).unwrap();
+            box_once_err(Ok(Val::byte_str(buf)))
         }),
         ("toyaml", v(0), |cv| {
-            use jaq_std::ValT;
             let mut buf = Vec::new();
             yaml::write(&mut buf, &cv.1).unwrap();
             box_once(Ok(Val::from_utf8_bytes(buf)))
@@ -944,109 +940,6 @@ impl Hash for Val {
     }
 }
 
-/// Write a byte.
-///
-/// This uses `$f` to write bytes not corresponding to normal ASCII characters.
-///
-/// This is especially useful to pretty-print control characters, such as
-/// `'\n'` (U+000A), but also all other control characters.
-#[macro_export]
-macro_rules! write_byte {
-    ($w:ident, $c:expr, $f:expr) => {{
-        match $c {
-            // Rust does not recognise the following two character escapes
-            0x08 => write!($w, "\\b"),
-            0x0c => write!($w, "\\f"),
-            c @ (b'\t' | b'\n' | b'\r' | b'\\' | b'"') => {
-                write!($w, "{}", char::from(c).escape_default())
-            }
-            0x00..=0x1F | 0x7F..=0xFF => $f,
-            c => write!($w, "{}", char::from(c)),
-        }
-    }};
-}
-
-/// Write a UTF-8 string as JSON string, including leading and trailing quotes.
-///
-/// This uses `$f` to format byte slices that do not need to be escaped.
-#[macro_export]
-macro_rules! write_utf8 {
-    ($w:ident, $s:ident, $f:expr) => {{
-        write!($w, "\"")?;
-        let is_special = |c| matches!(c, 0x00..=0x1F | b'\\' | b'"' | 0x7F);
-        for s in $s.split_inclusive(|c| is_special(*c)) {
-            match s.split_last() {
-                Some((last, init)) if is_special(*last) => {
-                    $f(init)?;
-                    write_byte!($w, *last, write!($w, "\\u{last:04x}"))?
-                }
-                _ => $f(s)?,
-            }
-        }
-        write!($w, "\"")
-    }};
-}
-
-/// Write a byte string, including leading and trailing quotes.
-///
-/// This maps all non-ASCII `u8`s to `\xXX`.
-#[macro_export]
-macro_rules! write_bytes {
-    ($w:ident, $s: ident) => {{
-        write!($w, "\"")?;
-        $s.iter()
-            .try_for_each(|c| write_byte!($w, *c, write!($w, "\\x{c:02x}")))?;
-        write!($w, "\"")
-    }};
-}
-
-macro_rules! write_seq {
-    ($w:ident, $iter:ident, $f:expr) => {{
-        if let Some(x) = $iter.next() {
-            $f(x)?;
-        }
-        $iter.try_for_each(|x| {
-            write!($w, ",")?;
-            $f(x)
-        })
-    }};
-}
-
-macro_rules! write_val {
-    ($w:ident, $v:ident, $f:expr) => {{
-        match $v {
-            Val::Null => write!($w, "null"),
-            Val::Bool(b) => write!($w, "{b}"),
-            Val::Num(n) => write!($w, "{n}"),
-            Val::Str(s, Tag::Raw) => write!($w, "{}", bstr(s)),
-            Val::Str(b, Tag::Bytes) => write_bytes!($w, b),
-            Val::Str(s, Tag::Utf8) => write_utf8!($w, s, |part| write!($w, "{}", bstr(part))),
-            Val::Arr(a) => {
-                write!($w, "[")?;
-                let mut iter = a.iter();
-                write_seq!($w, iter, $f)?;
-                write!($w, "]")
-            }
-            Val::Obj(o) => {
-                write!($w, "{{")?;
-                let mut iter = o.iter();
-                write_seq!($w, iter, |(k, v)| {
-                    use jaq_std::ValT;
-                    $f(k)?;
-                    // YAML interprets {1:2}  as {"1:2": null}, whereas
-                    // it   interprets {1: 2} as {1: 2}
-                    // in order to keep compatibility with jq,
-                    // we add a space between ':' and the value
-                    // only if the key is a UTF-8 string
-                    write!($w, ":{}", if k.is_utf8_str() { "" } else { " " })?;
-                    $f(v)
-                })?;
-                write!($w, "}}")
-            }
-        }
-    }};
-}
-
 /// Display bytes as valid UTF-8 string.
 ///
 /// This maps invalid UTF-8 to the Unicode replacement character.
@@ -1054,35 +947,9 @@ pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display
     BStr::new(s)
 }
 
-type ValFormatterFn = fn(&Val, &mut Formatter) -> fmt::Result;
-
-type WriteFn<T> = fn(&mut dyn std::io::Write, &T) -> std::io::Result<()>;
-
-impl Val {
-    fn write_with(&self, w: &mut impl std::io::Write, f: WriteFn<Val>) -> std::io::Result<()> {
-        match self {
-            Val::Str(s, Tag::Raw) => w.write_all(s),
-            Val::Str(b, Tag::Bytes) => write_bytes!(w, b),
-            Val::Str(s, Tag::Utf8) => write_utf8!(w, s, |part| w.write_all(part)),
-            _ => write_val!(w, self, |v: &Val| f(w, v)),
-        }
-    }
-
-    fn write(&self, mut w: impl std::io::Write) -> std::io::Result<()> {
-        self.write_with(&mut w, |w, v| v.write(w))
-    }
-
-    /// Format a value as compact JSON, using a custom function to format child values.
-    ///
-    /// This is useful to override how certain values are printed, e.g. for YAML.
-    fn fmt_rec(&self, f: &mut Formatter, rec: ValFormatterFn) -> fmt::Result {
-        write_val!(f, self, |v: &Val| rec(v, f))
-    }
-}
-
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.fmt_rec(f, |v, f| write!(f, "{v}"))
+        json::format_with(f, self, |f, v| write!(f, "{v}"))
     }
 }
 

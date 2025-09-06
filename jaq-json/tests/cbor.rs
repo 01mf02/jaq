@@ -19,7 +19,7 @@ fn jc(json: &str, cbor_hex: &str) {
     assert_eq!(json_val, cbor_val);
 
     let mut cbor_bin2 = Vec::new();
-    cbor::serialise(&cbor_val, &mut cbor_bin2);
+    cbor::write(&mut cbor_bin2, &cbor_val).unwrap();
     //dbg!(&cbor_bin2);
 
     let cbor_val2 = cbor::parse_single(&*cbor_bin2).unwrap();

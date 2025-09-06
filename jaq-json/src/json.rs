@@ -1,8 +1,9 @@
 //! JSON support.
-use crate::{Map, Num, Val};
+use crate::{Map, Num, Val, Tag};
 use alloc::{string::ToString, vec::Vec};
 use hifijson::token::{Expect, Lex, Token};
 use hifijson::{str, IterLexer, LexAlloc, SliceLexer};
+use core::fmt::{self, Formatter};
 #[cfg(feature = "std")]
 use std::io;
 
@@ -83,4 +84,54 @@ fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::Error
         })),
         _ => Err(Expect::Value)?,
     }
+}
+
+type WriteFn<T> = fn(&mut dyn std::io::Write, &T) -> std::io::Result<()>;
+type FormatFn<T> = fn(&mut Formatter, &T) -> fmt::Result;
+
+pub(crate) fn write_with(w: &mut dyn std::io::Write, v: &Val, f: WriteFn<Val>) -> std::io::Result<()> {
+    match v {
+        Val::Str(s, Tag::Raw) => w.write_all(s),
+        Val::Str(b, Tag::Bytes) => write_bytes!(w, b),
+        Val::Str(s, Tag::Utf8) => write_utf8!(w, s, |part| w.write_all(part)),
+        _ => write_val!(w, v, |v: &Val| f(w, v)),
+    }
+}
+
+/// Write a value as JSON.
+///
+/// Note that unlike jq, this may actually produce invalid JSON.
+/// In particular, this may yield:
+///
+/// - literals for special floating-point values (nan, inf, -inf)
+/// - invalid UTF-8 characters
+/// - byte strings with `\xXX` sequences
+/// - objects with non-string keys
+///
+/// The key principles behind this behaviour are:
+///
+/// 1. Printing a value should always succeed.
+///    (Otherwise, there would exist values that we could not even inspect.)
+/// 2. Printing a value should yield valid JSON if and only if
+///    the value can be represented by an equivalent JSON value.
+///    (To give users a chance to find non-JSON values and to take appropriate action.)
+///
+/// jq and jaq agree on principle 1, but disagree on principle 2.
+/// In particular, this shows by the fact that `jq -n 'nan'` yields `null`.
+/// That means that jq maps values that cannot be represented by JSON
+/// to different values that can be represented by JSON.
+///
+/// In summary,
+/// jq may cause silent information loss, whereas
+/// jaq may yield invalid JSON values.
+/// Choose your poison.
+pub fn write(w: &mut dyn std::io::Write, v: &Val) -> std::io::Result<()> {
+    write_with(w, v, |w, v| write(w, v))
+}
+
+/// Format a value as compact JSON, using a custom function to format child values.
+///
+/// This is useful to override how certain values are printed, e.g. for YAML.
+pub(crate) fn format_with(w: &mut Formatter, v: &Val, f: FormatFn<Val>) -> fmt::Result {
+    write_val!(w, v, |v: &Val| f(w, v))
 }
