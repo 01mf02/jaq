@@ -1,4 +1,4 @@
-use core::num::ParseIntError;
+use core::{fmt::Debug, num::ParseIntError};
 use jaq_json::{cbor, json};
 
 // Thanks to: <https://stackoverflow.com/a/52992629>
@@ -9,20 +9,26 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
         .collect()
 }
 
+fn unwrap_collect<T, E: Debug>(iter: impl Iterator<Item = Result<T, E>>) -> Vec<T> {
+    iter.collect::<Result<Vec<_>, _>>().unwrap()
+}
+
 fn jc(json: &str, cbor_hex: &str) {
     //dbg!(json);
-    let json_val = json::parse_single(json.as_bytes()).unwrap();
+    let json_val = unwrap_collect(json::parse_many(json.as_bytes()));
 
     let cbor_bin = decode_hex(cbor_hex).unwrap();
     //dbg!(&cbor_bin);
-    let cbor_val = cbor::parse_single(&*cbor_bin).unwrap();
+    let cbor_val = unwrap_collect(cbor::parse_many(&*cbor_bin));
     assert_eq!(json_val, cbor_val);
 
     let mut cbor_bin2 = Vec::new();
-    cbor::write(&mut cbor_bin2, &cbor_val).unwrap();
+    cbor_val
+        .iter()
+        .for_each(|v| cbor::write(&mut cbor_bin2, v).unwrap());
     //dbg!(&cbor_bin2);
 
-    let cbor_val2 = cbor::parse_single(&*cbor_bin2).unwrap();
+    let cbor_val2 = unwrap_collect(cbor::parse_many(&*cbor_bin2));
     assert_eq!(cbor_val, cbor_val2);
 }
 

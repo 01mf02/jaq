@@ -12,22 +12,6 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
     core::iter::from_fn(move || st.parse_stream_entry())
 }
 
-/// Parse exactly one YAML document.
-pub fn parse_single(s: &str) -> Result<Val, PError> {
-    let mut st = State::new(Parser::new_from_str(s));
-    assert!(matches!(st.next(), Ok((Event::StreamStart, _))));
-    let doc = match st.next()? {
-        (Event::StreamEnd, span) => Err(PError::Single(false, Span(span))),
-        next => st.parse_doc(next),
-    }?;
-    match st.next() {
-        Ok((Event::DocumentStart(_), span)) => Err(PError::Single(true, Span(span))),
-        Ok((Event::StreamEnd, _)) => Ok(doc),
-        // Can we somehow trigger this? If so, please report this!
-        _ => panic!(),
-    }
-}
-
 macro_rules! write_yaml {
     ($w:ident, $v:ident, $f:expr) => {{
         match $v {
@@ -72,8 +56,6 @@ pub enum PError {
     Lex(LError),
     /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
     Scalar(Cow<'static, str>, String, Span),
-    /// Single value expected, found none if false and more than one if true
-    Single(bool, Span),
 }
 
 impl fmt::Display for PError {
@@ -87,11 +69,6 @@ impl fmt::Display for PError {
                 };
                 write!(f, "scalar \"{s}\" {msg} tag {tag} ({span})")
             }
-            Self::Single(some, span) => write!(
-                f,
-                "expected single YAML value, found {} ({span})",
-                if *some { "more than one" } else { "none" }
-            ),
         }
     }
 }

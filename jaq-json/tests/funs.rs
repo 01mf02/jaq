@@ -23,8 +23,6 @@ yields!(tocbor, "-10 | tocbor | . == ([41] | tobytes)", true);
 yields!(fromyaml_doc1, r#""---\n1" | fromyaml"#, 1);
 yields!(fromyaml_doc2, r#""1\n..." | fromyaml"#, 1);
 yields!(fromyaml_doc3, r#""---\n1\n..." | fromyaml"#, 1);
-yields!(fromyaml_none, r#""" | fromyaml? // -1"#, -1);
-yields!(fromyaml_some, r#""1\n---" | fromyaml? // -1"#, -1);
 yields!(fromyaml_nan, r#"".nan" | fromyaml | isnan"#, true);
 yields!(fromyaml_inf, r#"".inf" | fromyaml == infinite"#, true);
 yields!(fromyaml_ninf, r#""-.inf" | fromyaml == -infinite"#, true);
@@ -40,6 +38,9 @@ yields!(
     r#""{\"a\":1,true: 2,3: 4}" | fromyaml | keys"#,
     json!([true, 3, "a"])
 );
+yields!(fromyaml_none, r#""" | [fromyaml]"#, json!([]));
+yields!(fromyaml_many, r#""1\n---\n2" | [fromyaml]"#, [1, 2]);
+
 yields!(toyaml_nan, "nan | toyaml", ".nan");
 yields!(toyaml_inf, "[infinite, -infinite] | toyaml", "[.inf,-.inf]");
 yields!(toyaml_bytes, r#""Hi!" | tobytes | toyaml"#, "!!binary SGkh");

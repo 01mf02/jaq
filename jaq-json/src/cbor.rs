@@ -74,11 +74,6 @@ impl From<PError<io::Error>> for io::Error {
     }
 }
 
-/// Parse exactly one CBOR value.
-pub fn parse_single(b: &[u8]) -> Result<Val, BoxError> {
-    parse_one(b).map_err(Into::into)
-}
-
 /// Parse a sequence of CBOR values.
 pub fn parse_many(b: &[u8]) -> impl Iterator<Item = Result<Val, BoxError>> + '_ {
     decode_many(b).map(|r| r.map_err(Into::into))
@@ -92,13 +87,6 @@ pub fn read_many(read: impl io::Read) -> impl Iterator<Item = io::Result<Val>> {
 /// Write a value as CBOR.
 pub fn write(w: &mut dyn io::Write, v: &Val) -> io::Result<()> {
     write_one(v, w)
-}
-
-/// Decode a single CBOR value.
-fn parse_one<R: Read>(read: R) -> Result<Val, PError<R::Error>> {
-    let mut decoder = Decoder::from(read);
-    let header = decoder.pull()?;
-    parse(header, &mut decoder)
 }
 
 /// Decode a sequence of CBOR values.

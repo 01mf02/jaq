@@ -11,24 +11,25 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod funs;
 mod num;
+#[macro_use]
+mod write;
 
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
-use core::fmt::{self, Debug};
+use core::fmt;
 use core::hash::{Hash, Hasher};
-use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_core::{load, ops, path, val, DataT, Exn, Native, RunPtr};
-use jaq_std::{run, unary, v, Filter, ValT as _};
-pub use num::Num;
+use jaq_core::box_iter::box_once;
+use jaq_core::{load, ops, path, val, Exn};
 use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
 
-#[macro_use]
-mod write;
+pub use funs::{base_funs, funs};
+pub use num::Num;
 
 #[cfg(feature = "cbor")]
 pub mod cbor;
@@ -92,10 +93,8 @@ enum Type {
     Float,
     /// `-"a"`, `"a" | round`
     Num,
-    /*
     /// `{(0): 1}` or `0 | fromjson` or `0 | explode` or `"a b c" | split(0)`
     Str,
-    */
     /// `0 | sort` or `0 | implode` or `[] | .[0:] = 0`
     Arr,
     /// `0 | .[]` or `0 | .[0]` or `0 | keys` (array or object)
@@ -110,7 +109,7 @@ impl Type {
             Self::Int => "integer",
             Self::Float => "floating-point number",
             Self::Num => "number",
-            //Self::Str => "string",
+            Self::Str => "string",
             Self::Arr => "array",
             Self::Iter => "iterable (array or object)",
             Self::Range => "rangeable (array or string)",
@@ -370,193 +369,6 @@ pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
         .into_iter()
 }
 
-impl Val {
-    /// Return 0 for null, the absolute value for numbers, and
-    /// the length for strings, arrays, and objects.
-    ///
-    /// Fail on booleans.
-    fn length(&self) -> ValR {
-        match self {
-            Val::Null => Ok(Val::from(0usize)),
-            Val::Num(n) => Ok(Val::Num(n.length())),
-            Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
-            Val::Str(b, Tag::Bytes | Tag::Raw) => Ok(Val::from(b.len() as isize)),
-            Val::Arr(a) => Ok(Val::from(a.len() as isize)),
-            Val::Obj(o) => Ok(Val::from(o.len() as isize)),
-            Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
-        }
-    }
-
-    /// Return the indices of `y` in `self`.
-    fn indices<'a>(&'a self, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
-        match (self, y) {
-            (Val::Str(_, tag @ (Tag::Bytes | Tag::Utf8)), Val::Str(y, tag_))
-                if tag == tag_ && y.is_empty() =>
-            {
-                Ok(Box::new(core::iter::empty()))
-            }
-            (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
-            (Val::Str(x, Tag::Utf8), Val::Str(y, Tag::Utf8)) => {
-                let index = |(i, _, _)| x.get(i..i + y.len());
-                let iw = x.char_indices().map_while(index).enumerate();
-                Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
-            }
-            (Val::Str(x, tag @ Tag::Bytes), Val::Str(y, tag_)) if tag == tag_ => {
-                let iw = x.windows(y.len()).enumerate();
-                Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
-            }
-            (Val::Arr(x), Val::Arr(y)) => {
-                let iw = x.windows(y.len()).enumerate();
-                Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
-            }
-            (Val::Arr(x), y) => {
-                let ix = x.iter().enumerate();
-                Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
-            }
-            (x, y) => Err(Error::index(x.clone(), y.clone())),
-        }
-    }
-
-    fn skip_take(range: jaq_core::val::Range<&Self>, len: usize) -> Result<(usize, usize), Error> {
-        let (from, upto) = (range.start, range.end);
-        let from = from.as_ref().map(|i| i.as_isize()).transpose();
-        let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
-        from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-            let from = abs_bound(from, len, 0);
-            let upto = abs_bound(upto, len, len);
-            skip_take(from, upto)
-        })
-    }
-
-    fn to_bytes(&self) -> Result<Bytes, Self> {
-        match self {
-            Val::Num(n) => n
-                .as_isize()
-                .and_then(|i| u8::try_from(i).ok())
-                .map(|u| Bytes::from(Vec::from([u])))
-                .ok_or_else(|| self.clone()),
-            Val::Str(b, _) => Ok(b.clone()),
-            Val::Arr(a) => {
-                let mut buf = BytesMut::new();
-                for x in a.iter() {
-                    buf.put(Val::to_bytes(x)?);
-                }
-                Ok(buf.into())
-            }
-            _ => Err(self.clone()),
-        }
-    }
-}
-
-/// Functions of the standard library.
-#[cfg(feature = "parse")]
-pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
-    base_funs().chain(parse_funs().into_vec().into_iter().map(run))
-}
-
-/// Minimal set of filters.
-pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
-    base().into_vec().into_iter().map(run)
-}
-
-fn box_once_err<'a>(r: ValR) -> BoxIter<'a, ValX> {
-    box_once(r.map_err(Exn::from))
-}
-
-fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
-    Box::new([
-        ("tojson", v(0), |cv| {
-            let mut buf = Vec::new();
-            json::write(&mut buf, &cv.1).unwrap();
-            box_once(Ok(Val::from_utf8_bytes(buf)))
-        }),
-        ("tobytes", v(0), |cv| {
-            let pass = |b| Val::Str(b, Tag::Bytes);
-            let fail = |v| Error::str(format_args!("cannot convert {v} to bytes"));
-            box_once_err(cv.1.to_bytes().map(pass).map_err(fail))
-        }),
-        ("torawstring", v(0), |cv| {
-            box_once(Ok(match cv.1 {
-                Val::Str(s, _) => Val::Str(s, Tag::Raw),
-                v => Val::Str(v.to_string().into(), Tag::Raw),
-            }))
-        }),
-        ("length", v(0), |cv| box_once_err(cv.1.length())),
-        ("contains", v(1), |cv| {
-            unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
-        }),
-        ("has", v(1), |cv| unary(cv, |v, k| v.has(&k).map(Val::from))),
-        ("indices", v(1), |cv| {
-            let to_int = |i: usize| Val::from(i as isize);
-            unary(cv, move |x, v| {
-                x.indices(&v).map(|idxs| idxs.map(to_int).collect())
-            })
-        }),
-        ("bsearch", v(1), |cv| {
-            let to_idx = |r: Result<_, _>| r.map_or_else(|i| -1 - i as isize, |i| i as isize);
-            unary(cv, move |a, x| {
-                a.as_arr().map(|a| Val::from(to_idx(a.binary_search(&x))))
-            })
-        }),
-    ])
-}
-
-fn parse_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Error {
-    Error::str(format_args!("cannot parse {i} as {fmt}: {e}"))
-}
-
-fn serialise_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Error {
-    Error::str(format_args!("cannot serialise {i} as {fmt}: {e}"))
-}
-
-#[cfg(feature = "parse")]
-fn parse_funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
-    Box::new([
-        ("fromjson", v(0), |cv| {
-            let parse = |s| json::parse_single(s).map_err(|e| parse_fail(&cv.1, "JSON", e));
-
-            box_once_err(cv.1.try_as_utf8_bytes().and_then(parse))
-        }),
-        ("fromcbor", v(0), |cv| {
-            let parse = |b| cbor::parse_single(b).map_err(|e| parse_fail(&cv.1, "CBOR", e));
-            box_once_err(cv.1.try_as_bytes().and_then(parse))
-        }),
-        ("fromyaml", v(0), |cv| {
-            let parse = |b: &str| yaml::parse_single(b).map_err(|e| parse_fail(&cv.1, "YAML", e));
-            let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.and_then(|s| parse(&s)))
-        }),
-        ("fromtoml", v(0), |cv| {
-            let parse = |b: &str| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
-            let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.and_then(|s| parse(&s)))
-        }),
-        ("fromxml", v(0), |cv| {
-            let parse = |b: &str| xml::parse_collect(b).map_err(|e| parse_fail(&cv.1, "XML", e));
-            let s = cv.1.try_as_utf8_bytes().map(String::from_utf8_lossy);
-            box_once_err(s.and_then(|s| parse(&s)))
-        }),
-        ("tocbor", v(0), |cv| {
-            let mut buf = Vec::new();
-            cbor::write(&mut buf, &cv.1).unwrap();
-            box_once_err(Ok(Val::byte_str(buf)))
-        }),
-        ("toyaml", v(0), |cv| {
-            let mut buf = Vec::new();
-            yaml::write(&mut buf, &cv.1).unwrap();
-            box_once(Ok(Val::from_utf8_bytes(buf)))
-        }),
-        ("totoml", v(0), |cv| {
-            let ser = toml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "TOML", e));
-            box_once_err(ser.map(|ser| Val::utf8_str(ser.to_string())))
-        }),
-        ("toxml", v(0), |cv| {
-            let ser = xml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "XML", e));
-            box_once_err(ser.map(|ser| Val::utf8_str(ser.to_string())))
-        }),
-    ])
-}
-
 fn skip_take(from: usize, until: usize) -> (usize, usize) {
     (from, until.saturating_sub(from))
 }
@@ -636,38 +448,15 @@ impl Val {
         }
     }
 
-    /// Return true if `value | .[key]` is defined.
-    ///
-    /// Fail on values that are neither binaries, arrays nor objects.
-    fn has(&self, key: &Self) -> Result<bool, Error> {
-        match (self, key) {
-            (Self::Str(a, Tag::Bytes), Self::Num(Num::Int(i))) if *i >= 0 => {
-                Ok((*i as usize) < a.len())
-            }
-            (Self::Arr(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
-            (a @ (Self::Str(_, Tag::Bytes) | Self::Arr(_)), Self::Num(Num::BigInt(i))) => {
-                a.has(&Self::from(bigint_to_int_saturated(i)))
-            }
-            (Self::Obj(o), k) => Ok(o.contains_key(k)),
-            _ => Err(Error::index(self.clone(), key.clone())),
-        }
-    }
-
-    /// `a` contains `b` iff either
-    /// * the string `b` is a substring of `a`,
-    /// * every element in the array `b` is contained in some element of the array `a`,
-    /// * for every key-value pair `k, v` in `b`,
-    ///   there is a key-value pair `k, v'` in `a` such that `v'` contains `v`, or
-    /// * `a` equals `b`.
-    fn contains(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Str(l, tag), Self::Str(r, tag_)) if tag == tag_ => l.contains_str(r),
-            (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
-            (Self::Obj(l), Self::Obj(r)) => r
-                .iter()
-                .all(|(k, r)| l.get(k).is_some_and(|l| l.contains(r))),
-            _ => self == other,
-        }
+    fn skip_take(range: jaq_core::val::Range<&Self>, len: usize) -> Result<(usize, usize), Error> {
+        let (from, upto) = (range.start, range.end);
+        let from = from.as_ref().map(|i| i.as_isize()).transpose();
+        let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
+        from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
+            let from = abs_bound(from, len, 0);
+            let upto = abs_bound(upto, len, len);
+            skip_take(from, upto)
+        })
     }
 }
 

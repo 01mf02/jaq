@@ -11,11 +11,6 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
     core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
 }
 
-/// Parse a stream of root XML values and collect it into an array.
-pub(crate) fn parse_collect(s: &str) -> Result<Val, PError> {
-    parse_many(s).collect()
-}
-
 /// Serialise a value to an XML value.
 pub fn serialise<'a>(v: &'a Val) -> Result<impl Display + 'a, impl Display> {
     XmlVal::try_from(v)
