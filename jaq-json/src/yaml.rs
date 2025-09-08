@@ -79,7 +79,6 @@ impl From<ScanError> for PError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for PError {}
 
 type EventSpan<'input> = (Event<'input>, saphyr_parser::Span);

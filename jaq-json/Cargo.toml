@@ -12,9 +12,8 @@ categories = ["data-structures"]
 rust-version = "1.70"
 
 [features]
-default = ["formats", "std"]
+default = ["formats"]
 formats = ["cbor", "json", "toml", "xml", "yaml"]
-std = ["hifijson/std"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
 json = ["hifijson"]
@@ -40,7 +39,7 @@ serde_json = { version = "1.0.81", default-features = false, features = ["alloc"
 base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }
-hifijson = { version = "0.2.0", default-features = false, features = ["alloc"], optional = true }
+hifijson = { version = "0.2.0", default-features = false, features = ["alloc", "std"], optional = true }
 saphyr-parser = { version = "0.0.6", optional = true }
 toml_edit = { version = "0.23.2", optional = true }
 xmlparser = { version = "0.13.6", optional = true }

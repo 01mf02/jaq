@@ -13,7 +13,6 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Er
     core::iter::from_fn(move || Some(parse(lexer.ws_token()?, &mut lexer)))
 }
 
-#[cfg(feature = "std")]
 /// Read a sequence of JSON values.
 pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
     use crate::invalid_data;

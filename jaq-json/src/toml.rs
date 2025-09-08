@@ -53,10 +53,8 @@ impl fmt::Display for PError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for PError {}
 
-#[cfg(feature = "std")]
 impl std::error::Error for SError {}
 
 fn value(v: Value) -> Result<Val, PError> {

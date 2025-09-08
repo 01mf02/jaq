@@ -8,7 +8,6 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
-#[cfg(feature = "std")]
 extern crate std;
 
 #[cfg(feature = "formats")]
@@ -17,6 +16,20 @@ mod funs;
 mod num;
 #[macro_use]
 mod write;
+
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "json")]
+pub mod json;
+#[cfg(feature = "toml")]
+pub mod toml;
+#[cfg(feature = "xml")]
+pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
+
+#[cfg(feature = "serde_json")]
+mod serde_json;
 
 use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, string::String, vec::Vec};
 use bstr::{BStr, ByteSlice};
@@ -33,20 +46,6 @@ pub use funs::base_funs;
 #[cfg(feature = "formats")]
 pub use funs::funs;
 pub use num::Num;
-
-#[cfg(feature = "cbor")]
-pub mod cbor;
-#[cfg(feature = "json")]
-pub mod json;
-#[cfg(feature = "toml")]
-pub mod toml;
-#[cfg(feature = "xml")]
-pub mod xml;
-#[cfg(feature = "yaml")]
-pub mod yaml;
-
-#[cfg(feature = "serde_json")]
-mod serde_json;
 
 /// JSON superset with binary data and non-string object keys.
 ///

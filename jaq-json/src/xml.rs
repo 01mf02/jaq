@@ -87,7 +87,6 @@ impl From<xmlparser::Error> for PError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for PError {}
 
 fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, PError> {
@@ -244,7 +243,6 @@ impl fmt::Display for SError {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for SError {}
 
 /// XML value.
