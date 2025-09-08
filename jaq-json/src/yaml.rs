@@ -1,5 +1,5 @@
 //! YAML support.
-use crate::{json, Num, Val};
+use crate::{write, Num, Val};
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
@@ -26,12 +26,12 @@ macro_rules! write_yaml {
 
 /// Format a value as YAML document, without explicit document start/end markers.
 pub fn format(w: &mut Formatter, v: &Val) -> fmt::Result {
-    write_yaml!(w, v, json::format_with(w, v, format))
+    write_yaml!(w, v, write::format_with(w, v, format))
 }
 
 /// Write a value as YAML document, without explicit document start/end markers.
 pub fn write(w: &mut dyn std::io::Write, v: &Val) -> std::io::Result<()> {
-    write_yaml!(w, v, json::write_with(w, v, |w, v| write(w, v)))
+    write_yaml!(w, v, write::write_with(w, v, |w, v| write(w, v)))
 }
 
 /// Lex error.

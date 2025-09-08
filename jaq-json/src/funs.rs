@@ -125,6 +125,7 @@ pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter
 
 fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
+        ("tojson", v(0), |cv| bome(Ok(Val::utf8_str(cv.1.to_json())))),
         ("tobytes", v(0), |cv| {
             let pass = |b| Val::Str(b, Tag::Bytes);
             let fail = |v| Error::str(format_args!("cannot convert {v} to bytes"));

@@ -18,8 +18,7 @@ mod num;
 #[macro_use]
 mod write;
 
-use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, string::String, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
@@ -315,8 +314,7 @@ impl jaq_core::ValT for Val {
         if let Self::Str(b, _tag) = self {
             Self::utf8_str(b)
         } else {
-            // TODO: do not corrupt non-UTF-8 characters
-            Self::utf8_str(self.to_string())
+            Self::utf8_str(self.to_json())
         }
     }
 }
@@ -464,6 +462,12 @@ impl Val {
             let upto = abs_bound(upto, len, len);
             skip_take(from, upto)
         })
+    }
+
+    fn to_json(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        write::write(&mut buf, self).unwrap();
+        buf
     }
 }
 

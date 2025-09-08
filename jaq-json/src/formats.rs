@@ -104,11 +104,6 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             let parse = |b| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
             bome(cv.1.try_as_utf8_bytes().and_then(from_utf8).and_then(parse))
         }),
-        ("tojson", v(0), |cv| {
-            let mut buf = Vec::new();
-            json::write(&mut buf, &cv.1).unwrap();
-            box_once(Ok(Val::from_utf8_bytes(buf)))
-        }),
         ("tocbor", v(0), |cv| {
             let mut buf = Vec::new();
             cbor::write(&mut buf, &cv.1).unwrap();
@@ -117,7 +112,7 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         ("toyaml", v(0), |cv| {
             let mut buf = Vec::new();
             yaml::write(&mut buf, &cv.1).unwrap();
-            box_once(Ok(Val::from_utf8_bytes(buf)))
+            box_once(Ok(Val::utf8_str(buf)))
         }),
         ("totoml", v(0), |cv| {
             let ser = toml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "TOML", e));
