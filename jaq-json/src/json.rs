@@ -103,7 +103,7 @@ pub(crate) fn write_with(w: &mut dyn io::Write, v: &Val, f: WriteFn<Val>) -> io:
 /// Note that unlike jq, this may actually produce invalid JSON.
 /// In particular, this may yield:
 ///
-/// - literals for special floating-point values (nan, inf, -inf)
+/// - literals for special floating-point values (NaN, Infinity, -Infinity)
 /// - invalid UTF-8 characters
 /// - byte strings with `\xXX` sequences
 /// - objects with non-string keys

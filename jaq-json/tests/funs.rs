@@ -108,15 +108,11 @@ yields!(length_int_neg, "-2 | length", 2);
 yields!(length_float_pos, " 2.5 | length", 2.5);
 yields!(length_float_neg, "-2.5 | length", 2.5);
 
-#[test]
-fn tojson() {
-    // TODO: correct this
-    give(json!(1.0), "tojson", json!("1.0"));
-    give(json!(0), "1.0 | tojson", json!("1.0"));
-    give(json!(0), "1.1 | tojson", json!("1.1"));
-    give(json!(0), "0.0 / 0.0 | tojson", json!("null"));
-    give(json!(0), "1.0 / 0.0 | tojson", json!("null"));
-}
+yields!(tojson_fl0, "1.0 | tojson", "1.0");
+yields!(tojson_fl1, "1.1 | tojson", "1.1");
+yields!(tojson_nan, "0.0 / 0.0 | tojson", "NaN");
+yields!(tojson_inf, "1.0 / 0.0 | tojson", "Infinity");
+yields!(tojson_ninf, "-1.0 / 0.0 | tojson", "-Infinity");
 
 #[test]
 fn tonumber() {

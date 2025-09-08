@@ -329,8 +329,10 @@ impl fmt::Display for Num {
         match self {
             Self::Int(i) => write!(f, "{i}"),
             Self::BigInt(i) => write!(f, "{i}"),
-            Self::Float(x) if x.is_finite() => ryu::Buffer::new().format_finite(*x).fmt(f),
-            Self::Float(_) => write!(f, "null"),
+            Self::Float(x) if x.is_nan() => write!(f, "NaN"),
+            Self::Float(f64::INFINITY) => write!(f, "Infinity"),
+            Self::Float(f64::NEG_INFINITY) => write!(f, "-Infinity"),
+            Self::Float(x) => ryu::Buffer::new().format_finite(*x).fmt(f),
             Self::Dec(n) => write!(f, "{n}"),
         }
     }
