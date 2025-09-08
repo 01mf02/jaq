@@ -1,0 +1,43 @@
+{
+  "xmldecl": {
+    "version": "1.0"
+  }
+}
+{
+  "pi": {
+    "target": "xml-stylesheet",
+    "content": "href=\"common.css\""
+  }
+}
+{
+  "doctype": {
+    "name": "html"
+  }
+}
+{
+  "t": "html",
+  "a": {
+    "xmlns": "http://www.w3.org/1999/xhtml"
+  },
+  "c": [
+    "\n  ",
+    {
+      "t": "body",
+      "c": [
+        "\n    ",
+        {
+          "comment": " CDATA blocks do not require escaping "
+        },
+        "\n    ",
+        {
+          "cdata": "Hello & goodbye!"
+        },
+        {
+          "t": "br"
+        },
+        "\n  "
+      ]
+    },
+    "\n"
+  ]
+}

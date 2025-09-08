@@ -2,7 +2,7 @@
 use crate::{bstr, Map, Val};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
-use core::fmt::{self, Display, Formatter};
+use core::fmt::{self, Formatter};
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
 /// Parse a stream of root XML values.
@@ -12,7 +12,7 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
 }
 
 /// Serialise a value to an XML value.
-pub fn serialise<'a>(v: &'a Val) -> Result<impl Display + 'a, impl Display> {
+pub fn serialise(v: &Val) -> Result<XmlVal<&[u8]>, SError> {
     XmlVal::try_from(v)
 }
 
@@ -225,7 +225,7 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, PError> {
 
 /// Serialisation error.
 #[derive(Debug)]
-enum SError {
+pub enum SError {
     /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
     InvalidEntry(&'static str, Val, Val),
     /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`
@@ -246,7 +246,7 @@ impl fmt::Display for SError {
 impl std::error::Error for SError {}
 
 /// XML value.
-enum XmlVal<S> {
+pub enum XmlVal<S> {
     /// XML declaration, e.g. `<?xml version='1.0' encoding='UTF-8' standalone='yes'?>`
     XmlDecl(Vec<(S, S)>),
     /// DOCTYPE directive, e.g. `<!DOCTYPE greeting SYSTEM "hello.dtd" [...]>`
@@ -391,7 +391,7 @@ impl fmt::Display for XmlVal<&[u8]> {
             Self::XmlDecl(a) => {
                 write!(f, "<?xml")?;
                 write_kvs(f, a)?;
-                write!(f, ">")
+                write!(f, "?>")
             }
             Self::DocType {
                 name,
@@ -414,7 +414,7 @@ impl fmt::Display for XmlVal<&[u8]> {
                 if let Some(s) = content {
                     write!(f, " {}", bstr(s))?;
                 }
-                write!(f, ">")
+                write!(f, "?>")
             }
         }
     }
