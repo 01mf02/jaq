@@ -11,6 +11,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+#[cfg(feature = "formats")]
+mod formats;
 mod funs;
 mod num;
 #[macro_use]
@@ -28,7 +30,9 @@ use jaq_core::{load, ops, path, val, Exn};
 use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
 
-pub use funs::{base_funs, funs};
+pub use funs::base_funs;
+#[cfg(feature = "formats")]
+pub use funs::funs;
 pub use num::Num;
 
 #[cfg(feature = "cbor")]
@@ -93,8 +97,10 @@ enum Type {
     Float,
     /// `-"a"`, `"a" | round`
     Num,
+    /*
     /// `{(0): 1}` or `0 | fromjson` or `0 | explode` or `"a b c" | split(0)`
     Str,
+    */
     /// `0 | sort` or `0 | implode` or `[] | .[0:] = 0`
     Arr,
     /// `0 | .[]` or `0 | .[0]` or `0 | keys` (array or object)
@@ -109,7 +115,7 @@ impl Type {
             Self::Int => "integer",
             Self::Float => "floating-point number",
             Self::Num => "number",
-            Self::Str => "string",
+            //Self::Str => "string",
             Self::Arr => "array",
             Self::Iter => "iterable (array or object)",
             Self::Range => "rangeable (array or string)",
@@ -309,6 +315,7 @@ impl jaq_core::ValT for Val {
         if let Self::Str(b, _tag) = self {
             Self::utf8_str(b)
         } else {
+            // TODO: do not corrupt non-UTF-8 characters
             Self::utf8_str(self.to_string())
         }
     }
@@ -738,14 +745,14 @@ pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display
 
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        json::format_with(f, self, |f, v| write!(f, "{v}"))
+        write_val!(f, self, |v: &Val| v.fmt(f))
     }
 }
 
-#[cfg(feature = "parse")]
+#[cfg(feature = "formats")]
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-#[cfg(feature = "parse")]
+#[cfg(feature = "formats")]
 fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }

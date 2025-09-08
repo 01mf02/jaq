@@ -12,8 +12,8 @@ categories = ["data-structures"]
 rust-version = "1.70"
 
 [features]
-default = ["parse", "std"]
-parse = ["cbor", "json", "toml", "xml", "yaml"]
+default = ["formats", "std"]
+formats = ["cbor", "json", "toml", "xml", "yaml"]
 std = ["hifijson/std"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
