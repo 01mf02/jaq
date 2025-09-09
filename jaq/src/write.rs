@@ -135,8 +135,8 @@ pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
         (_, Format::Cbor) => cbor::write(w, val)?,
         (_, Format::Json | Format::Raw) => write_json(w, &pp(), 0, val)?,
         (_, Format::Yaml) => write_yaml(w, &pp(), 0, val)?,
-        (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::serialise(val))?)?,
-        (_, Format::Xml) => map_err_to_string(xml::XmlVal::try_from(val))?.write(w)?,
+        (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Toml::try_from(val))?)?,
+        (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
     };
 
     if cli.join_output || matches!(format, Format::Cbor) {

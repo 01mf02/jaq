@@ -147,7 +147,7 @@ fn xml() {
     let xml_val = unwrap_collect(xml::parse_many(xml));
     assert_eq!(json_val, xml_val);
 
-    let serialise = |v| format!("{}\n", xml::XmlVal::try_from(v).unwrap());
+    let serialise = |v| format!("{}\n", xml::Xml::try_from(v).unwrap());
     let xml2: Vec<_> = json_val.iter().map(serialise).collect();
     assert_eq!(xml, xml2.concat());
 }

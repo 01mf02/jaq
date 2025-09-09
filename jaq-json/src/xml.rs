@@ -242,7 +242,7 @@ impl fmt::Display for SError {
 impl std::error::Error for SError {}
 
 /// XML value.
-pub enum XmlVal<S> {
+pub enum Xml<S> {
     /// XML declaration, e.g. `<?xml version='1.0' encoding='UTF-8' standalone='yes'?>`
     XmlDecl(Vec<(S, S)>),
     /// DOCTYPE directive, e.g. `<!DOCTYPE greeting SYSTEM "hello.dtd" [...]>`
@@ -275,7 +275,7 @@ pub enum XmlVal<S> {
     Comment(S),
 }
 
-impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
+impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
     type Error = SError;
     fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
         use jaq_std::ValT;
@@ -380,10 +380,10 @@ macro_rules! write_kvs {
 macro_rules! write_val {
     ($w:ident, $v:ident, $fs:expr, $fv:expr) => {{
         match $v {
-            XmlVal::Scalar(Val::Str(s, _)) => $fs(s),
-            XmlVal::Scalar(v) => write!($w, "{v}"),
-            XmlVal::Seq(a) => a.iter().try_for_each($fv),
-            XmlVal::Tac(t, a, c) => {
+            Xml::Scalar(Val::Str(s, _)) => $fs(s),
+            Xml::Scalar(v) => write!($w, "{v}"),
+            Xml::Seq(a) => a.iter().try_for_each($fv),
+            Xml::Tac(t, a, c) => {
                 write!($w, "<")?;
                 $fs(t)?;
                 write_kvs!($w, a, $fs)?;
@@ -397,7 +397,7 @@ macro_rules! write_val {
                     write!($w, "/>")
                 }
             }
-            XmlVal::XmlDecl(a) => {
+            Xml::XmlDecl(a) => {
                 write!($w, "<?xml")?;
                 write_kvs!($w, a, $fs)?;
                 write!($w, "?>")
@@ -443,13 +443,13 @@ macro_rules! write_val {
     }};
 }
 
-impl fmt::Display for XmlVal<&[u8]> {
+impl fmt::Display for Xml<&[u8]> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write_val!(f, self, |s| bstr(s).fmt(f), |v: &Self| v.fmt(f))
     }
 }
 
-impl XmlVal<&[u8]> {
+impl Xml<&[u8]> {
     /// Write an XML value.
     pub fn write(&self, w: &mut dyn io::Write) -> io::Result<()> {
         write_val!(w, self, |s: &[u8]| w.write_all(s), |v: &Self| v.write(w))

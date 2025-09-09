@@ -10,15 +10,9 @@ pub fn parse(s: &str) -> Result<Val, PError> {
     table(s.parse::<Document<String>>()?.into_table())
 }
 
-/// Serialise a value as a TOML document.
-pub fn serialise(v: &Val) -> Result<impl Display, impl Display> {
-    let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
-    obj.and_then(obj_table).map(DocumentMut::from)
-}
-
 /// Serialisation error.
 #[derive(Debug)]
-enum SError {
+pub enum SError {
     /// non-string key in object
     Key(Val),
     /// non-table value as root
@@ -84,6 +78,23 @@ fn table(t: Table) -> Result<Val, PError> {
         .map(|(k, v)| Ok((k.into(), item(v)?)))
         .collect::<Result<_, _>>()
         .map(Val::obj)
+}
+
+/// TOML root value.
+pub struct Toml(DocumentMut);
+
+impl Display for Toml {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<'a> TryFrom<&Val> for Toml {
+    type Error = SError;
+    fn try_from(v: &Val) -> Result<Self, Self::Error> {
+        let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
+        obj.and_then(obj_table).map(DocumentMut::from).map(Self)
+    }
 }
 
 fn obj_table(o: &Map) -> Result<Table, SError> {

@@ -115,12 +115,12 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             box_once(Ok(Val::utf8_str(buf)))
         }),
         ("totoml", v(0), |cv| {
-            let ser = toml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "TOML", e));
+            let ser = toml::Toml::try_from(&cv.1).map_err(|e| serialise_fail(&cv.1, "TOML", e));
             bome(ser.map(|ser| Val::utf8_str(ser.to_string())))
         }),
         ("toxml", v(0), |cv| {
             let fail = |e| serialise_fail(&cv.1, "XML", e);
-            bome(xml::XmlVal::try_from(&cv.1).map_err(fail).map(|v| {
+            bome(xml::Xml::try_from(&cv.1).map_err(fail).map(|v| {
                 let mut buf = Vec::new();
                 v.write(&mut buf).unwrap();
                 Val::utf8_str(buf)
