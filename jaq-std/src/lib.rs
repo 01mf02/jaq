@@ -26,7 +26,7 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{borrow::Cow, boxed::Box, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use jaq_core::box_iter::{box_once, then, BoxIter};
 use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValT as _, ValX, ValXs};
@@ -203,9 +203,10 @@ trait ValTx: ValT + Sized {
     }
 
     /// If the value is interpreted as UTF-8 string,
-    /// return its `str` representation, replacing invalid characters.
-    fn try_as_str(&self) -> Result<Cow<'_, str>, Error<Self>> {
-        self.try_as_utf8_bytes().map(String::from_utf8_lossy)
+    /// return its `str` representation.
+    fn try_as_str(&self) -> Result<&str, Error<Self>> {
+        self.try_as_utf8_bytes()
+            .and_then(|s| core::str::from_utf8(s).map_err(Error::str))
     }
 
     fn map_utf8_str<B>(self, f: impl FnOnce(&[u8]) -> B) -> ValR<Self>
