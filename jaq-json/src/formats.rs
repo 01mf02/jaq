@@ -119,8 +119,12 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             bome(ser.map(|ser| Val::utf8_str(ser.to_string())))
         }),
         ("toxml", v(0), |cv| {
-            let ser = xml::serialise(&cv.1).map_err(|e| serialise_fail(&cv.1, "XML", e));
-            bome(ser.map(|ser| Val::utf8_str(ser.to_string())))
+            let fail = |e| serialise_fail(&cv.1, "XML", e);
+            bome(xml::XmlVal::try_from(&cv.1).map_err(fail).map(|v| {
+                let mut buf = Vec::new();
+                v.write(&mut buf).unwrap();
+                Val::utf8_str(buf)
+            }))
         }),
     ])
 }

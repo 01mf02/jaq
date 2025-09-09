@@ -3,17 +3,13 @@ use crate::{bstr, Map, Val};
 use alloc::string::{String, ToString};
 use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
 use core::fmt::{self, Formatter};
+use std::io;
 use xmlparser::{ElementEnd, ExternalId, StrSpan, TextPos, Token, Tokenizer};
 
 /// Parse a stream of root XML values.
 pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
     let mut tokens = Tokenizer::from(s);
     core::iter::from_fn(move || tokens.next().map(|tk| parse(tk?, &mut tokens)))
-}
-
-/// Serialise a value to an XML value.
-pub fn serialise(v: &Val) -> Result<XmlVal<&[u8]>, SError> {
-    XmlVal::try_from(v)
 }
 
 /// Prefix and local name of a tag.
@@ -369,53 +365,93 @@ impl<'a> TryFrom<&'a Val> for XmlVal<&'a [u8]> {
     }
 }
 
-impl fmt::Display for XmlVal<&[u8]> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let write_kvs = |f: &mut Formatter, a: &Vec<_>| {
-            a.iter()
-                .try_for_each(|(k, v)| write!(f, " {}=\"{}\"", bstr(k), bstr(v)))
-        };
-        match self {
-            Self::Scalar(Val::Str(s, _)) => write!(f, "{}", bstr(s)),
-            Self::Scalar(v) => write!(f, "{v}"),
-            Self::Seq(a) => a.iter().try_for_each(|v| v.fmt(f)),
-            Self::Tac(t, a, c) => {
-                write!(f, "<{}", bstr(t))?;
-                write_kvs(f, a)?;
+macro_rules! write_kvs {
+    ($w:ident, $a:ident, $f:expr) => {{
+        $a.iter().try_for_each(|(k, v)| {
+            write!($w, " ")?;
+            $f(k)?;
+            write!($w, "=\"")?;
+            $f(v)?;
+            write!($w, "\"")
+        })
+    }};
+}
+
+macro_rules! write_val {
+    ($w:ident, $v:ident, $fs:expr, $fv:expr) => {{
+        match $v {
+            XmlVal::Scalar(Val::Str(s, _)) => $fs(s),
+            XmlVal::Scalar(v) => write!($w, "{v}"),
+            XmlVal::Seq(a) => a.iter().try_for_each($fv),
+            XmlVal::Tac(t, a, c) => {
+                write!($w, "<")?;
+                $fs(t)?;
+                write_kvs!($w, a, $fs)?;
                 if let Some(c) = c {
-                    write!(f, ">{c}</{}>", bstr(t))
+                    write!($w, ">")?;
+                    $fv(c)?;
+                    write!($w, "</")?;
+                    $fs(t)?;
+                    write!($w, ">")
                 } else {
-                    write!(f, "/>")
+                    write!($w, "/>")
                 }
             }
-            Self::XmlDecl(a) => {
-                write!(f, "<?xml")?;
-                write_kvs(f, a)?;
-                write!(f, "?>")
+            XmlVal::XmlDecl(a) => {
+                write!($w, "<?xml")?;
+                write_kvs!($w, a, $fs)?;
+                write!($w, "?>")
             }
             Self::DocType {
                 name,
                 external,
                 internal,
             } => {
-                write!(f, "<!DOCTYPE {}", bstr(name))?;
+                write!($w, "<!DOCTYPE ")?;
+                $fs(name)?;
                 if let Some(s) = external {
-                    write!(f, " {}", bstr(s))?;
+                    write!($w, " ")?;
+                    $fs(s)?;
                 }
                 if let Some(s) = internal {
-                    write!(f, " [{}]", bstr(s))?;
+                    write!($w, " [")?;
+                    $fs(s)?;
+                    write!($w, "]")?;
                 }
-                write!(f, ">")
+                write!($w, ">")
             }
-            Self::Cdata(s) => write!(f, "<![CDATA[{}]]>", bstr(s)),
-            Self::Comment(s) => write!(f, "<!--{}-->", bstr(s)),
+            Self::Cdata(s) => {
+                write!($w, "<![CDATA[")?;
+                $fs(s)?;
+                write!($w, "]]>")
+            }
+            Self::Comment(s) => {
+                write!($w, "<!--")?;
+                $fs(s)?;
+                write!($w, "-->")
+            }
             Self::Pi { target, content } => {
-                write!(f, "<?{}", bstr(target))?;
+                write!($w, "<?")?;
+                $fs(target)?;
                 if let Some(s) = content {
-                    write!(f, " {}", bstr(s))?;
+                    write!($w, " ")?;
+                    $fs(s)?;
                 }
-                write!(f, "?>")
+                write!($w, "?>")
             }
         }
+    }};
+}
+
+impl fmt::Display for XmlVal<&[u8]> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write_val!(f, self, |s| bstr(s).fmt(f), |v: &Self| v.fmt(f))
+    }
+}
+
+impl XmlVal<&[u8]> {
+    /// Write an XML value.
+    pub fn write(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        write_val!(w, self, |s: &[u8]| w.write_all(s), |v: &Self| v.write(w))
     }
 }
