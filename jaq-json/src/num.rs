@@ -70,6 +70,17 @@ impl Num {
         }
     }
 
+    pub(crate) fn as_pos_usize(&self) -> Option<PosUsize> {
+        match self {
+            Self::Int(i) => Some(PosUsize(*i >= 0, i.unsigned_abs())),
+            Self::BigInt(i) => i
+                .magnitude()
+                .to_usize()
+                .map(|u| PosUsize(i.sign() != Sign::Minus, u)),
+            _ => None,
+        }
+    }
+
     /// If the value is or can be converted to float, return it, else fail.
     pub(crate) fn as_f64(&self) -> Option<f64> {
         match self {
@@ -91,6 +102,27 @@ impl Num {
             Self::Float(f) => Self::Float(f.abs()),
         }
     }
+}
+
+#[derive(Copy, Clone)]
+pub(crate) struct PosUsize(bool, usize);
+
+impl PosUsize {
+    pub fn wrap(&self, len: usize) -> Option<usize> {
+        self.0.then_some(self.1).or_else(|| len.checked_sub(self.1))
+    }
+}
+
+#[test]
+fn wrap_test() {
+    let len = 4;
+    let pos = |i| PosUsize(true, i);
+    let neg = |i| PosUsize(false, i);
+    assert_eq!(pos(0).wrap(len), Some(0));
+    assert_eq!(pos(8).wrap(len), Some(8));
+    assert_eq!(neg(1).wrap(len), Some(3));
+    assert_eq!(neg(4).wrap(len), Some(0));
+    assert_eq!(neg(8).wrap(len), None);
 }
 
 fn int_or_big<const N: usize>(

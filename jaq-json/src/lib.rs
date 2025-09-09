@@ -166,15 +166,14 @@ impl jaq_core::ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
-            (Val::Str(a, Tag::Bytes), Val::Num(Num::Int(i))) => {
-                Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| Val::from(a[i] as isize)))
-            }
-            (Val::Arr(a), Val::Num(Num::Int(i))) => {
-                Ok(abs_index(*i, a.len()).map_or(Val::Null, |i| a[i].clone()))
-            }
-            (a @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), Val::Num(Num::BigInt(i))) => {
-                a.index(&Val::Num(Num::Int(bigint_to_int_saturated(i))))
-            }
+            (Val::Str(a, Tag::Bytes), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => Ok(i
+                .as_pos_usize()
+                .and_then(|i| abs_index(i, a.len()))
+                .map_or(Val::Null, |i| Val::from(a[i] as usize))),
+            (Val::Arr(a), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => Ok(i
+                .as_pos_usize()
+                .and_then(|i| abs_index(i, a.len()))
+                .map_or(Val::Null, |i| a[i].clone())),
             (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
             (s @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
             (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
@@ -256,10 +255,9 @@ impl jaq_core::ValT for Val {
             }
             Val::Arr(ref mut a) => {
                 let a = Rc::make_mut(a);
-                let abs_or = |i| {
-                    abs_index(i, a.len()).ok_or(Error::str(format_args!("index {i} out of bounds")))
-                };
-                let i = match index.as_isize().and_then(abs_or) {
+                let oob = || Error::str(format_args!("index {index} out of bounds"));
+                let abs_or = |i| abs_index(i, a.len()).ok_or_else(oob);
+                let i = match index.as_pos_usize().and_then(abs_or) {
                     Ok(i) => i,
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
@@ -284,8 +282,8 @@ impl jaq_core::ValT for Val {
     ) -> ValX {
         if let Val::Arr(ref mut a) = self {
             let a = Rc::make_mut(a);
-            let from = range.start.as_ref().map(|i| i.as_isize()).transpose();
-            let upto = range.end.as_ref().map(|i| i.as_isize()).transpose();
+            let from = range.start.as_ref().map(|i| i.as_pos_usize()).transpose();
+            let upto = range.end.as_ref().map(|i| i.as_pos_usize()).transpose();
             let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
                 Ok(from_upto) => from_upto,
                 Err(e) => return opt.fail(self, |_| Exn::from(e)),
@@ -379,33 +377,13 @@ fn skip_take(from: usize, until: usize) -> (usize, usize) {
 
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
 /// else return `default`.
-fn abs_bound(i: Option<isize>, len: usize, default: usize) -> usize {
-    i.map_or(default, |i| core::cmp::min(wrap(i, len).unwrap_or(0), len))
+fn abs_bound(i: Option<num::PosUsize>, len: usize, default: usize) -> usize {
+    i.map_or(default, |i| core::cmp::min(i.wrap(len).unwrap_or(0), len))
 }
 
 /// Absolutise an index and return result if it is inside [0, len).
-fn abs_index(i: isize, len: usize) -> Option<usize> {
-    wrap(i, len).filter(|i| *i < len)
-}
-
-fn wrap(i: isize, len: usize) -> Option<usize> {
-    if i >= 0 {
-        Some(i as usize)
-    } else if len < -i as usize {
-        None
-    } else {
-        Some(len - (-i as usize))
-    }
-}
-
-#[test]
-fn wrap_test() {
-    let len = 4;
-    assert_eq!(wrap(0, len), Some(0));
-    assert_eq!(wrap(8, len), Some(8));
-    assert_eq!(wrap(-1, len), Some(3));
-    assert_eq!(wrap(-4, len), Some(0));
-    assert_eq!(wrap(-8, len), None);
+fn abs_index(i: num::PosUsize, len: usize) -> Option<usize> {
+    i.wrap(len).filter(|i| *i < len)
 }
 
 impl Val {
@@ -431,10 +409,10 @@ impl Val {
         }
     }
 
-    /// If the value is a machine-sized integer, return it, else fail.
-    fn as_isize(&self) -> Result<isize, Error> {
+    /// If the value is an integer in [-usize::MAX, +usize::MAX], return it, else fail.
+    fn as_pos_usize(&self) -> Result<num::PosUsize, Error> {
         let fail = || Error::typ(self.clone(), Type::Int.as_str());
-        self.as_num().and_then(Num::as_isize).ok_or_else(fail)
+        self.as_num().and_then(Num::as_pos_usize).ok_or_else(fail)
     }
 
     /// If the value is an array, return it, else fail.
@@ -454,8 +432,8 @@ impl Val {
 
     fn skip_take(range: jaq_core::val::Range<&Self>, len: usize) -> Result<(usize, usize), Error> {
         let (from, upto) = (range.start, range.end);
-        let from = from.as_ref().map(|i| i.as_isize()).transpose();
-        let upto = upto.as_ref().map(|i| i.as_isize()).transpose();
+        let from = from.as_ref().map(|i| i.as_pos_usize()).transpose();
+        let upto = upto.as_ref().map(|i| i.as_pos_usize()).transpose();
         from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
             let from = abs_bound(from, len, 0);
             let upto = abs_bound(upto, len, len);
