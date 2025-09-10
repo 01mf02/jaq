@@ -89,7 +89,7 @@ impl Display for Toml {
     }
 }
 
-impl<'a> TryFrom<&Val> for Toml {
+impl TryFrom<&Val> for Toml {
     type Error = SError;
     fn try_from(v: &Val) -> Result<Self, Self::Error> {
         let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
