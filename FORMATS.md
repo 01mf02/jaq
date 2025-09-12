@@ -2,6 +2,9 @@ jaq supports reading and writing the following formats:
 
 - UTF-8 text (`raw`)
 - JSON (`json`)
+- YAML (`yaml`)
+- CBOR (`cbor`)
+- TOML (`toml`)
 - XML (`xml`)
 
 jaq tries to guess the file format from the file name;
@@ -14,15 +17,16 @@ e.g. `--from xml`.
 
 ## JSON
 
-jaq reads and writes JSON data as specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
+jaq can read and write JSON data as specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
 A good overview of the syntax is given at <https://www.json.org>.
 
-jaq diverges in one point from JSON:
-Where JSON limits object keys to strings,
-jaq allows arbitrary values as object keys.
+jaq's JSON parser accepts a slight superset of JSON, where
+strings may contain non-UTF-8 characters (such as the FF byte) and
+objects may contain non-string keys.
+The reasoning behind allowing these changes is that they actually make the parser faster and simpler, while continuing to parse valid JSON as before.
 For example, the following is invalid JSON, but is allowed in jaq:
 
-    {null: 1, true: 2, 3: 4, "5": 6, [7]: 8}
+    {null: 0, true: 1, 2: 3, "str": 4, ["arr"]: 5, {}: 6}
 
 This change simplifies parsing and makes jaq more flexible,
 because it allows using objects as hash maps for arbitrary keys.
