@@ -12,3 +12,6 @@ resolver = "2"
 [profile.release]
 strip = true
 codegen-units = 1
+
+[patch.crates-io]
+regex-lite = { git = 'https://github.com/01mf02/regex', package = 'regex-lite', branch = 'bytes' }

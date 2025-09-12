@@ -68,7 +68,7 @@ pub(crate) fn run(
     let vars = Vars::new(vars);
 
     for item in if cli.null_input { null } else { iter } {
-        let data = funs::Data::new(&filter.lut, iter);
+        let data = funs::Data::new(cli, &filter.lut, iter);
         let ctx = Ctx::new(&data, vars.clone());
         let input = item.map_err(Error::Parse)?;
         //println!("Got {:?}", input);

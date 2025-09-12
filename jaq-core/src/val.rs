@@ -134,10 +134,8 @@ pub trait ValT:
     /// This is used by `if v then ...`.
     fn as_bool(&self) -> bool;
 
-    /// If the value is a string, return it.
+    /// Convert value into a string value.
     ///
-    /// If `v.as_str()` yields `Some(s)`, then
-    /// `"\(v)"` yields `s`, otherwise it yields `v.to_string()`
-    /// (provided by [`Display`]).
-    fn as_str(&self) -> Option<&str>;
+    /// This is used by `"\(v)"`.
+    fn into_string(self) -> Self;
 }

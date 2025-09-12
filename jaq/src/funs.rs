@@ -1,4 +1,4 @@
-use crate::{filter, run, write, Cli, Error, Val};
+use crate::{filter, run, style, write, Cli, Error, Val};
 use jaq_core::{data, DataT, Lut, Native, RunPtr};
 use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
@@ -14,13 +14,14 @@ impl DataT for DataKind {
 }
 
 pub struct Data<'a> {
+    cli: &'a Cli,
     lut: &'a Lut<DataKind>,
     inputs: Inputs<'a, Val>,
 }
 
 impl<'a> Data<'a> {
-    pub fn new(lut: &'a Lut<DataKind>, inputs: Inputs<'a, Val>) -> Self {
-        Self { lut, inputs }
+    pub fn new(cli: &'a Cli, lut: &'a Lut<DataKind>, inputs: Inputs<'a, Val>) -> Self {
+        Self { cli, lut, inputs }
     }
 }
 
@@ -52,7 +53,8 @@ static REPL_KILL_DEPTH: AtomicUsize = AtomicUsize::new(0);
 pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
         let depth = REPL_DEPTH.fetch_add(1, Ordering::Relaxed);
-        repl_with(depth, |s| match eval(s, cv.1.clone()) {
+        let cli = cv.0.data().cli;
+        repl_with(cli, depth, |s| match eval(cli, s, cv.1.clone()) {
             Ok(()) => (),
             Err(e) => eprint!("{e}"),
         })
@@ -63,26 +65,27 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
     })
 }
 
-fn eval(code: String, input: Val) -> Result<(), Error> {
+fn eval(cli: &Cli, code: String, input: Val) -> Result<(), Error> {
     let (ctx, filter) =
         filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
-    let cli = &Cli::default();
     let inputs = core::iter::once(Ok(input));
     crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| write::print(out, cli, &v)))?;
     Ok(())
 }
 
-fn repl_with(depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
+fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     use rustyline::config::{Behavior, Config};
-    use yansi::Paint;
+    use style::ANSI;
     let config = Config::builder()
         .behavior(Behavior::PreferTerm)
         .auto_add_history(true)
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
     let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
+    let style = ANSI.if_color(cli.color_stdout());
     let _ = history.iter().try_for_each(|h| rl.load_history(h));
-    let prompt = format!("{}{} ", str::repeat("  ", depth), '>'.bold());
+    let prompt = style.display(style.bold, '>');
+    let prompt = format!("{}{} ", str::repeat("  ", depth), prompt);
     let mut first = true;
     loop {
         use core::cmp::Ordering::{Equal, Greater, Less};

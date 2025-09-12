@@ -4,8 +4,8 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Native, Lut, Vars};
-use jaq_json::{fmt_str, Val};
+use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
+use jaq_json::{bstr, json, write_byte, write_bytes, write_utf8, Tag, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
@@ -83,15 +83,21 @@ where
 }
 
 fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
-    let display = |s| FormatterFn(move |f: &mut Formatter| fmt_str(f, &escape(s)));
     match v {
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
-        Val::Int(i) => span(f, "number", i),
-        Val::Float(x) if x.is_finite() => span_dbg(f, "number", x),
-        Val::Float(_) => span(f, "null", "null"),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s) => span(f, "string", display(s)),
+        Val::Str(s, Tag::Raw) => write!(f, "{}", bstr(&escape_bytes(s))),
+        Val::Str(b, Tag::Bytes) => {
+            let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
+            span(f, "bytes", escape_str(&fun.to_string()))
+        }
+        Val::Str(s, Tag::Utf8) => {
+            let fun = FormatterFn(move |f: &mut Formatter| {
+                write_utf8!(f, s, |part| bstr(&escape_bytes(part)).fmt(f))
+            });
+            span(f, "string", fun)
+        }
         Val::Arr(a) if a.is_empty() => write!(f, "[]"),
         Val::Arr(a) => {
             write!(f, "[")?;
@@ -101,13 +107,14 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
         Val::Obj(o) => {
             write!(f, "{{")?;
-            fmt_seq(f, opts, level, &**o, |f, (k, val)| {
-                span(f, "key", display(k))?;
+            fmt_seq(f, opts, level, &**o, |f, (k, v)| {
+                use jaq_std::ValT;
+                fmt_val(f, opts, level + 1, k)?;
                 write!(f, ":")?;
-                if !opts.compact {
+                if !opts.compact || !k.is_utf8_str() {
                     write!(f, " ")?;
                 }
-                fmt_val(f, opts, level + 1, val)
+                fmt_val(f, opts, level + 1, v)
             })?;
             write!(f, "}}")
         }
@@ -118,16 +125,16 @@ fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
     write!(f, "<span class=\"{cls}\">{el}</span>")
 }
 
-fn span_dbg(f: &mut Formatter, cls: &str, el: impl Debug) -> fmt::Result {
-    write!(f, "<span class=\"{cls}\">{el:?}</span>")
-}
+const AC_PATTERNS: &[&str] = &["&", "<", ">"];
+const AC_REPLACES: &[&str] = &["&amp;", "&lt;", "&gt;"];
 
-fn escape(s: &str) -> String {
-    use aho_corasick::AhoCorasick;
-    let patterns = &["&", "<", ">"];
-    let replaces = &["&amp;", "&lt;", "&gt;"];
-    let ac = AhoCorasick::new(patterns).unwrap();
-    ac.replace_all(s, replaces)
+fn escape_bytes(s: &[u8]) -> Vec<u8> {
+    let ac = aho_corasick::AhoCorasick::new(AC_PATTERNS).unwrap();
+    ac.replace_all_bytes(s, AC_REPLACES)
+}
+fn escape_str(s: &str) -> String {
+    let ac = aho_corasick::AhoCorasick::new(AC_PATTERNS).unwrap();
+    ac.replace_all(s, AC_REPLACES)
 }
 
 #[allow(dead_code)]
@@ -192,7 +199,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 
     let post_value = |y| {
         let s = FormatterFn(|f: &mut Formatter| match &y {
-            Val::Str(s) if settings.raw_output => span(f, "string", escape(s)),
+            Val::Str(s, _) if settings.raw_output => span(f, "string", bstr(&escape_bytes(s))),
             y => fmt_val(f, &pp_opts, 0, y),
         });
         scope.post_message(&s.to_string().into()).unwrap();
@@ -235,7 +242,7 @@ fn read_str<'a>(
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
-        let vals = json_slice(input.as_bytes());
+        let vals = json::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
         Box::new(collect_if(settings.slurp, vals))
     }
 }
@@ -246,14 +253,6 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     } else {
         Box::new(input.lines()) as Box<dyn Iterator<Item = _>>
     }
-}
-
-fn json_slice(slice: &[u8]) -> impl Iterator<Item = Result<Val, String>> + '_ {
-    let mut lexer = hifijson::SliceLexer::new(slice);
-    core::iter::from_fn(move || {
-        use hifijson::token::Lex;
-        Some(Val::parse(lexer.ws_token()?, &mut lexer).map_err(|e| e.to_string()))
-    })
 }
 
 fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(

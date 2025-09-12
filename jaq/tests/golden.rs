@@ -127,6 +127,18 @@ const ONE23: &str = "One\nTwo\nThree\n";
 test!(raw_input_slurp, &["-Rs"], ONE23, r#""One\nTwo\nThree\n""#);
 
 test!(
+    rawfile,
+    &[
+        "--rawfile",
+        "a",
+        "tests/256.bin",
+        "($a | tobytes) == ([range(256)] | tobytes)"
+    ],
+    "0",
+    "true"
+);
+
+test!(
     raw_input,
     &["-R"],
     ONE23,
@@ -148,6 +160,15 @@ test!(
     r#"{"विश\u094dव": 1}"#,
     r#"{"विश्व":1}"#
 );
+
+test!(
+    non_str_key,
+    &["-c"],
+    r#"{1: 2, 3.1415: 4, ["foo"]: "bar", {true: false}: true}"#,
+    r#"{1: 2,3.1415: 4,["foo"]: "bar",{true: false}: true}"#
+);
+
+test!(surrogate_pair, &[], r#""\uD801\uDC37""#, r#""𐐷""#);
 
 test!(
     mods,

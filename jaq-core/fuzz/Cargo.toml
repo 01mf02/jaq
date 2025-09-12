@@ -38,3 +38,6 @@ name = "parse_tokens"
 path = "fuzz_targets/parse_tokens.rs"
 test = false
 doc = false
+
+[patch.crates-io]
+regex-lite = { git = 'https://github.com/01mf02/regex', package = 'regex-lite', branch = 'bytes' }

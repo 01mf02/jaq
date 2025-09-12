@@ -99,10 +99,10 @@ textarea {
 }
 
 .string  { color: green; }
+.bytes   { color: red; }
 .number  { color: darkorange; }
 .boolean { color: blue; }
 .null    { color: magenta; }
-.key     { color: red; }
 
 .red     { color: #dc322f; }
 .yellow  { color: #b58900; }

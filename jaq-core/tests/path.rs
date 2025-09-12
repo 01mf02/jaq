@@ -23,7 +23,10 @@ fn index_access() {
     give(json!({"_a": 1}), "._a", json!(1));
     give(json!({"_0": 1}), "._0", json!(1));
 
-    give(json!({"a": 1}), r#".[0, "a", 0 == 0]?"#, json!(1));
+    // this diverges from jq, which fails here, because
+    // jaq can create objects with non-string keys
+    give(json!({"a": 1}), r#".[0]"#, json!(null));
+
     give(json!([0, 1, 2]), r#".["a", 0, 0 == 0]?"#, json!(0));
     give(json!([0, 1, 2]), r#".[3]?"#, json!(null));
     gives(json!("asdf"), ".[0]?", []);
@@ -101,7 +104,6 @@ fn index_update() {
     fail(json!([0, 1, 2]), ".[-4] |= -1", Oob(-4));
     */
 
-    give(json!({"a": 1}), r#".[0, "a"]? |= .+1"#, json!({"a": 2}));
     give(json!([0, 1, 2]), r#".["a", 0]? |= .+1"#, json!([1, 1, 2]));
     give(json!([0, 1, 2]), r#".[3]? |= .+1"#, json!([0, 1, 2]));
     give(json!("asdf"), ".[0]? |= .+1", json!("asdf"));
@@ -121,15 +123,18 @@ fn iter_update() {
 
     give(json!([1]), ".[] |= .+1", json!([2]));
     give(json!([[1]]), ".[][] |= .+1", json!([[2]]));
-
-    give(
-        json!({"a": 1, "b": 2}),
-        ".[] |= ((if .>1 then . else {}[] end) | .+1)",
-        json!({"b": 3}),
-    );
-
-    give(json!([[0, 1], "a"]), ".[][]? |= .+1", json!([[1, 2], "a"]));
 }
+
+yields!(
+    obj_iter_update,
+    r#"{"a": 1, "b": 2} | .[] |= ((if .>1 then . else {}[] end) | .+1)"#,
+    json!({"b": 3})
+);
+yields!(
+    arr_iter_opt_update,
+    r#"[[0, 1], "a"] | .[][]? |= .+1"#,
+    json!([[1, 2], "a"])
+);
 
 #[test]
 fn range_update() {
@@ -177,7 +182,7 @@ fn update_complex() {
     // in general, `a | a |= .`
     // works in jq when `a` is either null, a number, or a boolean --- it
     // does *not* work when `a` is a string, an array, or an object!
-    fail(json!(0), "0 |= .+1", Error::path_expr(Val::Int(0)));
+    fail(json!(0), "0 |= .+1", Error::path_expr(Val::from(0usize)));
 }
 
 yields!(alt_update_l, "[1, 2] | .[] // . |= 3", [3, 3]);

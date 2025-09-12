@@ -10,6 +10,53 @@ yields!(bsearch_absent2, "[1, 3] | bsearch(2)", -2);
 yields!(bsearch_absent3, "[1, 3] | bsearch(4)", -3);
 yields!(bsearch_present, "[1, 3] | [bsearch(1, 3)]", [0, 1]);
 
+yields!(byteoff1, r#""asd" as $x | $x[1:] | byteoffset($x)  "#, 1);
+yields!(byteoff2, r#""asd" as $x | "df" | byteoffset($x)? // 9"#, 9);
+yields!(byteoff3, r#""asd" as $x | $x | byteoffset($x[1:])"#, -1);
+
+// 41 = 0x29
+yields!(fromcbor1, "[41] | tobytes | fromcbor", -10);
+yields!(fromcbor2, "[99, 230, 176, 180] | tobytes | fromcbor", "水");
+yields!(tocbor, "-10 | tocbor | . == ([41] | tobytes)", true);
+
+// "---" starts a new value, "..." ends a previous value
+yields!(fromyaml_doc1, r#""---\n1" | fromyaml"#, 1);
+yields!(fromyaml_doc2, r#""1\n..." | fromyaml"#, 1);
+yields!(fromyaml_doc3, r#""---\n1\n..." | fromyaml"#, 1);
+yields!(fromyaml_nan, r#"".nan" | fromyaml | isnan"#, true);
+yields!(fromyaml_inf, r#"".inf" | fromyaml == infinite"#, true);
+yields!(fromyaml_ninf, r#""-.inf" | fromyaml == -infinite"#, true);
+yields!(fromyaml_bytes, r#""!!binary SGkh" | fromyaml"#, "Hi!");
+yields!(fromyaml_str, r#""abc" | fromyaml"#, "abc");
+yields!(
+    fromyaml_arr,
+    r#""[0.0, abc]" | fromyaml"#,
+    json!([0.0, "abc"])
+);
+yields!(
+    fromyaml_obj,
+    r#""{\"a\":1,true: 2,3: 4}" | fromyaml | keys"#,
+    json!([true, 3, "a"])
+);
+yields!(fromyaml_none, r#""" | [fromyaml]"#, json!([]));
+yields!(fromyaml_many, r#""1\n---\n2" | [fromyaml]"#, [1, 2]);
+
+yields!(toyaml_nan, "nan | toyaml", ".nan");
+yields!(toyaml_inf, "[infinite, -infinite] | toyaml", "[.inf,-.inf]");
+yields!(toyaml_bytes, r#""Hi!" | tobytes | toyaml"#, "!!binary SGkh");
+yields!(toyaml_str, r#""abc" | toyaml"#, r#""abc""#);
+yields!(toyaml_arr, r#"[0.0, "abc"] | toyaml"#, r#"[0.0,"abc"]"#);
+yields!(
+    toyaml_obj,
+    "{a: 1, (true): 2, (3): 4} | toyaml",
+    "{\"a\":1,true: 2,3: 4}"
+);
+yields!(
+    toyaml_ff,
+    r"255 | tobytes | tostring | toyaml | explode",
+    [34, -255, 34]
+);
+
 #[test]
 fn has() {
     /* TODO: reenable these tests
@@ -61,15 +108,11 @@ yields!(length_int_neg, "-2 | length", 2);
 yields!(length_float_pos, " 2.5 | length", 2.5);
 yields!(length_float_neg, "-2.5 | length", 2.5);
 
-#[test]
-fn tojson() {
-    // TODO: correct this
-    give(json!(1.0), "tojson", json!("1.0"));
-    give(json!(0), "1.0 | tojson", json!("1.0"));
-    give(json!(0), "1.1 | tojson", json!("1.1"));
-    give(json!(0), "0.0 / 0.0 | tojson", json!("null"));
-    give(json!(0), "1.0 / 0.0 | tojson", json!("null"));
-}
+yields!(tojson_fl0, "1.0 | tojson", "1.0");
+yields!(tojson_fl1, "1.1 | tojson", "1.1");
+yields!(tojson_nan, "0.0 / 0.0 | tojson", "NaN");
+yields!(tojson_inf, "1.0 / 0.0 | tojson", "Infinity");
+yields!(tojson_ninf, "-1.0 / 0.0 | tojson", "-Infinity");
 
 #[test]
 fn tonumber() {
@@ -163,3 +206,9 @@ fn math_rem() {
     give(json!(null), "2000000001 % 3", json!(0));
     give(json!(null), "2000000001 % 2000000001", json!(0));
 }
+
+yields!(
+    format_urid_invalid,
+    r#"("%FF" | @urid) == ([255] | tobytes | tostring)"#,
+    true
+);

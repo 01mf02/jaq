@@ -1,4 +1,4 @@
-//! Standard library for a JSON query language.
+//! Standard library for the jq language.
 //!
 //! The standard library provides a set of filters.
 //! These filters are either implemented as definitions or as functions.
@@ -26,7 +26,8 @@ mod regex;
 mod time;
 
 use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
+use bstr::{BStr, ByteSlice};
 use jaq_core::box_iter::{box_once, then, BoxIter};
 use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValT as _, ValX, ValXs};
 
@@ -95,14 +96,21 @@ where
         .chain([debug(), stderr()].map(upd))
 }
 
-/// Values that the core library can operate on.
-pub trait ValT: jaq_core::ValT + Ord + From<f64> {
+/// Values that the standard library can operate on.
+pub trait ValT: jaq_core::ValT + Ord + From<f64> + From<usize> {
     /// Convert an array into a sequence.
     ///
     /// This returns the original value as `Err` if it is not an array.
     fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self>;
 
-    /// Use the value as integer.
+    /// True if the value is integer.
+    fn is_int(&self) -> bool;
+
+    /// Use the value as machine-sized integer.
+    ///
+    /// If this function returns `Some(_)`, then [`Self::is_int`] must return true.
+    /// However, the other direction must not necessarily be the case, because
+    /// there may be integer values that are not representable by `isize`.
     fn as_isize(&self) -> Option<isize>;
 
     /// Use the value as floating-point number.
@@ -111,32 +119,35 @@ pub trait ValT: jaq_core::ValT + Ord + From<f64> {
     /// because the value may either be
     /// not a number or a number that does not fit into [`f64`].
     fn as_f64(&self) -> Result<f64, Error<Self>>;
+
+    /// True if the value is interpreted as UTF-8 string.
+    fn is_utf8_str(&self) -> bool;
+
+    /// If the value is a string (whatever its interpretation), return its bytes.
+    fn as_bytes(&self) -> Option<&[u8]>;
+
+    /// If the value is interpreted as UTF-8 string, return its bytes.
+    fn as_utf8_bytes(&self) -> Option<&[u8]> {
+        self.is_utf8_str().then(|| self.as_bytes()).flatten()
+    }
+
+    /// If the value is a string (whatever its interpretation), return its bytes, else fail.
+    fn try_as_bytes(&self) -> Result<&[u8], Error<Self>> {
+        self.as_bytes().ok_or_else(|| self.fail_str())
+    }
+
+    /// If the value is interpreted as UTF-8 string, return its bytes, else fail.
+    fn try_as_utf8_bytes(&self) -> Result<&[u8], Error<Self>> {
+        self.as_utf8_bytes().ok_or_else(|| self.fail_str())
+    }
+
+    /// If the value is a string and `sub` points to a slice of the string,
+    /// shorten the string to `sub`, else panic.
+    fn as_sub_str(&self, sub: &[u8]) -> Self;
+
+    /// Interpret bytes as UTF-8 string value.
+    fn from_utf8_bytes(b: impl AsRef<[u8]> + Send + 'static) -> Self;
 }
-
-trait ValTS: jaq_core::ValT {
-    fn try_as_str(&self) -> Result<&str, Error<Self>> {
-        self.as_str()
-            .ok_or_else(|| Error::typ(self.clone(), "string"))
-    }
-
-    fn mutate_str(self, f: impl FnOnce(&mut str)) -> ValR<Self> {
-        let mut s = self.try_as_str()?.to_owned();
-        f(&mut s);
-        Ok(Self::from(s))
-    }
-
-    fn trim_with(self, f: impl FnOnce(&str) -> &str) -> ValR<Self> {
-        let s = self.try_as_str()?;
-        let t = f(s);
-        Ok(if core::ptr::eq(s, t) {
-            // the input was already trimmed, so do not allocate new memory
-            self
-        } else {
-            t.to_string().into()
-        })
-    }
-}
-impl<T: jaq_core::ValT> ValTS for T {}
 
 /// Convenience trait for implementing the core functions.
 trait ValTx: ValT + Sized {
@@ -173,11 +184,55 @@ trait ValTx: ValT + Sized {
     }
 
     fn round(self, f: impl FnOnce(f64) -> f64) -> ValR<Self> {
-        if self.as_isize().is_some() {
-            Ok(self)
+        Ok(if self.is_int() {
+            self
         } else {
-            Ok(Self::from(f(self.as_f64()?) as isize))
-        }
+            let f = f(self.as_f64()?);
+            if f.is_finite() {
+                if isize::MIN as f64 <= f && f <= isize::MAX as f64 {
+                    Self::from(f as isize)
+                } else {
+                    // print floating-point number without decimal places,
+                    // i.e. like an integer
+                    Self::from_num(&alloc::format!("{f:.0}"))?
+                }
+            } else {
+                Self::from(f)
+            }
+        })
+    }
+
+    /// If the value is interpreted as UTF-8 string,
+    /// return its `str` representation.
+    fn try_as_str(&self) -> Result<&str, Error<Self>> {
+        self.try_as_utf8_bytes()
+            .and_then(|s| core::str::from_utf8(s).map_err(Error::str))
+    }
+
+    fn map_utf8_str<B>(self, f: impl FnOnce(&[u8]) -> B) -> ValR<Self>
+    where
+        B: AsRef<[u8]> + Send + 'static,
+    {
+        Ok(Self::from_utf8_bytes(f(self.try_as_utf8_bytes()?)))
+    }
+
+    fn trim_utf8_with(&self, f: impl FnOnce(&[u8]) -> &[u8]) -> ValR<Self> {
+        Ok(self.as_sub_str(f(self.try_as_utf8_bytes()?)))
+    }
+
+    /// Helper function to strip away the prefix or suffix of a string.
+    fn strip_fix<F>(self, fix: &Self, f: F) -> Result<Self, Error<Self>>
+    where
+        F: for<'a> FnOnce(&'a [u8], &[u8]) -> Option<&'a [u8]>,
+    {
+        Ok(match f(self.try_as_bytes()?, fix.try_as_bytes()?) {
+            Some(sub) => self.as_sub_str(sub),
+            None => self,
+        })
+    }
+
+    fn fail_str(&self) -> Error<Self> {
+        Error::typ(self.clone(), "string")
     }
 }
 impl<T: ValT> ValTx for T {}
@@ -279,25 +334,58 @@ where
     Ok(Some(mx))
 }
 
-/// Convert a string into an array of its Unicode codepoints.
-fn explode<V: ValT>(s: &str) -> impl Iterator<Item = ValR<V>> + '_ {
-    // conversion from u32 to isize may fail on 32-bit systems for high values of c
-    let conv = |c: char| Ok(isize::try_from(c as u32).map_err(Error::str)?.into());
-    s.chars().map(conv)
+/// Convert a string into an array of its Unicode codepoints (with negative integers representing UTF-8 errors).
+fn explode<V: ValT>(s: &[u8]) -> impl Iterator<Item = ValR<V>> + '_ {
+    let invalid = [].iter();
+    Explode { s, invalid }.map(|r| match r {
+        Err(b) => Ok((-(b as isize)).into()),
+        // conversion from u32 to isize may fail on 32-bit systems for high values of c
+        Ok(c) => Ok(isize::try_from(c as u32).map_err(Error::str)?.into()),
+    })
 }
 
-/// Convert an array of Unicode codepoints into a string.
-fn implode<V: ValT>(xs: &[V]) -> Result<String, Error<V>> {
-    xs.iter().map(as_codepoint).collect()
+struct Explode<'a> {
+    s: &'a [u8],
+    invalid: core::slice::Iter<'a, u8>,
+}
+impl Iterator for Explode<'_> {
+    type Item = Result<char, u8>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.invalid.next().map(|next| Err(*next)).or_else(|| {
+            let (c, size) = bstr::decode_utf8(self.s);
+            let (consumed, rest) = self.s.split_at(size);
+            self.s = rest;
+            c.map(Ok).or_else(|| {
+                // invalid UTF-8 sequence, emit all invalid bytes
+                self.invalid = consumed.iter();
+                self.invalid.next().map(|next| Err(*next))
+            })
+        })
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let max = self.s.len();
+        let min = self.s.len() / 4;
+        let inv = self.invalid.as_slice().len();
+        (min + inv, Some(max + inv))
+    }
 }
 
-/// If the value is an integer representing a valid Unicode codepoint, return it, else fail.
-fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
-    let i = v.try_as_isize()?;
-    // conversion from isize to u32 may fail on 64-bit systems for high values of c
-    let u = u32::try_from(i).map_err(Error::str)?;
-    // may fail e.g. on `[1114112] | implode`
-    char::from_u32(u).ok_or_else(|| Error::str(format_args!("cannot use {u} as character")))
+/// Convert an array of Unicode codepoints (with negative integers representing UTF-8 errors) into a string.
+fn implode<V: ValT>(xs: &[V]) -> Result<Vec<u8>, Error<V>> {
+    let mut v = Vec::with_capacity(xs.len());
+    for x in xs {
+        // on 32-bit systems, some high u32 values cannot be represented as isize
+        let i = x.try_as_isize()?;
+        if let Ok(b) = u8::try_from(-i) {
+            v.push(b)
+        } else {
+            // may fail e.g. on `[1114112] | implode`
+            let c = u32::try_from(i).ok().and_then(char::from_u32);
+            let c = c.ok_or_else(|| Error::str(format_args!("cannot use {i} as character")))?;
+            v.extend(c.encode_utf8(&mut [0; 4]).as_bytes())
+        }
+    }
+    Ok(v)
 }
 
 /// This implements a ~10x faster version of:
@@ -310,7 +398,7 @@ fn as_codepoint<V: ValT>(v: &V) -> Result<char, Error<V>> {
 /// ~~~
 fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<V>> {
     use core::cmp::Ordering::{Equal, Greater, Less};
-    let cmp = by.partial_cmp(&V::from(0)).unwrap_or(Equal);
+    let cmp = by.partial_cmp(&V::from(0usize)).unwrap_or(Equal);
     core::iter::from_fn(move || match from.clone() {
         Ok(x) => match cmp {
             Greater => x < to,
@@ -324,6 +412,23 @@ fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<
             Some(e)
         }
     })
+}
+
+fn byte_offset<V: ValT>(fixed: V, loose: V) -> ValR<V> {
+    let range = |v: &V| {
+        let b = v.try_as_bytes()?;
+        let start = b.as_ptr() as usize;
+        Ok(start..start + b.len())
+    };
+    let f = range(&fixed)?;
+    let l = range(&loose)?;
+    if f.start <= l.end && l.start <= f.end {
+        V::from(l.start) - V::from(f.start)
+    } else {
+        Err(Error::str(format_args!(
+            "{fixed} does not overlap with {loose}"
+        )))
+    }
 }
 
 fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Result<T, E>> {
@@ -371,19 +476,23 @@ where
         ("round", v(0), |cv| bome(cv.1.round(f64::round))),
         ("ceil", v(0), |cv| bome(cv.1.round(f64::ceil))),
         ("utf8bytelength", v(0), |cv| {
-            bome(cv.1.try_as_str().map(|s| (s.len() as isize).into()))
+            bome(cv.1.try_as_utf8_bytes().map(|s| (s.len() as isize).into()))
         }),
         ("explode", v(0), |cv| {
-            bome(cv.1.try_as_str().and_then(|s| explode(s).collect()))
+            bome(cv.1.try_as_utf8_bytes().and_then(|s| explode(s).collect()))
         }),
         ("implode", v(0), |cv| {
-            bome(cv.1.into_vec().and_then(|s| implode(&s)).map(D::V::from))
+            let implode = |s: Vec<_>| implode(&s);
+            bome(cv.1.into_vec().and_then(implode).map(D::V::from_utf8_bytes))
         }),
         ("ascii_downcase", v(0), |cv| {
-            bome(cv.1.mutate_str(str::make_ascii_lowercase))
+            bome(cv.1.map_utf8_str(ByteSlice::to_ascii_lowercase))
         }),
         ("ascii_upcase", v(0), |cv| {
-            bome(cv.1.mutate_str(str::make_ascii_uppercase))
+            bome(cv.1.map_utf8_str(ByteSlice::to_ascii_uppercase))
+        }),
+        ("byteoffset", v(1), |mut cv| {
+            bome(byte_offset(cv.0.pop_var(), cv.1))
         }),
         ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
         ("keys_unsorted", v(0), |cv| {
@@ -425,36 +534,40 @@ where
         }),
         ("startswith", v(1), |cv| {
             unary(cv, |v, s| {
-                Ok(v.try_as_str()?.starts_with(s.try_as_str()?).into())
+                Ok(v.try_as_bytes()?.starts_with(s.try_as_bytes()?).into())
             })
         }),
         ("endswith", v(1), |cv| {
             unary(cv, |v, s| {
-                Ok(v.try_as_str()?.ends_with(s.try_as_str()?).into())
+                Ok(v.try_as_bytes()?.ends_with(s.try_as_bytes()?).into())
             })
         }),
         ("ltrimstr", v(1), |cv| {
-            unary(cv, |v, pre| {
-                Ok(v.try_as_str()?
-                    .strip_prefix(pre.try_as_str()?)
-                    .map_or_else(|| v.clone(), |s| D::V::from(s.to_owned())))
-            })
+            unary(cv, |v, pre| v.strip_fix(&pre, <[u8]>::strip_prefix))
         }),
         ("rtrimstr", v(1), |cv| {
-            unary(cv, |v, suf| {
-                Ok(v.try_as_str()?
-                    .strip_suffix(suf.try_as_str()?)
-                    .map_or_else(|| v.clone(), |s| D::V::from(s.to_owned())))
-            })
+            unary(cv, |v, suf| v.strip_fix(&suf, <[u8]>::strip_suffix))
         }),
-        ("trim", v(0), |cv| bome(cv.1.trim_with(str::trim))),
-        ("ltrim", v(0), |cv| bome(cv.1.trim_with(str::trim_start))),
-        ("rtrim", v(0), |cv| bome(cv.1.trim_with(str::trim_end))),
+        ("trim", v(0), |cv| {
+            bome(cv.1.trim_utf8_with(ByteSlice::trim))
+        }),
+        ("ltrim", v(0), |cv| {
+            bome(cv.1.trim_utf8_with(ByteSlice::trim_start))
+        }),
+        ("rtrim", v(0), |cv| {
+            bome(cv.1.trim_utf8_with(ByteSlice::trim_end))
+        }),
         ("escape_csv", v(0), |cv| {
-            bome(cv.1.try_as_str().map(|s| s.replace('"', "\"\"").into()))
+            bome(
+                cv.1.try_as_utf8_bytes()
+                    .map(|s| ValT::from_utf8_bytes(s.replace(b"\"", b"\"\""))),
+            )
         }),
         ("escape_sh", v(0), |cv| {
-            bome(cv.1.try_as_str().map(|s| s.replace('\'', r"'\''").into()))
+            bome(
+                cv.1.try_as_utf8_bytes()
+                    .map(|s| ValT::from_utf8_bytes(s.replace(b"'", b"'\\''"))),
+            )
         }),
     ])
 }
@@ -527,8 +640,8 @@ where
         ("halt", v(0), |_| std::process::exit(0)),
         ("halt_error", v(1), |mut cv| {
             bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
-                if let Some(s) = cv.1.as_str() {
-                    std::print!("{s}");
+                if let Some(s) = cv.1.as_utf8_bytes() {
+                    std::print!("{}", BStr::new(s));
                 } else {
                     std::println!("{}", cv.1);
                 }
@@ -539,9 +652,9 @@ where
 }
 
 #[cfg(feature = "format")]
-fn replace(s: &str, patterns: &[&str], replacements: &[&str]) -> String {
+fn replace(s: &[u8], patterns: &[&str], replacements: &[&str]) -> Vec<u8> {
     let ac = aho_corasick::AhoCorasick::new(patterns).unwrap();
-    ac.replace_all(s, replacements)
+    ac.replace_all_bytes(s, replacements)
 }
 
 #[cfg(feature = "format")]
@@ -553,34 +666,30 @@ where
         ("escape_html", v(0), |cv| {
             let pats = ["<", ">", "&", "\'", "\""];
             let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-            bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
+            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
         }),
         ("escape_tsv", v(0), |cv| {
             let pats = ["\n", "\r", "\t", "\\", "\0"];
             let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
-            bome(cv.1.try_as_str().map(|s| replace(s, &pats, &reps).into()))
+            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
         }),
         ("encode_uri", v(0), |cv| {
-            use urlencoding::encode;
-            bome(cv.1.try_as_str().map(|s| encode(s).into_owned().into()))
+            bome(cv.1.map_utf8_str(|s| urlencoding::encode_binary(s).to_string()))
         }),
         ("decode_uri", v(0), |cv| {
-            use urlencoding::decode;
-            bome(cv.1.try_as_str().and_then(|s| {
-                let d = decode(s).map_err(Error::str)?;
-                Ok(d.into_owned().into())
-            }))
+            bome(cv.1.map_utf8_str(|s| urlencoding::decode_binary(s).to_vec()))
         }),
         ("encode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            bome(cv.1.try_as_str().map(|s| STANDARD.encode(s).into()))
+            bome(cv.1.map_utf8_str(|s| STANDARD.encode(s)))
         }),
         ("decode_base64", v(0), |cv| {
             use base64::{engine::general_purpose::STANDARD, Engine};
-            use core::str::from_utf8;
-            bome(cv.1.try_as_str().and_then(|s| {
-                let d = STANDARD.decode(s).map_err(Error::str)?;
-                Ok(from_utf8(&d).map_err(Error::str)?.to_owned().into())
+            bome(cv.1.try_as_utf8_bytes().and_then(|s| {
+                STANDARD
+                    .decode(s)
+                    .map_err(Error::str)
+                    .map(ValT::from_utf8_bytes)
             }))
         }),
     ])
@@ -655,7 +764,10 @@ where
 }
 
 #[cfg(feature = "regex")]
-fn re<'a, D: DataT>(s: bool, m: bool, mut cv: Cv<'a, D>) -> ValR<D::V<'a>> {
+fn re<'a, D: DataT>(s: bool, m: bool, mut cv: Cv<'a, D>) -> ValR<D::V<'a>>
+where
+    D::V<'a>: ValT,
+{
     let flags = cv.0.pop_var();
     let re = cv.0.pop_var();
 
@@ -665,16 +777,23 @@ fn re<'a, D: DataT>(s: bool, m: bool, mut cv: Cv<'a, D>) -> ValR<D::V<'a>> {
 
     let flags = regex::Flags::new(flags.try_as_str()?).map_err(fail_flag)?;
     let re = flags.regex(re.try_as_str()?).map_err(fail_re)?;
-    let out = regex::regex(cv.1.try_as_str()?, &re, flags, (s, m));
+    let out = regex::regex(cv.1.try_as_utf8_bytes()?, &re, flags, (s, m));
+    let sub = |s| cv.1.as_sub_str(s);
     let out = out.into_iter().map(|out| match out {
-        Matches(ms) => ms.into_iter().map(|m| D::V::from_map(m.fields())).collect(),
-        Mismatch(s) => Ok(D::V::from(s.to_string())),
+        Matches(ms) => ms
+            .into_iter()
+            .map(|m| D::V::from_map(m.fields(sub)))
+            .collect(),
+        Mismatch(s) => Ok(sub(s)),
     });
     out.collect()
 }
 
 #[cfg(feature = "regex")]
-fn regex<D: DataT>() -> Box<[Filter<RunPtr<D>>]> {
+fn regex<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
+where
+    for<'a> D::V<'a>: ValT,
+{
     let vv = || [Bind::Var(()), Bind::Var(())].into();
     Box::new([
         ("matches", vv(), |cv| bome(re(false, true, cv))),
@@ -752,10 +871,13 @@ fn debug<D: DataT>() -> Filter<RunPathsUpdatePtr<D>> {
 }
 
 #[cfg(feature = "log")]
-fn stderr<D: DataT>() -> Filter<RunPathsUpdatePtr<D>> {
-    fn eprint_raw<V: jaq_core::ValT>(v: &V) {
-        if let Some(s) = v.as_str() {
-            log::error!("{s}")
+fn stderr<D: DataT>() -> Filter<RunPathsUpdatePtr<D>>
+where
+    for<'a> D::V<'a>: ValT,
+{
+    fn eprint_raw<V: ValT>(v: &V) {
+        if let Some(s) = v.as_utf8_bytes() {
+            log::error!("{}", BStr::new(s))
         } else {
             log::error!("{v}")
         }
