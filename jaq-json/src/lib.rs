@@ -31,7 +31,7 @@ pub mod yaml;
 #[cfg(feature = "serde_json")]
 mod serde_json;
 
-use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
@@ -46,6 +46,11 @@ pub use funs::base_funs;
 #[cfg(feature = "formats")]
 pub use funs::funs;
 pub use num::Num;
+
+#[cfg(feature = "sync")]
+pub(crate) type RefPtr<T> = alloc::sync::Arc<T>;
+#[cfg(not(feature = "sync"))]
+pub(crate) type RefPtr<T> = alloc::rc::Rc<T>;
 
 /// JSON superset with binary data and non-string object keys.
 ///
@@ -62,9 +67,9 @@ pub enum Val {
     /// String
     Str(Bytes, Tag),
     /// Array
-    Arr(Rc<Vec<Val>>),
+    Arr(RefPtr<Vec<Val>>),
     /// Object
-    Obj(Rc<Map<Val, Val>>),
+    Obj(RefPtr<Map<Val, Val>>),
 }
 
 /// Interpretation of a string.
@@ -134,8 +139,8 @@ pub type ValX = jaq_core::ValX<Val>;
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
 // However, to keep MSRV low, we reimplement it here.
-fn rc_unwrap_or_clone<T: Clone>(a: Rc<T>) -> T {
-    Rc::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
+fn rc_unwrap_or_clone<T: Clone>(a: RefPtr<T>) -> T {
+    RefPtr::try_unwrap(a).unwrap_or_else(|a| (*a).clone())
 }
 
 impl jaq_core::ValT for Val {
@@ -234,7 +239,7 @@ impl jaq_core::ValT for Val {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
-                let o = Rc::make_mut(o);
+                let o = RefPtr::make_mut(o);
                 match o.entry(index.clone()) {
                     Occupied(mut e) => {
                         let v = core::mem::take(e.get_mut());
@@ -254,7 +259,7 @@ impl jaq_core::ValT for Val {
                 Ok(self)
             }
             Val::Arr(ref mut a) => {
-                let a = Rc::make_mut(a);
+                let a = RefPtr::make_mut(a);
                 let oob = || Error::str(format_args!("index {index} out of bounds"));
                 let abs_or = |i| abs_index(i, a.len()).ok_or_else(oob);
                 let i = match index.as_pos_usize().and_then(abs_or) {
@@ -281,7 +286,7 @@ impl jaq_core::ValT for Val {
         f: impl Fn(Self) -> I,
     ) -> ValX {
         if let Val::Arr(ref mut a) = self {
-            let a = Rc::make_mut(a);
+            let a = RefPtr::make_mut(a);
             let from = range.start.as_ref().map(|i| i.as_pos_usize()).transpose();
             let upto = range.end.as_ref().map(|i| i.as_pos_usize()).transpose();
             let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
@@ -319,7 +324,7 @@ impl jaq_core::ValT for Val {
 impl jaq_std::ValT for Val {
     fn into_seq<S: FromIterator<Self>>(self) -> Result<S, Self> {
         match self {
-            Self::Arr(a) => match Rc::try_unwrap(a) {
+            Self::Arr(a) => match RefPtr::try_unwrap(a) {
                 Ok(a) => Ok(a.into_iter().collect()),
                 Err(a) => Ok(a.iter().cloned().collect()),
             },
@@ -416,14 +421,14 @@ impl Val {
     }
 
     /// If the value is an array, return it, else fail.
-    fn into_arr(self) -> Result<Rc<Vec<Self>>, Error> {
+    fn into_arr(self) -> Result<RefPtr<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::typ(self, Type::Arr.as_str())),
         }
     }
 
-    fn as_arr(&self) -> Result<&Rc<Vec<Self>>, Error> {
+    fn as_arr(&self) -> Result<&RefPtr<Vec<Self>>, Error> {
         match self {
             Self::Arr(a) => Ok(a),
             _ => Err(Error::typ(self.clone(), Type::Arr.as_str())),
@@ -488,7 +493,7 @@ impl From<val::Range<Val>> for Val {
 
 impl FromIterator<Self> for Val {
     fn from_iter<T: IntoIterator<Item = Self>>(iter: T) -> Self {
-        Self::Arr(Rc::new(iter.into_iter().collect()))
+        Self::Arr(RefPtr::new(iter.into_iter().collect()))
     }
 }
 
@@ -512,12 +517,12 @@ impl core::ops::Add for Val {
                 Ok(Str(buf.into(), tag))
             }
             (Arr(mut l), Arr(r)) => {
-                //std::dbg!(Rc::strong_count(&l));
-                Rc::make_mut(&mut l).extend(r.iter().cloned());
+                //std::dbg!(RefPtr::strong_count(&l));
+                RefPtr::make_mut(&mut l).extend(r.iter().cloned());
                 Ok(Arr(l))
             }
             (Obj(mut l), Obj(r)) => {
-                Rc::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
+                RefPtr::make_mut(&mut l).extend(r.iter().map(|(k, v)| (k.clone(), v.clone())));
                 Ok(Obj(l))
             }
             (l, r) => Err(Error::math(l, ops::Math::Add, r)),
@@ -532,7 +537,7 @@ impl core::ops::Sub for Val {
             (Self::Num(x), Self::Num(y)) => Ok(Self::Num(x - y)),
             (Self::Arr(mut l), Self::Arr(r)) => {
                 let r = r.iter().collect::<alloc::collections::BTreeSet<_>>();
-                Rc::make_mut(&mut l).retain(|x| !r.contains(x));
+                RefPtr::make_mut(&mut l).retain(|x| !r.contains(x));
                 Ok(Self::Arr(l))
             }
             (l, r) => Err(Error::math(l, ops::Math::Sub, r)),
@@ -540,8 +545,8 @@ impl core::ops::Sub for Val {
     }
 }
 
-fn obj_merge(l: &mut Rc<Map>, r: Rc<Map>) {
-    let l = Rc::make_mut(l);
+fn obj_merge(l: &mut RefPtr<Map>, r: RefPtr<Map>) {
+    let l = RefPtr::make_mut(l);
     let r = rc_unwrap_or_clone(r).into_iter();
     r.for_each(|(k, v)| match (l.get_mut(&k), v) {
         (Some(Val::Obj(l)), Val::Obj(r)) => obj_merge(l, r),
