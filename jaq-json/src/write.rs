@@ -57,7 +57,7 @@ macro_rules! write_utf8 {
 #[macro_export]
 macro_rules! write_bytes {
     ($w:ident, $s: ident) => {{
-        write!($w, "\"")?;
+        write!($w, "b\"")?;
         $s.iter()
             .try_for_each(|c| write_byte!($w, *c, write!($w, "\\x{c:02x}")))?;
         write!($w, "\"")
