@@ -74,7 +74,6 @@ fn write_rec(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, rec: WriteFn) ->
             write_utf8!(w, s, |part| w.write_all(part))
         }),
         Val::Str(b, Tag::Bytes) => style.write(w, style.red, |w| write_bytes!(w, b)),
-        Val::Str(s, Tag::Raw) => w.write_all(s),
         Val::Arr(a) => {
             bold(w, '[')?;
             if !a.is_empty() {

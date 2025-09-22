@@ -73,8 +73,6 @@ pub enum Val {
 /// as well as how a string is printed.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Tag {
-    /// Sequence of bytes, not to be escaped
-    Raw,
     /// Sequence of bytes, to be escaped
     Bytes,
     /// Sequence of UTF-8 code points

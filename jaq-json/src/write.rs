@@ -92,7 +92,6 @@ macro_rules! write_val {
             Val::Null => write!($w, "null"),
             Val::Bool(b) => write!($w, "{b}"),
             Val::Num(n) => write!($w, "{n}"),
-            Val::Str(s, Tag::Raw) => write!($w, "{}", bstr(s)),
             Val::Str(b, Tag::Bytes) => write_bytes!($w, b),
             Val::Str(s, Tag::Utf8) => write_utf8!($w, s, |part| write!($w, "{}", bstr(part))),
             Val::Arr(a) => {
@@ -126,7 +125,6 @@ type FormatFn<T> = fn(&mut Formatter, &T) -> fmt::Result;
 
 pub(crate) fn write_with(w: &mut dyn Write, v: &Val, f: WriteFn<Val>) -> io::Result<()> {
     match v {
-        Val::Str(s, Tag::Raw) => w.write_all(s),
         Val::Str(b, Tag::Bytes) => write_bytes!(w, b),
         Val::Str(s, Tag::Utf8) => write_utf8!(w, s, |part| w.write_all(part)),
         _ => write_val!(w, v, |v: &Val| f(w, v)),

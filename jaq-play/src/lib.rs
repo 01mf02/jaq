@@ -87,7 +87,6 @@ fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Resu
         Val::Null => span(f, "null", "null"),
         Val::Bool(b) => span(f, "boolean", b),
         Val::Num(n) => span(f, "number", n),
-        Val::Str(s, Tag::Raw) => write!(f, "{}", bstr(&escape_bytes(s))),
         Val::Str(b, Tag::Bytes) => {
             let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
             span(f, "bytes", escape_str(&fun.to_string()))

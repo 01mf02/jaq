@@ -234,7 +234,6 @@ fn encode<W: Write>(v: &Val, encoder: &mut Encoder<W>) -> Result<(), W::Error> {
         Val::Num(Num::Dec(d)) => encode(&Val::Num(Num::from_dec_str(d)), encoder),
         Val::Str(s, Tag::Utf8) => encoder.text(&String::from_utf8_lossy(s), None),
         Val::Str(b, Tag::Bytes) => encoder.bytes(b, None),
-        Val::Str(b, Tag::Raw) => encoder.write_all(b),
         Val::Arr(a) => {
             encoder.push(Header::Array(Some(a.len())))?;
             a.iter().try_for_each(|x| encode(x, encoder))

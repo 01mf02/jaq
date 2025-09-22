@@ -1,7 +1,6 @@
 //! [`serde_json::Value`] support.
 use crate::{Num, Tag, Val};
 use alloc::string::ToString;
-use bytes::Bytes;
 use jaq_std::ValT;
 
 impl From<serde_json::Value> for Val {
@@ -24,8 +23,6 @@ pub enum SError {
     Num(Num),
     /// Non-string key in object
     Key(Val),
-    /// Raw string
-    Raw(Bytes),
 }
 
 fn from_key(k: &Val) -> Result<&[u8], SError> {
@@ -48,7 +45,6 @@ impl TryFrom<&Val> for serde_json::Value {
             ),
             Val::Str(s, Tag::Utf8) => String(from_utf8(&*s)),
             Val::Str(s, Tag::Bytes) => String(s.iter().copied().map(char::from).collect()),
-            Val::Str(s, Tag::Raw) => Err(SError::Raw(s.clone()))?,
             Val::Arr(a) => Array(a.iter().map(TryInto::try_into).collect::<Result<_, _>>()?),
             Val::Obj(o) => Object(
                 o.iter()
