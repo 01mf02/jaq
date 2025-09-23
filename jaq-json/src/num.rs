@@ -1,5 +1,5 @@
 //! Integer / decimal numbers.
-use alloc::rc::Rc;
+use super::Rc;
 use alloc::string::{String, ToString};
 use core::cmp::Ordering;
 use core::fmt;

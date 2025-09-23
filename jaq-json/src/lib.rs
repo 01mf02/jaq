@@ -31,7 +31,7 @@ pub mod yaml;
 #[cfg(feature = "serde_json")]
 mod serde_json;
 
-use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, string::String, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
 use core::cmp::Ordering;
@@ -46,6 +46,11 @@ pub use funs::base_funs;
 #[cfg(feature = "formats")]
 pub use funs::funs;
 pub use num::Num;
+
+#[cfg(not(feature = "sync"))]
+pub use alloc::rc::Rc;
+#[cfg(feature = "sync")]
+pub use alloc::sync::Arc as Rc;
 
 /// JSON superset with binary data and non-string object keys.
 ///
@@ -65,6 +70,13 @@ pub enum Val {
     Arr(Rc<Vec<Val>>),
     /// Object
     Obj(Rc<Map<Val, Val>>),
+}
+
+#[cfg(feature = "sync")]
+#[test]
+fn val_send_sync() {
+    fn send_sync<T: Send + Sync>(_: T) {}
+    send_sync(Val::default())
 }
 
 /// Interpretation of a string.
