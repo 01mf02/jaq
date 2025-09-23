@@ -1,14 +1,17 @@
 function Header(el)
   -- uppercase top-level headings for man pages
-  if FORMAT == "man" and el.level == 1 then
+  if FORMAT == "man" and el.level <= 2 then
     return el:walk{Str = function(el) return pandoc.Str(string.upper(el.text)) end}
   end
 end
 
--- inline code is assumed to be in jq
 function Code(code)
-  code.classes[1] = "jq"
-  return code
+  -- inline code is assumed to be in jq
+  --code.classes[1] = "jq"
+  if FORMAT == "man" then
+    return pandoc.Strong(code)
+  end
+  --return code
 end
 
 -- code blocks are assumed to be in jq if no other language is given
