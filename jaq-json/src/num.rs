@@ -1,12 +1,11 @@
 //! Integer / decimal numbers.
+use super::Rc;
 use alloc::string::{String, ToString};
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use num_bigint::{BigInt, Sign};
 use num_traits::cast::ToPrimitive;
-
-use super::RefPtr;
 
 /// Integer / decimal number.
 ///
@@ -23,11 +22,11 @@ pub enum Num {
     /// Machine-size integer
     Int(isize),
     /// Arbitrarily large integer
-    BigInt(RefPtr<BigInt>),
+    BigInt(Rc<BigInt>),
     /// Floating-point number
     Float(f64),
     /// Decimal number
-    Dec(RefPtr<String>),
+    Dec(Rc<String>),
 }
 
 impl Num {
@@ -36,7 +35,7 @@ impl Num {
     }
 
     pub(crate) fn from_str(s: &str) -> Self {
-        Self::try_from_int_str(s, 10).unwrap_or_else(|| Self::Dec(RefPtr::new(s.to_string())))
+        Self::try_from_int_str(s, 10).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
     pub(crate) fn from_integral<T: Copy + TryInto<isize> + Into<BigInt>>(x: T) -> Self {
@@ -301,7 +300,7 @@ impl PartialEq for Num {
                 i.to_isize().is_some_and(|i| float_eq(i as f64, *f))
             }
             (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
-            (Self::Dec(x), Self::Dec(y)) if RefPtr::ptr_eq(x, y) => true,
+            (Self::Dec(x), Self::Dec(y)) if Rc::ptr_eq(x, y) => true,
             (Self::Dec(n), y) => &Self::from_dec_str(n) == y,
             (x, Self::Dec(n)) => x == &Self::from_dec_str(n),
         }
@@ -329,7 +328,7 @@ impl Ord for Num {
             (Self::Float(f), Self::Int(i)) => float_cmp(*f, *i as f64),
             (Self::Float(x), Self::BigInt(y)) => float_cmp(*x, y.to_f64().unwrap()),
             (Self::Float(x), Self::Float(y)) => float_cmp(*x, *y),
-            (Self::Dec(x), Self::Dec(y)) if RefPtr::ptr_eq(x, y) => Ordering::Equal,
+            (Self::Dec(x), Self::Dec(y)) if Rc::ptr_eq(x, y) => Ordering::Equal,
             (Self::Dec(n), y) => Self::from_dec_str(n).cmp(y),
             (x, Self::Dec(n)) => x.cmp(&Self::from_dec_str(n)),
         }
