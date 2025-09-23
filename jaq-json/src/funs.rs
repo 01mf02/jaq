@@ -1,5 +1,5 @@
 use crate::{Error, Num, Tag, Val, ValR, ValX};
-use alloc::{boxed::Box, string::ToString, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use bstr::ByteSlice;
 use bytes::{BufMut, Bytes, BytesMut};
 use jaq_core::box_iter::{box_once, BoxIter};
@@ -16,7 +16,7 @@ impl Val {
             Val::Null => Ok(Val::from(0usize)),
             Val::Num(n) => Ok(Val::Num(n.length())),
             Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
-            Val::Str(b, Tag::Bytes | Tag::Raw) => Ok(Val::from(b.len() as isize)),
+            Val::Str(b, Tag::Bytes) => Ok(Val::from(b.len() as isize)),
             Val::Arr(a) => Ok(Val::from(a.len() as isize)),
             Val::Obj(o) => Ok(Val::from(o.len() as isize)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
@@ -130,12 +130,6 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             let pass = |b| Val::Str(b, Tag::Bytes);
             let fail = |v| Error::str(format_args!("cannot convert {v} to bytes"));
             bome(cv.1.to_bytes().map(pass).map_err(fail))
-        }),
-        ("torawstring", v(0), |cv| {
-            box_once(Ok(match cv.1 {
-                Val::Str(s, _) => Val::Str(s, Tag::Raw),
-                v => Val::Str(v.to_string().into(), Tag::Raw),
-            }))
         }),
         ("length", v(0), |cv| bome(cv.1.length())),
         ("contains", v(1), |cv| {

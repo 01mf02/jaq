@@ -128,7 +128,7 @@ fn val_item(v: &Val) -> Result<Item, SError> {
 fn val_value(v: &Val) -> Result<Value, SError> {
     let fail = || SError::Val(v.clone());
     Ok(match v {
-        Val::Null | Val::Str(_, Tag::Bytes | Tag::Raw) => Err(fail())?,
+        Val::Null | Val::Str(_, Tag::Bytes) => Err(fail())?,
         Val::Bool(b) => Value::Boolean(Formatted::new(*b)),
         Val::Str(s, Tag::Utf8) => {
             Value::String(Formatted::new(String::from_utf8_lossy(s).into_owned()))
