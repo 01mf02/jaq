@@ -1,16 +1,29 @@
 //! JSON support.
-use crate::{Map, Num, Val};
+use crate::{Map, Num, Tag, Val};
 use alloc::{string::ToString, vec::Vec};
 use hifijson::token::{Expect, Lex, Token};
-use hifijson::{str, IterLexer, LexAlloc, SliceLexer};
+use hifijson::{IterLexer, LexAlloc, SliceLexer};
 use std::io;
 
 pub use crate::write::write;
 
+/// Eat whitespace/comments, then try to return a token.
+fn ws_tk<L: Lex>(lexer: &mut L) -> Option<Token> {
+    loop {
+        lexer.eat_whitespace();
+        if lexer.peek_next() == Some(b'#') {
+            lexer.skip_until(|c| c == b'\n');
+        } else {
+            break;
+        }
+    }
+    lexer.peek_next().map(|next| lexer.token(next))
+}
+
 /// Parse a sequence of JSON values.
 pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Error>> + '_ {
     let mut lexer = SliceLexer::new(slice);
-    core::iter::from_fn(move || Some(parse(lexer.ws_token()?, &mut lexer)))
+    core::iter::from_fn(move || Some(parse(ws_tk(&mut lexer)?, &mut lexer)))
 }
 
 /// Read a sequence of JSON values.
@@ -18,26 +31,42 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
     use crate::invalid_data;
     let mut lexer = IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
-        let v = parse(lexer.ws_token()?, &mut lexer);
-        Some(v.map_err(|e| core::mem::take(&mut lexer.error).unwrap_or_else(|| invalid_data(e))))
+        let v = ws_tk(&mut lexer).map(|token| parse(token, &mut lexer).map_err(invalid_data));
+        // always return I/O error if present, regardless of the output value!
+        lexer.error.take().map(Err).or(v)
     })
 }
 
 /// Parse exactly one JSON value.
 pub fn parse_single(s: &[u8]) -> Result<Val, hifijson::Error> {
-    SliceLexer::new(s).exactly_one(parse)
+    SliceLexer::new(s).exactly_one(ws_tk, parse)
 }
 
 /// Parse a JSON string as byte string, preserving invalid UTF-8 as-is.
-fn parse_string<L: LexAlloc>(lexer: &mut L) -> Result<Vec<u8>, hifijson::Error> {
+fn parse_string<L: LexAlloc>(lexer: &mut L, tag: Tag) -> Result<Vec<u8>, hifijson::Error> {
     let on_string = |bytes: &mut L::Bytes, out: &mut Vec<u8>| {
         out.extend(bytes.iter());
         Ok(())
     };
-    lexer.str_fold(Vec::new(), on_string, |lexer, escape, out| {
-        let c = lexer.escape_char(escape).map_err(str::Error::Escape)?;
-        out.extend(c.encode_utf8(&mut [0; 4]).as_bytes());
+    let s = lexer.str_fold(Vec::new(), on_string, |lexer, out| {
+        use hifijson::escape::Error;
+        match (tag, lexer.take_next().ok_or(Error::Eof)?) {
+            (Tag::Bytes, b'u') => Err(Error::InvalidKind(b'u'))?,
+            (Tag::Bytes, b'x') => out.push(lexer.hex()?),
+            (_, c) => out.extend(lexer.escape(c)?.encode_utf8(&mut [0; 4]).as_bytes()),
+        }
         Ok(())
+    });
+    s.map_err(hifijson::Error::Str)
+}
+
+fn parse_num<L: LexAlloc>(lexer: &mut L) -> Result<Num, hifijson::Error> {
+    let (num, parts) = lexer.num_string()?;
+    // if we are dealing with an integer ...
+    Ok(if parts.dot.is_none() && parts.exp.is_none() {
+        Num::try_from_int_str(&num, 10).unwrap()
+    } else {
+        Num::Dec(num.to_string().into())
     })
 }
 
@@ -46,41 +75,45 @@ fn parse_string<L: LexAlloc>(lexer: &mut L) -> Result<Vec<u8>, hifijson::Error> 
 /// If the underlying lexer reads input fallibly (for example `IterLexer`),
 /// the error returned by this function might be misleading.
 /// In that case, always check whether the lexer contains an error.
-fn parse(token: Token, lexer: &mut impl LexAlloc) -> Result<Val, hifijson::Error> {
-    match token {
-        Token::Null => Ok(Val::Null),
-        Token::True => Ok(Val::Bool(true)),
-        Token::False => Ok(Val::Bool(false)),
-        Token::DigitOrMinus => Ok(Val::Num({
-            let (num, parts) = lexer.num_string()?;
-            // if we are dealing with an integer ...
-            if parts.dot.is_none() && parts.exp.is_none() {
-                Num::try_from_int_str(&num, 10).unwrap()
-            } else {
-                Num::Dec(num.to_string().into())
-            }
-        })),
-        Token::Quote => Ok(Val::utf8_str(parse_string(lexer)?)),
-        Token::LSquare => Ok(Val::Arr({
+fn parse<L: LexAlloc>(token: Token, lexer: &mut L) -> Result<Val, hifijson::Error> {
+    Ok(match token {
+        Token::Other(b'n') if lexer.strip_prefix(b"null") => Val::Null,
+        Token::Other(b't') if lexer.strip_prefix(b"true") => Val::Bool(true),
+        Token::Other(b'f') if lexer.strip_prefix(b"false") => Val::Bool(false),
+        Token::Other(b'b') if lexer.strip_prefix(b"b\"") => {
+            Val::byte_str(parse_string(lexer, Tag::Bytes)?)
+        }
+        Token::Other(b'N') if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
+        Token::Other(b'I') if lexer.strip_prefix(b"Infinity") => {
+            Val::Num(Num::Float(f64::INFINITY))
+        }
+        Token::Minus => Val::Num(match lexer.peek_next() {
+            Some(b'I') if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
+            Some(b'I') => Err(Expect::Value)?,
+            _ => -parse_num(lexer)?,
+        }),
+        Token::Other(b'0'..=b'9') => Val::Num(parse_num(lexer)?),
+        Token::Quote => Val::utf8_str(parse_string(lexer, Tag::Utf8)?),
+        Token::LSquare => Val::Arr({
             let mut arr = Vec::new();
-            lexer.seq(Token::RSquare, |token, lexer| {
+            lexer.seq(Token::RSquare, ws_tk, |token, lexer| {
                 arr.push(parse(token, lexer)?);
                 Ok::<_, hifijson::Error>(())
             })?;
             arr.into()
-        })),
-        Token::LCurly => Ok(Val::obj({
+        }),
+        Token::LCurly => Val::obj({
             let mut obj = Map::default();
-            lexer.seq(Token::RCurly, |token, lexer| {
+            lexer.seq(Token::RCurly, ws_tk, |token, lexer| {
                 let is_colon = |t: &Token| *t == Token::Colon;
                 let key = parse(token, lexer)?;
-                lexer.ws_token().filter(is_colon).ok_or(Expect::Colon)?;
-                let value = parse(lexer.ws_token().ok_or(Expect::Value)?, lexer)?;
+                ws_tk(lexer).filter(is_colon).ok_or(Expect::Colon)?;
+                let value = parse(ws_tk(lexer).ok_or(Expect::Value)?, lexer)?;
                 obj.insert(key, value);
                 Ok::<_, hifijson::Error>(())
             })?;
             obj
-        })),
+        }),
         _ => Err(Expect::Value)?,
-    }
+    })
 }

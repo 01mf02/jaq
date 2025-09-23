@@ -235,7 +235,10 @@ impl core::ops::Neg for Num {
             Self::Int(x) => int_or_big(x.checked_neg(), [x], |[x]| -x),
             Self::BigInt(x) => Self::big_int(-&*x),
             Self::Float(x) => Self::Float(-x),
-            Self::Dec(n) => -Self::from_dec_str(&n),
+            Self::Dec(n) => match n.strip_prefix('-') {
+                Some(pos) => Self::Dec(pos.to_string().into()),
+                None => Self::Dec(alloc::format!("-{n}").into()),
+            },
         }
     }
 }
