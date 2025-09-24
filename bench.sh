@@ -41,7 +41,7 @@ while read -r line; do
     [ $j != $1 ] && echo -n ', '
     echo -n '"'$j'": ['
     for i in `seq 3`; do
-      t=$(echo $n | $TIME $j "$(cat examples/$b.jq) | length" 2>&1 > /dev/null)
+      t=$(echo $n | $TIME $j "$(cat examples/benches/$b.jq) | length" 2>&1 > /dev/null)
       [ -z "$t" ] && break # terminate on timeout
       [ $i -ne 1 ] && echo -n ', '
       echo -n $t
