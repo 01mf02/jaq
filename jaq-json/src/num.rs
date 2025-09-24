@@ -82,12 +82,12 @@ impl Num {
     }
 
     /// If the value is or can be converted to float, return it, else fail.
-    pub(crate) fn as_f64(&self) -> Option<f64> {
+    pub(crate) fn as_f64(&self) -> f64 {
         match self {
-            Self::Int(n) => Some(*n as f64),
-            Self::BigInt(n) => Some(n.to_f64().unwrap()),
-            Self::Float(n) => Some(*n),
-            Self::Dec(n) => n.parse().ok(),
+            Self::Int(n) => *n as f64,
+            Self::BigInt(n) => n.to_f64().unwrap(),
+            Self::Float(n) => *n,
+            Self::Dec(n) => n.parse().unwrap(),
         }
     }
 
