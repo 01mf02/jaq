@@ -347,7 +347,7 @@ impl jaq_std::ValT for Val {
 
     fn as_f64(&self) -> Result<f64, Error> {
         let fail = || Error::typ(self.clone(), Type::Float.as_str());
-        self.as_num().and_then(Num::as_f64).ok_or_else(fail)
+        self.as_num().map(Num::as_f64).ok_or_else(fail)
     }
 
     fn is_utf8_str(&self) -> bool {
