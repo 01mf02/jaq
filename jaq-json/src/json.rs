@@ -60,8 +60,8 @@ fn parse_string<L: LexAlloc>(lexer: &mut L, tag: Tag) -> Result<Vec<u8>, hifijso
     s.map_err(hifijson::Error::Str)
 }
 
-fn parse_num<L: LexAlloc>(lexer: &mut L) -> Result<Num, hifijson::Error> {
-    let (num, parts) = lexer.num_string()?;
+fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::Error> {
+    let (num, parts) = lexer.num_string(prefix)?;
     // if we are dealing with an integer ...
     Ok(if parts.dot.is_none() && parts.exp.is_none() {
         Num::try_from_int_str(&num, 10).unwrap()
@@ -90,9 +90,9 @@ fn parse<L: LexAlloc>(token: Token, lexer: &mut L) -> Result<Val, hifijson::Erro
         Token::Minus => Val::Num(match lexer.peek_next() {
             Some(b'I') if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
             Some(b'I') => Err(Expect::Value)?,
-            _ => -parse_num(lexer)?,
+            _ => parse_num(lexer, "-")?,
         }),
-        Token::Other(b'0'..=b'9') => Val::Num(parse_num(lexer)?),
+        Token::Other(b'0'..=b'9') => Val::Num(parse_num(lexer, "")?),
         Token::Quote => Val::utf8_str(parse_string(lexer, Tag::Utf8)?),
         Token::LSquare => Val::Arr({
             let mut arr = Vec::new();
