@@ -115,10 +115,9 @@ pub trait ValT: jaq_core::ValT + Ord + From<f64> + From<usize> {
 
     /// Use the value as floating-point number.
     ///
-    /// This may fail in more complex ways than [`Self::as_isize`],
-    /// because the value may either be
-    /// not a number or a number that does not fit into [`f64`].
-    fn as_f64(&self) -> Result<f64, Error<Self>>;
+    /// This succeeds for all numeric values,
+    /// rounding too large/small ones to +/- Infinity.
+    fn as_f64(&self) -> Option<f64>;
 
     /// True if the value is interpreted as UTF-8 string.
     fn is_utf8_str(&self) -> bool;
@@ -166,6 +165,11 @@ trait ValTx: ValT + Sized {
         self.try_as_isize()?.try_into().map_err(Error::str)
     }
 
+    fn try_as_f64(&self) -> Result<f64, Error<Self>> {
+        self.as_f64()
+            .ok_or_else(|| Error::typ(self.clone(), "number"))
+    }
+
     /// Apply a function to an array.
     fn mutate_arr(self, f: impl FnOnce(&mut Vec<Self>)) -> ValR<Self> {
         let mut a = self.into_vec()?;
@@ -187,7 +191,7 @@ trait ValTx: ValT + Sized {
         Ok(if self.is_int() {
             self
         } else {
-            let f = f(self.as_f64()?);
+            let f = f(self.try_as_f64()?);
             if f.is_finite() {
                 if isize::MIN as f64 <= f && f <= isize::MAX as f64 {
                     Self::from(f as isize)
