@@ -224,7 +224,7 @@ impl Cli {
         Ok(cli)
     }
 
-    pub fn color_if(&self, f: impl Fn() -> bool) -> bool {
+    fn color_if(&self, f: impl Fn() -> bool) -> bool {
         if self.monochrome_output {
             false
         } else if self.color_output {
@@ -235,8 +235,13 @@ impl Cli {
     }
 
     pub fn color_stdio(&self, io: impl std::io::IsTerminal) -> bool {
+        #[cfg(not(target_os = "windows"))]
+        let enabled = || true;
+        #[cfg(target_os = "windows")]
+        let enabled = || crate::windows::enable_ansi_support();
+
         let no_color = || std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
-        self.color_if(|| io.is_terminal() && !no_color())
+        self.color_if(|| io.is_terminal() && !no_color()) && enabled()
     }
 
     pub fn color_stdout(&self) -> bool {
