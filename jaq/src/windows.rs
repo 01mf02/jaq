@@ -1,3 +1,6 @@
+//! Windows-specific functions.
+//!
+//! This is taken from [`yansi`](https://github.com/SergioBenitez/yansi/blob/3e35184fc181fef63bc11dedb22413e821168255/src/windows.rs).
 #![allow(non_camel_case_types, non_snake_case, clippy::upper_case_acronyms)]
 use core::ffi::c_void;
 
