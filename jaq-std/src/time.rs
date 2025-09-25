@@ -7,7 +7,7 @@ fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
     let fail = || Error::str(format_args!("cannot parse {v} as epoch timestamp"));
     let val = match v.as_isize() {
         Some(i) => i as i64 * 1000000,
-        None => (v.as_f64()? * 1000000.0) as i64,
+        None => (v.try_as_f64()? * 1000000.0) as i64,
     };
     DateTime::from_timestamp_micros(val).ok_or_else(fail)
 }
@@ -27,7 +27,7 @@ fn datetime_to_epoch<Tz: TimeZone, V: ValT>(dt: DateTime<Tz>, frac: bool) -> Val
 /// Parse a "broken down time" array.
 fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
     let [year, month, day, hour, min, sec]: &[V; 6] = v.get(..6)?.try_into().ok()?;
-    let sec = sec.as_f64().ok()?;
+    let sec = sec.as_f64()?;
     let u32 = |v: &V| -> Option<u32> { v.as_isize()?.try_into().ok() };
     Utc.with_ymd_and_hms(
         year.as_isize()?.try_into().ok()?,
@@ -79,7 +79,7 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
         let dt = DateTime::from_timestamp(i as i64, 0).ok_or_else(fail)?;
         Ok(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
     } else {
-        let f = v.as_f64()?;
+        let f = v.try_as_f64()?;
         let dt = DateTime::from_timestamp_micros((f * 1e6) as i64).ok_or_else(fail)?;
         Ok(dt.format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string())
     }

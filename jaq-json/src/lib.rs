@@ -101,8 +101,10 @@ pub enum Tag {
 enum Type {
     /// `[] | .["a"]` or `limit("a"; 0)` or `range(0; "a")`
     Int,
+    /*
     /// `"1" | sin` or `pow(2; "3")` or `fma(2; 3; "4")`
     Float,
+    */
     /// `-"a"`, `"a" | round`
     Num,
     /*
@@ -121,7 +123,7 @@ impl Type {
     fn as_str(&self) -> &'static str {
         match self {
             Self::Int => "integer",
-            Self::Float => "floating-point number",
+            //Self::Float => "floating-point number",
             Self::Num => "number",
             //Self::Str => "string",
             Self::Arr => "array",
@@ -345,9 +347,8 @@ impl jaq_std::ValT for Val {
         self.as_num().and_then(Num::as_isize)
     }
 
-    fn as_f64(&self) -> Result<f64, Error> {
-        let fail = || Error::typ(self.clone(), Type::Float.as_str());
-        self.as_num().map(Num::as_f64).ok_or_else(fail)
+    fn as_f64(&self) -> Option<f64> {
+        self.as_num().map(Num::as_f64)
     }
 
     fn is_utf8_str(&self) -> bool {
