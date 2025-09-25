@@ -3,9 +3,9 @@ mod filter;
 mod funs;
 mod read;
 mod style;
-mod write;
 #[cfg(target_os = "windows")]
 mod windows;
+mod write;
 
 use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
