@@ -12,7 +12,7 @@ title: JAQ(1)
 
 # Synopsis
 
-`jaq` \[_OPTION_\]... \[_FILTER_\] \[_FILE_\]...
+`jaq`\ \[_OPTION_\]...\ \[_FILTER_\]\ \[_FILE_\]...
 
 
 
@@ -37,12 +37,56 @@ In addition, jaq adds some functionality not present in jq:
 [`tobytes`]: #tobytes
 [`--in-place`]: #--in-place
 
-# Options
+
+
+# Command-line interface
+
+Running
+`jaq`\ \[_OPTION_\]...\ \[_FILTER_\]\ \[_FILE_\]...
+performs the following steps:
+
+- Parse _FILTER_ as jq program; see [jq language](#jq-lang)
+- For each _FILE_:
+    - Parse _FILE_ to a stream of values
+    - For each input value in the file:
+        - Run _FILTER_ on the input value and print its output values as JSON
+
+For example, `jaq '.name?' persons.json`
+parses the filter `.name?`, then
+reads all values in `persons.json` one-by-one.
+It then executes the filter `.name?` on each of the values and
+prints the outputs of the filter as JSON.
+
+There are a few rules:
+
+- If no _FILTER_ is given, jaq uses `.` (the [identity] filter) as filter.
+- If no _FILE_ is given, jaq reads from standard input.
+- jaq determines the format to parse a _FILE_ as follows:
+    - If [`--from`] _FORMAT_ is used, jaq uses that format.
+    - Otherwise, if _FILE_ has a file extension known by jaq, such as
+      `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`,
+      jaq uses the corresponding format.
+    - Otherwise, jaq assumes JSON.
+- If an error is encountered at any point, jaq stops.
 
 
 ## Input options
 
-### `--from` {#--from}
+### `--from` _FORMAT_ {#--from}
+
+Interpret all input files as _FORMAT_.
+For example,
+`jaq --from yaml . myfile.yml`
+parses `myfile.yml` as YAML.
+Possible values of _FORMAT_ include:
+`raw`, `json`, `yaml`, `cbor`, `toml`, `xml`.
+
+jaq automatically chooses the corresponding input format for
+files with the extensions
+`.json`, `.yaml`, `.cbor`, `.toml`, `.xml`, `.xhtml`.
+That means that
+`jaq --from cbor . myfile.cbor` is equivalent to
+`jaq . myfile.cbor`.
 
 ### `-n`, `--null-input`
 
@@ -64,6 +108,8 @@ When combined with `-s` (`--slurp`), this yields the whole input as a single str
 For example,
 `echo -e "Hello\nWorld" | jaq -Rs` yields `"Hello\nWorld\n"`.
 
+This is equivalent to `--from raw`.
+
 ### `-s`, `--slurp`
 
 Read (slurp) all input values into one array.
@@ -74,7 +120,15 @@ For example,
 
 ## Output options
 
-### `--to` {#--to}
+### `--to` _FORMAT_ {#--to}
+
+Print all output values in the given _FORMAT_.
+Any _FORMAT_ accepted by [`--from`] can be used here.
+
+Note that not every value can be printed in every format.
+For example, TOML requires that the root value is an object, so
+`jaq --to toml <<< []`
+yields an error.
 
 ### `-c`, `--compact-output`
 
@@ -91,6 +145,8 @@ For example,
 This does not impact strings contained inside other values, i.e. arrays and objects.
 For example,
 `jaq -r <<< '["Hello\nWorld"]'` outputs `["Hello\nWorld"]`.
+
+This is equivalent to `--to raw`.
 
 ### `-j`, `--join-output`
 
@@ -109,13 +165,45 @@ For example,
 `jaq -i . myfile.json` reads the file `myfile.json` and
 overwrites it with a formatted version of it.
 Note that the input file is overwritten only
-once there is no more output and if there has not been any error.
+once there is no more output and
+if there has not been any error.
 
--S, --sort-keys           Print objects sorted by their keys
--C, --color-output        Always color output
--M, --monochrome-output   Do not color output
---tab                 Use tabs for indentation rather than spaces
---indent <N>          Use N spaces for indentation [default: 2]
+### `-S`, `--sort-keys`
+
+Print objects sorted by their keys.
+For example,
+`jaq -Sc <<< '{"b": {"d": 3, "c": 2}, "a": 1}'` yields
+`{"a":1,"b":{"c":2,"d":3}}`, whereas
+`jaq  -c <<< '{"b": {"d": 3, "c": 2}, "a": 1}'` yields
+`{"b":{"d":3,"c":2},"a":1}`.
+
+### `-C`, `--color-output`
+
+Always color output, even if jaq does not print to a terminal.
+For example,
+`jaq -C <<< '{}' | jaq --from raw tobytes` yields the byte string
+`b"\x1b[1m{\x1b[0m\x1b[1m}\x1b[0m"`, containing ANSI color sequences, whereas
+`jaq    <<< '{}' | jaq --from raw tobytes` yields
+`b"{}"`.
+(Here, `jaq --from raw tobytes` prints a byte representation of its input.)
+
+### `-M`, `--monochrome-output`
+
+Do not color output.
+
+### `--tab`
+
+Use tabs for indentation rather than spaces.
+
+For example,
+`jaq --tab <<< '[1, [2]]' | jaq -Rs` yields
+`"[\n\t1,\n\t[\n\t\t2\n\t]\n]\n"`, whereas
+`jaq      <<< '[1, [2]]' | jaq -Rs` yields
+`"[\n  1,\n  [\n    2\n  ]\n]\n"`.
+
+### `--indent` _N_
+
+Use _N_ spaces for indentation (default: 2).
 
 
 ## Compilation options
@@ -133,7 +221,73 @@ once there is no more output and if there has not been any error.
 --args                Collect remaining positional arguments into `$ARGS.positional`
 
 
-# Core language
+
+# jq language {#jq-lang}
+
+The jq language is a lazy, functional streaming programming language.
+A program written in the jq language is called a jq program or _filter_.
+jq programs can be executed with several interpreters, including
+`jq`, `gojq`, `fq`, and `jaq`.
+The jq language is Turing-complete and can therefore be used to write
+any program that can be written in any other programming language.
+
+jaq aims to execute jq programs similarly to `jq`,
+yet jaq diverges from `jq` in some situations.
+This manual tries to point out such occasions.
+
+
+## Values
+
+### `null`
+
+The `null` value can be constructed by writing `null`.
+
+The `null` value can be also obtained in various other ways,
+such as indexing a non-existing key in an array or object, e.g.
+`[] | .[0]` or `{} | .a`.
+
+### Booleans
+
+The booleans `true` and `false` can be constructed by writing `true` or `false`.
+Booleans can also be produced by comparison operations, e.g.
+`0 == 0` or `[] == {}`.
+
+### Numbers
+
+Numbers corresponding to the regular expression
+`[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` can be written as-is, e.g.
+`0`, `3.14` and `2.99e6`.
+Negative numbers can be constructed by
+applying the [negation] operator to a number, e.g. `-1`.
+
+Internally, jaq distinguishes
+integers, floating-point numbers, and decimal numbers:
+
+- A number without a dot (`.`) and without an exponent (`e`/`E`)
+  is losslessly stored as integer.
+  jaq can store and calculate with integers of arbitrary size, e.g.
+  `340282366920938463463374607431768211456` (`2^128`).
+- Any non-integer number is stored initially as decimal number,
+  which is a string representation of the number.
+  That means that jaq losslessly preserves
+  any number corresponding to the regular expression above,
+  such as `1.0e500`, if it occurs in a JSON file or jq filter.
+- When calculating with a decimal number,
+  jaq converts it transparently to a 64-bit IEEE-754 floating-point number.
+  For example, `1.0e500 + 1` yields `Infinity`, because jaq converts
+  `1.0e500` to the closest floating-point number, which is `Infinity`.
+
+### Strings
+
+### Arrays
+
+### Objects
+
+
+## Identity
+
+The identity filter `.` returns its input as single output.
+
 
 ## Concatenation
 
