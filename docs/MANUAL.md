@@ -281,6 +281,21 @@ integers, floating-point numbers, and decimal numbers:
 
 ### Arrays
 
+Arrays can be constructed using the syntax `[f]`, where `f` is a filter.
+The filter `[f]` passes its input to `f` and runs it,
+returning an array containing all outputs of `f`.
+If `f` throws an error, then `[f]` returns that error instead of an array.
+
+This syntax allows constructing arrays such as `[1, 2, 3]`.
+Here, `1, 2, 3` is just a filter that yields three numbers,
+see [concatenation](#concatenation).
+There is no dedicated array syntax `[x1, ..., xn]`.
+That means that you can use arbitrary filters in `[f]`; for example,
+`[limit(3; repeat(0))]` returns `[0, 0, 0]`.
+You can use the input passed to `[f]` inside `f`;
+for example, we can write the previous filter equivalently as
+`{count: 3, elem: 0} | [limit(.count; repeat(.elem))]`.
+
 ### Objects
 
 
