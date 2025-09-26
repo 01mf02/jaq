@@ -236,11 +236,51 @@ yet jaq diverges from `jq` in some situations.
 This manual tries to point out such occasions.
 
 
+## Filters
+
+A *filter* is a function that
+takes an input value and
+yields a stream of output values.
+
+The stream of output values can be infinite; for example, the jq filter
+`repeat("Hi")` yields an infinite sequence of strings `"Hi"`.
+An equivalent UNIX command is `yes "Hi"`.
+
+Following the UNIX philosophy,
+you can pipe the outputs of one filter to another filter; for example,
+`add(limit(10; repeat("Hi\n")) | length)` is a jq filter that
+produces 10 newline-terminated `"Hi"` strings,
+calculates the `length` of each of them, then
+`add`s the computed lengths.
+It counts the number of characters of 10 "Hi" lines, yielding the final result `30`.
+Its UNIX equivalent would be `yes "Hi" | head -10 | wc -c`.
+
+While UNIX programs traditionally operate on strings,
+jq filters traditionally operate on JSON values.
+That gives jq an advantage when processing more complex data,
+such as numbers, arrays, objects.
+For example, suppose that we have a JSON array that contains
+an object for each file in the current directory.
+Then we can get the largest MP4 file in the directory as follows:
+
+~~~
+$ jaq 'first(sort_by(-.size)[] | .name | select(endswith(".mp4")))' << EOF
+[ {"name": "Benson, Arizona.mp4", "size": 10893113},
+  {"name": "Michel Delpech - Pour un flirt.webm", "size": 23131654},
+  {"name": "Rainhard Fendrich - I am from Austria.mp4", "size": 11615456}
+]
+EOF
+"Rainhard Fendrich - I am from Austria.mp4"
+~~~
+
+The following sections document how to construct filters.
+
+
 ## Values
 
 ### `null`
 
-The `null` value can be constructed by writing `null`.
+The filter `null` returns the `null` value.
 
 The `null` value can be also obtained in various other ways,
 such as indexing a non-existing key in an array or object, e.g.
@@ -248,7 +288,7 @@ such as indexing a non-existing key in an array or object, e.g.
 
 ### Booleans
 
-The booleans `true` and `false` can be constructed by writing `true` or `false`.
+The filters `true` and `false` return the boolean values `true` and `false`.
 Booleans can also be produced by comparison operations, e.g.
 `0 == 0` or `[] == {}`.
 
