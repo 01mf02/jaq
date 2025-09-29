@@ -495,8 +495,8 @@ where
         ("ascii_upcase", v(0), |cv| {
             bome(cv.1.map_utf8_str(ByteSlice::to_ascii_uppercase))
         }),
-        ("byteoffset", v(1), |mut cv| {
-            bome(byte_offset(cv.0.pop_var(), cv.1))
+        ("byteoffset", v(2), |mut cv| {
+            bome(byte_offset(cv.0.pop_var(), cv.0.pop_var()))
         }),
         ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
         ("keys_unsorted", v(0), |cv| {

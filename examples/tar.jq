@@ -15,7 +15,7 @@
 # this decoder stores *where* that data came from.
 # That means that we can obtain e.g. the byte offset of each file header:
 #
-# . as $i | decode_tar | {name: .o.name, offset: .i | byteoffset($i)}
+#     . as $i | decode_tar | {name: .o.name, offset: byteoffset(.i; $i)}
 #
 # All these commands take about 200 milliseconds on my machine.
 # For comparison, `tar --list --file 1G.tar` takes about 10 milliseconds.
@@ -86,8 +86,7 @@ def decode_entry:
   . as $input |
   # we use i as remaining input, which we later use to infer consumed input
   {i: .} |
-  # TODO: make byteoffset fail
-  def consumed: .i | byteoffset($input) // error;
+  def consumed: byteoffset(.i; $input);
   def offset: (BLOCK_BYTES - (consumed % BLOCK_BYTES)) % BLOCK_BYTES;
   str("name"; 100) |
   oct("mode"; 8) |
@@ -104,7 +103,7 @@ def decode_entry:
 ;
 
 # Translate from i denoting remaining input to i denoting consumed input.
-def set_consumed($input): .i |= .[:byteoffset($input)];
+def set_consumed($input): .i |= .[:byteoffset(.; $input)];
 
 def decode_tar: tobytes |
   ([limit(BLOCK_BYTES*2; repeat(0))] | tobytes) as $END_MARKER |
