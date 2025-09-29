@@ -245,7 +245,6 @@ impl jaq_core::ValT for Val {
         f: impl Fn(Self) -> I,
     ) -> ValX {
         match self {
-            Val::Null => Val::Obj(Default::default()).map_index(index, opt, f),
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
                 let o = Rc::make_mut(o);
