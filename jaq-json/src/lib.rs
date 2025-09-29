@@ -178,6 +178,7 @@ impl jaq_core::ValT for Val {
 
     fn index(self, index: &Self) -> ValR {
         match (self, index) {
+            (Val::Null, _) => Ok(Val::Null),
             (Val::Str(a, Tag::Bytes), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => Ok(i
                 .as_pos_usize()
                 .and_then(|i| abs_index(i, a.len()))
@@ -244,6 +245,7 @@ impl jaq_core::ValT for Val {
         f: impl Fn(Self) -> I,
     ) -> ValX {
         match self {
+            Val::Null => Val::Obj(Default::default()).map_index(index, opt, f),
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
                 let o = Rc::make_mut(o);
