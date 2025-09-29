@@ -32,15 +32,6 @@ pub struct Lut<F> {
     pub(crate) funs: Vec<F>,
 }
 
-impl<F> Default for Lut<F> {
-    fn default() -> Self {
-        Lut {
-            terms: Vec::new(),
-            funs: Vec::new(),
-        }
-    }
-}
-
 impl<F> Default for Filter<F> {
     fn default() -> Self {
         Self {
@@ -230,7 +221,10 @@ pub struct Compiler<S, F> {
 impl<S, F> Default for Compiler<S, F> {
     fn default() -> Self {
         Self {
-            lut: Lut::default(),
+            lut: Lut {
+                terms: Vec::new(),
+                funs: Vec::new(),
+            },
             mod_map: Vec::new(),
             imported_mods: Vec::new(),
             included_mods: Vec::new(),
