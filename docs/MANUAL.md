@@ -285,21 +285,26 @@ The filter `null` returns the `null` value.
 
 The `null` value can be also obtained in various other ways,
 such as indexing a non-existing key in an array or object, e.g.
-`[] | .[0]` or `{} | .a`.
+`[] | .[0] --> null` or
+`{} | .a   --> null`.
 
 ### Booleans
 
 The filters `true` and `false` return the boolean values `true` and `false`.
 Booleans can also be produced by comparison operations, e.g.
-`0 == 0` or `[] == {}`.
+`0  ==  0 --> true` or
+`[] == {} --> false`.
 
 ### Numbers
 
 Numbers corresponding to the regular expression
-`[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` can be written as-is, e.g.
-`0`, `3.14` and `2.99e6`.
+`[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` are
+filters that return their corresponding value, e.g.
+`0 --> 0`,
+`3.14 --> 3.14`, and
+`2.99e6 --> 2.99e6`.
 Negative numbers can be constructed by
-applying the [negation] operator to a number, e.g. `-1`.
+applying the [negation] operator to a number, e.g. `-1 --> -1`.
 
 Internally, jaq distinguishes
 integers, floating-point numbers, and decimal numbers:
@@ -315,10 +320,13 @@ integers, floating-point numbers, and decimal numbers:
   such as `1.0e500`, if it occurs in a JSON file or jq filter.
 - When calculating with a decimal number,
   jaq converts it transparently to a 64-bit IEEE-754 floating-point number.
-  For example, `1.0e500 + 1` yields `Infinity`, because jaq converts
+  For example, `1.0e500 + 1 --> Infinity`, because jaq converts
   `1.0e500` to the closest floating-point number, which is `Infinity`.
 
 ### Strings
+
+A string is *identifier-like* if it matches the regular expression
+`[a-zA-Z_][a-zA-Z_0-9]*`.
 
 ### Arrays
 
@@ -332,7 +340,7 @@ Here, `1, 2, 3` is just a filter that yields three numbers,
 see [concatenation](#concatenation).
 There is no dedicated array syntax `[x1, ..., xn]`.
 That means that you can use arbitrary filters in `[f]`; for example,
-`[limit(3; repeat(0))]` returns `[0, 0, 0]`.
+`limit(3; repeat(0)) --> 0 0 0`.
 You can use the input passed to `[f]` inside `f`;
 for example, we can write the previous filter equivalently as
 `{count: 3, elem: 0} | [limit(.count; repeat(.elem))]`.
@@ -344,27 +352,161 @@ for example, we can write the previous filter equivalently as
 
 ### Identity
 
-The identity filter `.` returns its input as single output.
+The filter `.` yields its input as single output.
 
+### Recursion
+
+The filter `..` yields its input and all recursively contained values.
+For example,
+`{"a": 1, "b": [2, ["3"]]} | .. -->
+{"a": 1, "b": [2, ["3"]]}
+1
+[2, ["3"]]
+2
+["3"]
+"3"`.
 
 ### Concatenation
 
-`f, g`: Return the concatenation of the outputs of `f` and `g`.
-
-::: Examples
-
-~~~
-.a, length
-{"a": 0, "b": 1}
-0
-2
-~~~
-
-:::
+The filter `f, g` yields the concatenation of the outputs of `f` and `g`.
+For example, `1, 2 --> 1 2`.
 
 ### Composition
 
-`f | g`: For each output of `f`, apply the output to g and return all its outputs.
+The filter `f | g` runs `f`, and
+for every output `y` of `f`, it runs `g` with `y` as input and yields its outputs.
+For example, `(1, 2) | (., 3) --> 1 3 2 3`.
+
+If either `f` or `g` yields an error, then
+`f | g` yields that error, followed by nothing.
+For example, `(1, 2) | (., error)` yields the same as `1, error`.
+
+### Variable binding
+
+The filter `f as $y | g` runs `f`, and
+for every output `y` of `f`, it binds the value of `y` to the *variable* `$y`,
+then runs `g` *on the original input*,
+replacing any reference to `$y` in `g` by the value `y`.
+For example,
+`"Hello" | length as $x | . + " has length \($x)" --> "Hello has length 5"`.
+
+### Filter definition
+
+The filter `def x: f; g` binds the filter `f` to a filter with the name `x`.
+Here, `x` is an identifier.
+The filter `g` can contain calls to the filter `x`, and
+any such calls will be replaced by the filter `f`.
+
+The filter `def x(x1; ...; xn): f; g` binds the filter `f` to
+a filter with the name `x` and the arity `n`.
+Here, `x1` to `xn` are identifiers that are called *arguments* of `x`, and
+`f` can contain references to these arguments.
+The filter `g` can contain calls of the shape `x(g1; ...; gn)`,
+where `g1` to `gn` are filters.
+Any such calls will be replaced by the filter `f`, where
+every argument `xi` is replaced by its corresponding filter `gi`.
+
+Filters can be defined recursively; for example,
+`def f: 0, f; f` yields an infinite sequence of `0` values.
+
+
+## Path operators
+
+jq's path operators `.[x]`, `.[x:y]` and `.[]` retrieve parts of their input.
+
+### Indexing
+
+The indexing operator `.[x]` yields the `x`-th element of the input.
+For example,
+`[1, 2, 3] | .[1] --> 2` and
+`{a: 1, b: 2} | .["a"] --> 1`.
+
+If there is no element at that index in the input, then this operator returns `null`.
+For example,
+`[1, 2, 3] | .[3]` and
+`{a: 1, b: 2} | .["c"]` both yield `null`.
+
+This operator treats byte string input like an array of numbers in the range 0..256.
+For example,
+`"@ABC" | tobytes | .[0] --> 64`.
+
+This operator yields an error either
+if the input is neither an array or an object, or
+if the input is an array and the index is not an integer.
+
+For identifier-like strings like `name`,
+you can write `.name` as short form for `.["name"]`.
+
+For array input, you can also use negative numbers as index,
+which will be interpreted as index counting from the end of the array.
+For example,
+`[1, 2, 3] | .[-1] --> 3`.
+
+### Slicing
+
+The slicing operator `.[x:y]` yields a slice of a string or an array,
+from the `x`-th element to (excluding) the `y`-th element.
+For example,
+`[1, 2, 3] | .[1:3] --> [2, 3]`, and
+`"Hello World!" | .[6:11] --> "World"`.
+
+When slicing a text string, the `x`-th element refers to the `x`-th *UTF-8 character*.
+For example,
+`"老虎" | .[1:2] --> "虎"`.
+
+Like the indexing operator, the slicing operator
+treats byte string input like an array of numbers and
+interprets negative indices as indices counting from the end.
+
+The short form `.[x:]` creates a slice from the index `x` to the end, and
+the short form `.[:y]` creates a slice from the beginning to (excluding) the index `x`.
+For example, `"Hello World!" | .[:5], .[6:] --> "Hello" "World!"`.
+
+### Iterating
+
+The iteration operator `.[]` yields all values `v1 ... vn` when given
+an array `[v1, ..., vn]` or
+an object `{k1: v1, ..., kn: vn}`.
+For example,
+`[1, 2, 3] | .[] --> 1 2 3` and
+`{a: 1, b: 2} | .[] --> 1 2`.
+
+It holds that `.[]` has the same effect as `.[keys[]]`.
+For example,
+`[1, 2, 3] | .[keys[]] --> 1 2 3`.
+
+### Advanced use
+
+For each of the filters in this section,
+you can employ any atomic filter instead of the leading `.` (identity).
+For example, you can write `explode[]` as short form for `explode | .[]`.
+
+You can also terminate any filter in this section with a `?`,
+which silences errors from that operator.
+For example, `.[]` yields an error if the input is neither an array nor an object,
+but `.[]?` silences such errors, yielding no output instead.
+
+You can chain together an arbitrary number of these operators;
+for example, `.[0][]?[:-1]` is the same as `.[0] | .[]? | .[:-1]`.
+
+When you combine the techniques above, be aware that
+the filters `x` and `y` in `.[x]` and `.[x:y]`
+are executed on the *original* input and
+are *not* influenced by error suppression with `?`.
+That means that `f[][x]?[y:z]` is equivalent to
+`f as $f | x as $x | y as $y | z as $z | $f | .[] | .[$x]? | .[$y:$z]`.
+
+## More filters
+
+### if-then-else
+
+### try-catch
+
+### label-break
+
+### reduce/foreach
+
+
 
 # Standard library
 
