@@ -94,7 +94,11 @@ def unique: unique_by(.);
 
 # Paths
 def paths(f): path_values | if .[1] | f then .[0] else empty end;
-def getpath($path): reduce $path[] as $p (.; .[$p]);
+def getpathpart($p): 
+  if (($p | isobject) and (isobject | not))
+  then .[$p.start // 0 : $p.end // length]
+  else .[$p] end;
+def getpath($path): reduce $path[] as $p (.; getpathpart($p));
 def del(f): f |= empty;
 
 # Arrays
