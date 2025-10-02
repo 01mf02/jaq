@@ -348,11 +348,16 @@ for example, we can write the previous filter equivalently as
 ### Objects
 
 
-## Basic filters
+## Nullary filters
+
+A nullary filter does not take any arguments.
+All nullary filters are atomic.
 
 ### Identity
 
 The filter `.` yields its input as single output.
+For example,
+`1 | . --> 1`.
 
 ### Recursion
 
@@ -366,10 +371,39 @@ For example,
 ["3"]
 "3"`.
 
-### Concatenation
+## Unary filters
 
-The filter `f, g` yields the concatenation of the outputs of `f` and `g`.
-For example, `1, 2 --> 1 2`.
+A unary filter takes a single argument.
+All unary filters are atomic.
+
+### Error suppression (`?`)
+
+The postfix operator `f?` runs the atomic filter `f` and
+returns all its outputs until (excluding) the first error.
+For example,
+`(1, error, 2)? --> 1`.
+
+### Negation
+
+The prefix operator `-f` runs the atomic filter `f` and negates its outputs.
+For example,
+`-1 --> -1` and
+`-(1, 2) --> -1 -2`.
+
+We can see that negation has a higher precedence than error suppression by
+`-[]? --> ` (no output), which is the same as
+`(-[])? --> `.
+If negation would have a lower precedence, then `-[]?` would be equivalent to
+`-([]?)`; however, that filter yields an error, as we can see by
+`try -([]?) catch -1 --> -1`.
+
+
+## Binary filters
+
+A binary filter takes two arguments.
+All binary filters are non-atomic.
+
+This section lists all binary infix filters sorted by increasing precedence.
 
 ### Composition
 
@@ -383,31 +417,97 @@ For example, `(1, 2) | (., error)` yields the same as `1, error`.
 
 ### Variable binding
 
-The filter `f as $y | g` runs `f`, and
-for every output `y` of `f`, it binds the value of `y` to the *variable* `$y`,
-then runs `g` *on the original input*,
-replacing any reference to `$y` in `g` by the value `y`.
+The filter `f as $x | g` runs `f`, and
+for every output `x` of `f`, it binds the value of `x` to the *variable* `$x`.
+Here, `x` is an identifier.
+It then runs `g` *on the original input*,
+replacing any reference to `$x` in `g` by the value `x`.
 For example,
 `"Hello" | length as $x | . + " has length \($x)" --> "Hello has length 5"`.
 
-### Filter definition
+### Concatenation
 
-The filter `def x: f; g` binds the filter `f` to a filter with the name `x`.
-Here, `x` is an identifier.
-The filter `g` can contain calls to the filter `x`, and
-any such calls will be replaced by the filter `f`.
+The filter `f, g` yields the concatenation of the outputs of `f` and `g`.
+For example, `1, 2 --> 1 2`.
 
-The filter `def x(x1; ...; xn): f; g` binds the filter `f` to
-a filter with the name `x` and the arity `n`.
-Here, `x1` to `xn` are identifiers that are called *arguments* of `x`, and
-`f` can contain references to these arguments.
-The filter `g` can contain calls of the shape `x(g1; ...; gn)`,
-where `g1` to `gn` are filters.
-Any such calls will be replaced by the filter `f`, where
-every argument `xi` is replaced by its corresponding filter `gi`.
+### Plain assignment
 
-Filters can be defined recursively; for example,
-`def f: 0, f; f` yields an infinite sequence of `0` values.
+The filter `f = g` runs `g` with its input, and
+for every output `y` of `g`, it
+returns a copy of the input whose
+values at the positions given by `f` are replaced by `y`.
+For example,
+`[1, 2, 3] | .[0] = (length, 4) -->
+[3, 2, 3]
+[4, 2, 3]`.
+
+### Update assignment
+
+The filter `f |= g` returns a copy of its input where
+each value `v` at a position given by `f` is replaced by
+the output of `g` run with input `v`.
+For example,
+`[1, 2, 3] | .[] |= .*2 --> [2, 4, 6]`.
+
+When `g` yields *no* outputs, then the value at the position is deleted;
+for example,
+`[1, 2, 3] | .[0] |= empty --> [2, 3]` and
+`{a: 1, b: 2} | .a |= empty --> {"b": 2}`.
+
+When `g` yields *multiple* outputs, then it depends on
+the input type and on `f` whether more than one output of `g` is considered.
+For example,
+`1 | . |= (., .*2) --> 1 2` and
+`[1, 2, 3] |  .[ ] |= (., .*2) --> [1, 2, 2, 4, 3, 6]` consider multiple outputs, but
+`[1, 2, 3] |  .[0] |= (., .*2) --> [1, 2, 3]` and
+`{a: 1, b: 2} | .a |= (., .*2) --> {"a": 1, "b": 2}` consider only the first output.
+
+### Arithmetic update assignment
+
+The filters
+`f += g`,
+`f -= g`,
+`f *= g`,
+`f /= g`,
+`f %= g`
+are short-hand forms for
+`f = . + g`, ...
+For example,
+`[1, 2, 3] | .[0] += (length, 4) -->
+[4, 2, 3]
+[5, 2, 3]`.
+
+### Alternation
+
+The filter `f // g` runs `f` and yields
+all its outputs that are neither `null` nor `false`.
+If `f` yields no such outputs, then this filter yields the outputs of `g`.
+For example,
+`(null, 1, false, 2) // (3, 4) --> 1 2`,
+`(null, false) // (3, 4) --> 3 4`, and
+`empty // 3 --> 3`.
+
+### Logic
+
+`or`, `and`
+
+## Value filters
+
+### Equality
+
+`.a == .b`
+
+### Comparison
+
+`.a < .b`
+
+### Addition / subtraction
+
+`+`, `-`
+
+### Multiplication / division
+
+, `*`, `/`, `%`
 
 
 ## Path operators
@@ -428,7 +528,8 @@ For example,
 
 This operator treats byte string input like an array of numbers in the range 0..256.
 For example,
-`"@ABC" | tobytes | .[0] --> 64`.
+`"@ABC" | tobytes | .[0] --> 64`,
+because the character `'@'` is encoded in UTF-8 as single byte `64` (`0x40`).
 
 This operator yields an error either
 if the input is neither an array or an object, or
@@ -496,7 +597,10 @@ are *not* influenced by error suppression with `?`.
 That means that `f[][x]?[y:z]` is equivalent to
 `f as $f | x as $x | y as $y | z as $z | $f | .[] | .[$x]? | .[$y:$z]`.
 
-## More filters
+
+## Atomic keyword filters
+
+This section lists all atomic filters that start with a reserved keyword.
 
 ### if-then-else
 
@@ -504,7 +608,26 @@ That means that `f[][x]?[y:z]` is equivalent to
 
 ### label-break
 
-### reduce/foreach
+### reduce / foreach
+
+### def
+
+The filter `def x: f; g` binds the filter `f` to a filter with the name `x`.
+Here, `x` is an identifier.
+The filter `g` can contain calls to the filter `x`, and
+any such calls will be replaced by the filter `f`.
+
+The filter `def x(x1; ...; xn): f; g` binds the filter `f` to
+a filter with the name `x` and the arity `n`.
+Here, `x1` to `xn` are identifiers that are called *arguments* of `x`, and
+`f` can contain references to these arguments.
+The filter `g` can contain calls of the shape `x(g1; ...; gn)`,
+where `g1` to `gn` are filters.
+Any such calls will be replaced by the filter `f`, where
+every argument `xi` is replaced by its corresponding filter `gi`.
+
+Filters can be defined recursively; for example,
+`def f: 0, f; f` yields an infinite sequence of `0` values.
 
 
 
