@@ -29,6 +29,9 @@ running `jaq -n '1 + 2, true or false'` yields the outputs `3` and `true`.
 
 ## Values
 
+This section lists all potential values that jq filters can process,
+and how to produce them.
+
 ### `null`
 
 The filter `null` returns the `null` value.
@@ -75,8 +78,43 @@ integers, floating-point numbers, and decimal numbers:
 
 ### Strings
 
+Strings can be constructed using the syntax `"..."`.
+Here, `...` may contain any UTF-8 characters
+in the range from `U+0020` to `U+10FFFF`, excluding `'"'` and `'\'`.
+For example,
+`"Hello 東京!" --> "Hello 東京!"`.
+
+Furthermore, `...` may contain escape sequences, which
+start with `'\'` and are followed by one of:
+
+- `b`, `f`, `n`, `r`, or `t`
+- `'"'` or `'\'`
+- `uHHHH`, where `HHHH` is a hexadecimal number
+- `(f)`, where `f` is a jq filter (*string interpolation*)
+
+Most characters below `U+0020` can only be produced via a Unicode escape sequence, i.e.
+`"NUL = \u0000" --> "NUL = \u0000"`.
+
+A string containing an interpolated filter, such as
+`"...\(f)..."`, is equivalent to
+`"..." + (f | tostring) + "..."`.
+For example,
+`"Hello \("Alice", "Bob") 😀!\n" -->
+"Hello Alice 😀!\n" "Hello Bob 😀!\n"`.
+
 A string is *identifier-like* if it matches the regular expression
 `[a-zA-Z_][a-zA-Z_0-9]*`.
+
+Strings may be prefixed with `@x`, where `x` is an identifier; e.g. `@uri`.
+In such a case, the filters of interpolated strings are
+piped through `@x` instead of `tostring`, i.e.
+`@x "...\(f)..."` is equivalent to
+`@x "..." + (f | @x) + @x "..."`.
+When `"..."` does not contain any interpolated filter, then
+`@x "..."` is equivalent to `"..."`.
+For example,
+`"-[]?" | @uri "https://gedenkt.at/jaq/?q=\(.)" -->
+"https://gedenkt.at/jaq/?q=-%5B%5D%3F"`.
 
 ### Arrays
 
@@ -96,6 +134,46 @@ for example, we can write the previous filter equivalently as
 `{count: 3, elem: 0} | [limit(.count; repeat(.elem))]`.
 
 ### Objects
+
+An object is a mapping from keys to values.
+In jq, keys must be strings, whereas
+in jaq, keys can be arbitrary values.
+
+An empty object can be constructed with the filter `{}`.
+An object with a single key and value can be constructed by `{(k): v}`,
+where `k` and `v` are both filters.
+For example, `{("a"): 1} --> {"a": 1}`.
+
+If `k` is a [text string filter](#strings) such as `"a"` or a variable such as `$k`,
+then you can omit the parentheses, e.g. `{"a": 1}` or `{$k: 1}`.
+If the string is identifier-like,
+then you can also omit the quotes, e.g. `{a: 1}`.
+
+To construct an object with multiple key-value pairs,
+you can add multiple objects; e.g.
+`{(k1): v1} + ... + {(kn): vn}`.
+You can write this more compactly as
+`{(k1): v1, ..., (kn): vn}`.
+For example,
+`{a: 1, b: 2} --> {"a": 1, "b": 2}`.
+
+Instead of `{k: .k}` (see [indexing](#indexing)),
+you can also write `{k}`; e.g.,
+`{a: 1, b: 2} | {a} --> {"a": 1}`.
+Instead of `{k: $k}`,
+you can also write `{$k}`; e.g.,
+`1 as $k | {$k} --> {"k": 1}`.
+
+The filter `{(k): v}` is equivalent to `k as $k | v as $v | {$k: $v}`.
+That means that when either `k` or `v` yield multiple output values,
+an object is produced for every output combination; for example,
+`{("a", "b"): (1, 2)} --> {"a": 1} {"a": 2} {"b": 1} {"b": 2}`.
+Note that here, it is necessary to surround `1, 2` with parentheses,
+in order to clarify that `,` does not start a new key-value pair.
+
+Because object keys can be arbitrary values in jaq, you can write e.g.
+`{(0): 1, "2": 3, ([4]): 5, ({}): 6} -->
+{ 0 : 1, "2": 3,  [4] : 5,  {} : 6}`.
 
 
 ## Nullary filters
@@ -257,7 +335,11 @@ For example,
 
 ### Multiplication / division
 
-, `*`, `/`, `%`
+`*`, `/`
+
+### Modulus
+
+`%`
 
 
 ## Path operators

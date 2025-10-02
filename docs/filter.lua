@@ -6,7 +6,7 @@ function Header(el)
 end
 
 function Code(code)
-  -- inline code is assumed to be in jq
+  -- jq is unfortunately currently not a language with highlighting support
   --code.classes[1] = "jq"
   if FORMAT == "man" then
     return pandoc.Strong(code)
