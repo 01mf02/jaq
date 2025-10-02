@@ -10,8 +10,18 @@ function Code(code)
   --code.classes[1] = "jq"
   if FORMAT == "man" then
     return pandoc.Strong(code)
+  else
+    local startIndex, endIndex = string.find(code.text, " --> ", 1, true)
+    if startIndex ~= nil then
+      local filter = string.sub(code.text, 1, startIndex - 1)
+      local input = "null"
+      local url = "https://gedenkt.at/jaq/?q=" .. encodeUrl(filter) .. "&j=" .. encodeUrl(input)
+
+      code.text = code.text:sub(1, startIndex - 1) .. " ⟼ " .. code.text:sub(endIndex + 1)
+      local run_attrs = {target = "_blank", rel = "noopener"}
+      return {code, " ", pandoc.Link("🔗", url, "Run example", run_attrs)}
+    end
   end
-  --return code
 end
 
 -- code blocks are assumed to be in jq if no other language is given
@@ -21,6 +31,14 @@ function CodeBlock(block)
     return block
   end
 end
+
+function encodeUrl(str)
+  str = string.gsub(str, "\n", "\r\n")
+  str = string.gsub(str, "([^%w%.%- ])", function(c) return string.format("%%%02X", string.byte(c)) end)
+  str = string.gsub(str, " ", "+")
+  return str
+end
+
 
 function Div(el)
   local class = el.classes[1]
