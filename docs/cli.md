@@ -28,6 +28,22 @@ There are a few rules:
     - Otherwise, jaq assumes JSON.
 - If an error is encountered at any point, jaq stops.
 
+When passing filters directly as _FILTER_ argument on the command-line,
+care has to be taken to properly escape the filter.
+How to do this depends from platform to platform, but on Unixoid systems,
+surrounding the filter with single quotes (`'`) and
+replacing occurrences of `'` in filters by `'\''` suffices.
+For example, to run the filter `"'"` that
+produces a string containing a single quote, you can use
+`jaq -n '"'\''"'`.
+
+Running filters that start with the [negation operator](#negation),
+such as `jaq '-1'`, fails because `-` is interpreted as
+start of a command-line switch rather than negation.
+You can remedy this by using
+`jaq -- '-1'` instead, or by surrounding the filter in parentheses, i.e.
+`jaq '(-1)'`.
+
 
 ## Input options
 
