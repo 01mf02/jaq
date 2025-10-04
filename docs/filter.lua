@@ -11,15 +11,14 @@ function Code(code)
   if FORMAT == "man" then
     return pandoc.Strong(code)
   else
-    local startIndex, endIndex = string.find(code.text, " --> ", 1, true)
-    if startIndex ~= nil then
-      local filter = string.sub(code.text, 1, startIndex - 1)
+    local filter, output = codeTest(code.text)
+    if filter ~= nil then
       local input = "null"
       local url = "https://gedenkt.at/jaq/?q=" .. encodeUrl(filter) .. "&j=" .. encodeUrl(input)
 
-      code.text = code.text:sub(1, startIndex - 1) .. " ⟼ " .. code.text:sub(endIndex + 1)
+      code.text = filter .. " ⟼ " .. output
       local run_attrs = {target = "_blank", rel = "noopener"}
-      return {code, " ", pandoc.Link("🔗", url, "Run example", run_attrs)}
+      return {code, " ", pandoc.Link("▶️", url, "Run example", run_attrs)}
     end
   end
 end
@@ -39,35 +38,26 @@ function encodeUrl(str)
   return str
 end
 
-
-function Div(el)
-  local class = el.classes[1]
-  if class == "Examples" then
-    el = el:walk{CodeBlock = function(block) return example(block.text) end}
-
-    if FORMAT == "html" then
-      local summary = pandoc.Plain{
-        pandoc.RawInline("html",  '<summary>'), pandoc.Str 'Examples',
-        pandoc.RawInline("html", "</summary>")
-      }
-      return {
-        pandoc.RawBlock("html",  '<details>'), summary, el,
-        pandoc.RawBlock("html", '</details>')
-      }
-    end
+-- Return filter and expected output if given code is a unit test
+function codeTest(code)
+  local startIndex, endIndex = string.find(code, " --> ", 1, true)
+  if startIndex ~= nil then
+    local filter = string.sub(code, 1, startIndex - 1)
+    local output = string.sub(code, endIndex + 1)
+    return filter, output
   end
-  if FORMAT == "man" then
-    el = pandoc.DefinitionList({{pandoc.Emph(class), el.content}})
-  end
-  return el
 end
 
-function example(test)
-  local _, _, filter, input, output = test:find("([^\n]+)\n([^\n]+)\n(.*)")
-
-  if FORMAT == "man" then
-    filter = "'" .. filter .. "'"
-    input = "'" .. input .. "'"
-    return pandoc.CodeBlock("$ jaq " .. filter .. " \\\n  <<< " .. input .. "\n" .. output)
-  end
+-- Print unit tests when running `pandoc --from filter.lua`
+function Writer(doc, opts)
+  doc.blocks:walk{Code = function(code)
+    local filter, output = codeTest(code.text)
+    if filter ~= nil then
+      print(filter)
+      print("null") -- input
+      print(output)
+      print() -- end of test
+    end
+  end}
+  os.exit(0)
 end
