@@ -1,0 +1,38 @@
+html {
+    font-size: 135%;
+}
+
+body {
+    margin: 0;
+}
+
+.container {
+    display: flex;
+    max-width: 1320px;
+    /* center */
+    margin: 0 auto; 
+}
+
+nav {
+    width: 25%;
+    /* necessary for "position: sticky" to work with Flexbox */
+    align-self: flex-start;
+    position: sticky;
+    top: 0px;
+    overflow-y: auto;
+    /* necessary for scrolling inside nav */
+    max-height: 100vh;
+    margin-right: 16px;
+}
+
+nav > ul {
+    padding-left: 0px;
+}
+
+nav a {
+    text-decoration: none;
+}
+
+section#main {
+    width: 75%;
+}
