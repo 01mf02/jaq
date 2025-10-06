@@ -1,0 +1,1 @@
+"a" * . | [range(length) as $x | .[$x:], .[:-$x]]
