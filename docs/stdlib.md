@@ -7,5 +7,3 @@
 ## Byte strings
 
 ### `tobytes`
-
-### `byteoffset`

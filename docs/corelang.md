@@ -32,6 +32,15 @@ running `jaq -n '1 + 2, true or false'` yields the outputs `3` and `true`.
 This section lists all potential values that jq filters can process,
 and how to produce them.
 
+jaq extends the set of values that jq can process by
+[byte strings](#byte-strings) and
+[objects with non-string values](#objects).
+Where
+ jq reads and writes values by default as [JSON](#json),
+jaq reads and writes values by default as [XJON](#xjon),
+which is an extension of JSON.
+See those sections for how jaq serialises values.
+
 ### `null`
 
 The filter `null` returns the `null` value.
@@ -76,9 +85,9 @@ integers, floating-point numbers, and decimal numbers:
   For example, `1.0e500 + 1 --> Infinity`, because jaq converts
   `1.0e500` to the closest floating-point number, which is `Infinity`.
 
-### Strings
+### Text strings
 
-Strings can be constructed using the syntax `"..."`.
+A text string is an array of bytes that can be constructed using the syntax `"..."`.
 Here, `...` may contain any UTF-8 characters
 in the range from `U+0020` to `U+10FFFF`, excluding `'"'` and `'\'`.
 For example,
@@ -116,9 +125,29 @@ For example,
 `"-[]?" | @uri "https://gedenkt.at/jaq/?q=\(.)" -->
 "https://gedenkt.at/jaq/?q=-%5B%5D%3F"`.
 
+### Byte strings
+
+A byte string is an array of bytes that is *not* interpreted as (UTF-8) text.
+It can be produced from a text string via the filter [`tobytes`](#tobytes), e.g.
+`"Hello, world! 🙂" | tobytes --> b"Hello, world! \xf0\x9f\x99\x82"`.
+Currently, there is no native syntax in jaq to produce a byte string directly.
+
+Byte strings differ from text strings in a few regards; in particular,
+they can be [indexed](#indexing) and [sliced](#slicing) in constant time.
+That makes byte strings interesting e.g. for parsing binary formats.
+
+For compatibility reasons, jaq considers
+both text strings and byte strings as strings.
+That means that `"Hello" | isstring and (tobytes | isstring) --> true`.
+Furthermore, a text string and a byte string that
+contain equivalent bytes are considered equal, e.g.
+`"Hello" | . == tobytes --> true`.
+
+
 ### Arrays
 
-Arrays can be constructed using the syntax `[f]`, where `f` is a filter.
+An array of values can be constructed using the syntax
+`[f]`, where `f` is a filter.
 The filter `[f]` passes its input to `f` and runs it,
 returning an array containing all outputs of `f`.
 If `f` throws an error, then `[f]` returns that error instead of an array.
