@@ -293,11 +293,10 @@ impl jaq_core::ValT for Val {
                 Ok(range) => skip_take(range, a.len()),
                 Err(e) => return opt.fail(self, |_| Exn::from(e)),
             };
-            let a = Rc::make_mut(a);
             let arr = a.iter().skip(skip).take(take).cloned().collect();
             let y = f(arr).map(|y| y?.into_arr().map_err(Exn::from)).next();
             let y = y.transpose()?.unwrap_or_default();
-            a.splice(skip..skip + take, (*y).clone());
+            Rc::make_mut(a).splice(skip..skip + take, (*y).clone());
             Ok(self)
         } else {
             opt.fail(self, |v| Exn::from(Error::typ(v, Type::Arr.as_str())))
