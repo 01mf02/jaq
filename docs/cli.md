@@ -74,7 +74,7 @@ The inputs can still be obtained via the [`inputs`] filter; for example,
 `yes true | jaq -n 'first(inputs)'` yields `true`.
 This can be useful to fold over all inputs with [`reduce`] or [`foreach`].
 
-### `-R`, `--raw-input`
+### `-R`, `--raw-input` {#--raw-input}
 
 Read lines of the input as sequence of strings.
 For example,
