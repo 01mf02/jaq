@@ -1,31 +1,62 @@
-jaq supports reading and writing the following formats:
-
-- UTF-8 text (`raw`)
-- JSON (`json`)
-- XML (`xml`)
-
-jaq tries to guess the file format from the file name;
-for example, `jaq . file.xml` will try to read `file.xml` as XML file.
-Data on the standard input/output will be read/written by default in JSON format.
-If you need to override the input/output file format, use `--from` and `--to`,
-e.g. `--from xml`.
-
 # Formats
+
+jaq supports reading and writing several data formats.
+This section describes these data formats.
 
 ## JSON
 
-jaq reads and writes JSON data as specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
-A good overview of the syntax is given at <https://www.json.org>.
+JSON is specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
+A good overview of its syntax is given at <https://www.json.org>.
 
-jaq diverges in one point from JSON:
-Where JSON limits object keys to strings,
-jaq allows arbitrary values as object keys.
-For example, the following is invalid JSON, but is allowed in jaq:
+## XJON
 
-    {null: 1, true: 2, 3: 4, "5": 6, [7]: 8}
+The native data format of jaq is a superset of JSON called *XJON*
+(eXtended JavaScript Object Notation, pronounced like "action").
 
-This change simplifies parsing and makes jaq more flexible,
-because it allows using objects as hash maps for arbitrary keys.
+XJON extends JSON as follows:
+
+- Line comments: `# ... \n` is interpreted as comment
+- Special floating-point numbers: `NaN`, `Infinity`, `-Infinity`
+- UTF-8 strings with invalid code points:
+  The JSON standard is slightly ambiguous whether
+  strings may contain invalid UTF-8 code points.
+  XJON explicitly allows for invalid code points in UTF-8 strings,
+  e.g. the output of `printf '"\xFF"'`.
+  This increases compatibility with tools that output such strings (e.g. file names).
+  Furthermore, it allows for constant-time loading of strings via [`--raw-input`](#--raw-input),
+  where jq takes linear time due to UTF-8 validation.
+- Byte strings:
+  A byte string is created via `b"..."`, where `...` is a sequence of:
+    - bytes in the range 0x20 to (including) 0xFF,
+      excluding the ASCII characters `'"'` and `'\'`
+    - an escape sequence, starting with a backslash (`'\'`) and followed by
+      `b`, `f`, `n`, `r`, `t`, `'"'`, `'\'`, or
+      `xHH`, where `HH` is a hexadecimal number
+  For example: `b"Here comes \xFF, dadadada\nHere comes \xFF\nAnd I say: \"It's alright\"\x00"`.
+  Byte strings of this shape can also be found in other languages, like
+  Rust & Python (with leading `b`) and JavaScript & C (without leading `b`).
+- Objects with non-string keys:
+  Where JSON limits object keys to strings,
+  XJON allows arbitrary values as object keys.
+  For example: `{null: 1, true: 2, 3: 4, "5": 6, [7]: 8}`
+
+The goal behind XJON was to
+support a set of values present in YAML and CBOR, namely
+byte strings and objects with non-string keys, while keeping the format
+both human-readable and simple & performant to parse, like JSON.
+
+XJON perfectly preserves all values that are processed by jaq.
+The same is not true for JSON and `jq`;
+for example,
+`jq -n 'nan | isnan'` does not yield the same output as
+`jq -n 'nan' | jq 'isnan'`,
+because `jq` prints NaN as `null`, thus losing information.
+
+Currently, wherever jaq accepts JSON, it also accepts XJON.
+That means that
+`jaq --from json <<< 'NaN b"Bytes" {1: 2} # Over and out'` yields
+`'NaN b"Bytes" {1: 2}`, although the input is XJON, not valid JSON.
+
 
 ## XML
 
