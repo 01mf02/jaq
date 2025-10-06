@@ -418,23 +418,6 @@ fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<
     })
 }
 
-fn byte_offset<V: ValT>(fixed: V, loose: V) -> ValR<V> {
-    let range = |v: &V| {
-        let b = v.try_as_bytes()?;
-        let start = b.as_ptr() as usize;
-        Ok(start..start + b.len())
-    };
-    let f = range(&fixed)?;
-    let l = range(&loose)?;
-    if f.start <= l.end && l.start <= f.end {
-        V::from(l.start) - V::from(f.start)
-    } else {
-        Err(Error::str(format_args!(
-            "{fixed} does not overlap with {loose}"
-        )))
-    }
-}
-
 fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Result<T, E>> {
     Box::new(r.transpose().into_iter())
 }
@@ -494,9 +477,6 @@ where
         }),
         ("ascii_upcase", v(0), |cv| {
             bome(cv.1.map_utf8_str(ByteSlice::to_ascii_uppercase))
-        }),
-        ("byteoffset", v(1), |mut cv| {
-            bome(byte_offset(cv.0.pop_var(), cv.1))
         }),
         ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
         ("keys_unsorted", v(0), |cv| {
