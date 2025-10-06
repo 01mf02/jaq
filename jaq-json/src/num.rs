@@ -105,7 +105,7 @@ impl Num {
 }
 
 #[derive(Copy, Clone)]
-pub(crate) struct PosUsize(bool, usize);
+pub(crate) struct PosUsize(pub(crate) bool, pub(crate) usize);
 
 impl PosUsize {
     pub fn wrap(&self, len: usize) -> Option<usize> {

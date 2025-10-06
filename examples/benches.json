@@ -24,3 +24,4 @@
 {"name": "range-prop"  , "n":     128}
 {"name": "cumsum"      , "n": 1048576}
 {"name": "cumsum-xy"   , "n": 1048576}
+{"name": "str-slice"   , "n":    8192}
