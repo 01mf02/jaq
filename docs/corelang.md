@@ -233,13 +233,6 @@ For example,
 A unary filter takes a single argument.
 All unary filters are atomic.
 
-### Error suppression (`?`)
-
-The postfix operator `f?` runs the atomic filter `f` and
-returns all its outputs until (excluding) the first error.
-For example,
-`(1, error, 2)? --> 1`.
-
 ### Negation
 
 The prefix operator `-f` runs the atomic filter `f` and negates its outputs.
@@ -247,12 +240,22 @@ For example,
 `-1 --> -1` and
 `-(1, 2) --> -1 -2`.
 
-We can see that negation has a higher precedence than error suppression by
-`-[]? --> ` (no output), which is the same as
+### Error suppression (`?`)
+
+The postfix operator `f?` runs the atomic filter `f` and
+returns all its outputs until (excluding) the first error.
+For example,
+`(1, error, 2)? --> 1`.
+
+We can see that error suppression has a higher precedence than negation by
+`try -[]? catch -1 --> -1`, which shows us that
+`-[]?` yields the same as `-([]?)`, which is equivalent to
+`-[]` and yields an error.
+If negation would have a higher precedence,
+then `-[]?` would be equivalent to `(-[])?`;
+however, that filter yields no output, as we can see by
 `(-[])? --> `.
-If negation would have a lower precedence, then `-[]?` would be equivalent to
-`-([]?)`; however, that filter yields an error, as we can see by
-`try -([]?) catch -1 --> -1`.
+
 
 
 ## Binary filters
