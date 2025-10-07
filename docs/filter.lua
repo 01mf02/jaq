@@ -40,7 +40,7 @@ end
 
 -- Return filter and expected output if given code is a unit test
 function codeTest(code)
-  local startIndex, endIndex = string.find(code, " --> ", 1, true)
+  local startIndex, endIndex = string.find(code, " -->", 1, true)
   if startIndex ~= nil then
     local filter = string.sub(code, 1, startIndex - 1)
     local output = string.sub(code, endIndex + 1)
