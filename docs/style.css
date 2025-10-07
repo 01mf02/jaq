@@ -13,16 +13,18 @@ body {
     margin: 0 auto; 
 }
 
+.container > * {
+    margin-left: 10px;
+    margin-right: 10px;
+    overflow: auto;
+}
+
 nav {
-    width: 25%;
-    /* necessary for "position: sticky" to work with Flexbox */
-    align-self: flex-start;
+    flex: 1;
     position: sticky;
     top: 0px;
-    overflow-y: auto;
     /* necessary for scrolling inside nav */
     max-height: 100vh;
-    margin-right: 16px;
 }
 
 nav > ul {
@@ -34,5 +36,11 @@ nav a {
 }
 
 section#main {
-    width: 75%;
+    flex: 3;
+}
+
+@media(max-width: 660px) {
+    nav {
+        display: none;
+    }
 }
