@@ -339,10 +339,10 @@ For example,
 
 ### Logic
 
-The filter `f or g` evaluates `f` and
+The filter `f or g` (disjunction) evaluates `f` and
 returns `true` if its boolean value is `true`, else it
 returns the boolean values of `g`.
-The filter `f and g` evaluates `f` and
+The filter `f and g` (conjunction) evaluates `f` and
 returns `false` if its boolean value is `false`, else it
 returns the boolean values of `g`.
 
@@ -356,6 +356,11 @@ and
 true
 false
 false`.
+
+The filter `f and g` has higher precedence than `f or g`; we can see this by
+`false and true or true --> true`, which yields the same as
+`(false and true) or true --> true`, but not the same as
+`false and (true or true) --> false`.
 
 It holds that `f or g` is equivalent to `f as $x | $x or g`;
 similar for `and`.
@@ -424,12 +429,14 @@ Values are ordered as follows:
   `[0] < [1] --> true`.
 - Objects: An object `$x` is smaller than an object `$y` if
   the keys of `$x` are smaller than the keys of `$y` or
+  the keys of `$x` are equal to the keys of `$y` and
   the values of `$x` are smaller than the values of `$y`.
   More precisely:
   `($x | to_entries | sort_by(.key)) as $ex |
   ($y | to_entries | sort_by(.key)) as $ey |
-  [$ex[].key] < [$ey[].key] or [$ex[].value] < [$ey[].value]`.
-
+  [$ex[].key]   < [$ey[].key] or
+  [$ex[].key]  == [$ey[].key] and
+  [$ex[].value] < [$ey[].value]`.
 
 ### Addition / subtraction
 
