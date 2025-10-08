@@ -1,18 +1,4 @@
-# jq language {#jq-lang}
-
-The jq language is a lazy, functional streaming programming language.
-A program written in the jq language is called a jq program or _filter_.
-jq programs can be executed with several interpreters, including
-`jq`, `gojq`, `fq`, and `jaq`.
-The jq language is Turing-complete and can therefore be used to write
-any program that can be written in any other programming language.
-
-jaq aims to execute jq programs similarly to `jq`,
-yet jaq diverges from `jq` in some situations.
-This manual tries to point out such occasions.
-
-
-## Filters
+# Core filters {#jq-lang}
 
 Filters are the basic building blocks of jq programs.
 A *filter* is a function that
@@ -146,6 +132,10 @@ contain equivalent bytes are considered equal, e.g.
 
 ### Arrays
 
+An array is a finite sequence of values.
+An empty array can be constructed with the filter
+`[]`, which is a short form for
+`[empty] --> []`.
 An array of values can be constructed using the syntax
 `[f]`, where `f` is a filter.
 The filter `[f]` passes its input to `f` and runs it,
@@ -205,7 +195,7 @@ Because object keys can be arbitrary values in jaq, you can write e.g.
 { 0 : 1, "2": 3,  [4] : 5,  {} : 6}`.
 
 
-## Nullary filters
+## Nullary
 
 A nullary filter does not take any arguments.
 All nullary filters are atomic.
@@ -228,7 +218,7 @@ For example,
 ["3"]
 "3"`.
 
-## Unary filters
+## Unary
 
 A unary filter takes a single argument.
 All unary filters are atomic.
@@ -258,7 +248,7 @@ however, that filter yields no output, as we can see by
 
 
 
-## Binary filters
+## Binary (complex)
 
 A binary filter takes two arguments.
 All binary filters are non-atomic.
@@ -349,29 +339,156 @@ For example,
 
 ### Logic
 
-`or`, `and`
+The filter `f or g` evaluates `f` and
+returns `true` if its boolean value is `true`, else it
+returns the boolean values of `g`.
+The filter `f and g` evaluates `f` and
+returns `false` if its boolean value is `false`, else it
+returns the boolean values of `g`.
 
-## Value filters
+For example,
+`(true, false) or (true, false) -->
+true
+true
+false`
+and
+`(true, false) and (true, false) -->
+true
+false
+false`.
+
+It holds that `f or g` is equivalent to `f as $x | $x or g`;
+similar for `and`.
+
+
+## Binary (simple)
+
+Every simple binary operator such as `+` in this section fulfills the property that
+`f + g` is equivalent to
+`f as $x | g as $y | $x + $y`.
+For example,
+`(1, 2) + (1, 3) --> 2 4 3 5` and
+`(1, 2) * (1, 3) --> 1 3 2 6`.
+This property does not hold for the complex binary filters above.
+
+Note that a slightly different property holds in `jq`, namely that
+`f + g` is equivalent to
+`g as $y | f as $x | $x + $y`.
+That means that in `jq`,
+`(1, 2) + (1, 3)` yields `2 3 4 5`.
 
 ### Equality
 
-`.a == .b`
+The operator `$x == $y` returns `true` if the two values `$x` and `$y` are equal, else `false`.
+Similarly, `$x != $y` returns the negation of `$x == $y`, i.e. `$x == $y | not`.
 
-### Comparison
+Interesting cases include:
 
-`.a < .b`
+- NaN does not equal any value, including itself; i.e.
+  `nan == nan --> false`
+- Integer values equal equivalent floating-point values; i.e.
+  `1 == 1.0 --> true`
+- Objects are equal if they have the same keys and for every key,
+  the associated value is equal; i.e.
+  `{a: 1, b: 2} == {b: 2, a: 1} --> true`
+
+There are values that are equal,
+yet yield different results when fed to the same filter.
+For example,
+`{a: 1, b: 2} as $x | {b: 2, a: 1} as $y |
+$x == $y, ($x | tojson) == ($y | tojson) --> true false`.
+
+### Ordering
+
+The operator `$x < $y` returns `true` if `$x` is smaller than `$y`.
+Similarly,
+`$x >  $y` is equivalent to `$y < $x`,
+`$x <= $y` is equivalent to `$x < $y or $x == $y`, and
+`$x >= $y` is equivalent to `$x > $y or $x == $y`.
+
+Values are ordered as follows:
+
+- `null`
+- Booleans: `false < true --> true`
+- Numbers:
+    - `NaN` is smaller than any other number, including itself; i.e.
+      `nan < nan --> true`
+    - `-Infinity`, e.g. `-infinite < -99999999999999999999999999 --> true`
+    - Finite numbers, e.g. `0 < 1 --> true`
+    - `Infinity`, e.g. `infinite > 99999999999999999999999999 --> true`
+- Strings: lexicographic ordering by underlying bytes, e.g.
+  `"Hello" < "Hello World" --> true` and
+  `"@" < "A" --> true`.
+- Arrays: lexicographic ordering, e.g.
+  `[1, 2] < [1, 2, 3] --> true` and
+  `[0] < [1] --> true`.
+- Objects: An object `$x` is smaller than an object `$y` if
+  the keys of `$x` are smaller than the keys of `$y` or
+  the values of `$x` are smaller than the values of `$y`.
+  More precisely:
+  `($x | to_entries | sort_by(.key)) as $ex |
+  ($y | to_entries | sort_by(.key)) as $ey |
+  [$ex[].key] < [$ey[].key] or [$ex[].value] < [$ey[].value]`.
+
 
 ### Addition / subtraction
 
-`+`, `-`
+The filter `$x + $y` adds two values as follows:
+
+- `null + $x` and `$x + null` yields `$x`.
+- Adding numbers yields their sum, which is
+  integer if both numbers are integer, else a floating-point number.
+  For example,
+  `1 + 2 --> 3` and
+  `1 + 2.0 --> 3.0`.
+- Adding strings or arrays concatenates them, i.e.
+  `"Hello, " + "World!" --> "Hello, World!"` and
+  `[1, 2] + [3, 4] --> [1, 2, 3, 4]`.
+- Adding objects yields their *union*.
+  If a key is present in both objects, then the resulting object
+  will contain the key with the value of the object on the *right*; i.e.
+  `{a: 1, b: 2} + {b: 3, c: 4} --> {"a": 1, "b": 3, "c": 4}`.
+- Adding anything else yields an error.
+
+The filter `$x - $y` subtracts `$y` from `$x` as follows:
+
+- Subtracting numbers yields their difference, similar to addition.
+- Subtracting arrays yields the
+  left array with all elements contained in the right array removed; i.e.
+  `[1, 2, 3, 4] - [2, 4] --> [1, 3]`.
+- Subtracting anything else yields an error.
 
 ### Multiplication / division
 
-`*`, `/`
+The filter `$x * $y` multiplies two values as follows:
+
+- Multiplying numbers yields their product, similar to addition.
+- Multiplying a string with an integer `$n` yields
+  the `$n`-fold concatenation of the string, i.e.
+  `"abc" * 3 --> "abcabcabc"`.
+  If `$n <= 0`, then this yields `null`, i.e.
+  `0 * "abc" --> null`.
+- Multiplying two objects merges them recursively.
+  In particular,
+  `$x * {k: v, ...}` yields
+  `($x + {k: $x[k] * v}) * {...}` if both `v` and `$x[k]` are objects, else
+  `($x + {k: v}) * {...}`.
+  For example,
+  `{a: {b: 0, c: 2}, e: 4} * {a: {b: 1, d: 3}, f: 5} -->
+  {"a": {"b": 1, "c": 2, "d": 3}, "e": 4, "f": 5}`.
+- Multiplying anything else yields an error.
 
 ### Modulus
 
-`%`
+The filter `$x % $y` calculates the modulus of two numbers,
+and fails for anything else.
+For example,
+`5 % 2 --> 1`.
+Any of the two numbers can also be a floating-point number;
+however, the result of this may be unexpected.
+For example,
+`5.1 % 2 --> 1.0999999999999996` and
+`5.5 % 2 --> 1.5`.
 
 
 ## Path operators
@@ -389,6 +506,11 @@ If there is no element at that index in the input, then this operator returns `n
 For example,
 `[1, 2, 3] | .[3]` and
 `{a: 1, b: 2} | .["c"]` both yield `null`.
+
+`jq` accepts floating-point numbers as array indices; e.g.
+`[1, 2] | .[1.5]` yields `2`.
+In jaq, indexing an array with a floating-point number yields an error.
+The same applies to the [slicing](#slicing) operator below.
 
 This operator treats byte string input like an array of numbers in the range 0..256.
 For example,
@@ -462,9 +584,10 @@ That means that `f[][x]?[y:z]` is equivalent to
 `f as $f | x as $x | y as $y | z as $z | $f | .[] | .[$x]? | .[$y:$z]`.
 
 
-## Atomic keyword filters
+## Keywords
 
-This section lists all atomic filters that start with a reserved keyword.
+This section lists all filters that start with a reserved keyword.
+These filters are all atomic.
 
 ### if-then-else
 
