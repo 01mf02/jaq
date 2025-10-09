@@ -47,6 +47,14 @@ Booleans can also be produced by comparison operations, e.g.
 `0  ==  0 --> true` or
 `[] == {} --> false`.
 
+Every jq value can be mapped to a *boolean value*, namely
+`null` and `false` have the boolean value `false`,
+all other values have the boolean value `true`.
+This is important for filters such as
+[`if-then-else`](#if-then-else) and
+[`//`](#alternation).
+
+
 ### Numbers
 
 Numbers corresponding to the regular expression
@@ -312,7 +320,7 @@ For example,
 
 :::
 
-### Chaining
+### Compound paths
 
 For each of the filters in this section,
 you can employ any atomic filter instead of the leading `.` (identity).
@@ -498,7 +506,8 @@ For example:
 ### Alternation
 
 The filter `f // g` runs `f` and yields
-all its outputs that are neither `null` nor `false`.
+all its outputs whose [boolean value](#booleans) is `true`; that is,
+all outputs that are neither `null` nor `false`.
 If `f` yields no such outputs, then this filter yields the outputs of `g`.
 For example:
 
@@ -728,11 +737,93 @@ These filters are all atomic.
 
 ### if-then-else
 
+The filter `if p then f else g end` runs the filter `p` with its input.
+For every output of `p`, if its [boolean value](#booleans) is `true`,
+the outputs of `f` run with the original input are returned, else
+the outputs of `g` run with the original input are returned.
+
+Examples:
+
+- `if true     then 0 else 1 end --> 0`
+- `if [], null then 0 else 1 end --> 0 1`
+
+There exists a longer form of this filter, namely
+`if p1 then f1 elif p2 then f2 ... else g end`.
+This is equivalent to
+`if p1 then f1 else (if p2 then f2 else (... else g end) end) end`.
+
 ### try-catch
+
+The filter `try f catch g` runs the atomic filter `f` with its input,
+and returns its outputs until (excluding) the first error.
+If `f` yields an error, then
+the atomic filter `g` is run with the error value as input,
+and its outputs are returned.
+
+Examples:
+
+- `try (1, error(42), 2) catch (. + 1) --> 1 43`
+- `try (1,            2) catch (. + 1) --> 1 2`
+
+A short form of this filter is
+`try f`, which is equivalent to
+`try f catch empty` as well as to
+`f?` ([error suppression](#error-suppression)).
 
 ### label-break
 
 ### reduce / foreach
+
+The filters
+`reduce xs as $x (init; update)` and
+`foreach xs as $x (init; update; project)`
+both run the atomic filter `xs` on its input.
+Suppose that the outputs of `xs` are `x1`, ..., `xn`.
+Then the filters are equivalent to:
+
+~~~
+reduce x1, ..., xn as $x (init; update) :=
+init
+| x1 as $x | update
+| ...
+| xn as $x | update
+~~~
+
+~~~
+foreach x1, ..., xn as $x (init; update; project) :=
+init |
+x1 as $x | update | project, (
+...
+xn as $x | update | project, (
+empty)...)
+~~~
+
+Here, both `update` and `project` have access to the current `$x`.
+
+The filter
+`foreach xs as $x (init; update)` is equivalent to
+`foreach xs as $x (init; update; .)`.
+
+As example, we can calculate the sum and the cumulative sum using
+`reduce` and `foreach`, respectively:
+
+- `reduce  (1, 2, 3) as $x (0; . + $x) --> 6`
+- `foreach (1, 2, 3) as $x (0; . + $x) --> 1 3 6`
+- `foreach (1, 2, 3) as $x (0; . + $x; [$x, .]) --> [1, 1] [2, 3] [3, 6]`
+
+We can also reverse a list via
+`[1, 2, 3] | reduce .[] as $x ([]; [$x] + .) --> [3, 2, 1]`.
+(However, note that this has quadratic runtime and is thus quite inefficient.)
+
+::: Compatibility
+
+The execution of `reduce` and `foreach` differs between `jq` and jaq
+when `update` yields multiple outputs.
+However, the precise behaviour of `jq` in that case
+is quite difficult to describe.
+
+:::
+
 
 ### def
 
