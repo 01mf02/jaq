@@ -18,6 +18,8 @@ running `jaq -n '1 + 2, true or false'` yields the outputs `3` and `true`.
 This section lists all potential values that jq filters can process,
 and how to produce them.
 
+::: Compatibility
+
 jaq extends the set of values that jq can process by
 [byte strings](#byte-strings) and
 [objects with non-string values](#objects).
@@ -26,6 +28,8 @@ Where
 jaq reads and writes values by default as [XJON](#xjon),
 which is an extension of JSON.
 See those sections for how jaq serialises values.
+
+:::
 
 ### `null`
 
@@ -70,6 +74,18 @@ integers, floating-point numbers, and decimal numbers:
   jaq converts it transparently to a 64-bit IEEE-754 floating-point number.
   For example, `1.0e500 + 1 --> Infinity`, because jaq converts
   `1.0e500` to the closest floating-point number, which is `Infinity`.
+
+::: Compatibility
+
+`jq` prints NaN as `null`; e.g. `nan | tojson` yields `null`.
+In contrast, jaq prints NaN as `NaN`; e.g. `nan | tojson --> "NaN"`.
+
+As a result, in jaq, any value can be round-tripped with `tojson | fromjson`; e.g.
+`nan | tojson | fromjson | isnan --> true`.
+In `jq`, `tojson | fromjson` does not round-trip, because of
+`NaN` and `Infinity`.
+
+:::
 
 ### Text strings
 
@@ -129,6 +145,13 @@ Furthermore, a text string and a byte string that
 contain equivalent bytes are considered equal, e.g.
 `"Hello" | . == tobytes --> true`.
 
+::: Compatibility
+
+Byte strings do not exist in `jq`; however, they exist in `fq`.
+
+:::
+
+
 
 ### Arrays
 
@@ -150,7 +173,7 @@ That means that you can use arbitrary filters in `[f]`; for example,
 `limit(3; repeat(0)) --> 0 0 0`.
 You can use the input passed to `[f]` inside `f`;
 for example, we can write the previous filter equivalently as
-`{count: 3, elem: 0} | [limit(.count; repeat(.elem))]`.
+`{count: 3, elem: 0} | [limit(.count; repeat(.elem))] --> [0, 0, 0]`.
 
 ### Objects
 
@@ -190,9 +213,129 @@ an object is produced for every output combination; for example,
 Note that here, it is necessary to surround `1, 2` with parentheses,
 in order to clarify that `,` does not start a new key-value pair.
 
-Because object keys can be arbitrary values in jaq, you can write e.g.
-`{(0): 1, "2": 3, ([4]): 5, ({}): 6} -->
-{ 0 : 1, "2": 3,  [4] : 5,  {} : 6}`.
+::: Compatibility
+
+Because object keys can be arbitrary values in jaq, you can write e.g.:
+
+~~~
+{(0): 1, "2": 3, ([4]): 5, ({}): 6} -->
+{ 0 : 1, "2": 3,  [4] : 5,  {} : 6}
+~~~
+
+This yields an error in `jq`.
+
+:::
+
+
+## Path operators
+
+jq's path operators
+`.[x]` ([indexing](#indexing)),
+`.[x:y]` ([slicing](#slicing)), and
+`.[]` ([iterating](#iterating))
+retrieve parts of their input.
+
+### Indexing
+
+The indexing operator `.[x]` yields the `x`-th element of the input.
+For example:
+
+- `[1, 2, 3] | .[1] --> 2`
+- `{a: 1, b: 2} | .["a"] --> 1`
+
+If there is no element at that index in the input, then this operator returns `null`.
+For example:
+
+- `[1, 2, 3] | .[3] --> null`
+- `{a: 1, b: 2} | .["c"] --> null`
+
+This operator treats byte string input like an array of numbers in the range 0..256.
+For example,
+`"@ABC" | tobytes | .[0] --> 64`,
+because the character `'@'` is encoded in UTF-8 as single byte `64` (`0x40`).
+
+This operator yields an error either
+if the input is neither an array or an object, or
+if the input is an array and the index is not an integer.
+
+For identifier-like strings like `name`,
+you can write `.name` as short form for `.["name"]`.
+
+For array input, you can also use negative numbers as index,
+which will be interpreted as index counting from the end of the array.
+For example,
+`[1, 2, 3] | .[-1] --> 3`.
+
+::: Compatibility
+
+`jq` accepts floating-point numbers as array indices; e.g.
+`[1, 2] | .[1.5]` yields `2`.
+In jaq, indexing an array with a floating-point number yields an error.
+The same applies to the [slicing](#slicing) operator below.
+
+:::
+
+### Slicing
+
+The slicing operator `.[x:y]` yields a slice of a string or an array,
+from the `x`-th element to (excluding) the `y`-th element.
+For example,
+`[1, 2, 3] | .[1:3] --> [2, 3]`, and
+`"Hello World!" | .[6:11] --> "World"`.
+
+When slicing a text string, the `x`-th element refers to the `x`-th *UTF-8 character*.
+For example,
+`"老虎" | .[1:2] --> "虎"`.
+
+Like the indexing operator, the slicing operator
+treats byte string input like an array of numbers and
+interprets negative indices as indices counting from the end.
+
+The short form `.[x:]` creates a slice from the index `x` to the end, and
+the short form `.[:y]` creates a slice from the beginning to (excluding) the index `x`.
+For example, `"Hello World!" | .[:5], .[6:] --> "Hello" "World!"`.
+
+### Iterating
+
+The iteration operator `.[]` yields all values `v1 ... vn` when given
+an array `[v1, ..., vn]` or
+an object `{k1: v1, ..., kn: vn}`.
+For example,
+`[1, 2, 3] | .[] --> 1 2 3` and
+`{a: 1, b: 2} | .[] --> 1 2`.
+
+::: Advanced
+
+It holds that `.[]` has the same effect as `.[keys[]]`.
+For example,
+`[1, 2, 3] | .[keys[]] --> 1 2 3`.
+
+:::
+
+### Chaining
+
+For each of the filters in this section,
+you can employ any atomic filter instead of the leading `.` (identity).
+For example, you can write `explode[]` as short form for `explode | .[]`.
+
+You can also terminate any filter in this section with a `?`,
+which silences errors from that operator.
+For example, `.[]` yields an error if the input is neither an array nor an object,
+but `.[]?` silences such errors, yielding no output instead.
+
+You can chain together an arbitrary number of these operators;
+for example, `.[0][]?[:-1]` is the same as `.[0] | .[]? | .[:-1]`.
+
+::: Advanced
+
+When you combine the techniques above, be aware that
+the filters `x` and `y` in `.[x]` and `.[x:y]`
+are executed on the *original* input and
+are *not* influenced by error suppression with `?`.
+That means that `f[][x]?[y:z]` is equivalent to
+`f as $f | x as $x | y as $y | z as $z | $f | .[] | .[$x]? | .[$y:$z]`.
+
+:::
 
 
 ## Nullary
@@ -209,14 +352,17 @@ For example,
 ### Recursion
 
 The filter `..` yields its input and all recursively contained values.
-For example,
-`{"a": 1, "b": [2, ["3"]]} | .. -->
+For example:
+
+~~~
+{"a": 1, "b": [2, ["3"]]} | .. -->
 {"a": 1, "b": [2, ["3"]]}
 1
 [2, ["3"]]
 2
 ["3"]
-"3"`.
+"3"
+~~~
 
 ## Unary
 
@@ -237,6 +383,12 @@ returns all its outputs until (excluding) the first error.
 For example,
 `(1, error, 2)? --> 1`.
 
+This operator is equivalent to `try f` (see [`try-catch`](#try-catch)).
+For example,
+`try (1, error, 2) --> 1`.
+
+::: Advanced
+
 We can see that error suppression has a higher precedence than negation by
 `try -[]? catch -1 --> -1`, which shows us that
 `-[]?` yields the same as `-([]?)`, which is equivalent to
@@ -245,6 +397,8 @@ If negation would have a higher precedence,
 then `-[]?` would be equivalent to `(-[])?`;
 however, that filter yields no output, as we can see by
 `(-[])? --> `.
+
+:::
 
 
 
@@ -286,10 +440,13 @@ The filter `f = g` runs `g` with its input, and
 for every output `y` of `g`, it
 returns a copy of the input whose
 values at the positions given by `f` are replaced by `y`.
-For example,
-`[1, 2, 3] | .[0] = (length, 4) -->
+For example:
+
+~~~
+[1, 2, 3] | .[0] = (length, 4) -->
 [3, 2, 3]
-[4, 2, 3]`.
+[4, 2, 3]
+~~~
 
 ### Update assignment
 
@@ -304,13 +461,21 @@ for example,
 `[1, 2, 3] | .[0] |= empty --> [2, 3]` and
 `{a: 1, b: 2} | .a |= empty --> {"b": 2}`.
 
+::: Advanced
+
 When `g` yields *multiple* outputs, then it depends on
 the input type and on `f` whether more than one output of `g` is considered.
-For example,
-`1 | . |= (., .*2) --> 1 2` and
-`[1, 2, 3] |  .[ ] |= (., .*2) --> [1, 2, 2, 4, 3, 6]` consider multiple outputs, but
-`[1, 2, 3] |  .[0] |= (., .*2) --> [1, 2, 3]` and
-`{a: 1, b: 2} | .a |= (., .*2) --> {"a": 1, "b": 2}` consider only the first output.
+For example, the following updates consider multiple outputs:
+
+- `1 | . |= (., .*2) --> 1 2`
+- `[1, 2, 3] |  .[ ] |= (., .*2) --> [1, 2, 2, 4, 3, 6]`
+
+On the other hand, the following updates consider only the first output:
+
+- `[1, 2, 3] |  .[0] |= (., .*2) --> [1, 2, 3]`
+- `{a: 1, b: 2} | .a |= (., .*2) --> {"a": 1, "b": 2}`
+
+:::
 
 ### Arithmetic update assignment
 
@@ -322,20 +487,24 @@ The filters
 `f %= g`
 are short-hand forms for
 `f = . + g`, ...
-For example,
-`[1, 2, 3] | .[0] += (length, 4) -->
+For example:
+
+~~~
+[1, 2, 3] | .[0] += (length, 4) -->
 [4, 2, 3]
-[5, 2, 3]`.
+[5, 2, 3]
+~~~
 
 ### Alternation
 
 The filter `f // g` runs `f` and yields
 all its outputs that are neither `null` nor `false`.
 If `f` yields no such outputs, then this filter yields the outputs of `g`.
-For example,
-`(null, 1, false, 2) // (3, 4) --> 1 2`,
-`(null, false) // (3, 4) --> 3 4`, and
-`empty // 3 --> 3`.
+For example:
+
+- `(null, 1, false, 2) // (3, 4) --> 1 2`
+- `(null, false) // (3, 4) --> 3 4`
+- `empty // 3 --> 3`
 
 ### Logic
 
@@ -346,21 +515,52 @@ The filter `f and g` (conjunction) evaluates `f` and
 returns `false` if its boolean value is `false`, else it
 returns the boolean values of `g`.
 
-For example,
-`(true, false) or (true, false) -->
+For example:
+
+~~~
+(true, false) or (true, false) -->
 true
-true
-false`
-and
-`(true, false) and (true, false) -->
 true
 false
-false`.
+~~~
 
-The filter `f and g` has higher precedence than `f or g`; we can see this by
+~~~
+(true, false) and (true, false) -->
+true
+false
+false
+~~~
+
+The filter `f and g` has higher precedence than `f or g`.
+
+::: Advanced
+
+We can see the higher precedence of `and` by
 `false and true or true --> true`, which yields the same as
 `(false and true) or true --> true`, but not the same as
 `false and (true or true) --> false`.
+
+To find this formula, I used the following program:
+
+~~~
+def bool: true, false;
+{x: bool, y: bool, z: bool} | select(
+  ((.x and  .y) or .z ) !=
+  ( .x and (.y  or .z))
+) -->
+{
+  "x": false,
+  "y": true,
+  "z": true
+}
+{
+  "x": false,
+  "y": false,
+  "z": true
+}
+~~~
+
+:::
 
 It holds that `f or g` is equivalent to `f as $x | $x or g`;
 similar for `and`.
@@ -376,11 +576,15 @@ For example,
 `(1, 2) * (1, 3) --> 1 3 2 6`.
 This property does not hold for the complex binary filters above.
 
-Note that a slightly different property holds in `jq`, namely that
+::: Compatibility
+
+In `jq`, a slightly different property holds, namely that
 `f + g` is equivalent to
 `g as $y | f as $x | $x + $y`.
 That means that in `jq`,
 `(1, 2) + (1, 3)` yields `2 3 4 5`.
+
+:::
 
 ### Equality
 
@@ -397,19 +601,29 @@ Interesting cases include:
   the associated value is equal; i.e.
   `{a: 1, b: 2} == {b: 2, a: 1} --> true`
 
+::: Advanced
+
 There are values that are equal,
 yet yield different results when fed to the same filter.
-For example,
-`{a: 1, b: 2} as $x | {b: 2, a: 1} as $y |
-$x == $y, ($x | tojson) == ($y | tojson) --> true false`.
+For example:
+
+~~~
+{a: 1, b: 2} as $x |
+{b: 2, a: 1} as $y |
+$x == $y, ($x | tojson) == ($y | tojson) -->
+true false
+~~~
+
+:::
 
 ### Ordering
 
 The operator `$x < $y` returns `true` if `$x` is smaller than `$y`.
-Similarly,
-`$x >  $y` is equivalent to `$y < $x`,
-`$x <= $y` is equivalent to `$x < $y or $x == $y`, and
-`$x >= $y` is equivalent to `$x > $y or $x == $y`.
+Similarly:
+
+- `$x >  $y` is equivalent to `$y < $x`,
+- `$x <= $y` is equivalent to `$x < $y or $x == $y`, and
+- `$x >= $y` is equivalent to `$x > $y or $x == $y`.
 
 Values are ordered as follows:
 
@@ -423,20 +637,28 @@ Values are ordered as follows:
     - `Infinity`, e.g. `infinite > 99999999999999999999999999 --> true`
 - Strings: lexicographic ordering by underlying bytes, e.g.
   `"Hello" < "Hello World" --> true` and
-  `"@" < "A" --> true`.
+  `"@B" < "A" --> true`.
 - Arrays: lexicographic ordering, e.g.
   `[1, 2] < [1, 2, 3] --> true` and
-  `[0] < [1] --> true`.
-- Objects: An object `$x` is smaller than an object `$y` if
-  the keys of `$x` are smaller than the keys of `$y` or
-  the keys of `$x` are equal to the keys of `$y` and
-  the values of `$x` are smaller than the values of `$y`.
-  More precisely:
-  `($x | to_entries | sort_by(.key)) as $ex |
-  ($y | to_entries | sort_by(.key)) as $ey |
-  [$ex[].key]   < [$ey[].key] or
-  [$ex[].key]  == [$ey[].key] and
-  [$ex[].value] < [$ey[].value]`.
+  `[0, 2] < [1] --> true`.
+- Objects: An object `$x` is smaller than an object `$y` either if:
+  - the keys of `$x` are smaller than the keys of `$y` or
+  - the keys of `$x` are equal to the keys of `$y` and
+    the values of `$x` are smaller than the values of `$y`.
+
+::: Advanced
+
+More precisely, an object `$x` is smaller than an object `$y` if:
+
+~~~
+($x | to_entries | sort_by(.key)) as $ex |
+($y | to_entries | sort_by(.key)) as $ey |
+[$ex[].key]   < [$ey[].key] or
+[$ex[].key]  == [$ey[].key] and
+[$ex[].value] < [$ey[].value]
+~~~
+
+:::
 
 ### Addition / subtraction
 
@@ -497,98 +719,6 @@ For example,
 `5.1 % 2 --> 1.0999999999999996` and
 `5.5 % 2 --> 1.5`.
 
-
-## Path operators
-
-jq's path operators `.[x]`, `.[x:y]` and `.[]` retrieve parts of their input.
-
-### Indexing
-
-The indexing operator `.[x]` yields the `x`-th element of the input.
-For example,
-`[1, 2, 3] | .[1] --> 2` and
-`{a: 1, b: 2} | .["a"] --> 1`.
-
-If there is no element at that index in the input, then this operator returns `null`.
-For example,
-`[1, 2, 3] | .[3]` and
-`{a: 1, b: 2} | .["c"]` both yield `null`.
-
-`jq` accepts floating-point numbers as array indices; e.g.
-`[1, 2] | .[1.5]` yields `2`.
-In jaq, indexing an array with a floating-point number yields an error.
-The same applies to the [slicing](#slicing) operator below.
-
-This operator treats byte string input like an array of numbers in the range 0..256.
-For example,
-`"@ABC" | tobytes | .[0] --> 64`,
-because the character `'@'` is encoded in UTF-8 as single byte `64` (`0x40`).
-
-This operator yields an error either
-if the input is neither an array or an object, or
-if the input is an array and the index is not an integer.
-
-For identifier-like strings like `name`,
-you can write `.name` as short form for `.["name"]`.
-
-For array input, you can also use negative numbers as index,
-which will be interpreted as index counting from the end of the array.
-For example,
-`[1, 2, 3] | .[-1] --> 3`.
-
-### Slicing
-
-The slicing operator `.[x:y]` yields a slice of a string or an array,
-from the `x`-th element to (excluding) the `y`-th element.
-For example,
-`[1, 2, 3] | .[1:3] --> [2, 3]`, and
-`"Hello World!" | .[6:11] --> "World"`.
-
-When slicing a text string, the `x`-th element refers to the `x`-th *UTF-8 character*.
-For example,
-`"老虎" | .[1:2] --> "虎"`.
-
-Like the indexing operator, the slicing operator
-treats byte string input like an array of numbers and
-interprets negative indices as indices counting from the end.
-
-The short form `.[x:]` creates a slice from the index `x` to the end, and
-the short form `.[:y]` creates a slice from the beginning to (excluding) the index `x`.
-For example, `"Hello World!" | .[:5], .[6:] --> "Hello" "World!"`.
-
-### Iterating
-
-The iteration operator `.[]` yields all values `v1 ... vn` when given
-an array `[v1, ..., vn]` or
-an object `{k1: v1, ..., kn: vn}`.
-For example,
-`[1, 2, 3] | .[] --> 1 2 3` and
-`{a: 1, b: 2} | .[] --> 1 2`.
-
-It holds that `.[]` has the same effect as `.[keys[]]`.
-For example,
-`[1, 2, 3] | .[keys[]] --> 1 2 3`.
-
-### Advanced use
-
-For each of the filters in this section,
-you can employ any atomic filter instead of the leading `.` (identity).
-For example, you can write `explode[]` as short form for `explode | .[]`.
-
-You can also terminate any filter in this section with a `?`,
-which silences errors from that operator.
-For example, `.[]` yields an error if the input is neither an array nor an object,
-but `.[]?` silences such errors, yielding no output instead.
-
-You can chain together an arbitrary number of these operators;
-for example, `.[0][]?[:-1]` is the same as `.[0] | .[]? | .[:-1]`.
-
-When you combine the techniques above, be aware that
-the filters `x` and `y` in `.[x]` and `.[x:y]`
-are executed on the *original* input and
-are *not* influenced by error suppression with `?`.
-That means that `f[][x]?[y:z]` is equivalent to
-`f as $f | x as $x | y as $y | z as $z | $f | .[] | .[$x]? | .[$y:$z]`.
 
 
 ## Keywords

@@ -38,6 +38,50 @@ section#main {
     flex: 3;
 }
 
+.example {
+    position: relative;
+}
+
+.example > a {
+    opacity: 35%;
+}
+
+.example:hover > a {
+    opacity: 100%;
+}
+
+.example.block > a {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+}
+
+code {
+    background-color: #eee;
+}
+
+.Advanced::before {
+    content: "Advanced 🔬";
+    color: #0969da;
+    font-weight: bold;
+}
+
+.Advanced {
+    border-left: .25em solid #0969da;
+    padding: 10px 20px;
+}
+
+.Compatibility::before {
+    content: "Compatibility 😬";
+    color: #cf222e;
+    font-weight: bold;
+}
+
+.Compatibility {
+    border-left: .25em solid #cf222e;
+    padding: 10px 20px;
+}
+
 @media(max-width: 660px) {
     nav {
         display: none;
