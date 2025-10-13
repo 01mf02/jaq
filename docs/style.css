@@ -69,6 +69,7 @@ code {
 .Advanced {
     border-left: .25em solid #0969da;
     padding: 10px 20px;
+    margin: 20px 0;
 }
 
 .Compatibility::before {
@@ -80,6 +81,7 @@ code {
 .Compatibility {
     border-left: .25em solid #cf222e;
     padding: 10px 20px;
+    margin: 20px 0;
 }
 
 @media(max-width: 660px) {

@@ -1,4 +1,4 @@
-# Command-line interface
+# Command-line interface {#cli}
 
 Running
 `jaq`\ \[_OPTION_\]...\ \[_FILTER_\]\ \[_FILE_\]...
@@ -91,6 +91,20 @@ Read (slurp) all input values into one array.
 For example,
 `echo "1 2 3" | jaq -s` yields a single output, namely the array `[1, 2, 3]`, whereas
 `echo "1 2 3" | jaq` yields three outputs, namely `1`, `2`, and `3`.
+
+::: Compatibility
+
+When multiple files are slurped in,
+`jq` combines the inputs of all files into one single array, whereas
+jaq yields an array for every file.
+This is motivated by jaq's [`--in-place`](#--in-place) option,
+which could not work with the behaviour implemented by `jq`.
+The behaviour of `jq` can be approximated in jaq;
+for example, to achieve the output of
+`jq -s . a b`, you may use
+`jaq -s . <(cat a b)`.
+
+:::
 
 
 ## Output options
