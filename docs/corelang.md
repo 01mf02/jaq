@@ -1,7 +1,14 @@
-# Core filters {#jq-lang}
+# Core language {#corelang}
 
-Filters are the basic building blocks of jq programs.
-A *filter* is a function that
+The jq language is a lazy, functional streaming programming language
+originally designed by Stephen Dolan.
+The jq language is Turing-complete and can therefore be used to write
+any program that can be written in any other programming language.
+jq programs can be executed with several interpreters, including
+`jq`, `gojq`, `fq`, and `jaq`.
+
+A program written in the jq language is called a jq program or _filter_.
+A filter is a function that
 takes an input value and
 yields a stream of output values.
 
@@ -67,7 +74,7 @@ Negative numbers can be constructed by
 applying the [negation] operator to a number, e.g. `-1 --> -1`.
 
 Internally, jaq distinguishes
-integers, floating-point numbers, and decimal numbers:
+integers, floating-point numbers (floats), and decimal numbers:
 
 - A number without a dot (`.`) and without an exponent (`e`/`E`)
   is losslessly stored as integer.
@@ -83,11 +90,35 @@ integers, floating-point numbers, and decimal numbers:
   For example, `1.0e500 + 1 --> Infinity`, because jaq converts
   `1.0e500` to the closest floating-point number, which is `Infinity`.
 
+The rules of jaq are:
+
+* The sum, difference, product, and remainder of two integers is integer, e.g.
+  `1 + 2 --> 3`.
+* Any other operation between two numbers yields a float, e.g.
+  `10 / 2 --> 5.0` and
+  `1.0 + 2 --> 3.0`.
+
+You can convert an integer to a floating-point number e.g.
+by adding 0.0, by multiplying with 1.0, or by dividing with 1.
+You can convert a floating-point number to an integer by
+`round`, `floor`, or `ceil`, e.g.
+`1.2 | floor, round, ceil --> 1 1 2`.
+
 ::: Compatibility
 
-`jq` prints NaN as `null`; e.g. `nan | tojson` yields `null`.
-In contrast, jaq prints NaN as `NaN`; e.g. `nan | tojson --> "NaN"`.
+`jq` uses floats for any number,
+meaning that it does not distinguish integers from floats.
+Many operations in jaq, such as array indexing,
+check whether the passed numbers are indeed integer.
+The motivation behind this is to avoid
+rounding errors that may silently lead to wrong results.
+For example,
+`[0, 1, 2] | .[1] --> 1`, whereas
+`[0, 1, 2] | .[1.0000000000000001]` yields
+an error in jaq as opposed to `1` in `jq`.
 
+Furthermore, `jq` prints NaN as `null`; e.g. `nan | tojson` yields `null`.
+In contrast, jaq prints NaN as `NaN`; e.g. `nan | tojson --> "NaN"`.
 As a result, in jaq, any value can be round-tripped with `tojson | fromjson`; e.g.
 `nan | tojson | fromjson | isnan --> true`.
 In `jq`, `tojson | fromjson` does not round-trip, because of
@@ -117,9 +148,11 @@ Most characters below `U+0020` can only be produced via a Unicode escape sequenc
 A string containing an interpolated filter, such as
 `"...\(f)..."`, is equivalent to
 `"..." + (f | tostring) + "..."`.
-For example,
-`"Hello \("Alice", "Bob") 😀!\n" -->
-"Hello Alice 😀!\n" "Hello Bob 😀!\n"`.
+For example:
+
+- `"Hello \("Alice", "Bob") 😀!\n" -->
+  "Hello Alice 😀!\n" "Hello Bob 😀!\n"`
+- `41 | "The successor of \(.) is \(.+1)." --> "The successor of 41 is 42."`.
 
 A string is *identifier-like* if it matches the regular expression
 `[a-zA-Z_][a-zA-Z_0-9]*`.
@@ -164,6 +197,7 @@ Byte strings do not exist in `jq`; however, they exist in `fq`.
 ### Arrays
 
 An array is a finite sequence of values.
+
 An empty array can be constructed with the filter
 `[]`, which is a short form for
 `[empty] --> []`.
@@ -173,12 +207,12 @@ The filter `[f]` passes its input to `f` and runs it,
 returning an array containing all outputs of `f`.
 If `f` throws an error, then `[f]` returns that error instead of an array.
 
-This syntax allows constructing arrays such as `[1, 2, 3]`.
+This syntax allows constructing arrays such as `[1, 2, 3] --> [1, 2, 3]`.
 Here, `1, 2, 3` is just a filter that yields three numbers,
 see [concatenation](#concatenation).
 There is no dedicated array syntax `[x1, ..., xn]`.
 That means that you can use arbitrary filters in `[f]`; for example,
-`limit(3; repeat(0)) --> 0 0 0`.
+`[limit(3; repeat(0))] --> [0, 0, 0]`.
 You can use the input passed to `[f]` inside `f`;
 for example, we can write the previous filter equivalently as
 `{count: 3, elem: 0} | [limit(.count; repeat(.elem))] --> [0, 0, 0]`.
@@ -186,8 +220,6 @@ for example, we can write the previous filter equivalently as
 ### Objects
 
 An object is a mapping from keys to values.
-In jq, keys must be strings, whereas
-in jaq, keys can be arbitrary values.
 
 An empty object can be constructed with the filter `{}`.
 An object with a single key and value can be constructed by `{(k): v}`,
@@ -223,6 +255,8 @@ in order to clarify that `,` does not start a new key-value pair.
 
 ::: Compatibility
 
+In jq, keys must be strings, whereas
+in jaq, keys can be arbitrary values.
 Because object keys can be arbitrary values in jaq, you can write e.g.:
 
 ~~~
@@ -593,6 +627,11 @@ In `jq`, a slightly different property holds, namely that
 That means that in `jq`,
 `(1, 2) + (1, 3)` yields `2 3 4 5`.
 
+As a result, in jaq,
+`(1,2) * (3,4) --> 3 4 6 8` and
+`{a: (1,2), b: (3,4)} | .a * .b --> 3 4 6 8`
+yield the same outputs, whereas `jq` yields `3 6 4 8` for the former example.
+
 :::
 
 ### Equality
@@ -716,6 +755,17 @@ The filter `$x * $y` multiplies two values as follows:
   {"a": {"b": 1, "c": 2, "d": 3}, "e": 4, "f": 5}`.
 - Multiplying anything else yields an error.
 
+::: Compatibility
+
+In jq, division by 0 yields an error, whereas
+in jaq, `n / 0` yields
+`nan` if `n == 0`,
+` infinite` if `n > 0`, and
+`-infinite` if `n < 0`.
+jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
+
+:::
+
 ### Modulus
 
 The filter `$x % $y` calculates the modulus of two numbers,
@@ -792,10 +842,10 @@ init
 ~~~
 foreach x1, ..., xn as $x (init; update; project) :=
 init |
-x1 as $x | update | project, (
-...
-xn as $x | update | project, (
-empty)...)
+( x1 as $x | update | project,
+( ...
+( xn as $x | update | project,
+( empty ))...))
 ~~~
 
 Here, both `update` and `project` have access to the current `$x`.
@@ -822,6 +872,36 @@ when `update` yields multiple outputs.
 However, the precise behaviour of `jq` in that case
 is quite difficult to describe.
 
+The interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
+
+* It deals very naturally with filters that yield multiple outputs.
+  In contrast, jq discriminates outputs of `f`,
+  because it recurses only on the last of them,
+  although it outputs all of them.
+* It makes the implementation of `reduce` and `foreach`
+  special cases of the same code, reducing the potential for bugs.
+
+
+:::
+
+::: Advanced
+
+Consider the following example for an `update` yielding multiple values:
+`foreach (5, 10) as $x (1; .+$x, -.) -->
+6 16 -6 -1 9 1` in jaq, whereas it yields
+`6 -1 9 1` in jq.
+We can see that both jq and jaq yield the values `6` and `-1`
+resulting from the first iteration (where `$x` is 5), namely
+`1 | 5 as $x | (.+$x, -.)`.
+However, jq performs the second iteration (where `$x` is 10)
+*only on the last value* returned from the first iteration, namely `-1`,
+yielding the values `9` and `1` resulting from
+`-1 | 10 as $x | (.+$x, -.)`.
+jaq yields these values too, but it also performs the second iteration
+on all other values returned from the first iteration, namely `6`,
+yielding the values `16` and `-6` that result from
+` 6 | 10 as $x | (.+$x, -.)`.
+
 :::
 
 
@@ -841,5 +921,10 @@ where `g1` to `gn` are filters.
 Any such calls will be replaced by the filter `f`, where
 every argument `xi` is replaced by its corresponding filter `gi`.
 
+An example is the definition of the filter [`map(f)`](#map) in the standard library:
+`def map(f): [.[] | f];`.
+
 Filters can be defined recursively; for example,
 `def f: 0, f; f` yields an infinite sequence of `0` values.
+An example of a non-terminating filter is
+`def r: r; r`.
