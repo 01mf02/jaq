@@ -81,6 +81,9 @@ yields!(obj_keyword, "{if: 0} | .if", 0);
 yields!(key_update1, "{} | .a  |= .+1", json!({"a": 1}));
 yields!(key_update2, "{} | .a? |= .+1", json!({"a": 1}));
 
+yields!(null_index1, ".a", json!(null));
+yields!(null_index2, ".[0]", json!(null));
+
 // `.[f]?` is *not* the same as `(.[f])?`
 // (we're writing `0[]` to simulate `error` here)
 yields!(index_opt_inner, "try .[0[]]? catch 1", 1);
