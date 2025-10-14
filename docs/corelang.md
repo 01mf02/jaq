@@ -302,6 +302,10 @@ if the input is an array and the index is not an integer.
 
 For identifier-like strings like `name`,
 you can write `.name` as short form for `.["name"]`.
+For example,
+`{a: 1} | .a --> 1`.
+This works also for strings that are the same as reserved [keywords](#keywords); e.g.
+`{if: 1} | .if --> 1`.
 
 For array input, you can also use negative numbers as index,
 which will be interpreted as index counting from the end of the array.
