@@ -453,6 +453,12 @@ however, that filter yields no output, as we can see by
 A binary filter takes two arguments.
 All binary filters are non-atomic.
 
+All binary operators that contain the characters `|` or `=` are right-associative.
+All other binary operators are left-associative.
+That means that for example,
+`f | g | h` is equivalent to `f | (g | h)`, whereas
+`f - g - h` is equivalent to `(f - g) - h`.
+
 This section lists all binary infix filters sorted by increasing precedence.
 
 ### Composition
