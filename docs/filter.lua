@@ -19,7 +19,7 @@ function Code(code)
   if FORMAT == "man" then
     return pandoc.Strong(code)
   else
-    local filter, output = codeTest(code.text)
+    local filter, output = code_test(code)
     if filter ~= nil then
       code.text = filter .. " ⟼ " .. output
       local link = play_link(filter, output)
@@ -32,7 +32,7 @@ function CodeBlock(code)
   if FORMAT == "man" then
     return code
   else
-    local filter, output = codeTest(code.text)
+    local filter, output = code_test(code)
     if filter ~= nil then
       code.text = filter .. " ⟼ " .. output
       local link = play_link(filter, output)
@@ -56,11 +56,15 @@ function escape_url(str)
 end
 
 -- Return filter and expected output if given code is a unit test
-function codeTest(code)
-  local startIndex, endIndex = string.find(code, "-->", 1, true)
+function code_test(code)
+  -- if a code class has been given
+  if next(code.classes) ~= nil then
+    return
+  end
+  local startIndex, endIndex = string.find(code.text, "-->", 1, true)
   if startIndex ~= nil then
-    local filter = string.sub(code, 1, startIndex - 1)
-    local output = string.sub(code, endIndex + 1)
+    local filter = string.sub(code.text, 1, startIndex - 1)
+    local output = string.sub(code.text, endIndex + 1)
     return filter, output
   end
 end
@@ -72,7 +76,7 @@ end
 -- Print unit tests when running `pandoc --from filter.lua`
 function Writer(doc, opts)
   local test = function(code)
-    local filter, output = codeTest(code.text)
+    local filter, output = code_test(code)
     if filter ~= nil then
       print((trim(filter):gsub("#[^\n]*", ""):gsub("\n", " ")))
       print("null") -- input
