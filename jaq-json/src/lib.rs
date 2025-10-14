@@ -192,31 +192,27 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn range(self, range: jaq_core::val::Range<&Self>) -> ValR {
-        use bstr::Chars;
+    fn range(self, range: val::Range<&Self>) -> ValR {
         match self {
-            Val::Str(b, t @ Tag::Bytes) => Self::skip_take(range, b.len())
+            Val::Str(b, t @ Tag::Bytes) => Self::range_int(range)
+                .map(|range| skip_take(range, b.len()))
                 .map(|(skip, take)| Val::Str(b.slice(skip..skip + take), t)),
-            // TODO: This is very inefficient, because
-            // we traverse the whole string regardless of the requested range.
-            // It would be better to create a special case for when
-            // all range bounds are positive.
-            Val::Str(s, Tag::Utf8) => {
-                Self::skip_take(range, s.chars().count()).map(|(skip, take)| {
-                    let advance = |chars: &mut Chars, n| {
-                        for _ in 0..n {
-                            chars.next();
-                        }
-                    };
-                    let mut sk = s.chars();
-                    advance(&mut sk, skip);
-                    let mut tk = sk.clone();
-                    advance(&mut tk, take);
-                    let slice = &sk.as_bytes()[..sk.as_bytes().len() - tk.as_bytes().len()];
-                    Val::Str(s.slice_ref(slice), Tag::Utf8)
-                })
-            }
-            Val::Arr(a) => Self::skip_take(range, a.len())
+            Val::Str(s, Tag::Utf8) => Self::range_int(range).map(|range_char| {
+                let byte_index = |num::PosUsize(pos, c)| {
+                    let mut chars = s.char_indices().map(|(start, ..)| start);
+                    if pos {
+                        chars.nth(c).unwrap_or(s.len())
+                    } else {
+                        chars.nth_back(c - 1).unwrap_or(0)
+                    }
+                };
+                let from_byte = range_char.start.map_or(0, byte_index);
+                let upto_byte = range_char.end.map_or(s.len(), byte_index);
+                let slice = &s[from_byte..core::cmp::max(upto_byte, from_byte)];
+                Val::Str(s.slice_ref(slice), Tag::Utf8)
+            }),
+            Val::Arr(a) => Self::range_int(range)
+                .map(|range| skip_take(range, a.len()))
                 .map(|(skip, take)| a.iter().skip(skip).take(take).cloned().collect()),
             _ => Err(Error::typ(self, Type::Range.as_str())),
         }
@@ -288,26 +284,19 @@ impl jaq_core::ValT for Val {
 
     fn map_range<I: Iterator<Item = ValX>>(
         mut self,
-        range: jaq_core::val::Range<&Self>,
+        range: val::Range<&Self>,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX {
         if let Val::Arr(ref mut a) = self {
-            let a = Rc::make_mut(a);
-            let from = range.start.as_ref().map(|i| i.as_pos_usize()).transpose();
-            let upto = range.end.as_ref().map(|i| i.as_pos_usize()).transpose();
-            let (from, upto) = match from.and_then(|from| Ok((from, upto?))) {
-                Ok(from_upto) => from_upto,
+            let (skip, take) = match Self::range_int(range) {
+                Ok(range) => skip_take(range, a.len()),
                 Err(e) => return opt.fail(self, |_| Exn::from(e)),
             };
-            let len = a.len();
-            let from = abs_bound(from, len, 0);
-            let upto = abs_bound(upto, len, len);
-            let (skip, take) = skip_take(from, upto);
             let arr = a.iter().skip(skip).take(take).cloned().collect();
             let y = f(arr).map(|y| y?.into_arr().map_err(Exn::from)).next();
             let y = y.transpose()?.unwrap_or_default();
-            a.splice(skip..skip + take, (*y).clone());
+            Rc::make_mut(a).splice(skip..skip + take, (*y).clone());
             Ok(self)
         } else {
             opt.fail(self, |v| Exn::from(Error::typ(v, Type::Arr.as_str())))
@@ -382,8 +371,10 @@ pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
         .into_iter()
 }
 
-fn skip_take(from: usize, until: usize) -> (usize, usize) {
-    (from, until.saturating_sub(from))
+fn skip_take(range: val::Range<num::PosUsize>, len: usize) -> (usize, usize) {
+    let from = abs_bound(range.start, len, 0);
+    let upto = abs_bound(range.end, len, len);
+    (from, upto.saturating_sub(from))
 }
 
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
@@ -441,15 +432,11 @@ impl Val {
         }
     }
 
-    fn skip_take(range: jaq_core::val::Range<&Self>, len: usize) -> Result<(usize, usize), Error> {
+    fn range_int(range: val::Range<&Self>) -> Result<val::Range<num::PosUsize>, Error> {
         let (from, upto) = (range.start, range.end);
         let from = from.as_ref().map(|i| i.as_pos_usize()).transpose();
         let upto = upto.as_ref().map(|i| i.as_pos_usize()).transpose();
-        from.and_then(|from| Ok((from, upto?))).map(|(from, upto)| {
-            let from = abs_bound(from, len, 0);
-            let upto = abs_bound(upto, len, len);
-            skip_take(from, upto)
-        })
+        Ok(from?..upto?)
     }
 
     fn to_json(&self) -> Vec<u8> {
