@@ -19,6 +19,13 @@ The following sections document all filters with built-in syntax in jq.
 Examples are written like `1 + 2, true or false --> 3 true`, which means that
 running `jaq -n '1 + 2, true or false'` yields the outputs `3` and `true`.
 
+An *atomic* filter is a filter that is _not_ a binary operator.
+For example, the filters
+`-1`, `map(.+1)`, and `.[0]` are all atomic, whereas the filters
+`1 + 2`, `explode | .[]`, and `.[0] += 1` are all non-atomic.
+To turn a non-atomic filter `f` into an equivalent atomic filter,
+surround it with parentheses, i.e. `(f)`.
+
 
 ## Values
 
@@ -387,7 +394,6 @@ That means that `f[][x]?[y:z]` is equivalent to
 ## Nullary
 
 A nullary filter does not take any arguments.
-All nullary filters are atomic.
 
 ### Identity
 
@@ -413,7 +419,6 @@ For example:
 ## Unary
 
 A unary filter takes a single argument.
-All unary filters are atomic.
 
 ### Negation
 
@@ -451,7 +456,6 @@ however, that filter yields no output, as we can see by
 ## Binary (complex)
 
 A binary filter takes two arguments.
-All binary filters are non-atomic.
 
 All binary operators that contain the characters `|` or `=` are right-associative.
 All other binary operators are left-associative.
@@ -480,6 +484,9 @@ It then runs `g` *on the original input*,
 replacing any reference to `$x` in `g` by the value `x`.
 For example,
 `"Hello" | length as $x | . + " has length \($x)" --> "Hello has length 5"`.
+
+Variables can be shadowed, such as
+`0 as $x | (1 as $x | $x), $x --> 1 0`.
 
 ### Concatenation
 
@@ -794,7 +801,6 @@ For example,
 ## Keywords
 
 This section lists all filters that start with a reserved keyword.
-These filters are all atomic.
 
 ### if-then-else
 
@@ -832,6 +838,22 @@ A short form of this filter is
 `f?` ([error suppression](#error-suppression)).
 
 ### label-break
+
+The filter `label $x | f` binds the label `$x` in `f`,
+runs `f` and yields its outputs.
+If the evaluation of `f` calls `break $x`,
+then the evaluation of `label $x | f` is stopped and returns no more outputs.
+For example,
+`label $x | 1, break $x, 2 --> 1`.
+
+Labels are distinct from variables, which means that
+`0 as $x | label $x | $x, break $x --> 0`.
+
+Like variables, labels can be shadowed; e.g.
+`label $x | 1, (label $x | 2, break $x, 3), 4, break $x, 5 --> 1 2 4`.
+
+It is possible to `break` from a filter argument; e.g.
+`def f(g): 1, g, 2; label $x | f(break $x) --> 1`.
 
 ### reduce / foreach
 
@@ -878,18 +900,18 @@ to see what is calculated:
 ~~~
 # reduce  (1, 2, 3) as $x (0; . + $x)
 0
-| 1 as $x | . + $x
-| 2 as $x | . + $x
-| 3 as $x | . + $x
+| 1 as $x | . + $x  # 1
+| 2 as $x | . + $x  # 3
+| 3 as $x | . + $x  # 6
 --> 6
 ~~~
 
 ~~~
 # foreach (1, 2, 3) as $x (0; . + $x; [$x, .])
 0 |
-( 1 as $x | . + $x | [$x, .],
-( 2 as $x | . + $x | [$x, .],
-( 3 as $x | . + $x | [$x, .],
+( 1 as $x | . + $x | [$x, .],  # [1, 1]
+( 2 as $x | . + $x | [$x, .],  # [2, 3]
+( 3 as $x | . + $x | [$x, .],  # [3, 6]
 ( empty ))))
 --> [1, 1] [2, 3] [3, 6]
 ~~~
@@ -897,6 +919,14 @@ to see what is calculated:
 We can also reverse a list via
 `[1, 2, 3] | reduce .[] as $x ([]; [$x] + .) --> [3, 2, 1]`.
 (However, note that this has quadratic runtime and is thus quite inefficient.)
+
+Note that when `xs` yields no outputs, then
+`reduce`  yields `init`, whereas
+`foreach` yields no output.
+For example:
+
+- `reduce  empty as $x (0; . + $x) --> 0` and
+- `foreach empty as $x (0; . + $x) -->` (no output).
 
 ::: Compatibility
 
