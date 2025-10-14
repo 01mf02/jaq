@@ -38,7 +38,7 @@ XJON extends JSON as follows:
 - Objects with non-string keys:
   Where JSON limits object keys to strings,
   XJON allows arbitrary values as object keys.
-  For example: `{null: 1, true: 2, 3: 4, "5": 6, [7]: 8}`
+  For example: `{null: 0, true: 1, 2: 3, "str": 4, ["arr"]: 5, {}: 6}`
 
 The goal behind XJON was to
 support a set of values present in YAML and CBOR, namely
@@ -57,6 +57,11 @@ That means that
 `jaq --from json <<< 'NaN b"Bytes" {1: 2} # Over and out'` yields
 `'NaN b"Bytes" {1: 2}`, although the input is XJON, not valid JSON.
 
+## YAML
+
+## CBOR
+
+## TOML
 
 ## XML
 
