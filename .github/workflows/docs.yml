@@ -20,3 +20,9 @@ jobs:
     - name: Generate documentation and run unit tests
       working-directory: docs
       run: ./build.sh
+    - uses: actions/upload-artifact@v4
+      with:
+        name: docs
+        path: |
+          docs/jaq.1
+          docs/MANUAL.html
