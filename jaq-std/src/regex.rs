@@ -3,7 +3,11 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use bstr::ByteSlice;
-use regex_lite::bytes::{self as regex, Error, Regex, RegexBuilder};
+use regex_automata::{nfa::thompson, util::syntax};
+use thompson::pikevm::{PikeVM as Regex, Builder as RegexBuilder};
+use thompson::BuildError as Error;
+
+//use regex_automata::bytes::{self as regex, Error, Regex, RegexBuilder};
 
 #[derive(Copy, Clone, Default)]
 pub struct Flags {
@@ -54,17 +58,22 @@ impl Flags {
     }
 
     fn impact(self, builder: &mut RegexBuilder) -> &mut RegexBuilder {
-        builder
+        use syntax::Config;
+        builder.syntax(Config::new()
             .case_insensitive(self.i)
             .multi_line(self.m)
             .dot_matches_new_line(self.s)
             .swap_greed(self.l)
             .ignore_whitespace(self.x)
+            .utf8(false)
+        )
     }
 
     pub fn regex(self, re: &str) -> Result<Regex, Error> {
-        let mut builder = RegexBuilder::new(re);
-        self.impact(&mut builder).build()
+        let mut builder = RegexBuilder::new();
+        self.impact(&mut builder)
+            .thompson(thompson::Config::new().utf8(false))
+.build(re)
     }
 }
 
@@ -102,12 +111,13 @@ pub struct Match<B, S> {
     pub name: Option<S>,
 }
 
-impl<'a> Match<&'a [u8], &'a str> {
-    pub fn new(bc: &mut ByteChar, m: regex::Match<'a>, name: Option<&'a str>) -> Self {
+impl<'a> Match<&'a [u8], String> {
+    pub fn new(s: &'a [u8], bc: &mut ByteChar, m: regex_automata::Span, name: Option<String>) -> Self {
+        let string = &s[m.start..m.end];
         Self {
-            offset: bc.char_of_byte(m.start()).unwrap(),
-            length: m.as_bytes().chars().count(),
-            string: m.as_bytes(),
+            offset: bc.char_of_byte(m.start).unwrap(),
+            length: string.chars().count(),
+            string,
             name,
         }
     }
@@ -142,21 +152,25 @@ pub fn regex<'a>(
     re: &'a Regex,
     flags: Flags,
     sm: (bool, bool),
-) -> Vec<Part<&'a [u8], &'a str>> {
+) -> Vec<Part<&'a [u8], String>> {
     // mismatches & matches
     let (mi, ma) = sm;
 
     let mut last_byte = 0;
     let mut bc = ByteChar::new(s);
     let mut out = Vec::new();
+    let mut cache = re.create_cache();
 
-    for c in re.captures_iter(s) {
-        let whole = c.get(0).unwrap();
-        if flags.ignore_empty() && whole.as_bytes().is_empty() {
+    for c in re.captures_iter(&mut cache, s) {
+        let whole = c.get_match().unwrap();
+        if flags.ignore_empty() && whole.is_empty() {
             continue;
         }
-        let match_names = c.iter().zip(re.capture_names());
-        let matches = match_names.filter_map(|(m, n)| Some(Match::new(&mut bc, m?, n)));
+        //let match_names = c.iter().zip(re.capture_names());
+        use regex_automata::PatternID;
+        let names = c.group_info().pattern_names(PatternID::ZERO).map(|o| o.map(|s| s.to_string()));
+        let match_names = c.iter().zip(names);
+        let matches = match_names.filter_map(|(m, n)| Some(Match::new(s, &mut bc, m?, n)));
         if mi {
             out.push(Part::Mismatch(&s[last_byte..whole.start()]));
             last_byte = whole.end();

@@ -30,6 +30,7 @@ libm = { version = "0.2.7", optional = true }
 aho-corasick = { version = "1.0", optional = true }
 base64 = { version = "0.22", optional = true }
 urlencoding = { version = "2.1.3", optional = true }
+regex-automata = "0.4.13"
 
 [dev-dependencies]
 jaq-json = { path = "../jaq-json" }

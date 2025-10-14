@@ -428,6 +428,7 @@ dependencies = [
  "jaq-json",
  "libm",
  "log",
+ "regex-automata",
  "regex-lite",
  "serde_json",
  "urlencoding",
@@ -599,14 +600,25 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.9"
+version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
+checksum = "5276caf25ac86c8d810222b3dbb938e512c55c6831a10f3e6ed1c93b84041f1c"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
 
 [[package]]
 name = "regex-lite"
 version = "0.1.6"
 source = "git+https://github.com/01mf02/regex?branch=bytes#cd695a8ad0bfc6331fbdeae8ae1b2630595767ce"
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rustix"
