@@ -26,12 +26,6 @@ This manual points out occasions where jaq diverges from `jq`.
 
 ::: Advanced
 
-The jq manual documents many features only by examples,
-which leaves jq's behaviour in many edge cases undocumented.
-In contrast, this manual tries to document features via
-*properties* that can be tested.
-This allows users to more thoroughly understand jq's behaviour.
-
 For an even deeper understanding of jq semantics,
 feel free to read my jq language specification at
 <https://github.com/01mf02/jq-lang-spec/>.
