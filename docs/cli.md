@@ -227,7 +227,7 @@ Using `--library-path` adds a new directory to the search paths.
 In these search paths,
 `~` is substituted with the user's home directory
 (given by the environment variable `HOME` on Linux and `USERPROFILE` on Windows) and
-`ORIGIN` is substituted by the directory in which the `jaq` executable resides.
+`$ORIGIN` is substituted by the directory in which the `jaq` executable resides.
 
 For example,
 `jaq -L . -L .. 'include "script"; foo'`
