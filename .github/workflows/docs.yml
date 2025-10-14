@@ -1,0 +1,22 @@
+name: Generate documentation and run unit tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'docs'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Pandoc
+      uses: pandoc/actions/setup@main
+      with:
+        version: 3.4
+    - name: Generate documentation and run unit tests
+      working-directory: docs
+      run: ./build.sh

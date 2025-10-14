@@ -150,18 +150,18 @@ def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
 - Strings are neither escaped nor unescaped; that means,
    `Tom &amp; Jerry`  in the source XML becomes
   `"Tom &amp; Jerry"` in the target JSON.
-- A comment such as `<!-- this comment -->` is converted to
-  `{"comment": " this comment "}`.
-- A CDATA block such as `<![CDATA[Tom & Jerry]]>` is converted to
-  `{"cdata": "Tom & Jerry"}`.
+- A comment such as `<!-- this comment -->`{.xml} is converted to
+  `{"comment": " this comment "}`{.json}.
+- A CDATA block such as `<![CDATA[Tom & Jerry]]>`{.xml} is converted to
+  `{"cdata": "Tom & Jerry"}`{.json}.
 - An XML declaration such as
-  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` is converted to
-  `{"xmldecl": {"version": "1.0", "encoding": "UTF-8", "standalone": "yes"}}`.
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`{.xml} is converted to
+  `{"xmldecl": {"version": "1.0", "encoding": "UTF-8", "standalone": "yes"}}`{.json}.
   (Note that the values given in this declaration, such as the encoding,
   are ignored by jaq's XML parser.)
 - A processing instruction such as
-  `<?xml-stylesheet href="common.css"?>` is converted to
-  `{"pi": {"target": "xml-stylesheet", "content": "href=\"common.css\""}}`.
+  `<?xml-stylesheet href="common.css"?>`{.xml} is converted to
+  `{"pi": {"target": "xml-stylesheet", "content": "href=\"common.css\""}}`{.json}.
 
 To put all of this together, consider the following XML file (`test.xhtml`):
 
