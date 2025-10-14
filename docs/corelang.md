@@ -866,6 +866,28 @@ As example, we can calculate the sum and the cumulative sum using
 - `foreach (1, 2, 3) as $x (0; . + $x) --> 1 3 6`
 - `foreach (1, 2, 3) as $x (0; . + $x; [$x, .]) --> [1, 1] [2, 3] [3, 6]`
 
+Let us expand the first and the last example using the equivalences above
+to see what is calculated:
+
+~~~
+# reduce  (1, 2, 3) as $x (0; . + $x)
+0
+| 1 as $x | . + $x
+| 2 as $x | . + $x
+| 3 as $x | . + $x
+--> 6
+~~~
+
+~~~
+# foreach (1, 2, 3) as $x (0; . + $x; [$x, .])
+0 |
+( 1 as $x | . + $x | [$x, .],
+( 2 as $x | . + $x | [$x, .],
+( 3 as $x | . + $x | [$x, .],
+( empty ))))
+--> [1, 1] [2, 3] [3, 6]
+~~~
+
 We can also reverse a list via
 `[1, 2, 3] | reduce .[] as $x ([]; [$x] + .) --> [3, 2, 1]`.
 (However, note that this has quadratic runtime and is thus quite inefficient.)
@@ -895,17 +917,17 @@ Consider the following example for an `update` yielding multiple values:
 `foreach (5, 10) as $x (1; .+$x, -.) -->
 6 16 -6 -1 9 1` in jaq, whereas it yields
 `6 -1 9 1` in jq.
-We can see that both jq and jaq yield the values `6` and `-1`
+We can see that both jq and jaq yield the values
 resulting from the first iteration (where `$x` is 5), namely
-`1 | 5 as $x | (.+$x, -.)`.
+`1 | 5 as $x | (.+$x, -.) --> 6 -1`.
 However, jq performs the second iteration (where `$x` is 10)
 *only on the last value* returned from the first iteration, namely `-1`,
-yielding the values `9` and `1` resulting from
-`-1 | 10 as $x | (.+$x, -.)`.
+yielding the values
+`-1 | 10 as $x | (.+$x, -.) --> 9 1`.
 jaq yields these values too, but it also performs the second iteration
 on all other values returned from the first iteration, namely `6`,
-yielding the values `16` and `-6` that result from
-` 6 | 10 as $x | (.+$x, -.)`.
+yielding the values
+` 6 | 10 as $x | (.+$x, -.) --> 16 -6`.
 
 :::
 

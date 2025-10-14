@@ -74,7 +74,7 @@ function Writer(doc, opts)
   local test = function(code)
     local filter, output = codeTest(code.text)
     if filter ~= nil then
-      print((trim(filter):gsub("\n", " ")))
+      print((trim(filter):gsub("#[^\n]*", ""):gsub("\n", " ")))
       print("null") -- input
       print(trim(output))
       print() -- end of test
