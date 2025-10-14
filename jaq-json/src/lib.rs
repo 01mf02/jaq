@@ -243,8 +243,7 @@ impl jaq_core::ValT for Val {
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
-                let o = Rc::make_mut(o);
-                match o.entry(index.clone()) {
+                match Rc::make_mut(o).entry(index.clone()) {
                     Occupied(mut e) => {
                         let v = core::mem::take(e.get_mut());
                         match f(v).next().transpose()? {
@@ -263,7 +262,6 @@ impl jaq_core::ValT for Val {
                 Ok(self)
             }
             Val::Arr(ref mut a) => {
-                let a = Rc::make_mut(a);
                 let oob = || Error::str(format_args!("index {index} out of bounds"));
                 let abs_or = |i| abs_index(i, a.len()).ok_or_else(oob);
                 let i = match index.as_pos_usize().and_then(abs_or) {
@@ -271,6 +269,7 @@ impl jaq_core::ValT for Val {
                     Err(e) => return opt.fail(self, |_| Exn::from(e)),
                 };
 
+                let a = Rc::make_mut(a);
                 let x = core::mem::take(&mut a[i]);
                 if let Some(y) = f(x).next().transpose()? {
                     a[i] = y;
