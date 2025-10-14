@@ -526,7 +526,8 @@ The filters
 `f -= g`,
 `f *= g`,
 `f /= g`,
-`f %= g`
+`f %= g`, and
+`f //= g`
 are short-hand forms for
 `f = . + g`, ...
 For example:
