@@ -85,6 +85,16 @@ For example,
 
 This is equivalent to `--from raw`.
 
+::: Advanced
+
+When using `-Rs` to load a file (as opposed to standard input),
+jaq loads this file in constant time (if it can be memory-mapped).
+This is because unlike jq, jaq does not validate that strings are valid UTF-8.
+That permits loading arbitrary binary files;
+these can be processed as byte strings via [`tobytes`](#tobytes).
+
+:::
+
 ### `-s`, `--slurp`
 
 Read (slurp) all input values into one array.
@@ -232,8 +242,46 @@ If `--library-path` is not given, the following default search paths are used:
 
 ## Variable options
 
---arg       <A> <V>   Set variable `$A` to string `V`
---argjson   <A> <V>   Set variable `$A` to JSON value `V`
---slurpfile <A> <F>   Set variable `$A` to array containing the JSON values in file `F`
---rawfile   <A> <F>   Set variable `$A` to string containing the contents of file `F`
---args                Collect remaining positional arguments into `$ARGS.positional`
+### `--arg` _A_ _V_
+
+Set variable `$A` to string _V_.
+
+For example,
+`jaq --arg name "John Doe" -n '"Welcome, " + $name'` yields `"Welcome, John Doe"`.
+
+
+### `--argjson` _A_ _V_
+
+Set variable `$A` to JSON value _V_.
+
+For example,
+`jaq --argjson song '{"name": "One of Us", "artist": "ABBA", "year": 1981}' -n '"Currently playing: \($song.name) (\($song.year))"'`
+yields
+`"Currently playing: One of Us (1981)"`.
+
+If _V_ contains more than a single value, e.g. `1 2`, then jaq yields an error.
+
+### `--slurpfile` _A_ _F_
+
+Set variable `$A` to array containing the JSON values in file _F_.
+
+For example, if `values.json` contains `1 2 3`, then
+`jaq --slurpfile xs values.json -n '$xs'` yields `[1, 2, 3]`.
+
+### `--rawfile` _A_ _F_
+
+Set variable `$A` to string containing the contents of file _F_.
+
+### `--args`
+
+Collect remaining positional arguments into `$ARGS.positional`.
+
+If this option is given, then all further arguments that
+would have been interpreted as input files are
+instead collected into an array at `$ARGS.positional`.
+
+For example, if the file `input.json` exists, then
+`jaq '$ARGS.positional' input.json --args foo -n bar` yields `["foo", "bar"]`.
+Note that here, `input.json` and `-n` are *not* collected into the array ---
+the former because it comes *before* `--args`, and
+the latter because it would not have been interpreted as input file.
