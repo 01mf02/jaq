@@ -8,7 +8,7 @@ performs the following steps:
 - For each _FILE_:
     - Parse _FILE_ to a stream of values
     - For each input value in the file:
-        - Run _FILTER_ on the input value and print its output values as JSON
+        - Run _FILTER_ on the input value and print its output values
 
 For example, `jaq '.name?' persons.json`
 parses the filter `.name?`, then
@@ -197,8 +197,37 @@ Use _N_ spaces for indentation (default: 2).
 
 ## Compilation options
 
--f, --from-file           Read filter from a file given by filter argument
--L, --library-path <_DIR_>  Search for modules and data in given directory
+### `-f`, `--from-file` {#--from-file}
+
+Read filter from a file given by filter argument.
+
+With this option, jaq interprets the _FILTER_ argument as
+name of a file containing the filter.
+Note that the file name may not directly succeed this option.
+For example,
+`jaq --from-file -n script.jq`
+uses the contents of the file `script.jq` as filter.
+
+### `-L`, `--library-path` _DIR_
+
+Search for [modules](#modules) and data in given directory.
+
+jaq searches for modules and data in a set of directories called "search paths".
+Using `--library-path` adds a new directory to the search paths.
+In these search paths,
+`~` is substituted with the user's home directory
+(given by the environment variable `HOME` on Linux and `USERPROFILE` on Windows) and
+`ORIGIN` is substituted by the directory in which the `jaq` executable resides.
+
+For example,
+`jaq -L . -L .. 'include "script"; foo'`
+looks for `script.jq` first in the current directory, then in the parent directory.
+
+If `--library-path` is not given, the following default search paths are used:
+
+- `~/.jq`
+- `$ORIGIN/../lib/jq`
+- `$ORIGIN/../lib`
 
 
 ## Variable options
