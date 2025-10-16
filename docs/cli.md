@@ -70,9 +70,9 @@ For example,
 `yes | jaq -n` yields `null`,
 which shows that this does indeed not read any input.
 
-The inputs can still be obtained via the [`inputs`] filter; for example,
+The inputs can still be obtained via the [`inputs`](#inputs) filter; for example,
 `yes true | jaq -n 'first(inputs)'` yields `true`.
-This can be useful to fold over all inputs with [`reduce`] or [`foreach`].
+This can be useful to fold over all inputs with [`reduce` / `foreach`](#reduce-foreach).
 
 ### `-R`, `--raw-input` {#--raw-input}
 
@@ -122,7 +122,7 @@ for example, to achieve the output of
 ### `--to` _FORMAT_ {#--to}
 
 Print all output values in the given _FORMAT_.
-Any _FORMAT_ accepted by [`--from`] can be used here.
+Any _FORMAT_ accepted by [`--from`](#--from) can be used here.
 
 Note that not every value can be printed in every format.
 For example, TOML requires that the root value is an object, so
@@ -166,6 +166,12 @@ overwrites it with a formatted version of it.
 Note that the input file is overwritten only
 once there is no more output and
 if there has not been any error.
+
+::: Compatibility
+
+`jq` does not have this option.
+
+:::
 
 ### `-S`, `--sort-keys`
 
