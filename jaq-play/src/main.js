@@ -1,5 +1,5 @@
 // currently active jaq thread
-let worker = initWorker();
+let worker = undefined;
 
 const param_ids = Object.entries({'q': 'filter', 'j': 'input'});
 
@@ -22,6 +22,11 @@ function setParams() {
 }
 
 function startWorker() {
+    if (worker !== undefined) {
+        stopWorker();
+    }
+    worker = initWorker();
+
     setParams();
     showRunButton(false);
 
@@ -52,7 +57,7 @@ function initWorker() {
 
 function receiveFromWorker(data) {
     if (data == null) {
-        showRunButton(true);
+        stopWorker();
         return;
     }
 
@@ -71,7 +76,7 @@ function stopWorker() {
     console.log("Stopping worker ...");
     showRunButton(true)
     worker.terminate();
-    worker = initWorker();
+    worker = undefined;
 }
 
 document.getElementById("run-stop").onclick = async () => {
