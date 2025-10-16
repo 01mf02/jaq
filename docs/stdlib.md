@@ -302,13 +302,34 @@ nor does it reject array or object values in the array.
 ### `fromjson`, `tojson`
 
 
-## Date functions
+## Date & Time
 
 ### `now`
 
-### `fromdateiso8601`, `todateiso8601`
+This filter yields the seconds passed since January 1, 1970 (Unix epoch)
+as floating-point number.
 
-### `fromdate`, `todate`
+### `fromdate`, `todate`, `fromdateiso8601`, `todateiso8601`
+
+These filters convert between Unix time and ISO-8601 timestamps.
+
+For example, the
+[Apollo 13 accident](https://en.wikipedia.org/wiki/Apollo_13#Accident)
+happened at 03:08 UTC on April 14, 1970.
+Its corresponding Unix time is
+`"1970-04-14T03:08:00Z" | fromdate --> 8910480`.
+We can get back the ISO-8601 timestamp via
+`8910480 | todate --> "1970-04-14T03:08:00Z"`.
+
+These filters can handle floating-point numbers, e.g.
+`0.123456 | todate --> "1970-01-01T00:00:00.123456Z"` and
+`"1970-01-01T00:00:00.123456Z" | fromdate --> 0.123456`.
+In particular, `fromdate` yields a floating-point number if
+the time cannot be represented losslessly as an integer.
+
+The filters
+`fromdateiso8601` and `todateiso8601` are synonyms of
+`fromdate` and `todate`, respectively.
 
 ### `strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, `localtime`
 
