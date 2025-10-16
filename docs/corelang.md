@@ -753,7 +753,7 @@ The filter `$x - $y` subtracts `$y` from `$x` as follows:
   `[1, 2, 3, 4] - [2, 4] --> [1, 3]`.
 - Subtracting anything else yields an error.
 
-### Multiplication / division
+### Multiplication / division {#mul-div}
 
 The filter `$x * $y` multiplies two values as follows:
 
@@ -772,6 +772,28 @@ The filter `$x * $y` multiplies two values as follows:
   `{a: {b: 0, c: 2}, e: 4} * {a: {b: 1, d: 3}, f: 5} -->
   {"a": {"b": 1, "c": 2, "d": 3}, "e": 4, "f": 5}`.
 - Multiplying anything else yields an error.
+
+The filter `$x / $y` divides two values as follows:
+
+- Dividing a number by a number yields their quotient as floating-point number.
+  To perform this operation, both arguments are first converted to floating-point numbers.
+  For example, `1 / 2 --> 0.5`.
+- Dividing a string by a string *splits* `$x` by `$y`, yielding an array of strings.
+  For example,
+  `"foobarfoobazfoo" / "foo" --> ["", "bar", "baz", ""]`.
+  If `$y` is empty, then `$x / $y` yields an array with each character of the input as separate string.
+  For example,
+  `"🧑‍🔬 is 🤔" / "" --> ["🧑","‍","🔬"," ","i","s"," ","🤔"]`.
+
+::: Advanced
+
+You can round-trip string division with `.[:-1][] += $y | add + ""`.
+For example:
+
+- `"foobarfoobazfoo" / "foo" | .[:-1][] += "foo" | add + "" --> "foobarfoobazfoo"`
+- `"🧑‍🔬 is 🤔" / "" | .[:-1][] += "" | add + "" --> "🧑‍🔬 is 🤔"`
+
+:::
 
 ::: Compatibility
 
