@@ -240,7 +240,12 @@ For example, to establish that `sin(pi)` is smaller than `10^-5`, we can use
 
 ### `explode`, `implode`
 
-### `split($s)`
+### `split($s)` {#split}
+
+This filter yields `. / $s` if its input `.` and `$s` are both strings, else it fails.
+See the section on [division](#mul-div) for details.
+
+Note that there is also [`split($re; $flags)`](#splits) that splits by a regex.
 
 ### `join($s)`
 
@@ -354,15 +359,128 @@ therefore, it also does not implement the related filters
 
 ## Regular expressions
 
+All the filters in this section, such as `test`, take a string as input and
+fail if they receive any other type of value.
+Furthermore, they all take two string arguments, namely
+the regular expression `$re` and
+the `$flags` that determine how the regular expression is interpreted.
+Omitting `$flags` is equivalent to passing `""` as `$flags`.
+For example,
+`test($re)` is equivalent to `test($re; "")`.
+
+The supported flags are:
+
+- `g`: global search
+- `n`: ignore empty matches
+- `i`: case-insensitive
+- `m`: multi-line mode: `^` and `$` match begin/end of line
+- `s`: single-line mode: allow `.` to match `\n`
+- `l`: greedy
+- `x`: extended mode: ignore whitespace and allow line comments (starting with `#`)
+
+::: Compatibility
+
+jaq uses the [`regex-lite`](https://docs.rs/regex-lite) crate to
+compile and run regular expressions (regexes).
+See the crate documentation for a description of the supported regex syntax.
+
+:::
+
 ### `test`
+
+The filter `test` yields
+`true` if some part of the input matches the regular expression, else `false`.
+For example:
+
+- `"jaq v3.0" | test("v[0-9]+\\.[0-9]+") --> true`
+- `"jaq V3.0" | test("v[0-9]+\\.[0-9]+") --> false`
+- `"jaq V3.0" | test("v[0-9]+\\.[0-9]+"; "i") --> true`
 
 ### `scan`
 
+The filter `scan` yields all parts of the input that match the regular expression.
+For example:
+
+- `"v2.0, v3.0" | scan("v[0-9]+\\.[0-9]+"     ) --> "v2.0"`
+- `"v2.0, v3.0" | scan("v[0-9]+\\.[0-9]+"; "g") --> "v2.0" "v3.0"`
+- `"V2.0"       | scan("v[0-9]+\\.[0-9]+") -->` (no output)
+
 ### `match`
+
+The filter `match` yields an object for every part of the input that matches the regular expression, containing:
+
+- `"offset"`: the character index of the start of the match 
+- `"length"`: the number of characters of the match 
+- `"string"`: the contents of the match
+- `"captures"`: an array with an object for every capture group, containing:
+    - `"offset"`,
+    - `"length"`,
+    - `"string"`: as above, but for the capture group instead of the whole match
+    - `"name"`: the name of the capture group if it has one, else this key is omitted
+
+Example:
+
+~~~
+"v2.0, v3.0" | match("v(?<maj>[0-9]+)\\.([0-9]+)"; "g") -->
+{
+  "offset": 0,
+  "length": 4,
+  "string": "v2.0",
+  "captures": [
+    {
+      "offset": 1,
+      "length": 1,
+      "string": "2",
+      "name": "maj"
+    },
+    {
+      "offset": 3,
+      "length": 1,
+      "string": "0"
+    }
+  ]
+}
+{
+  "offset": 6,
+  "length": 4,
+  "string": "v3.0",
+  "captures": [
+    {
+      "offset": 7,
+      "length": 1,
+      "string": "3",
+      "name": "maj"
+    },
+    {
+      "offset": 9,
+      "length": 1,
+      "string": "0"
+    }
+  ]
+}
+~~~
 
 ### `capture`
 
-### `splits`
+The filter `capture` yields an object for every part of the input that matches the regular expression, containing
+for each named capture group an entry with
+the group name as key and its matched string as value.
+
+Example:
+
+~~~
+"v2.0, v3.0" | capture("v(?<maj>[0-9]+)\\.(?<min>[0-9]+)"; "g") -->
+{
+  "maj": "2",
+  "min": "0"
+}
+{
+  "maj": "3",
+  "min": "0"
+}
+~~~
+
+### `split`, `splits` {#splits}
 
 ### `sub`, `gsub`
 
