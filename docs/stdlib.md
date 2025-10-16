@@ -230,15 +230,82 @@ For example, to establish that `sin(pi)` is smaller than `10^-5`, we can use
 
 ## Strings
 
+Unless stated otherwise, all filters in this section
+take a text string as input, and fail if the input is of any other type.
+
 ### `utf8bytelength`
+
+The filter `utf8bytelength` yields the number of bytes of the input string.
+It is equivalent to `tobytes | length`, but different from `length`,
+which counts the number of *characters*.
+
+For example,
+`"ゼノギアス" | length, utf8bytelength, (tobytes | length) --> 5 15 15`.
 
 ### `startswith($s)`, `endswith($s)`
 
+The filter `startswith($s)` yields
+`true` if the input string starts with the string `$s`, else `false`.
+Similar for `endswith($s)`.
+For example:
+
+- `"ゼノギアス" | startswith("ゼノ") --> true`
+- `"ゼノギアス" | endswith("ギアス") --> true`
+
 ### `trim`, `ltrim`, `rtrim`
+
+The filters `ltrim` and `rtrim` remove from the input string all
+leading and trailing whitespace, respectively.
+Here, whitespace corresponds to the `White_Space` Unicode property.
+The filter `trim` is equivalent to `ltrim | rtrim`.
+
+For example:
+
+- `" \t\n　Bonjour !   \r  " | ltrim --> "Bonjour !   \r  "`
+- `" \t\n　Bonjour !   \r  " | rtrim --> " \t\n　Bonjour !"`
+
+Note that there are a few quite unusual whitespace characters in this string.
 
 ### `ltrimstr($s)`, `rtrimstr($s)`
 
+The filters `ltrimstr($s)` and `rtrimstr($s)` remove a single occurrence of
+`$s` from the start or the end of the string, respectively.
+If there is no such occurrence, the original string is returned.
+For example:
+
+- `"foofoobar" | ltrimstr("foo") --> "foobar"`
+- `"foobarbar" | rtrimstr("bar") --> "foobar"`
+
 ### `explode`, `implode`
+
+The filter `explode` yields an array containing
+a positive number for each valid Unicode code points of the input string and
+a negative number for each byte of each invalid Unicode code point.
+For example:
+
+~~~
+"Dear ☀️" + ([255] | tobytes | tostring) | explode -->
+[68,101,97,114,32,9728,65039,-255]
+~~~
+
+Here, we can see that `"☀️"` has turned into two code points, namely
+`9728` and `65039`, whereas the invalid `FF` byte (= 255) has become `-255`.
+
+The inverse filter of `explode` is `implode`:
+
+~~~
+[68,101,97,114,32,9728,65039, -255] | implode[:-1] -->
+"Dear ☀️"
+~~~
+
+(I omitted the `FF` byte at the end, because it is hard to save in a text editor.)
+
+::: Compatibility
+
+`jq` does not permit invalid code points in text strings, so it
+returns and accepts only natural numbers in `explode` and `implode`. 
+
+:::
 
 ### `split($s)` {#split}
 
@@ -266,6 +333,13 @@ nor does it reject array or object values in the array.
 :::
 
 ### `ascii_downcase`, `ascii_upcase`
+
+The filters `ascii_downcase` and `ascii_upcase` convert all
+ASCII letters in the input string to their lower/upper case variants, respectively.
+For example:
+
+- `"Der λΠ-Kalkül" | ascii_downcase --> "der λΠ-kalkül"`
+- `"Der λΠ-Kalkül" | ascii_upcase   --> "DER λΠ-KALKüL"`
 
 
 ## String formatting
