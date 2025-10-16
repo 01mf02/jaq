@@ -249,7 +249,6 @@ Set variable `$A` to string _V_.
 For example,
 `jaq --arg name "John Doe" -n '"Welcome, " + $name'` yields `"Welcome, John Doe"`.
 
-
 ### `--argjson` _A_ _V_
 
 Set variable `$A` to JSON value _V_.
@@ -281,7 +280,10 @@ would have been interpreted as input files are
 instead collected into an array at `$ARGS.positional`.
 
 For example, if the file `input.json` exists, then
-`jaq '$ARGS.positional' input.json --args foo -n bar` yields `["foo", "bar"]`.
+`jaq '$ARGS.positional' input.json --args foo -n bar -- baz -c qux` yields
+`["foo", "bar", "baz", "-c", "qux"]`.
 Note that here, `input.json` and `-n` are *not* collected into the array ---
 the former because it comes *before* `--args`, and
 the latter because it would not have been interpreted as input file.
+However, `-c` is collected into the array because it comes after `--`,
+which leads every argument after it to be interpreted as input file.
