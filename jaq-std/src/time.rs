@@ -1,6 +1,28 @@
 use crate::{Error, ValR, ValT, ValTx};
 use alloc::string::{String, ToString};
-use chrono::{DateTime, Datelike, FixedOffset, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, TimeZone, Timelike, Utc};
+use jiff::{Timestamp, Zoned};
+
+/// Convert a UNIX epoch timestamp with optional fractions.
+fn epoch_to_timestamp<V: ValT>(v: &V) -> Result<Timestamp, Error<V>> {
+    let val = match v.as_isize() {
+        Some(i) => i as i64 * 1000000,
+        None => (v.try_as_f64()? * 1000000.0) as i64,
+    };
+    Timestamp::from_microsecond(val).map_err(Error::str)
+}
+
+/// Convert a date-time pair to a UNIX epoch timestamp.
+fn timestamp_to_epoch<V: ValT>(ts: Timestamp, frac: bool) -> ValR<V> {
+    if frac {
+        Ok((ts.as_microsecond() as f64 / 1e6).into())
+    } else {
+        let seconds = ts.as_second();
+        isize::try_from(seconds)
+            .map(V::from)
+            .or_else(|_| V::from_num(&seconds.to_string()))
+    }
+}
 
 /// Convert a UNIX epoch timestamp with optional fractions.
 fn epoch_to_datetime<V: ValT>(v: &V) -> Result<DateTime<Utc>, Error<V>> {
@@ -42,21 +64,21 @@ fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime<Utc>> {
     .with_nanosecond((sec.fract() * 1e9) as u32)
 }
 
-/// Convert a DateTime<FixedOffset> to a "broken down time" array
-fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> [V; 8] {
+/// Convert a `Zoned` to a "broken down time" array
+fn zoned_to_array<V: ValT>(zoned: Zoned) -> [V; 8] {
     [
-        V::from(dt.year() as isize),
-        V::from(dt.month0() as isize),
-        V::from(dt.day() as isize),
-        V::from(dt.hour() as isize),
-        V::from(dt.minute() as isize),
-        if dt.nanosecond() > 0 {
-            V::from(dt.second() as f64 + dt.timestamp_subsec_micros() as f64 / 1e6)
+        V::from(zoned.year() as isize),
+        V::from(zoned.month() as isize - 1),
+        V::from(zoned.day() as isize),
+        V::from(zoned.hour() as isize),
+        V::from(zoned.minute() as isize),
+        if zoned.subsec_nanosecond() > 0 {
+            V::from(zoned.second() as f64 + zoned.subsec_nanosecond() as f64 / 1e9)
         } else {
-            V::from(dt.second() as isize)
+            V::from(zoned.second() as isize)
         },
-        V::from(dt.weekday().num_days_from_sunday() as isize),
-        V::from(dt.ordinal0() as isize),
+        V::from(zoned.weekday().to_sunday_zero_offset() as isize),
+        V::from(zoned.day_of_year() as isize - 1),
     ]
 }
 
@@ -67,22 +89,17 @@ fn datetime_to_array<V: ValT>(dt: DateTime<FixedOffset>) -> [V; 8] {
 /// <https://ijmacd.github.io/rfc3339-iso8601/> for differences.
 /// jq also only parses a very restricted subset of ISO 8601.
 pub fn from_iso8601<V: ValT>(s: &str) -> ValR<V> {
-    let dt = DateTime::parse_from_rfc3339(s)
-        .map_err(|e| Error::str(format_args!("cannot parse {s} as ISO-8601 timestamp: {e}")))?;
-    datetime_to_epoch(dt, s.contains('.'))
+    timestamp_to_epoch(s.parse().map_err(Error::str)?, s.contains('.'))
 }
 
 /// Format a number as an ISO 8601 timestamp string.
 pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
-    let fail = || Error::str(format_args!("cannot format {v} as ISO-8601 timestamp"));
-    if let Some(i) = v.as_isize() {
-        let dt = DateTime::from_timestamp(i as i64, 0).ok_or_else(fail)?;
-        Ok(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+    let ts = if let Some(i) = v.as_isize() {
+        Timestamp::from_second(i as i64)
     } else {
-        let f = v.try_as_f64()?;
-        let dt = DateTime::from_timestamp_micros((f * 1e6) as i64).ok_or_else(fail)?;
-        Ok(dt.format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string())
-    }
+        Timestamp::from_microsecond((v.try_as_f64()? * 1e6) as i64)
+    };
+    Ok(ts.map_err(Error::str)?.to_string())
 }
 
 /// Format a date (either number or array) in a given timezone.
@@ -97,18 +114,20 @@ pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: impl TimeZone) -> ValR<V> {
 }
 
 /// Convert an epoch timestamp to a "broken down time" array.
-pub fn gmtime<V: ValT>(v: &V, tz: impl TimeZone) -> ValR<V> {
-    let dt = epoch_to_datetime(v)?;
-    let dt = dt.with_timezone(&tz).fixed_offset();
-    datetime_to_array(dt).into_iter().map(Ok).collect()
+pub fn gmtime<V: ValT>(v: &V, tz: jiff::tz::TimeZone) -> ValR<V> {
+    let zoned = epoch_to_timestamp(v)?.to_zoned(tz);
+    zoned_to_array(zoned).into_iter().map(Ok).collect()
 }
 
 /// Parse a string into a "broken down time" array.
 pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
-    let dt = NaiveDateTime::parse_from_str(s, fmt)
-        .map_err(|e| Error::str(format_args!("cannot parse {s} using {fmt}: {e}")))?;
-    let dt = dt.and_utc().fixed_offset();
-    datetime_to_array(dt).into_iter().map(Ok).collect()
+    use jiff::fmt::strtime::BrokenDownTime;
+    let mut bdt = BrokenDownTime::parse(fmt, s).map_err(Error::str)?;
+    if (bdt.offset(), bdt.iana_time_zone()) == (None, None) {
+        bdt.set_offset(Some(jiff::tz::Offset::UTC));
+    }
+    let zoned = bdt.to_zoned().map_err(Error::str)?;
+    zoned_to_array(zoned).into_iter().map(Ok).collect()
 }
 
 /// Parse an array into a UNIX epoch timestamp.

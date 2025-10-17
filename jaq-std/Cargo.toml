@@ -8,7 +8,7 @@ readme = "../README.md"
 description = "Standard library for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["json", "query", "jq"]
-rust-version = "1.69"
+rust-version = "1.70"
 
 [features]
 default = ["std", "format", "log", "math", "regex", "time"]
@@ -16,7 +16,7 @@ regex = ["regex-lite"]
 std = []
 format = ["aho-corasick", "base64", "urlencoding"]
 math = ["libm"]
-time = ["chrono"]
+time = ["chrono", "jiff"]
 
 [dependencies]
 jaq-core = { version = "2.1.0", path = "../jaq-core" }
@@ -24,6 +24,7 @@ jaq-core = { version = "2.1.0", path = "../jaq-core" }
 bstr = "1"
 hifijson = { version = "0.2.0", optional = true }
 chrono = { version = "0.4.38", default-features = false, features = ["alloc", "clock"], optional = true }
+jiff = { version = "0.2.15", optional = true }
 regex-lite = { version = "0.1", optional = true }
 log = { version = "0.4.17", optional = true }
 libm = { version = "0.2.7", optional = true }
