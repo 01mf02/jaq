@@ -297,7 +297,7 @@ dependencies = [
 [[package]]
 name = "hifijson"
 version = "0.2.3"
-source = "git+https://github.com/01mf02/hifijson#038411bba398ea5ed128f4dd48f4dc8c9efe9a32"
+source = "git+https://github.com/01mf02/hifijson#da80bf1d2dc3a001d54d32b848faff18bafd2f5d"
 
 [[package]]
 name = "iana-time-zone"

@@ -10,6 +10,15 @@ yields!(bsearch_absent2, "[1, 3] | bsearch(2)", -2);
 yields!(bsearch_absent3, "[1, 3] | bsearch(4)", -3);
 yields!(bsearch_present, "[1, 3] | [bsearch(1, 3)]", [0, 1]);
 
+yields!(
+    fromjson_inf,
+    r#""Infinity +Infinity -Infinity" | [fromjson | tostring]"#,
+    ["Infinity", "Infinity", "-Infinity"]
+);
+yields!(fromjson_uint, r#"" 1" | fromjson"#, 1);
+yields!(fromjson_pint, r#""+1" | fromjson"#, 1);
+yields!(fromjson_nint, r#""-1" | fromjson"#, -1);
+
 // 41 = 0x29
 yields!(fromcbor1, "[41] | tobytes | fromcbor", -10);
 yields!(fromcbor2, "[99, 230, 176, 180] | tobytes | fromcbor", "水");

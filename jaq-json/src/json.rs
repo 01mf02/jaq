@@ -70,6 +70,16 @@ fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::
     })
 }
 
+fn parse_signed<L: LexAlloc>(lexer: &mut L, sign: u8) -> Result<Num, hifijson::Error> {
+    Ok(match (sign, lexer.peek_next()) {
+        (b'+', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::INFINITY),
+        (b'-', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
+        (b'+', _) => parse_num(lexer, "")?,
+        (b'-', _) => parse_num(lexer, "-")?,
+        _ => Err(Expect::Value)?,
+    })
+}
+
 /// Parse at least one JSON value, given an initial token and a lexer.
 ///
 /// If the underlying lexer reads input fallibly (for example `IterLexer`),
@@ -87,11 +97,7 @@ fn parse<L: LexAlloc>(token: Token, lexer: &mut L) -> Result<Val, hifijson::Erro
         Token::Other(b'I') if lexer.strip_prefix(b"Infinity") => {
             Val::Num(Num::Float(f64::INFINITY))
         }
-        Token::Minus => Val::Num(match lexer.peek_next() {
-            Some(b'I') if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
-            Some(b'I') => Err(Expect::Value)?,
-            _ => parse_num(lexer, "-")?,
-        }),
+        Token::Other(sign @ (b'+' | b'-')) => Val::Num(parse_signed(lexer.discarded(), sign)?),
         Token::Other(b'0'..=b'9') => Val::Num(parse_num(lexer, "")?),
         Token::Quote => Val::utf8_str(parse_string(lexer, Tag::Utf8)?),
         Token::LSquare => Val::Arr({
