@@ -27,16 +27,115 @@ For example,
 
 ### `length`
 
+The output of the filter `length` depends on its input type:
+
+- `null`: `0`, i.e. `null | length --> 0`
+- boolean: error, i.e. `true | try length catch "fail" --> "fail"`
+- number: the absolute value of the number, i.e. `-1, 1 | length --> 1 1`
+- text string: the number of characters, i.e. `"ゼノギアス" | length --> 5`
+- byte string: the number of bytes, i.e. `"ゼノギアス" | tobytes | length --> 15`
+- array: the number of values, i.e. `[1, [2, 3], 4] | length --> 3`
+- object: the number of key-value pairs, i.e. `{a: 0, b: 1} | length --> 2`
+
 ### `keys`, `keys_unsorted` {#keys}
+
+The filter `keys_unsorted` yields an array that contains
+all keys if the input is an object or
+all indices if the input is an array.
+The filter `keys` is equivalent to `keys_unsorted | sort`.
+For example:
+
+- `{c: 1, b: 2, a: 1} | keys_unsorted --> ["c", "b", "a"]`
+- `{c: 1, b: 2, a: 1} | keys          --> ["a", "b", "c"]`
+- `[1, 2, 3] | keys_unsorted --> [0, 1, 2]`
+- `[1, 2, 3] | keys          --> [0, 1, 2]`
+
+::: Advanced
+
+The filter `keys_unsorted` is equivalent to
+`to_entries | .[] |= .key`; for example,
+`{a: 1, b: 2} | to_entries | .[] |= .key --> ["a", "b"]`.
+
+:::
 
 ### `map(f)`, `map_values(f)` {#map}
 
+The filter `map(f)` obtains all values of the input (via `.[]`),
+applies `f` to the values, and collects all results into an array.
+For example:
+
+- `[1, 2, 3]    | map(., .*2) --> [1, 2, 2, 4, 3, 6]`.
+- `{a: 1, b: 2} | map(., .*2) --> [1, 2, 2, 4]`.
+
+The filter `map_values(f)` has the same effect as `map(f)`
+when the input is an array, but when the input is an object,
+`map_values(f)` also outputs an object.
+For example:
+
+- `[1, 2, 3, 4] | map_values(.*2) --> [2, 4, 6, 8]`
+- `{a: 1, b: 2} | map_values(.*2) --> {"a": 2, "b": 4}`
+
+::: Advanced
+
+The filter `map(f)` is equivalent to `[.[] | f]` and
+the filter `map_values(f)` is equivalent to `.[] |= f`.
+
+:::
+
 ### `to_entries`, `from_entries`, `with_entries(f)` {#entries}
+
+The filter `to_entries` takes as input an array or an object.
+It converts them to an array of objects of the shape
+`{key: k, value: v}`, such that `.[k]` on the original input yields `v`.
+For example:
+
+- `[   1,    2] | to_entries --> [{"key":  0 , "value": 1}, {"key":  1 , "value": 2}]`
+- `{a: 1, b: 2} | to_entries --> [{"key": "a", "value": 1}, {"key": "b", "value": 2}]`
+
+The filter `from_entries` constructs an object from
+an array of entries as given by `to_entries`.
+For example, `{a: 1, b: 2} | to_entries | from_entries --> {"a": 1, "b": 2}`.
+
+The filter `with_entries(f)` is equivalent to `to_entries | map(f) | from_entries`.
+For example, `{"a": 1, "b": 2} | with_entries(.key |= ascii_upcase) --> {"A": 1, "B": 2}`
 
 ### `not`
 
+The filter `not` converts its input to its [boolean value](#booleans) and returns its negation.
+For example:
+
+- `true  | not --> false`
+- `false | not --> true`
+- `"foo" | not --> false`
+
+::: Advanced
+
+The filter `not` is equivalent to `if . then false else true end`.
+We can obtain the boolean value of a value by `not | not`.
+
+:::
+
 ### `type`
 
+The filter `type` returns the type of its input value as string. For example:
+
+- `null  | type --> "null"`
+- `false | type --> "boolean"`
+- `0     | type --> "number"`
+- `"foo" | type --> "string"`
+- `[1]   | type --> "array"`
+- `{}    | type --> "object"`
+
+Note that both text strings and byte strings both have the same type `"string"`.
+
+::: Advanced
+
+The `type` filter can be relatively slow to run;
+if you use it for simple comparisons such as
+`type == "string"`, then you can also use filters like
+[`isstring`](#istype).
+
+:::
 
 ## Stream consumers
 
@@ -83,7 +182,7 @@ Yields its input if it is of the given type.
 
 ### `values`, `iterables`, `scalars`
 
-### `isnull`, `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject`
+### `isnull`, `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject` {#istype}
 
 ### `isnormal`, `isfinite`
 
