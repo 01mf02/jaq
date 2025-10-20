@@ -79,13 +79,18 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
 }
 
 /// Format a date (either number or array) in a given timezone.
+///
+/// When the input is a "broken down time" array,
+/// then it is assumed to be in the given timezone.
+/// When the input is an integer, i.e. a Unix epoch,
+/// then it is *converted* to the given timezone.
 pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: tz::TimeZone) -> ValR<V> {
     let fail = || Error::str(format_args!("cannot convert {v} to time"));
-    let bdt: strtime::BrokenDownTime = match v.clone().into_vec() {
-        Ok(v) => array_to_datetime(&v).ok_or_else(fail)?.into(),
-        Err(_) => (&epoch_to_timestamp(v)?.to_zoned(tz)).into(),
+    let zoned = match v.clone().into_vec() {
+        Ok(v) => array_to_datetime(&v).ok_or_else(fail)?.to_zoned(tz).map_err(Error::str)?,
+        Err(_) => epoch_to_timestamp(v)?.to_zoned(tz),
     };
-    strtime::format(fmt, bdt).map(V::from).map_err(Error::str)
+    strtime::format(fmt, &zoned).map(V::from).map_err(Error::str)
 }
 
 /// Convert an epoch timestamp to a "broken down time" array.
