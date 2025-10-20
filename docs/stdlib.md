@@ -485,10 +485,17 @@ If the input is a BDT array, then
 
 For example, if the user is in the CET zone (+0100):
 
-- `0 | strftime("%T %z (%Z)") --> "00:00:00 +0000 (GMT)"`
-- `[1970, 0, 1, 0, 0, 0] | strftime("%T %z (%Z)") --> "00:00:00 +0000 (GMT)"`
+- `0 | strftime("%T %z (%Z)") --> "00:00:00 +0000 (UTC)"`
+- `[1970, 0, 1, 0, 0, 0] | strftime("%T %z (%Z)") --> "00:00:00 +0000 (UTC)"`
 - `0 | strflocaltime("%T %z (%Z)")` yields `"01:00:00 +0100 (CET)"`
 - `[1970, 0, 1, 0, 0, 0] | strflocaltime("%T %z (%Z)")` yields `"00:00:00 +0100 (CET)"`
+
+::: Compatibility
+
+`jq` prints `GMT` instead of `UTC` in the examples above; however,
+GMT is not the same as UTC.
+
+:::
 
 ### `strptime($fmt)`
 
@@ -497,8 +504,8 @@ yielding a BDT array.
 If no time zone is inferred from the input (e.g. via `%Z`), it is assumed to be UTC.
 For example:
 
-- `"1970-01-01 00:00:00"     | strptime("%F %T"   ) --> [1970, 0, 1, 0, 0, 0, 4, 0]`
-- `"1970-01-01 00:00:00 GMT" | strptime("%F %T %Z") --> [1970, 0, 1, 0, 0, 0, 4, 0]`
+- `"1970-01-01 00:00:00" | strptime("%F %T") --> [1970, 0, 1, 0, 0, 0, 4, 0]`
+- `"1970-01-01 00:00:00 Europe/Vienna" | strptime("%F %T %Q") --> [1970, 0, 1, 0, 0, 0, 4, 0]`
 
 ### `gmtime`, `localtime`
 
