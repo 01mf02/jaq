@@ -728,10 +728,10 @@ impl fmt::Display for Val {
     }
 }
 
-#[cfg(feature = "formats")]
+#[allow(dead_code)]
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-#[cfg(feature = "formats")]
+#[allow(dead_code)]
 fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }
