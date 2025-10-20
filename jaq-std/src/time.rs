@@ -23,11 +23,11 @@ fn timestamp_to_epoch<V: ValT>(ts: Timestamp, frac: bool) -> ValR<V> {
     }
 }
 
-fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime> {
+fn array_to_datetime<V: ValT>(v: &[V]) -> Option<Result<DateTime, jiff::Error>> {
     let [year, month, day, hour, min, sec]: &[V; 6] = v.get(..6)?.try_into().ok()?;
     let sec = sec.as_f64()?;
     let i8 = |v: &V| -> Option<i8> { v.as_isize()?.try_into().ok() };
-    DateTime::new(
+    Some(DateTime::new(
         year.as_isize()?.try_into().ok()?,
         i8(month)? + 1,
         i8(day)?,
@@ -36,8 +36,7 @@ fn array_to_datetime<V: ValT>(v: &[V]) -> Option<DateTime> {
         // the `as i8` cast saturates, returning a number in the range [-128, 128]
         sec.floor() as i8,
         (sec.fract() * 1e9) as i32,
-    )
-    .ok()
+    ))
 }
 
 /// Convert a `DateTime` to a "broken down time" array
@@ -87,10 +86,15 @@ pub fn to_iso8601<V: ValT>(v: &V) -> Result<String, Error<V>> {
 pub fn strftime<V: ValT>(v: &V, fmt: &str, tz: tz::TimeZone) -> ValR<V> {
     let fail = || Error::str(format_args!("cannot convert {v} to time"));
     let zoned = match v.clone().into_vec() {
-        Ok(v) => array_to_datetime(&v).ok_or_else(fail)?.to_zoned(tz).map_err(Error::str)?,
+        Ok(v) => array_to_datetime(&v)
+            .ok_or_else(fail)?
+            .and_then(|dt| dt.to_zoned(tz))
+            .map_err(Error::str)?,
         Err(_) => epoch_to_timestamp(v)?.to_zoned(tz),
     };
-    strtime::format(fmt, &zoned).map(V::from).map_err(Error::str)
+    strtime::format(fmt, &zoned)
+        .map(V::from)
+        .map_err(Error::str)
 }
 
 /// Convert an epoch timestamp to a "broken down time" array.
@@ -112,7 +116,10 @@ pub fn strptime<V: ValT>(s: &str, fmt: &str) -> ValR<V> {
 /// Parse an array into a UNIX epoch timestamp.
 pub fn mktime<V: ValT>(v: &V) -> ValR<V> {
     let fail = || Error::str(format_args!("cannot convert {v} to time"));
-    let dt = array_to_datetime(&v.clone().into_vec()?).ok_or_else(fail)?;
-    let ts = dt.in_tz("UTC").map_err(Error::str)?.timestamp();
+    let ts = array_to_datetime(&v.clone().into_vec()?)
+        .ok_or_else(fail)?
+        .and_then(|dt| dt.to_zoned(tz::TimeZone::UTC))
+        .map_err(Error::str)?
+        .timestamp();
     timestamp_to_epoch(ts, ts.subsec_nanosecond() > 0)
 }
