@@ -21,8 +21,8 @@ jobs:
         restore-keys: cargo-
 
     - uses: dtolnay/rust-toolchain@1.69
-    - name: Check jaq-std
-      working-directory: jaq-std
+    - name: Check jaq-core
+      working-directory: jaq-core
       run: cargo check
 
     - uses: dtolnay/rust-toolchain@1.70

@@ -791,7 +791,7 @@ fn time<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
 where
     for<'a> D::V<'a>: ValT,
 {
-    use chrono::{Local, Utc};
+    use jiff::tz::TimeZone;
     Box::new([
         ("fromdateiso8601", v(0), |cv| {
             bome(cv.1.try_as_str().and_then(time::from_iso8601))
@@ -800,13 +800,21 @@ where
             bome(time::to_iso8601(&cv.1).map(D::V::from))
         }),
         ("strftime", v(1), |cv| {
-            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Utc))
+            unary(cv, |v, fmt| {
+                time::strftime(&v, fmt.try_as_str()?, TimeZone::UTC)
+            })
         }),
         ("strflocaltime", v(1), |cv| {
-            unary(cv, |v, fmt| time::strftime(&v, fmt.try_as_str()?, Local))
+            unary(cv, |v, fmt| {
+                time::strftime(&v, fmt.try_as_str()?, TimeZone::system())
+            })
         }),
-        ("gmtime", v(0), |cv| bome(time::gmtime(&cv.1, Utc))),
-        ("localtime", v(0), |cv| bome(time::gmtime(&cv.1, Local))),
+        ("gmtime", v(0), |cv| {
+            bome(time::gmtime(&cv.1, TimeZone::UTC))
+        }),
+        ("localtime", v(0), |cv| {
+            bome(time::gmtime(&cv.1, TimeZone::system()))
+        }),
         ("strptime", v(1), |cv| {
             unary(cv, |v, fmt| {
                 time::strptime(v.try_as_str()?, fmt.try_as_str()?)
