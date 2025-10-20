@@ -383,10 +383,68 @@ For example:
 
 ## Date & Time
 
+The filters in this section serve to
+obtain the current time and to
+convert between different time formats, such as:
+
+- Unix epoch: Marks a point in time by the number of seconds passed since
+  January 1, 1970 00:00:00 (UTC).
+- ISO-8601 datetime string: Represents a date, a time, and a time zone as a string,
+  such as `"1970-01-01T00:00:00Z"` (corresponding to Unix epoch `0`).
+- "Broken down time" (BDT) array: Represents a date and a time as an array of the shape
+  `[year, month, day, hour, minute, second, weekday, yearday]`.
+  All components are integers, except for `second`,
+  which may be a floating-point number.
+  The `month` is counted from `0`,
+  the `weekday` is counted from Sunday (which is `0`), and
+  the `yearday` is the day in the year counted from `0`.
+  When a BDT array is used as input, only the first six components are considered.
+
+You can convert between these representations via:
+
+- Unix epoch from/to ISO 8601: `fromdate`, `todate`
+- BDT to Unix epoch: `mktime`
+- Unix epoch to BDT: `gmtime, localtime`
+- Unix epoch or BDT from/to custom string: `strptime`, `strftime`, `strflocaltime`
+
+As example, let us consider the time where the
+Hill Valley courthouse's clock tower was struck by lightning, namely
+[Saturday, November 12, 1955, at 10:04 p.m. PST](https://en.wikipedia.org/wiki/Hill_Valley_(Back_to_the_Future)#Fictional_history).
+The corresponding date can be written in ISO 8601 as
+`"1955-11-12T10:04:00-08:00"`.
+We can convert that to a Unix epoch and from there to a (UTC) BDT via:
+
+~~~
+"1955-11-12T22:04:00-08:00" | fromdate | gmtime -->
+[
+  1955,
+  10,
+  13,
+  6,
+  4,
+  0,
+  0,
+  316
+]
+~~~
+
+We can infer that at this moment, in UTC
+it was November 13
+(the BDT month is `10` and not `11`, because BDT months are counted from `0`),
+at 06:04:00.
+Furthermore, that day
+was a Sunday (because the `weekday` is `0`), which
+was the `316`-th day of the year (where `0` is the first day).
+
+::: Compatibility
+
+`jq` does not allow time zone information in ISO 8601 datetime strings.
+
+:::
+
 ### `now`
 
-This filter yields the seconds passed since January 1, 1970 (Unix epoch)
-as floating-point number.
+This filter yields the Unix epoch as floating-point number.
 
 ### `fromdate`, `todate`, `fromdateiso8601`, `todateiso8601`
 
@@ -410,7 +468,54 @@ The filters
 `fromdateiso8601` and `todateiso8601` are synonyms of
 `fromdate` and `todate`, respectively.
 
-### `strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, `localtime`
+### `strftime($fmt)`, `strflocaltime($fmt)`
+
+The filters `strftime($fmt)` and `strflocaltime($fmt)` take as input either
+a number that is interpreted as Unix epoch, or
+a BDT array.
+The filters yield a string representation of the input time, using the format `$fmt`.
+
+If the input is a Unix epoch,
+both `strftime` and `strflocaltime` interpret it as UTC timestamp.
+If the input is a BDT array, then
+`strftime` interprets input as UTC and
+`strflocaltime` interprets input as user local time.
+`strftime` outputs the time as UTC and
+`strflocaltime` outputs the time as user local time.
+
+For example, if the user is in the CET zone (+0100):
+
+- `0 | strftime("%T %z (%Z)") --> "00:00:00 +0000 (GMT)"`
+- `[1970, 0, 1, 0, 0, 0] | strftime("%T %z (%Z)") --> "00:00:00 +0000 (GMT)"`
+- `0 | strflocaltime("%T %z (%Z)")` yields `"01:00:00 +0100 (CET)"`
+- `[1970, 0, 1, 0, 0, 0] | strflocaltime("%T %z (%Z)")` yields `"00:00:00 +0100 (CET)"`
+
+### `strptime($fmt)`
+
+The filter `strptime($fmt)` takes a string and parses it using the format `$fmt`,
+yielding a BDT array.
+If no time zone is inferred from the input (e.g. via `%Z`), it is assumed to be UTC.
+For example:
+
+- `"1970-01-01 00:00:00"     | strptime("%F %T"   ) --> [1970, 0, 1, 0, 0, 0, 4, 0]`
+- `"1970-01-01 00:00:00 GMT" | strptime("%F %T %Z") --> [1970, 0, 1, 0, 0, 0, 4, 0]`
+
+### `gmtime`, `localtime`
+
+The filters `gmtime` and `localtime` take a Unix epoch as input and
+yield a corresponding BDT array, containing
+the time in UTC (`gmtime`) or in the user local time (`localtime`).
+
+For example, if the user is in the CET zone (+0100):
+
+- `0 | gmtime --> [1970, 0, 1, 0, 0, 0, 4, 0]`
+- `0 | localtime` yields `[1970, 0, 1, 1, 0, 0, 4, 0]`
+
+### `mktime`
+
+The filter `mktime` takes a BDT array that is assumed to be in UTC,
+and yields the corresponding Unix epoch.
+For example, `[1970, 0, 1, 0, 0, 0] | mktime --> 0`.
 
 
 ## SQL-style
@@ -565,4 +670,3 @@ Example:
 
 When there is no more input value left,
 in `jq`, `input` yields an error, whereas in jaq, it yields no output value.
-
