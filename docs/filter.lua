@@ -3,6 +3,17 @@ function Header(el)
   if FORMAT == "man" and el.level <= 2 then
     return el:walk{Str = function(el) return pandoc.Str(string.upper(el.text)) end}
   end
+  if FORMAT == "html" then
+    -- an empty link to this header
+    local anchor_link = pandoc.Link(
+      {},                   -- content
+      '#' .. el.identifier, -- href
+      '',                   -- title
+      {class = 'anchor', ['aria-hidden'] = 'true'} -- attributes
+    )
+    el.content:insert(anchor_link)
+    return el
+  end
 end
 
 -- Map "Advanced" and "Compatibility" sections to definition lists in man page
