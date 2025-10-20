@@ -518,24 +518,6 @@ and yields the corresponding Unix epoch.
 For example, `[1970, 0, 1, 0, 0, 0] | mktime --> 0`.
 
 
-## SQL-style
-
-jaq supports none of jq's SQL-style operators
-`INDEX`,
-`JOIN`, and
-`IN`,
-mostly for aesthetic reasons (uppercase-names) and because jq is not SQL.
-
-
-## Streaming
-
-jaq does not support `jq`'s `--stream` option;
-therefore, it also does not implement the related filters
-`truncate_stream`,
-`fromstream`, and
-`tostream`.
-
-
 ## Regular expressions
 
 All the filters in this section, such as `test`, take a string as input and
@@ -668,5 +650,49 @@ Example:
 
 ### `input`, `inputs` {#inputs}
 
+The filter `inputs` yields all the inputs in the current input file.
+For example, `jaq -n '[inputs]' <<< 1 2 3` yields `[1, 2, 3]`.
+This can be useful to fold over large (potentially infinite) amounts of values;
+for example, to create a cumulative sum over all input integers, you can use
+`jaq -n 'foreach inputs as $x (0; .+$x)'`.
+
+The filter `input` yields the next input in the current input file.
+
+::: Compatibility
+
 When there is no more input value left,
 in `jq`, `input` yields an error, whereas in jaq, it yields no output value.
+That is, in jaq, `input` is equivalent to `first(inputs)`.
+
+:::
+
+::: Advanced
+
+Both `input` and `inputs` have a *side effect*, i.e. they advance the input stream.
+That means that unlike most jq filters, `inputs` is not referentially transparent.
+It is advised to use it sparingly and with caution,
+lest you are devoured by the evil dragons of evaluation order.
+
+:::
+
+
+## Unsupported
+
+This section lists filters present in `jq`, but not in jaq.
+
+### SQL-style
+
+jaq supports none of jq's SQL-style operators
+`INDEX`,
+`JOIN`, and
+`IN`,
+mostly for aesthetic reasons (uppercase-names) and because jq is not SQL.
+
+### Streaming
+
+jaq does not support `jq`'s `--stream` option;
+therefore, it also does not implement the related filters
+`truncate_stream`,
+`fromstream`, and
+`tostream`.
+
