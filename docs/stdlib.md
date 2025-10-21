@@ -141,9 +141,33 @@ if you use it for simple comparisons such as
 
 ### `first`, `first(f)`, `last`, `last(f)` {#first-last}
 
+The filter `first(f)` yields the first output of `f` if there is one, else nothing.
+For example,
+`first(1, 2, 3) --> 1` and
+`first(empty) -->` (no output).
+
+This filter stops evaluating `f` after the first output, meaning that
+it yields an output even if `f` yields infinitely many outputs.
+For example,
+`first(repeat(0)) --> 0` and
+`first(1, def f: f; f) --> 1`.
+
+Similarly, `last(f)` yields the last output of `f` if there is one, else nothing.
+If `f` yields an error, then the first error of `f` is yielded.
+For example,
+`last(1, 2, 3) --> 3`,
+`last(empty) -->` (no output), and
+`try last(1, error("fail"), 3) catch . --> "fail"`.
+
+The filters `first` and `last` are short forms for
+`first(.[])` and `last(.[])`, respectively.
+You can use them to retrieve the first/last element of an array, such as
+`[1, 2, 3] | first, last --> 1 3`.
+
 ### `limit($n; f)` {#limit}
 
-Yields the first `$n$` outputs of `f`, or no outputs if `$n <= 0`.
+The filter `limit($n; f)` yields the first `$n$` outputs of `f`.
+If `$n <= 0`, it yields no outputs.
 For example:
 
 - `limit( 3; 1, 2      ) --> 1 2`
@@ -156,7 +180,28 @@ When `$n < 0`, `jq` yields an error instead.
 
 :::
 
+### `skip($n; f)` {#skip}
+
+The filter `skip($n; f)` yields all outputs after the first `$n$` outputs of `f`.
+If `$n <= 0`, it yields all outputs of `f`.
+For example:
+
+- `skip( 3; 1, 2      ) -->` (no output)
+- `skip( 1; 1, 2, 3, 4) --> 2 3 4`
+- `skip(-1; 1, 2      ) --> 1 2`
+
 ### `nth($i)`, `nth($i; f)` {#nth}
+
+The filter `nth($i; f)` yields the `$i`-th output of `f`.
+If `f` yields less than `$i` outputs, then this filter yields no output.
+For example:
+
+- `nth(0; 1, 2, 3) --> 1`
+- `nth(2; 1, 2, 3) --> 3`
+- `nth(3; 1, 2, 3) -->` (no output)
+
+The filter `nth($i)` is a short form for `.[$i]`; e.g.
+`[1, 2, 3] | nth(0) --> 1`.
 
 
 ## Stream generators
