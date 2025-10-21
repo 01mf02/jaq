@@ -661,8 +661,12 @@ Interesting cases include:
 
 - NaN does not equal any value, including itself; i.e.
   `nan == nan --> false`
-- Integer values equal equivalent floating-point values; i.e.
-  `1 == 1.0 --> true`
+- An integer `i` equals a float `f` if
+  `f` is finite and `i` converted to a float is equal to `f`; i.e.
+  `1 == 1.0 --> true`.
+- Arrays are equal if they have the same values; i.e.
+  `[1, 2, 3] == [1, 2, 3]`, but
+  `[3, 2, 1] != [1, 2, 3]`.
 - Objects are equal if they have the same keys and for every key,
   the associated value is equal; i.e.
   `{a: 1, b: 2} == {b: 2, a: 1} --> true`
