@@ -259,12 +259,14 @@ impl Hash for Num {
                 }
             }
             Self::Dec(d) => Self::from_dec_str(d).hash(state),
-            Self::BigInt(i) => match i.to_isize() {
-                None => {
+            Self::BigInt(i) => {
+                let f = i.to_f64().unwrap();
+                if f.is_finite() {
+                    Self::Float(f).hash(state)
+                } else {
                     state.write_u8(1);
                     i.hash(state)
                 }
-                Some(i) => Self::Int(i).hash(state),
             },
         }
     }
@@ -291,16 +293,14 @@ impl PartialEq for Num {
         match (self, other) {
             (Self::Int(x), Self::Int(y)) => x == y,
             (Self::Int(i), Self::Float(f)) | (Self::Float(f), Self::Int(i)) => {
-                float_eq(*i as f64, *f)
+                f.is_finite() && float_eq(*i as f64, *f)
             }
             (Self::BigInt(x), Self::BigInt(y)) => x == y,
             (Self::Int(i), Self::BigInt(b)) | (Self::BigInt(b), Self::Int(i)) => {
                 **b == BigInt::from(*i)
             }
             (Self::BigInt(i), Self::Float(f)) | (Self::Float(f), Self::BigInt(i)) => {
-                // integers that cannot be represented by machine-sized integers
-                // are considered unequal to any float
-                i.to_isize().is_some_and(|i| float_eq(i as f64, *f))
+                f.is_finite() && float_eq(i.to_f64().unwrap(), *f)
             }
             (Self::Float(x), Self::Float(y)) => float_eq(*x, *y),
             (Self::Dec(x), Self::Dec(y)) if Rc::ptr_eq(x, y) => true,
