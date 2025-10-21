@@ -77,9 +77,8 @@ function stopWorker() {
 document.getElementById("run").onclick = async () => startWorker();
 document.getElementById("stop").onclick = async () => stopWorker();
 
-document.addEventListener('keydown', event => {
-    // CTRL + Enter
-    if (event.ctrlKey && event.key == 'Enter') { startWorker() }
-});
+document.getElementById("input" ).oninput = async () => startWorker();
+document.getElementById("filter").oninput = async () => startWorker();
 
 getParams();
+startWorker();
