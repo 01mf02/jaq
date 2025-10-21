@@ -165,6 +165,9 @@ fn limit() {
 
 yields!(limit_overflow, "[limit(0; def f: f | .; f)]", json!([]));
 
+yields!(limit_path, "[1, 2, 3] | [path(limit(2; .[]))]", [[0], [1]]);
+yields!(skip_path, "[1, 2, 3] | [path(skip(1; .[]))]", [[1], [2]]);
+
 yields!(
     math_0_argument_scalar_filters,
     "[-2.2, -1.1, 0, 1.1, 2.2 | sin as $s | cos as $c | $s * $s + $c * $c]",

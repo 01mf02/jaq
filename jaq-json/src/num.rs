@@ -267,7 +267,7 @@ impl Hash for Num {
                     state.write_u8(1);
                     i.hash(state)
                 }
-            },
+            }
         }
     }
 }
