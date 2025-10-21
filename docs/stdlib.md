@@ -464,6 +464,31 @@ For example:
 
 ### `tobytes`
 
+The filter `tobytes` converts its input to a [byte string](#byte-strings).
+Its output depends on the type of input:
+
+- Natural number in the range `0` to `255` (`0xFF`):
+  Yields a byte string with a single byte, e.g.
+  `0 | tobytes --> b"\x00"`.
+- Text string:
+  Yields a byte string containing the underlying bytes of the text string, e.g.
+  `"Hi" | tobytes --> b"Hi"`.
+- Byte string: Yields the byte string unchanged.
+- Array: Converts each element to a byte string and yields their concatenation, e.g.
+  `[0, "Hi", [1, 255]] | tobytes --> b"\x00Hi\x01\xFF"`.
+  This is equivalent to `map(tobytes) | add`.
+- Anything else: Yields an error.
+
+This is inspired by Erlang's `iolist_to_binary` function.
+
+::: Compatibility
+
+`jq` does not have byte strings and thus does not have `tobytes`.
+`fq`, which has pioneered the `tobytes` filter, has both.
+
+:::
+
+
 ## Recursion
 
 ### `walk`
