@@ -13,10 +13,14 @@ A good overview of its syntax is given at <https://www.json.org>.
 The native data format of jaq is a superset of JSON called *XJON*
 (eXtended JavaScript Object Notation, pronounced like "action").
 
-XJON extends JSON as follows:
+XJON extends JSON with following constructs:
 
 - Line comments: `# ... \n` is interpreted as comment
 - Special floating-point numbers: `NaN`, `Infinity`, `-Infinity`
+- Numbers starting with `+`:
+  Every number that may be prefixed with `-` (minus)
+  may also be prefixed with `+` (plus), e.g.
+  `+7`, `+Infinity`.
 - UTF-8 strings with invalid code points:
   The JSON standard is slightly ambiguous whether
   strings may contain invalid UTF-8 code points.
