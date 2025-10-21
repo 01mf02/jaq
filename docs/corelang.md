@@ -791,11 +791,11 @@ The filter `$x / $y` divides two values as follows:
 
 ::: Advanced
 
-You can round-trip string division with `.[:-1][] += $y | add + ""`.
+You can round-trip string division with `join($y)`.
 For example:
 
-- `"foobarfoobazfoo" / "foo" | .[:-1][] += "foo" | add + "" --> "foobarfoobazfoo"`
-- `"🧑‍🔬 is 🤔" / "" | .[:-1][] += "" | add + "" --> "🧑‍🔬 is 🤔"`
+- `"foobarfoobazfoo" / "foo" | join("foo") --> "foobarfoobazfoo"`
+- `"🧑‍🔬 is 🤔" / "" | join("") --> "🧑‍🔬 is 🤔"`
 
 :::
 
