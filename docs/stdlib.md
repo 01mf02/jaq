@@ -383,7 +383,7 @@ a negative number for each byte of each invalid Unicode code point.
 For example:
 
 ~~~
-"Dear ☀️" + ([255] | tobytes | tostring) | explode -->
+"Dear ☀️" + (255 | tobytes | tostring) | explode -->
 [68,101,97,114,32,9728,65039,-255]
 ~~~
 
@@ -749,7 +749,60 @@ Example:
 
 ### `split`, `splits` {#splits}
 
+The filter `split($re; $flags)` yields an array of
+those parts of the input string that do *not* match the regular expression `$re`.
+For example:
+
+- `"Here be\tspaces" | split("\\s" ; "") --> ["Here", "be", "spaces"]`
+- `"  More\n\n"      | split("\\s+"; "") --> ["", "More", ""]`
+- `""                | split("\\s" ; "") --> [""]`
+
+Note that `split($re; $flags)` is equivalent to `split($re; "g" + $flags)`,
+meaning that the string is split not only by the first match, but by all matches.
+Furthermore, unlike all other filters in this section,
+`split($s)` is *not* equivalent to `split($s; $flags)`, because
+`split($s)` splits a string by
+a separator that is *not* interpreted as regular expression;
+see [`split`](#split).
+
+The filter `splits($re; $flags)` yields the elements of the array yielded by `split($re; $flags)`.
+For example,
+`"Here be\tspaces" | splits("\\s") --> "Here" "be" "spaces"`.
+The filter `splits($re)` is equivalent to `splits($re; "")`.
+
 ### `sub`, `gsub`
+
+The filter `sub($re; f; $flags)` replaces
+all parts of the input string that match `$re` by
+the output of `f`.
+Here, `f` receives an object as returned by [`capture`](#capture); that is,
+for every named capture group, it contains
+its name as key and its matched string as value.
+
+For example:
+
+~~~
+"Mr. 高橋 & Mrs. 嵯峨" | sub("(?<title>(Mr|Ms|Mrs)\\.) (?<name>\\S+)"; "\(.name) (\(.title))"; "g") -->
+"高橋 (Mr.) & 嵯峨 (Mrs.)"
+~~~
+
+When the filter `f` yields multiple outputs,
+then all potential combinations are output.
+For example:
+
+~~~
+"Thanks, fine." | sub("(?<word>\\w+)"; .word, (.word | ascii_upcase); "g") -->
+"Thanks, fine."
+"Thanks, FINE."
+"THANKS, fine."
+"THANKS, FINE."
+~~~
+
+We have following short forms:
+
+- The filter `gsub($re; f; $flags)` is equivalent to `sub($re; f; "g" + $flags)`.
+- The filter `gsub($re; f)` is equivalent to `gsub($re; f; "")`.
+- The filter  `sub($re; f)` is equivalent to  `sub($re; f; "")`.
 
 
 ## I/O
