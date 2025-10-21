@@ -21,7 +21,7 @@ There are a few rules:
 - If no _FILTER_ is given, jaq uses `.` (the [identity] filter) as filter.
 - If no _FILE_ is given, jaq reads from standard input.
 - jaq determines the format to parse a _FILE_ as follows:
-    - If [`--from`] _FORMAT_ is used, jaq uses that format.
+    - If [`--from`](#--from) _FORMAT_ is used, jaq uses that format.
     - Otherwise, if _FILE_ has a file extension known by jaq, such as
       `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`,
       jaq uses the corresponding format.
@@ -62,6 +62,12 @@ files with the extensions
 That means that
 `jaq --from cbor . myfile.cbor` is equivalent to
 `jaq . myfile.cbor`.
+
+::: Compatibility
+
+`jq` does not have this option.
+
+:::
 
 ### `-n`, `--null-input`
 
@@ -128,6 +134,12 @@ Note that not every value can be printed in every format.
 For example, TOML requires that the root value is an object, so
 `jaq --to toml <<< []`
 yields an error.
+
+::: Compatibility
+
+`jq` does not have this option.
+
+:::
 
 ### `-c`, `--compact-output`
 
