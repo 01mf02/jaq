@@ -263,8 +263,9 @@ dependencies = [
 
 [[package]]
 name = "hifijson"
-version = "0.2.3"
-source = "git+https://github.com/01mf02/hifijson#da80bf1d2dc3a001d54d32b848faff18bafd2f5d"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cfe2fde708376d2a8da67b6cb2385a3b86bbe8ef43e3076e954b9c6ffa89ff3"
 
 [[package]]
 name = "indexmap"
@@ -365,13 +366,12 @@ dependencies = [
  "aho-corasick",
  "base64",
  "bstr",
- "hifijson",
  "jaq-core",
  "jaq-json",
  "jiff",
  "libm",
  "log",
- "regex-lite",
+ "regex-bites",
  "serde_json",
  "urlencoding",
 ]
@@ -603,9 +603,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "809e8dc61f6de73b46c85f4c96486310fe304c434cfa43669d7b40f711150908"
 
 [[package]]
-name = "regex-lite"
+name = "regex-bites"
 version = "0.1.6"
-source = "git+https://github.com/01mf02/regex?branch=bytes#cd695a8ad0bfc6331fbdeae8ae1b2630595767ce"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6a15a2fa0bfda9361941c45550896ae87b15cc6c8c939ea350079670332e211"
 
 [[package]]
 name = "rustix"

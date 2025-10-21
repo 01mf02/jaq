@@ -3,7 +3,7 @@
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use bstr::ByteSlice;
-use regex_lite::bytes::{self as regex, Error, Regex, RegexBuilder};
+use regex_bites::bytes::{self as regex, Error, Regex, RegexBuilder};
 
 #[derive(Copy, Clone, Default)]
 pub struct Flags {
