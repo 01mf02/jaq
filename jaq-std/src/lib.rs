@@ -585,6 +585,19 @@ macro_rules! limit {
         }
     };
 }
+macro_rules! skip {
+    ( $run:ident ) => {
+        |mut cv| {
+            let (f, fc) = cv.0.pop_fun();
+            let n = cv.0.pop_var();
+            let pos = |n: isize| n.try_into().unwrap_or(0usize);
+            then(n.try_as_isize().map_err(Exn::from).map(pos), |n| {
+                let fm = move |(i, y): (usize, Result<_, _>)| (i >= n || y.is_err()).then_some(y);
+                Box::new(f.$run((fc, cv.1)).enumerate().filter_map(fm))
+            })
+        }
+    };
+}
 
 fn base_paths<D: DataT>() -> Box<[Filter<RunPathsPtr<D>>]>
 where
@@ -596,6 +609,7 @@ where
         ("first", f(), (first!(run), first!(paths))),
         ("last", f(), (last!(run), last!(paths))),
         ("limit", vf(), (limit!(run), limit!(paths))),
+        ("skip", vf(), (skip!(run), skip!(paths))),
     ])
 }
 

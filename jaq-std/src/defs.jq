@@ -102,8 +102,7 @@ def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
 
-def skip($n; g): foreach g as $x ($n; . - 1; if . < 0 then $x else empty end);
-def nth(n; g): last(limit(n + 1; g));
+def nth(n; g): first(skip(n; g));
 
 # Objects <-> Arrays
 def keys: keys_unsorted | sort;
