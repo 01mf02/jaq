@@ -473,11 +473,78 @@ For example:
 
 ### `tostring`
 
+The filter `tostring` converts its input to a string.
+Its output depends on the type of its input:
+
+- Text strings are returned unchanged, i.e. `"Hi" | tostring --> "Hi"`
+- Byte strings are interpreted as text string, i.e. `"Hi" | tobytes | tostring --> "Hi"`
+- Any other value is formatted compactly as if output by `jaq -c`. For example:
+  - `null | tostring --> "null"`,
+  - `[0, 1] | tostring --> "[0,1]"`,
+  - `{a: 1} | tostring --> "{\"a\":1}"`.
+
+::: Advanced
+
+String interpolation without an explicit format, such as
+`"\(null) and \([0, 1])" --> "null and [0,1]"`, behaves as if
+the output of every interpolated filter was piped through `tostring`.
+
+:::
+
 ### `tonumber`
+
+The filter `tostring` takes as input either a number or a string.
+If the input is a number, it is returned unchanged;
+if the input is a string, it is parsed to a number, failing if this does not succeed.
+For example:
+
+- `  42   | tonumber --> 42`
+- ` "42"  | tonumber --> 42`
+- `"[42]" | try tonumber catch "fail" --> "fail"`
 
 ### `toboolean`
 
+The filter `toboolean` is for booleans what `tonumber` is for numbers. 
+For example:
+
+- `  true   | toboolean --> true`
+- ` "true"  | toboolean --> true`
+- `"[true]" | try toboolean catch "fail" --> "fail"`
+
 ### `fromjson`, `tojson`
+
+The filter `fromjson` takes a string as input,
+parses it to JSON values and yields them.
+For example:
+
+~~~
+"null true 0 \"foo\" [1] {\"foo\": 1}" | fromjson -->
+ null true 0  "foo"  [1] { "foo" : 1}
+~~~
+
+The filter `tojson` takes an arbitrary value and
+outputs a string containing its JSON representation.
+For example:
+
+~~~
+ [null,true,0, "foo" ,[1],{ "foo" :1}] | tojson -->
+"[null,true,0,\"foo\",[1],{\"foo\":1}]"
+~~~
+
+Note that `tojson` behaves similarly to `tostring`, but
+when its input is a string, it will also encode it to JSON,
+instead of returning it unchanged; i.e.
+`"Hi" | tojson --> "\"Hi\""`.
+
+::: Compatibility
+
+In `jq`, `fromjson` yields an error when its input string contains multiple JSON values.
+Furthermore, in `jaq`,
+`tojson | fromjson` is equivalent to identity (`.`), whereas in `jq`,
+this is not the case, because
+`nan | tojson | fromjson` yields `null`, not `nan`.
+
+:::
 
 
 ## Date & Time
