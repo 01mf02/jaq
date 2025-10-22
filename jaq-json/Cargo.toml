@@ -41,7 +41,7 @@ serde_json = { version = "1.0.81", default-features = false, features = ["alloc"
 base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }
-hifijson = { version = "0.3.0", default-features = false, features = ["alloc", "std"], optional = true }
+hifijson = { version = "0.3.0", default-features = false, features = ["alloc", "std"], optional = true, git = "https://github.com/01mf02/hifijson", branch = "no-tokens" }
 saphyr-parser = { version = "0.0.6", optional = true }
 toml_edit = { version = "0.23.2", optional = true }
 xmlparser = { version = "0.13.6", optional = true }
