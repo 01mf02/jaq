@@ -213,25 +213,93 @@ The filter `nth($i)` is a short form for `.[$i]`; e.g.
 
 ## Selection
 
+The filters in this section classify their inputs or output them selectively.
+
 ### `select(p)` {#select}
 
-Yields its input if `p` yields a `true` value for it.
+The filter `select(p)` yields its input if `p` yields a `true` value for it.
 For example,
 `(0, 1, -1, 2, -2) | select(. >= 0) --> 0 1 2`.
 
-### `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`
+### `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects` {#select-type}
 
-Yields its input if it is of the given type.
+Any of these filters yields its input if it is of the given type, else nothing.
+For example:
 
-### `normals`, `finites`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | nulls    --> null`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | booleans --> true`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | numbers  --> 0`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | strings  --> "Hi!"`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | arrays   --> [1, 2]`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | objects  --> {"a": 1}`
+
+::: Advanced
+
+These filters are equivalent to
+`select(. == null)`,
+`select(isboolean)`,
+...,
+`select(isobject)`.
+
+:::
+
+### `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject` {#istype}
+
+For every filter in this section, like `isboolean`, ..., `isobject`, there is
+a corresponding filter in the previous section like, `booleans`, ..., `objects`.
+Any of these filters yields `true` if
+its corresponding filter in the previous section yields some output, else `false`.
+For example:
+
+- `null | isboolean --> false`, because `null | booleans -->` (no output).
+- `true | isboolean --> true `, because `true | booleans --> true`.
+
+### `normals`, `finites` {#select-number}
+
+These filters return its input if
+`isnormal` or `isfinite` is `true`, respectively, else `false`.
 
 ### `values`, `iterables`, `scalars`
 
-### `isnull`, `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject` {#istype}
+The filter `values` yields its input if it is *not* `null`, else nothing.
 
-### `isnormal`, `isfinite`
+If a value is either an array or an object,
+it is said to be *iterable*; otherwise,
+it is said to be *scalar*.
+(The [iteration](#iterating) filter `.[]` succeeds on any iterable value,
+whereas it fails on any scalar.)
 
-### `isnan`, `isinfinite`
+The filters `iterables` and `scalars` yield their input if
+it is iterable or scalar, respectively, else nothing.
+
+Examples:
+
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | values    --> true 0 "Hi!" [1, 2] {"a": 1}`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | scalars   --> null true 0 "Hi!"`
+- `null, true, 0, "Hi!", [1, 2], {a: 1} | iterables --> [1, 2] {"a": 1}`
+
+### `isnan`, `isinfinite`, `isfinite`, `isnormal` {#isnumber}
+
+The filter `isnan` yields `true` if
+its input is `NaN`, else `false`.
+Note that it is *not* equivalent to `. == nan`, because
+`nan` is not equal to itself; see [equality](#equality).
+
+The filter `isinfinite` yields `true` if
+its input is either `Infinity` or `-Infinity`, else `false`.
+
+The filter `isfinite` yields `true` if
+its input is a number that is not infinite, else `false`.
+
+The filter `isnormal` yields `true` if
+its input is a number that is neither `0`, `NaN`, nor infinite.
+
+Examples:
+
+- `nan      | isnan, isinfinite, isfinite, isnormal --> true  false true  false`
+- `infinite | isnan, isinfinite, isfinite, isnormal --> false true  false false`
+- `0        | isnan, isinfinite, isfinite, isnormal --> false false true  false`
+- `1        | isnan, isinfinite, isfinite, isnormal --> false false true  true`
 
 
 ## Membership
