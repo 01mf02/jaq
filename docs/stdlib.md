@@ -254,6 +254,12 @@ For example:
 - `null | isboolean --> false`, because `null | booleans -->` (no output).
 - `true | isboolean --> true `, because `true | booleans --> true`.
 
+::: Compatibility
+
+`jq` does not implement these filters.
+
+:::
+
 ### `normals`, `finites` {#select-number}
 
 These filters return its input if
@@ -304,15 +310,103 @@ Examples:
 
 ## Membership
 
-### `contains($x)`
+### `contains($x)`, `inside($x)`
+
+The filter `contains($x)` yields `true`
+if any of the following conditions holds, else `false`.
+
+- The input is a string and `$x` is a substring of it.
+- The input is an array, `$x` is an array, and
+  for every value `v` in `$x`,
+  there is some value in the input that `contains(v)`.
+- The input is an object, `$x` is an object, and
+  for every key-value pair `{k: v}` in `$x`,
+  there is a value for the key `k` in the input that `contains(v)`.
+- The input is `null`, boolean, or a number, and `$x` is equal to the input.
+
+Examples:
+
+- `"Hello, world!" | contains("world")  --> true`
+- `[1, 2, 3]       | contains([1, 3])   --> true`
+- `[[1, 2], 3]     | contains([3, [1]]) --> true`
+- `{a: 1, b: 2}    | contains({a: 1})   --> true`
+- `{a: [1, 2]}     | contains({a: [1]}) --> true`
+- `0               | contains(0)        --> true`
+
+The filter `inside($x)` is a flipped version of `contains`.
+For example,
+`"world" | inside("Hello, world") --> true`.
+
+::: Advanced
+
+The filter `inside($x)` is equivalent to `. as $i | $x | contains($i)`.
+
+:::
 
 ### `indices($x)`
 
-### `index($x)`, `rindex($x)`
+The filter `indices($x)` yields the following:
 
-### `inside($x)`
+- If the input and `$x` are either both strings or both arrays, then it yields
+  the indices `i` for which `.[i:][:$x | length] == $x`; e.g.
+  `"Alice, Bob, and Carol" | indices(", ") --> [5, 10]` and
+  `[0, 1, 2, 3, 1, 2, 3] | indices([1, 2]) --> [1, 4]`.
+- If the input is an array and `$x` is not an array, then it yields
+  the indices `i` for which `.[i] == $x`; e.g.
+  `[0, 1, 2, 3, 1, 2, 3] | indices(1) --> [1, 4]`.
+- Otherwise, it yields an error.
+
+This means that `[[1, 2], 3] | indices([1, 2]) --> []`, because
+the input array has neither `1` nor `2`, just `[1, 2]` and `3`.
+
+::: Advanced
+
+We can verify the property given above:
+
+~~~
+def verify($x): all(indices($x)[] as $i | .[$i:][:$x | length]; . == $x);
+("Alice, Bob, and Carol" | verify(", "  )),
+([0, 1, 2, 3, 1, 2, 3]   | verify([1, 2]))
+--> true true
+~~~
+
+:::
+
+### `index($x)`, `rindex($x)` {#index}
+
+The filters `index($x)` and `rindex($x)` are shorthand for
+`indices($x) | first` and
+`indices($x) | last`, respectively.
+For example:
+
+- `"Alice, Bob, and Carol" | index(", ") --> 5`
+- `[0, 1, 2, 3, 1, 2, 3] | rindex([1, 2]) --> 4`
+- `"Hello world!" | index(", ") --> null`
+- `[0, 1, 2] | rindex(3) --> null`
 
 ### `has($k)`, `in($x)`
+
+The filter `has($k)` yields `true` if
+`$k` is among the keys of the input, else `false`.
+For example:
+
+- `[1, 2, 3]    | has( 0 ,  3 ) --> true false`
+- `{a: 1, b: 2} | has("a", "c") --> true false`
+
+The filter `in($x)` is a flipped version of `has`, just like
+`inside` is a flipped version of `contains`.
+For example,
+`"a" | in({a: 1, b: 2}) --> true`.
+
+::: Advanced
+
+The filter `has($k)` is a more performant version of `any(keys[]; . == $k)`.
+For example:
+
+- `[1, 2, 3]    | any(keys[]; . ==  0 ) --> true`
+- `{a: 1, b: 2} | any(keys[]; . == "a") --> true`
+
+:::
 
 
 ## Path expressions
