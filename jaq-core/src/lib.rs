@@ -5,6 +5,7 @@
 //! The example below demonstrates how to use this crate.
 //! See the implementation in the `jaq` crate if you are interested in
 //! more complex use cases, such as lazy JSON file loading, error handling etc.
+//! A good starting point is [jaq::filter::parse_compile](https://github.com/01mf02/jaq/blob/main/jaq/src/filter.rs).
 //!
 //! (This example requires enabling the `serde_json` feature for `jaq-json`.)
 //!
