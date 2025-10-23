@@ -613,9 +613,68 @@ For example, to establish that `sin(pi)` is smaller than `10^-5`, we can use
 
 ### `transpose`
 
+The filter `transpose` takes an array of arrays and yields its transposition.
+
+Examples:
+
+- `[[1 ,  2, 3], [4, 5, 6]] | transpose --> [[1, 4], [2, 5], [3, 6]]`
+- `[[1], [2, 3], [4, 5, 6]] | transpose --> [[1, 2, 4], [null, 3, 5], [null, null, 6]]`
+
+::: Advanced
+
+More precisely, `transpose` yields an array `$t` that contains
+`map(length) | max` arrays of length `length`, such that
+`$t[x][y] == .[y][x]` for every `x` and `y`.
+We can verify this:
+
+~~~
+def verify: transpose as $t |
+  ($t | length) == (map(length) | max),
+  (range($t | length) as $x |
+    ($t[$x] | length) == length,
+    (range(length) as $y |
+      $t[$x][$y] == .[$y][$x]
+    )
+  );
+[[1,   2, 3], [4, 5, 6]],
+[[1], [2, 3], [4, 5, 6]] | all(verify; .) --> true true
+~~~
+
+:::
+
 ### `flatten`, `flatten($depth)`
 
 ### `bsearch($x)`
+
+The filter `bsearch($x)` takes a sorted array and
+performs a binary search for `$x` in the array.
+If the array contains `$x`, then
+the filter yields a positive `$i` such that `.[$i] == $x`; otherwise,
+the filter yields a negative `$i` such that inserting `$x` at the index `-$i-1`
+in the array would preserve its the ordering.
+
+Examples:
+
+- `[0, 4, 8] | bsearch(8, 4, 0) --> 2 1 0`
+- `[0, 4, 8] | bsearch(-2, 2, 6, 10) --> -1 -2 -3 -4`
+
+If the input array is not sorted, then the output of this filter is meaningless.
+
+::: Advanced
+
+We can verify the property above for negative `$i`.
+First, let us search for the value `6` that is not in the input array:
+
+`[0, 4, 8] | bsearch(6) --> -3`.
+
+Now, the definition postulates that we can insert `6` at the index `-$i-1`,
+which is `--3-1 --> 2`:
+
+`[0, 4, 8] | .[2:2] = [6] --> [0, 4, 6, 8]`.
+
+We can see that the resulting array is sorted.
+
+:::
 
 
 ## Strings
