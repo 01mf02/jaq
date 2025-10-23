@@ -728,10 +728,10 @@ impl fmt::Display for Val {
     }
 }
 
-#[allow(dead_code)]
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+/// Type alias for a type-erased Error
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-#[allow(dead_code)]
-fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
+/// Helper function for creating a [std::io::Error] from an arbitrary error
+pub fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }
