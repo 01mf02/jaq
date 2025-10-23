@@ -11,13 +11,11 @@ pub use crate::write::write;
 fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     loop {
         lexer.eat_whitespace();
-        if lexer.peek_next() == Some(b'#') {
-            lexer.skip_until(|c| c == b'\n');
-        } else {
-            break;
+        match lexer.peek_next() {
+            Some(b'#') => lexer.skip_until(|c| c == b'\n'),
+            next => return next,
         }
     }
-    lexer.peek_next()
 }
 
 /// Parse a sequence of JSON values.
@@ -70,8 +68,8 @@ fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::
     })
 }
 
-fn parse_signed<L: LexAlloc>(lexer: &mut L, sign: u8) -> Result<Num, hifijson::Error> {
-    Ok(match (sign, lexer.peek_next()) {
+fn parse_signed<L: LexAlloc>(sign: u8, lexer: &mut L) -> Result<Num, hifijson::Error> {
+    Ok(match (sign, lexer.discarded().peek_next()) {
         (b'+', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::INFINITY),
         (b'-', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
         (b'+', _) => parse_num(lexer, "")?,
@@ -93,7 +91,7 @@ fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
         b'b' if lexer.strip_prefix(b"b\"") => Val::byte_str(parse_string(lexer, Tag::Bytes)?),
         b'N' if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
         b'I' if lexer.strip_prefix(b"Infinity") => Val::Num(Num::Float(f64::INFINITY)),
-        sign @ (b'+' | b'-') => Val::Num(parse_signed(lexer.discarded(), sign)?),
+        sign @ (b'+' | b'-') => Val::Num(parse_signed(sign, lexer)?),
         b'0'..=b'9' => Val::Num(parse_num(lexer, "")?),
         b'"' => Val::utf8_str(parse_string(lexer.discarded(), Tag::Utf8)?),
         b'[' => Val::Arr({
@@ -108,11 +106,7 @@ fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
             let mut obj = Map::default();
             lexer.discarded().seq(b'}', ws_tk, |next, lexer| {
                 let key = parse(next, lexer)?;
-                if ws_tk(lexer) == Some(b':') {
-                    lexer.take_next();
-                } else {
-                    Err(Expect::Colon)?;
-                }
+                lexer.expect(ws_tk, b':').ok_or(Expect::Colon)?;
                 let value = parse(ws_tk(lexer).ok_or(Expect::Value)?, lexer)?;
                 obj.insert(key, value);
                 Ok::<_, hifijson::Error>(())

@@ -264,7 +264,7 @@ dependencies = [
 [[package]]
 name = "hifijson"
 version = "0.3.0"
-source = "git+https://github.com/01mf02/hifijson?branch=no-tokens#24aeb911b2b702724f7637c69f443f736f6b2553"
+source = "git+https://github.com/01mf02/hifijson?branch=no-tokens#67aef00e49ee57f677157477f3033435155f6692"
 
 [[package]]
 name = "indexmap"
