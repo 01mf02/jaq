@@ -409,7 +409,7 @@ For example:
 :::
 
 
-## Path expressions
+## Paths
 
 ### `path(f)`
 
@@ -418,25 +418,109 @@ For example:
 ### `pick(f)`
 
 
-## Paths
-
-
 ## Reduction
 
 ### `add`, `add(f)`
 
-### `any`, `any(p)`
+The filter `add(f)` yields the sum of all elements yielded by `f`, or
+`null` if `f` yields no outputs.
+For example:
+
+- `add(1, 2, 3) --> 6`
+- `add(empty) --> null`
+
+The filter `add` is a short form of `add(.[])`.
+You can use it to add all values of an array or object:
+
+- `[1, 2, 3]    | add --> 6`
+- `{a: 1, b: 2} | add --> 3`
+
+::: Advanced
+
+The filter `add(f)` is equivalent to
+`reduce f as $x (null; . + $x)`. For example:
+`reduce (1, 2, 3) as $x (null; . + $x) --> 6`.
+
+:::
+
+### `any`, `any(p)`, `any(f; p)`
+
+The filter `any(f; p)` yields `true` if
+any output of `f | p` has the boolean value `true`, else `false`.
+For example:
+
+- `any(0, 1, 2; . == 42) --> false`
+- `any(0, 1, 2; . == 42, . == 2) --> true`
+
+The filters `any(p)` and `any` are short forms of
+`any(.[]; p)` and `any(.)`, respectively.
+For example:
+
+- `[1, 2, 3] | any(. % 2 == 0) --> true`
+- `[false, true] | any --> true`
 
 ### `all`, `all(p)`, `all(f; p)`
+
+The filter `all(f; p)` yields `true` if
+all outputs of `f | p` have the boolean value `true`, else `false`.
+For example:
+
+- `all(0, 1, 2; . >  0) --> false`
+- `all(0, 1, 2; . >= 0) --> true`
+
+The filters `all(p)` and `all` are defined analogously to `any(p)` and `any`.
 
 
 ## Numbers
 
+### `infinite`, `nan`
+
+The filters `infinite` and `nan` yield the floating-point numbers
+`Infinity` and `NaN`:
+
+- `infinite --> Infinity`
+- `nan | isnan --> true`
+  (we cannot test for equality with `NaN` here, because `nan == nan --> false`)
+
+::: Advanced
+
+We can also produce `Infinity` and `NaN` by:
+
+- `1 / 0 --> Infinity`
+- `0 / 0 | isnan --> true`
+
+:::
+
 ### `abs`
+
+The filter `abs`
+yields the negation of the input if the input is smaller than `0`, else it
+yields the input.
+Note that due to this definition, strings, arrays, and objects
+are also returned unchanged, because they are larger than `0`;
+see [ordering](#ordering).
+
+Examples:
+
+- `-2.0, -1, 0, 1, 2.0 | abs --> 2.0 1 0 1 2.0`
+- `"foo", [], {}       | abs --> "foo" [] {}`
 
 ### `floor`, `round`, `ceil` {#round}
 
-### `infinite`, `nan`
+The filters `floor`, `round` and `ceil` round a number
+to its closest smaller integer,
+to its closest integer, and
+to its closest larger integer, respectively.
+For example:
+
+- ` 0.5 | floor, round, ceil -->  0  1 1`
+- ` 0.4 | floor, round, ceil -->  0  0 1`
+- ` 0.0 | floor, round, ceil -->  0  0 0`
+- `-0.4 | floor, round, ceil --> -1  0 0`
+- `-0.5 | floor, round, ceil --> -1 -1 0`
+- `0, 1 | round --> 0 1`
+- `nan | round | isnan --> true`
+- `infinite | round --> Infinity`
 
 ### `libm` functions
 
