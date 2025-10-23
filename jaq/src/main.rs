@@ -11,7 +11,7 @@ use cli::{Cli, Format};
 use core::fmt::{self, Display, Formatter};
 use filter::{run, FileReports, Filter};
 use jaq_core::{load, unwrap_valr, Vars};
-use jaq_json::{json, Val};
+use jaq_json::{invalid_data, json, Val};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -178,12 +178,6 @@ fn args(positional: &[Val], named: &[(String, Val)]) -> Val {
         (key("named"), Val::obj(named.collect())),
     ];
     Val::obj(obj.into_iter().collect())
-}
-
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
-
-fn invalid_data(e: impl Into<BoxError>) -> io::Error {
-    io::Error::new(io::ErrorKind::InvalidData, e)
 }
 
 #[derive(Debug)]
