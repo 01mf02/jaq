@@ -1,23 +1,21 @@
 //! JSON support.
 use crate::{Map, Num, Tag, Val};
 use alloc::{string::ToString, vec::Vec};
-use hifijson::token::{Expect, Lex, Token};
+use hifijson::token::{Expect, Lex};
 use hifijson::{IterLexer, LexAlloc, SliceLexer};
 use std::io;
 
 pub use crate::write::write;
 
-/// Eat whitespace/comments, then try to return a token.
-fn ws_tk<L: Lex>(lexer: &mut L) -> Option<Token> {
+/// Eat whitespace/comments, then peek at next character.
+fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     loop {
         lexer.eat_whitespace();
-        if lexer.peek_next() == Some(b'#') {
-            lexer.skip_until(|c| c == b'\n');
-        } else {
-            break;
+        match lexer.peek_next() {
+            Some(b'#') => lexer.skip_until(|c| c == b'\n'),
+            next => return next,
         }
     }
-    lexer.peek_next().map(|next| lexer.token(next))
 }
 
 /// Parse a sequence of JSON values.
@@ -31,7 +29,7 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
     use crate::invalid_data;
     let mut lexer = IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
-        let v = ws_tk(&mut lexer).map(|token| parse(token, &mut lexer).map_err(invalid_data));
+        let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));
         // always return I/O error if present, regardless of the output value!
         lexer.error.take().map(Err).or(v)
     })
@@ -70,8 +68,8 @@ fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::
     })
 }
 
-fn parse_signed<L: LexAlloc>(lexer: &mut L, sign: u8) -> Result<Num, hifijson::Error> {
-    Ok(match (sign, lexer.peek_next()) {
+fn parse_signed<L: LexAlloc>(sign: u8, lexer: &mut L) -> Result<Num, hifijson::Error> {
+    Ok(match (sign, lexer.discarded().peek_next()) {
         (b'+', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::INFINITY),
         (b'-', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
         (b'+', _) => parse_num(lexer, "")?,
@@ -80,40 +78,35 @@ fn parse_signed<L: LexAlloc>(lexer: &mut L, sign: u8) -> Result<Num, hifijson::E
     })
 }
 
-/// Parse at least one JSON value, given an initial token and a lexer.
+/// Parse a JSON value, given an initial non-whitespace character and a lexer.
 ///
 /// If the underlying lexer reads input fallibly (for example `IterLexer`),
 /// the error returned by this function might be misleading.
 /// In that case, always check whether the lexer contains an error.
-fn parse<L: LexAlloc>(token: Token, lexer: &mut L) -> Result<Val, hifijson::Error> {
-    Ok(match token {
-        Token::Other(b'n') if lexer.strip_prefix(b"null") => Val::Null,
-        Token::Other(b't') if lexer.strip_prefix(b"true") => Val::Bool(true),
-        Token::Other(b'f') if lexer.strip_prefix(b"false") => Val::Bool(false),
-        Token::Other(b'b') if lexer.strip_prefix(b"b\"") => {
-            Val::byte_str(parse_string(lexer, Tag::Bytes)?)
-        }
-        Token::Other(b'N') if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
-        Token::Other(b'I') if lexer.strip_prefix(b"Infinity") => {
-            Val::Num(Num::Float(f64::INFINITY))
-        }
-        Token::Other(sign @ (b'+' | b'-')) => Val::Num(parse_signed(lexer.discarded(), sign)?),
-        Token::Other(b'0'..=b'9') => Val::Num(parse_num(lexer, "")?),
-        Token::Quote => Val::utf8_str(parse_string(lexer, Tag::Utf8)?),
-        Token::LSquare => Val::Arr({
+fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
+    Ok(match next {
+        b'n' if lexer.strip_prefix(b"null") => Val::Null,
+        b't' if lexer.strip_prefix(b"true") => Val::Bool(true),
+        b'f' if lexer.strip_prefix(b"false") => Val::Bool(false),
+        b'b' if lexer.strip_prefix(b"b\"") => Val::byte_str(parse_string(lexer, Tag::Bytes)?),
+        b'N' if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
+        b'I' if lexer.strip_prefix(b"Infinity") => Val::Num(Num::Float(f64::INFINITY)),
+        sign @ (b'+' | b'-') => Val::Num(parse_signed(sign, lexer)?),
+        b'0'..=b'9' => Val::Num(parse_num(lexer, "")?),
+        b'"' => Val::utf8_str(parse_string(lexer.discarded(), Tag::Utf8)?),
+        b'[' => Val::Arr({
             let mut arr = Vec::new();
-            lexer.seq(Token::RSquare, ws_tk, |token, lexer| {
-                arr.push(parse(token, lexer)?);
+            lexer.discarded().seq(b']', ws_tk, |next, lexer| {
+                arr.push(parse(next, lexer)?);
                 Ok::<_, hifijson::Error>(())
             })?;
             arr.into()
         }),
-        Token::LCurly => Val::obj({
+        b'{' => Val::obj({
             let mut obj = Map::default();
-            lexer.seq(Token::RCurly, ws_tk, |token, lexer| {
-                let is_colon = |t: &Token| *t == Token::Colon;
-                let key = parse(token, lexer)?;
-                ws_tk(lexer).filter(is_colon).ok_or(Expect::Colon)?;
+            lexer.discarded().seq(b'}', ws_tk, |next, lexer| {
+                let key = parse(next, lexer)?;
+                lexer.expect(ws_tk, b':').ok_or(Expect::Colon)?;
                 let value = parse(ws_tk(lexer).ok_or(Expect::Value)?, lexer)?;
                 obj.insert(key, value);
                 Ok::<_, hifijson::Error>(())
