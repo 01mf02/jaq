@@ -141,3 +141,63 @@ def next: [., .[2] + (1,2), .];
 This now runs almost instantaneously, and gives us the answer `2`.
 Going back to the original puzzle, because `X = 0`, `Y = 1`, `Z = 2`,
 the final answer to the puzzle is `Z`.
+
+
+## HTML scraping
+
+I wanted to extract the
+[list of examples from the CBOR specification](https://www.rfc-editor.org/rfc/rfc8949.html#name-examples-of-encoded-cbor-da),
+in order to create a test suite for the CBOR encoder/decoder in jaq.
+For this, I copied the relevant section from the HTML source code and
+pasted it into `examples/cbor-examples.xhtml`.
+The interesting parts look like this:
+
+~~~ html
+<table>
+<tbody>
+<tr>
+  <td class="text-left" rowspan="1" colspan="1">25</td>
+  <td class="text-left" rowspan="1" colspan="1">0x1819</td>
+</tr>
+<tr>
+  <td class="text-left" rowspan="1" colspan="1">100</td>
+  <td class="text-left" rowspan="1" colspan="1">0x1864</td>
+</tr>
+</tbody>
+</table>
+~~~
+
+Here, I was interested in the pairs `25` / `0x1819` and `100` / `0x1864`,
+meaning that the number `25` is encoded in CBOR as `0x1819`.
+
+Finally, I came up with a jq program to extract this data.
+It consists of the following tasks:
+
+1. Select all `<tr>` elements with `.. | select(.t? == "tr")`.
+2. Get its children with `.c`.
+3. Iterate over the children with `.[]` and get their children with `.c?[]`.
+
+(I use `.c?` here instead of `.c` because XML is whitespace-sensitive, so in
+`<tr> <td></td> </tr>`, the `<tr>` element has actually three children, namely
+two space strings `" "` and the `<td>` element.
+Indexing the strings with `.c` yields an error, whereas
+indexing them with `.c?` just yields nothing, allowing us to ignore the space.)
+
+We can see the effects of that on a slightly simplified version of the HTML:
+
+~~~
+"<table><tr> <td>25</td> <td>0x1819</td> </tr><tr> <td>100</td> <td>0x1864</td> </tr></table>" | fromxml |
+.. | select(.t? == "tr").c | [.[].c?[]] -->
+[ "25", "0x1819"]
+["100", "0x1864"]
+~~~
+
+To run this via the CLI:
+
+    jaq '.. | select(.t? == "tr").c | [.[].c?[]]' examples/cbor-examples.xhtml
+
+We can create a series of tests as follows:
+
+    jaq '.. | select(.t? == "tr").c | [.[].c?[]] | @json "jc(\(.[0]), \(.[1][2:]));"' examples/cbor-examples.xhtml -r
+
+I used exactly this command to create a draft for jaq's CBOR parsing test suite.
