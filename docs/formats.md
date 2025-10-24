@@ -31,11 +31,13 @@ XJON extends JSON with following constructs:
   where jq takes linear time due to UTF-8 validation.
 - Byte strings:
   A byte string is created via `b"..."`, where `...` is a sequence of:
+
     - bytes in the range 0x20 to (including) 0xFF,
       excluding the ASCII characters `'"'` and `'\'`
     - an escape sequence, starting with a backslash (`'\'`) and followed by
       `b`, `f`, `n`, `r`, `t`, `'"'`, `'\'`, or
       `xHH`, where `HH` is a hexadecimal number
+
   For example: `b"Here comes \xFF, dadadada\nHere comes \xFF\nAnd I say: \"It's alright\"\x00"`.
   Byte strings of this shape can also be found in other languages, like
   Rust & Python (with leading `b`) and JavaScript & C (without leading `b`).
@@ -93,19 +95,19 @@ making it suitable for round-tripping.
 
 As an example, consider the following input:
 
-~~~ xml
+``` xml
 <a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>
-~~~
+```
 
 We can see its internal representation in jaq by:
 
-~~~
+```
 $ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>' | jaq --from xml .
-~~~
+```
 
 This yields the following JSON:
 
-~~~ json
+``` json
 {
   "t": "a",
   "a": { "href": "https://www.w3.org" },
@@ -115,7 +117,7 @@ This yields the following JSON:
     ")"
   ]
 }
-~~~
+```
 
 ### Tags or The TAC Architecture
 
@@ -130,29 +132,29 @@ Tags are represented by "TAC" objects. A TAC object may have the following field
 
 An example query to obtain all links in an XHTML file:
 
-~~~ jq
+``` jq
 .. | select(.t? == "a") | .a.href
-~~~
+```
 
 We can also transform input XML and yield output XML.
 For example, to transform all `em` tags to `i` tags:
 
-~~~ jq
+``` jq
 (.. | select(.t? == "em") | .t) = "i"
-~~~
+```
 
 To yield XML output instead of JSON output, use the option `--to xml`:
 
-~~~
+```
 $ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>' | jaq --from xml --to xml '(.. | select(.t? == "em") | .t) = "i"'
 <a href="https://www.w3.org">World Wide Web Consortium (<i>W3C</i>)</a>
-~~~
+```
 
 Finally, we can extract all text from an XML file (discarding CDATA blocks):
 
-~~~ jq
+``` jq
 def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
-~~~
+```
 
 ### Other XML values
 
@@ -174,7 +176,7 @@ def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
 
 To put all of this together, consider the following XML file (`examples/test.xhtml`):
 
-~~~ xml
+``` xml
 <?xml version='1.0'?>
 <?xml-stylesheet href="common.css"?>
 <!DOCTYPE html>
@@ -184,11 +186,11 @@ To put all of this together, consider the following XML file (`examples/test.xht
     <![CDATA[Hello & goodbye!]]><br/>
   </body>
 </html>
-~~~
+```
 
 Running `jaq . examples/test.xhtml` yields the following output:
 
-~~~ json
+``` json
 {
   "xmldecl": {
     "version": "1.0"
@@ -232,4 +234,4 @@ Running `jaq . examples/test.xhtml` yields the following output:
     "\n"
   ]
 }
-~~~
+```

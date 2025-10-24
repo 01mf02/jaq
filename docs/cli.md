@@ -1,4 +1,6 @@
-# Command-line interface {#cli}
+{#cli}
+
+# Command-line interface
 
 Running
 `jaq`\ \[_OPTION_\]...\ \[_FILTER_\]\ \[_FILE_\]...
@@ -6,8 +8,10 @@ performs the following steps:
 
 - Parse _FILTER_ as jq program; see [jq language](#jq-lang)
 - For each _FILE_:
+
     - Parse _FILE_ to a stream of values
     - For each input value in the file:
+
         - Run _FILTER_ on the input value and print its output values
 
 For example, `jaq '.name?' persons.json`
@@ -21,6 +25,7 @@ There are a few rules:
 - If no _FILTER_ is given, jaq uses `.` (the [identity] filter) as filter.
 - If no _FILE_ is given, jaq reads from standard input.
 - jaq determines the format to parse a _FILE_ as follows:
+
     - If [`--from`](#--from) _FORMAT_ is used, jaq uses that format.
     - Otherwise, if _FILE_ has a file extension known by jaq, such as
       `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`,
@@ -47,7 +52,9 @@ You can remedy this by using
 
 ## Input options
 
-### `--from` _FORMAT_ {#--from}
+{#--from}
+
+### `--from` _FORMAT_
 
 Interpret all input files as _FORMAT_.
 For example,
@@ -80,7 +87,9 @@ The inputs can still be obtained via the [`inputs`](#inputs) filter; for example
 `yes true | jaq -n 'first(inputs)'` yields `true`.
 This can be useful to fold over all inputs with [`reduce` / `foreach`](#reduce-foreach).
 
-### `-R`, `--raw-input` {#--raw-input}
+{#--raw-input}
+
+### `-R`, `--raw-input`
 
 Read lines of the input as sequence of strings.
 For example,
@@ -125,7 +134,9 @@ for example, to achieve the output of
 
 ## Output options
 
-### `--to` _FORMAT_ {#--to}
+{#--to}
+
+### `--to` _FORMAT_
 
 Print all output values in the given _FORMAT_.
 Any _FORMAT_ accepted by [`--from`](#--from) can be used here.
@@ -169,7 +180,9 @@ This is particularly useful in combination with `--raw-output` (`-r`); for examp
 `jaq -jr <<< '"Hello" " " "World" "\n"'` yields the output `Hello World`
 (with trailing newline).
 
-### `-i`, `--in-place` {#--in-place}
+{#--in-place}
+
+### `-i`, `--in-place`
 
 Overwrite input file with its output.
 For example,
@@ -225,7 +238,9 @@ Use _N_ spaces for indentation (default: 2).
 
 ## Compilation options
 
-### `-f`, `--from-file` {#--from-file}
+{#--from-file}
+
+### `-f`, `--from-file`
 
 Read filter from a file given by filter argument.
 

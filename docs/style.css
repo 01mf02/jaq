@@ -34,6 +34,13 @@ nav a {
     text-decoration: none;
 }
 
+h1 > a,
+h2 > a,
+h3 > a {
+    text-decoration: inherit;
+    color: inherit;
+}
+
 section#main {
     flex: 3;
 }
@@ -82,25 +89,6 @@ code {
     border-left: .25em solid #cf222e;
     padding: 10px 20px;
     margin: 20px 0;
-}
-
-/* show the anchor links in headings if one hovers over the heading. */
-.anchor::before {
-    content: '🔗';
-    font-size: 80%;
-    opacity: 0.15;
-    padding-left: 0.5em;
-}
-.anchor {
-    text-decoration: none;
-}
-h1:hover > .anchor::before,
-h2:hover > .anchor::before,
-h3:hover > .anchor::before,
-h4:hover > .anchor::before,
-h5:hover > .anchor::before,
-h6:hover > .anchor::before {
-    opacity: 1;
 }
 
 @media(max-width: 660px) {

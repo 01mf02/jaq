@@ -3,23 +3,12 @@ function Header(el)
   if FORMAT == "man" and el.level <= 2 then
     return el:walk{Str = function(el) return pandoc.Str(string.upper(el.text)) end}
   end
-  if FORMAT == "html" then
-    -- an empty link to this header
-    local anchor_link = pandoc.Link(
-      {},                   -- content
-      '#' .. el.identifier, -- href
-      '',                   -- title
-      {class = 'anchor', ['aria-hidden'] = 'true'} -- attributes
-    )
-    el.content:insert(anchor_link)
-    return el
-  end
 end
 
 -- Map "Advanced" and "Compatibility" sections to definition lists in man page
 function Div(el)
-  if FORMAT == "man" then
-    local class = el.classes[1]
+  local class = el.classes[1]
+  if FORMAT == "man" and class ~= "section" then
     return pandoc.DefinitionList({{pandoc.Emph(class), el.content}})
   end
 end
@@ -82,6 +71,30 @@ end
 
 function trim(s)
   return s:match"^%s*(.*)":match"(.-)%s*$"
+end
+
+-- Make headings links to their ancestor sections
+function Pandoc(doc)
+  if FORMAT == "man" then
+    return doc
+  end
+
+  local current_sections = {}
+
+  local function walk_blocks(blocks)
+    for _, blk in pairs(blocks) do
+      if blk.t == "Div" and blk.classes[1] == "section" then
+        table.insert(current_sections, blk.identifier)
+        walk_blocks(blk.content)
+        table.remove(current_sections)
+      elseif blk.t == "Header" then
+        local ancestor_id = current_sections[#current_sections]
+        blk.content = {pandoc.Link(blk.content, "#" .. ancestor_id)}
+      end
+    end
+  end
+  walk_blocks(doc.blocks)
+  return doc
 end
 
 -- Print unit tests when running `pandoc --from filter.lua`

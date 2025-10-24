@@ -1,4 +1,6 @@
-# Standard library {#stdlib}
+{#stdlib}
+
+# Standard library
 
 ## Basic
 
@@ -17,7 +19,9 @@ which uses `empty` under the hood.
 
 :::
 
-### `error`, `error(f)` {#error}
+{#error}
+
+### `error`, `error(f)`
 
 The filter `error` takes its input and throws an error with the input as payload.
 The filter `error(f)` is equivalent to `f | error`.
@@ -37,7 +41,9 @@ The output of the filter `length` depends on its input type:
 - array: the number of values, i.e. `[1, [2, 3], 4] | length --> 3`
 - object: the number of key-value pairs, i.e. `{a: 0, b: 1} | length --> 2`
 
-### `keys`, `keys_unsorted` {#keys}
+{#keys}
+
+### `keys`, `keys_unsorted`
 
 The filter `keys_unsorted` yields an array that contains
 all keys if the input is an object or
@@ -58,7 +64,9 @@ The filter `keys_unsorted` is equivalent to
 
 :::
 
-### `map(f)`, `map_values(f)` {#map}
+{#map}
+
+### `map(f)`, `map_values(f)`
 
 The filter `map(f)` obtains all values of the input (via `.[]`),
 applies `f` to the values, and collects all results into an array.
@@ -82,7 +90,9 @@ the filter `map_values(f)` is equivalent to `.[] |= f`.
 
 :::
 
-### `to_entries`, `from_entries`, `with_entries(f)` {#entries}
+{#entries}
+
+### `to_entries`, `from_entries`, `with_entries(f)`
 
 The filter `to_entries` takes as input an array or an object.
 It converts them to an array of objects of the shape
@@ -139,7 +149,9 @@ if you use it for simple comparisons such as
 
 ## Stream consumers
 
-### `first`, `first(f)`, `last`, `last(f)` {#first-last}
+{#first-last}
+
+### `first`, `first(f)`, `last`, `last(f)`
 
 The filter `first(f)` yields the first output of `f` if there is one, else nothing.
 For example,
@@ -164,7 +176,9 @@ The filters `first` and `last` are short forms for
 You can use them to retrieve the first/last element of an array, such as
 `[1, 2, 3] | first, last --> 1 3`.
 
-### `limit($n; f)` {#limit}
+{#limit}
+
+### `limit($n; f)`
 
 The filter `limit($n; f)` yields the first `$n$` outputs of `f`.
 If `$n <= 0`, it yields no outputs.
@@ -180,7 +194,9 @@ When `$n < 0`, `jq` yields an error instead.
 
 :::
 
-### `skip($n; f)` {#skip}
+{#skip}
+
+### `skip($n; f)`
 
 The filter `skip($n; f)` yields all outputs after the first `$n$` outputs of `f`.
 If `$n <= 0`, it yields all outputs of `f`.
@@ -190,7 +206,9 @@ For example:
 - `skip( 1; 1, 2, 3, 4) --> 2 3 4`
 - `skip(-1; 1, 2      ) --> 1 2`
 
-### `nth($i)`, `nth($i; f)` {#nth}
+{#nth}
+
+### `nth($i)`, `nth($i; f)`
 
 The filter `nth($i; f)` yields the `$i`-th output of `f`.
 If `f` yields less than `$i` outputs, then this filter yields no output.
@@ -206,7 +224,9 @@ The filter `nth($i)` is a short form for `.[$i]`; e.g.
 
 ## Stream generators
 
-### `range($upto)`, `range($from; $upto)`, `range($from; $upto; $step)` {#range}
+{#range}
+
+### `range($upto)`, `range($from; $upto)`, `range($from; $upto; $step)`
 
 The filter `range($from; $upto; $step)`
 adds `$step` to `$from` until it exceeds `$upto`.
@@ -235,7 +255,7 @@ that prohibit non-numeric arguments.
 
 The filter is equivalent to:
 
-~~~
+```
 def range($from; $to; $by): $from |
    if $by > 0 then while(.  < $to; . + $by)
  elif $by < 0 then while(.  > $to; . + $by)
@@ -243,7 +263,7 @@ def range($from; $to; $by): $from |
    end;
 range(1; 10; 2) -->
 1 3 5 7 9
-~~~
+```
 
 For that reason, we can also use it with other values than numbers:
 
@@ -282,13 +302,17 @@ It returns all values recursively contained in the input, e.g.
 
 The filters in this section classify their inputs or output them selectively.
 
-### `select(p)` {#select}
+{#select}
+
+### `select(p)`
 
 The filter `select(p)` yields its input if `p` yields a `true` value for it.
 For example,
 `(0, 1, -1, 2, -2) | select(. >= 0) --> 0 1 2`.
 
-### `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects` {#select-type}
+{#select-type}
+
+### `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`
 
 Any of these filters yields its input if it is of the given type, else nothing.
 For example:
@@ -310,7 +334,9 @@ These filters are equivalent to
 
 :::
 
-### `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject` {#istype}
+{#istype}
+
+### `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject`
 
 For every filter in this section, like `isboolean`, ..., `isobject`, there is
 a corresponding filter in the previous section like, `booleans`, ..., `objects`.
@@ -327,7 +353,9 @@ For example:
 
 :::
 
-### `normals`, `finites` {#select-number}
+{#select-number}
+
+### `normals`, `finites`
 
 These filters return its input if
 `isnormal` or `isfinite` is `true`, respectively, else `false`.
@@ -351,7 +379,9 @@ Examples:
 - `null, true, 0, "Hi!", [1, 2], {a: 1} | scalars   --> null true 0 "Hi!"`
 - `null, true, 0, "Hi!", [1, 2], {a: 1} | iterables --> [1, 2] {"a": 1}`
 
-### `isnan`, `isinfinite`, `isfinite`, `isnormal` {#isnumber}
+{#isnumber}
+
+### `isnan`, `isinfinite`, `isfinite`, `isnormal`
 
 The filter `isnan` yields `true` if
 its input is `NaN`, else `false`.
@@ -430,16 +460,18 @@ the input array has neither `1` nor `2`, just `[1, 2]` and `3`.
 
 We can verify the property given above:
 
-~~~
+```
 def verify($x): all(indices($x)[] as $i | .[$i:][:$x | length]; . == $x);
 ("Alice, Bob, and Carol" | verify(", "  )),
 ([0, 1, 2, 3, 1, 2, 3]   | verify([1, 2]))
 --> true true
-~~~
+```
 
 :::
 
-### `index($x)`, `rindex($x)` {#index}
+{#index}
+
+### `index($x)`, `rindex($x)`
 
 The filters `index($x)` and `rindex($x)` are shorthand for
 `indices($x) | first` and
@@ -572,7 +604,9 @@ Examples:
 - `-2.0, -1, 0, 1, 2.0 | abs --> 2.0 1 0 1 2.0`
 - `"foo", [], {}       | abs --> "foo" [] {}`
 
-### `floor`, `round`, `ceil` {#round}
+{#round}
+
+### `floor`, `round`, `ceil`
 
 The filters `floor`, `round` and `ceil` round a number
 to its closest smaller integer,
@@ -673,10 +707,10 @@ For example, to establish that `sin(pi)` is smaller than `10^-5`, we can use
 The filter `sort` takes an array and sorts it.
 For example:
 
-~~~
+```
 [true, 1, "abc", [1], {"a": 1}, null, false, 0, "ABC", [], {}] | sort -->
 [null, false, true, 0, 1, "ABC", "abc", [], [1], {}, {"a": 1}]
-~~~
+```
 
 The filter `sort_by(f)` evaluates
 the filter `f` for each value in the input array, and
@@ -752,7 +786,7 @@ More precisely, `transpose` yields an array `$t` that contains
 `$t[x][y] == .[y][x]` for every `x` and `y`.
 We can verify this:
 
-~~~
+```
 def verify: transpose as $t |
   ($t | length) == (map(length) | max),
   (range($t | length) as $x |
@@ -763,11 +797,13 @@ def verify: transpose as $t |
   );
 [[1,   2, 3], [4, 5, 6]],
 [[1], [2, 3], [4, 5, 6]] | all(verify; .) --> true true
-~~~
+```
 
 :::
 
-### `flatten`, `flatten($depth)` {#flatten}
+{#flatten}
+
+### `flatten`, `flatten($depth)`
 
 The filter `flatten` flattens input arrays, and
 the filter `flatten($depth)` flattens input arrays up to a certain depth.
@@ -785,7 +821,7 @@ Note that `flatten` does not impact arrays that are descendants of an object.
 
 We can define `flatten/0` and `flatten/1` as:
 
-~~~
+```
 def flattens    : if isarray             then .[] | flattens       end;
 def flattens($d): if isarray and $d >= 0 then .[] | flattens($d-1) end;
 def flatten    : [flattens    ];
@@ -795,11 +831,13 @@ def flatten($d): [flattens($d)];
 [1, [2, [3]], {"a": [1, [2]]}]
 [1,  2, [3] , {"a": [1, [2]]}]
 [1,  2,  3  , {"a": [1, [2]]}]
-~~~
+```
 
 :::
 
-### `bsearch($x)` {#bsearch}
+{#bsearch}
+
+### `bsearch($x)`
 
 The filter `bsearch($x)` takes a sorted array and
 performs a binary search for `$x` in the array.
@@ -887,20 +925,20 @@ a positive number for each valid Unicode code points of the input string and
 a negative number for each byte of each invalid Unicode code point.
 For example:
 
-~~~
+```
 "Dear ☀️" + (255 | tobytes | tostring) | explode -->
 [68,101,97,114,32,9728,65039,-255]
-~~~
+```
 
 Here, we can see that `"☀️"` has turned into two code points, namely
 `9728` and `65039`, whereas the invalid `FF` byte (= 255) has become `-255`.
 
 The inverse filter of `explode` is `implode`:
 
-~~~
+```
 [68,101,97,114,32,9728,65039, -255] | implode[:-1] -->
 "Dear ☀️"
-~~~
+```
 
 (I omitted the `FF` byte at the end, because it is hard to save in a text editor.)
 
@@ -911,7 +949,9 @@ returns and accepts only natural numbers in `explode` and `implode`.
 
 :::
 
-### `split($s)` {#split}
+{#split}
+
+### `split($s)`
 
 This filter yields `. / $s` if its input `.` and `$s` are both strings, else it fails.
 See the section on [division](#mul-div) for details.
@@ -996,7 +1036,9 @@ This is inspired by Erlang's `iolist_to_binary` function.
 
 ## Recursion
 
-### `walk(f)` {#walk}
+{#walk}
+
+### `walk(f)`
 
 The filter `walk(f)` recursively updates its input with `f`.
 For example:
@@ -1008,26 +1050,26 @@ For example:
 In jaq, `walk(f)` is defined as `.. |= f`, whereas
 in `jq`, a definition similar to the following is used:
 
-~~~
+```
 def walk(f): def rec: (.[]? |= rec) | f; rec;
-~~~
+```
 
 This is a more efficient version of:
 
-~~~
+```
 def walk(f): (.[]? |= walk(f)) | f;
-~~~
+```
 
 We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
 First, let us recall that `.. |= f` is equivalent to the following in jaq:
 
-~~~
+```
 def rec_up: (.[]? | rec_up), .; rec_up |= f
-~~~
+```
 
 We can thus unfold `.. |= f`:
 
-~~~
+```
 ..                   |= f  === (unfolding .. |= f)
 rec_up               |= f  === (unfolding rec_up)
 ((.[]? | rec_up), .) |= f  === (because (l, r) |= f  ===  (l |= f) | (r |= f))
@@ -1035,7 +1077,7 @@ rec_up               |= f  === (unfolding rec_up)
 ((.[]? | rec_up) |= f)  | f         === (because (l | r) |= f  ===  l |= (r |= f))
 (.[]? |= (rec_up |= f)) | f         === (because rec_up |= f  ===  .. |= f)
 (.[]? |= (.. |= f))     | f
-~~~
+```
 
 We can see thus that
 `.. |= f` is equivalent to
@@ -1061,6 +1103,7 @@ Its output depends on the type of its input:
 - Text strings are returned unchanged, i.e. `"Hi" | tostring --> "Hi"`
 - Byte strings are interpreted as text string, i.e. `"Hi" | tobytes | tostring --> "Hi"`
 - Any other value is formatted compactly as if output by `jaq -c`. For example:
+
   - `null | tostring --> "null"`,
   - `[0, 1] | tostring --> "[0,1]"`,
   - `{a: 1} | tostring --> "{\"a\":1}"`.
@@ -1099,19 +1142,19 @@ The filter `fromjson` takes a string as input,
 parses it to JSON values and yields them.
 For example:
 
-~~~
+```
 "null true 0 \"foo\" [1] {\"foo\": 1}" | fromjson -->
  null true 0  "foo"  [1] { "foo" : 1}
-~~~
+```
 
 The filter `tojson` takes an arbitrary value and
 outputs a string containing its JSON representation.
 For example:
 
-~~~
+```
  [null,true,0, "foo" ,[1],{ "foo" :1}] | tojson -->
 "[null,true,0,\"foo\",[1],{\"foo\":1}]"
-~~~
+```
 
 Note that `tojson` behaves similarly to `tostring`, but
 when its input is a string, it will also encode it to JSON,
@@ -1162,7 +1205,7 @@ The corresponding date can be written in ISO 8601 as
 `"1955-11-12T10:04:00-08:00"`.
 We can convert that to a Unix epoch and from there to a (UTC) BDT via:
 
-~~~
+```
 "1955-11-12T22:04:00-08:00" | fromdate | gmtime -->
 [
   1955,
@@ -1174,7 +1217,7 @@ We can convert that to a Unix epoch and from there to a (UTC) BDT via:
   0,
   316
 ]
-~~~
+```
 
 We can infer that at this moment, in UTC
 it was November 13
@@ -1329,6 +1372,7 @@ The filter `match` yields an object for every part of the input that matches the
 - `"length"`: the number of characters of the match 
 - `"string"`: the contents of the match
 - `"captures"`: an array with an object for every capture group, containing:
+
     - `"offset"`,
     - `"length"`,
     - `"string"`: as above, but for the capture group instead of the whole match
@@ -1336,7 +1380,7 @@ The filter `match` yields an object for every part of the input that matches the
 
 Example:
 
-~~~
+```
 "v2.0, v3.0" | match("v(?<maj>[0-9]+)\\.([0-9]+)"; "g") -->
 {
   "offset": 0,
@@ -1374,7 +1418,7 @@ Example:
     }
   ]
 }
-~~~
+```
 
 ### `capture`
 
@@ -1384,7 +1428,7 @@ the group name as key and its matched string as value.
 
 Example:
 
-~~~
+```
 "v2.0, v3.0" | capture("v(?<maj>[0-9]+)\\.(?<min>[0-9]+)"; "g") -->
 {
   "maj": "2",
@@ -1394,9 +1438,11 @@ Example:
   "maj": "3",
   "min": "0"
 }
-~~~
+```
 
-### `split`, `splits` {#splits}
+{#splits}
+
+### `split`, `splits`
 
 The filter `split($re; $flags)` yields an array of
 those parts of the input string that do *not* match the regular expression `$re`.
@@ -1430,22 +1476,22 @@ its name as key and its matched string as value.
 
 For example:
 
-~~~
+```
 "Mr. 高橋 & Mrs. 嵯峨" | sub("(?<title>(Mr|Ms|Mrs)\\.) (?<name>\\S+)"; "\(.name) (\(.title))"; "g") -->
 "高橋 (Mr.) & 嵯峨 (Mrs.)"
-~~~
+```
 
 When the filter `f` yields multiple outputs,
 then all potential combinations are output.
 For example:
 
-~~~
+```
 "Thanks, fine." | sub("(?<word>\\w+)"; .word, (.word | ascii_upcase); "g") -->
 "Thanks, fine."
 "Thanks, FINE."
 "THANKS, fine."
 "THANKS, FINE."
-~~~
+```
 
 We have following short forms:
 
@@ -1456,7 +1502,9 @@ We have following short forms:
 
 ## I/O
 
-### `input`, `inputs` {#inputs}
+{#inputs}
+
+### `input`, `inputs`
 
 The filter `inputs` yields all the inputs in the current input file.
 For example, `jaq -n '[inputs]' <<< 1 2 3` yields `[1, 2, 3]`.
