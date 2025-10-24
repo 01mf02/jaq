@@ -172,7 +172,7 @@ def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
   `<?xml-stylesheet href="common.css"?>`{.xml} is converted to
   `{"pi": {"target": "xml-stylesheet", "content": "href=\"common.css\""}}`{.json}.
 
-To put all of this together, consider the following XML file (`test.xhtml`):
+To put all of this together, consider the following XML file (`examples/test.xhtml`):
 
 ~~~ xml
 <?xml version='1.0'?>
@@ -186,7 +186,7 @@ To put all of this together, consider the following XML file (`test.xhtml`):
 </html>
 ~~~
 
-Running `jaq . test.xhtml` yields the following output:
+Running `jaq . examples/test.xhtml` yields the following output:
 
 ~~~ json
 {
@@ -233,21 +233,3 @@ Running `jaq . test.xhtml` yields the following output:
   ]
 }
 ~~~
-
-### CBOR example
-
-I wanted to extract the
-[list of examples from the CBOR specification](https://www.rfc-editor.org/rfc/rfc8949.html#name-examples-of-encoded-cbor-da),
-in order to create a test suite for the CBOR encoder/decoder in jaq.
-For this, I copied the relevant section from the HTML source code and
-pasted it into `examples/cbor-examples.xhtml`.
-Finally, I came up with the following command to construct
-pairs of JSON and corresponding CBOR data:
-
-    jaq '.. | select(.t? == "tr").c | [.[].c?[]]' examples/cbor-examples.xhtml
-
-We can create a series of tests with the following call:
-
-    jaq '.. | select(.t? == "tr").c | [.[].c?[]] | @json "jc(\(.[0]), \(.[1][2:]));"' examples/cbor-examples.xhtml -r
-
-This has been used to create a draft for jaq's CBOR parsing test suite.
