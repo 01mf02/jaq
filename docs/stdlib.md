@@ -206,9 +206,76 @@ The filter `nth($i)` is a short form for `.[$i]`; e.g.
 
 ## Stream generators
 
-### `range`
+### `range($upto)`, `range($from; $upto)`, `range($from; $upto; $step)` {#range}
 
-### `recurse`
+The filter `range($from; $upto; $step)`
+adds `$step` to `$from` until it exceeds `$upto`.
+For example:
+
+- `range(1;  9;  2) --> 1 3 5 7`
+- `range(1; 10;  2) --> 1 3 5 7 9`
+- `range(9;  1; -2) --> 9 7 5 3`
+- `range(9;  0; -2) --> 9 7 5 3 1`
+
+The filter `range($from; $upto)` is a short form of `range($from; $upto; 1)` and
+the filter `range($upto)` is a short form of `range(0; $upto)`.
+For example:
+
+- `range(5) --> 0 1 2 3 4`
+- `range(2; 5) --> 2 3 4`
+
+::: Compatibility
+
+In `jq`, `range/1` and `range/2` are more restrictive versions of `range/3`
+that prohibit non-numeric arguments.
+
+:::
+
+::: Advanced
+
+The filter is equivalent to:
+
+~~~
+def range($from; $to; $by): $from |
+   if $by > 0 then while(.  < $to; . + $by)
+ elif $by < 0 then while(.  > $to; . + $by)
+   else            while(. != $to; . + $by)
+   end;
+range(1; 10; 2) -->
+1 3 5 7 9
+~~~
+
+For that reason, we can also use it with other values than numbers:
+
+- `range(""; "aaa"; "a") --> "" "a" "aa"`
+- `range([]; [1, 1, 1]; [1]) --> [] [1] [1, 1]`
+
+This makes it quite easy to accidentally create an infinite sequence, e.g. by
+`range(""; "b"; "a")`.
+
+:::
+
+### `recurse`, `recurse(f)`
+
+The filter `recurse(f)` is equivalent to `., (f | recurse(f))`.
+It first outputs its input, then runs `f` and `recurse(f)` on its outputs.
+This is useful to create infinite sequences.
+You can create a finite sequence by having `f` return `empty`, e.g. via `select`.
+For example:
+
+- `0 | limit(5; recurse(.+1))       --> 0 1 2 3 4`
+- `0 | recurse(.+1 | select(. < 5)) --> 0 1 2 3 4`
+
+The filter `recurse(f; p)` is equivalent to `recurse(f | select(p))`.
+That means that it recurses only on
+outputs of `f` for which `p` yields a `true` output.
+For example:
+
+- `0 | recurse(.+1; . < 5) --> 0 1 2 3 4`
+
+The filter `recurse` is a short form for `recurse(.[]?)`.
+It returns all values recursively contained in the input, e.g.
+`[1, [2], {a: 3}] | recurse --> [1, [2], {"a": 3}] 1 [2] 2 {"a":3} 3`.
 
 
 ## Selection
