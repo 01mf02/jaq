@@ -120,7 +120,7 @@ def all: all(.[]; .);
 def any: any(.[]; .);
 
 # Walking
-def walk(f): def rec: (.[]? |= rec) | f; rec;
+def walk(f): .. |= f;
 
 def flatten: [recurse(arrays[]) | select(isarray | not)];
 def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) | add end;
