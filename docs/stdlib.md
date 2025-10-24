@@ -670,13 +670,71 @@ For example, to establish that `sin(pi)` is smaller than `10^-5`, we can use
 
 ### `sort`, `sort_by(f)`
 
+The filter `sort` takes an array and sorts it.
+For example:
+
+~~~
+[true, 1, "abc", [1], {"a": 1}, null, false, 0, "ABC", [], {}] | sort -->
+[null, false, true, 0, 1, "ABC", "abc", [], [1], {}, {"a": 1}]
+~~~
+
+The filter `sort_by(f)` evaluates
+the filter `f` for each value in the input array, and
+sorts the values by the output of `f`.
+For example:
+
+- `[0, 1, 2, 3] | sort_by(. % 2) --> [0, 2, 1, 3]`
+- `[{a: 1, b: 2}, {a: 0, b: 3}] | sort_by(. ) --> [{"a": 0, "b": 3}, {"a": 1, "b": 2}]`
+- `[{a: 1, b: 2}, {a: 0, b: 3}] | sort_by(.a) --> [{"a": 0, "b": 3}, {"a": 1, "b": 2}]`
+- `[{a: 1, b: 2}, {a: 0, b: 3}] | sort_by(.b) --> [{"a": 1, "b": 2}, {"a": 0, "b": 3}]`
+
+::: Advanced
+
+We have the following correspondences:
+
+- `sort_by` is equivalent to `sort_by(.)`.
+- `sort_by(f)` is equivalent to `sort_by([f])`.
+
+:::
+
 ### `group_by(f)`
 
 ### `min`, `max`, `min_by(f)`, `max_by(f)`
 
+The filters `min` and `max` yield the smallest and largest element of an array, respectively.
+For example:
+
+- `[1, 2, 3] | min --> 1`
+- `[1, 2, 3] | max --> 3`
+
+The filters `min_by(f)` and `max_by(f)` evaluate
+the filter `f` for each value in the input array, and
+yield the value for which `f` produces the smallest or largest output,
+respectively.
+For example:
+
+- `["abc", [1, 2], {"a": 1}] | min_by(length) --> {"a": 1}`
+- `["abc", [1, 2], {"a": 1}] | max_by(length) --> "abc"`
+
+You can yield multiple values in `f` to break ties such as:
+
+- `["abc", [1, 2], {"a": 1, "b": 3}] | min_by(length, add?) --> [1, 2]`
+
+::: Advanced
+
+We have the following correspondences:
+
+- `min` and `max` are equivalent to `min_by(.)` and `max_by(.)`, respectively.
+- `min_by(f)` and `max_by(f)` are equivalent to `min_by([f])` and `max_by([f])`, respectively.
+
+:::
+
 ### `unique`, `unique_by(f)`
 
 ### `reverse`
+
+The filter `reverse` takes an array and reverses it.
+For example, `[1, 2, 3] | reverse --> [3, 2, 1]`.
 
 ### `transpose`
 
@@ -709,9 +767,39 @@ def verify: transpose as $t |
 
 :::
 
-### `flatten`, `flatten($depth)`
+### `flatten`, `flatten($depth)` {#flatten}
 
-### `bsearch($x)`
+The filter `flatten` flattens input arrays, and
+the filter `flatten($depth)` flattens input arrays up to a certain depth.
+For example:
+
+- `[1, [2, [3]], {a: [1, [2]]}] | flatten    --> [1,  2,  3  , {"a": [1, [2]]}]`
+- `[1, [2, [3]], {a: [1, [2]]}] | flatten(0) --> [1, [2, [3]], {"a": [1, [2]]}]`
+- `[1, [2, [3]], {a: [1, [2]]}] | flatten(1) --> [1,  2, [3] , {"a": [1, [2]]}]`
+- `[1, [2, [3]], {a: [1, [2]]}] | flatten(2) --> [1,  2,  3  , {"a": [1, [2]]}]`
+- `null, true, 0, "Hi" | flatten --> [null] [true] [0] ["Hi"]`
+
+Note that `flatten` does not impact arrays that are descendants of an object.
+
+::: Advanced
+
+We can define `flatten/0` and `flatten/1` as:
+
+~~~
+def flattens    : if isarray             then .[] | flattens       end;
+def flattens($d): if isarray and $d >= 0 then .[] | flattens($d-1) end;
+def flatten    : [flattens    ];
+def flatten($d): [flattens($d)];
+[1, [2, [3]], {"a": [1, [2]]}] | flatten, flatten(0), flatten(1), flatten(2) -->
+[1,  2,  3  , {"a": [1, [2]]}]
+[1, [2, [3]], {"a": [1, [2]]}]
+[1,  2, [3] , {"a": [1, [2]]}]
+[1,  2,  3  , {"a": [1, [2]]}]
+~~~
+
+:::
+
+### `bsearch($x)` {#bsearch}
 
 The filter `bsearch($x)` takes a sorted array and
 performs a binary search for `$x` in the array.
