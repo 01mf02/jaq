@@ -841,8 +841,60 @@ This is inspired by Erlang's `iolist_to_binary` function.
 
 ## Recursion
 
-### `walk`
+### `walk(f)` {#walk}
 
+The filter `walk(f)` recursively updates its input with `f`.
+For example:
+
+- `[[1, 2], [3]] | walk(numbers += 1) --> [[2, 3], [4]]`
+
+::: Advanced
+
+In jaq, `walk(f)` is defined as `.. |= f`, whereas
+in `jq`, a definition similar to the following is used:
+
+~~~
+def walk(f): def rec: (.[]? |= rec) | f; rec;
+~~~
+
+This is a more efficient version of:
+
+~~~
+def walk(f): (.[]? |= walk(f)) | f;
+~~~
+
+We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
+First, let us recall that `.. |= f` is equivalent to the following in jaq:
+
+~~~
+def rec_up: (.[]? | rec_up), .; rec_up |= f
+~~~
+
+We can thus unfold `.. |= f`:
+
+~~~
+..                   |= f  === (unfolding .. |= f)
+rec_up               |= f  === (unfolding rec_up)
+((.[]? | rec_up), .) |= f  === (because (l, r) |= f  ===  (l |= f) | (r |= f))
+((.[]? | rec_up) |= f)  | (. |= f)  === (because . |= f  ===  f)
+((.[]? | rec_up) |= f)  | f         === (because (l | r) |= f  ===  l |= (r |= f))
+(.[]? |= (rec_up |= f)) | f         === (because rec_up |= f  ===  .. |= f)
+(.[]? |= (.. |= f))     | f
+~~~
+
+We can see thus that
+`.. |= f` is equivalent to
+`(.[]? |= (.. |= f)) | f`.
+In the same sense,
+`walk(f)` is equivalent to
+`(.[]? |= walk(f)) | f`.
+We can conclude that `.. |= f` is equivalent to `walk(f)`.
+
+Note, however, that this equivalence does *not* hold in `jq`,
+because `jq`'s updates work differently than jaq's.
+The difference shows in particular when `f` returns multiple values.
+
+:::
 
 ## Serialisation & Deserialisation
 
