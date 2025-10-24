@@ -1,9 +1,3 @@
----
-title: JAQ(1)
----
-
-
-
 # Name
 
 `jaq` --- Command-line JSON processor

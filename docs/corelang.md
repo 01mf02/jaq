@@ -1,4 +1,6 @@
-# Core language {#corelang}
+{#corelang}
+
+# Core language
 
 The jq language is a lazy, functional streaming programming language
 originally designed by Stephen Dolan.
@@ -266,10 +268,10 @@ In jq, keys must be strings, whereas
 in jaq, keys can be arbitrary values.
 Because object keys can be arbitrary values in jaq, you can write e.g.:
 
-~~~
+```
 {(0): 1, "2": 3, ([4]): 5, ({}): 6} -->
 { 0 : 1, "2": 3,  [4] : 5,  {} : 6}
-~~~
+```
 
 This yields an error in `jq`.
 
@@ -406,7 +408,7 @@ For example,
 The filter `..` yields its input and all recursively contained values.
 For example:
 
-~~~
+```
 {"a": 1, "b": [2, ["3"]]} | .. -->
 {"a": 1, "b": [2, ["3"]]}
 1
@@ -414,7 +416,7 @@ For example:
 2
 ["3"]
 "3"
-~~~
+```
 
 ## Unary
 
@@ -501,11 +503,11 @@ returns a copy of the input whose
 values at the positions given by `f` are replaced by `y`.
 For example:
 
-~~~
+```
 [1, 2, 3] | .[0] = (length, 4) -->
 [3, 2, 3]
 [4, 2, 3]
-~~~
+```
 
 ### Update assignment
 
@@ -549,11 +551,11 @@ are short-hand forms for
 `f = . + g`, ...
 For example:
 
-~~~
+```
 [1, 2, 3] | .[0] += (length, 4) -->
 [4, 2, 3]
 [5, 2, 3]
-~~~
+```
 
 ### Alternation
 
@@ -578,19 +580,19 @@ returns the boolean values of `g`.
 
 For example:
 
-~~~
+```
 (true, false) or (true, false) -->
 true
 true
 false
-~~~
+```
 
-~~~
+```
 (true, false) and (true, false) -->
 true
 false
 false
-~~~
+```
 
 The filter `f and g` has higher precedence than `f or g`.
 
@@ -603,7 +605,7 @@ We can see the higher precedence of `and` by
 
 To find this formula, I used the following program:
 
-~~~
+```
 def bool: true, false;
 {x: bool, y: bool, z: bool} | select(
   ((.x and  .y) or .z ) !=
@@ -619,7 +621,7 @@ def bool: true, false;
   "y": false,
   "z": true
 }
-~~~
+```
 
 :::
 
@@ -677,12 +679,12 @@ There are values that are equal,
 yet yield different results when fed to the same filter.
 For example:
 
-~~~
+```
 {a: 1, b: 2} as $x |
 {b: 2, a: 1} as $y |
 $x == $y, ($x | tojson) == ($y | tojson) -->
 true false
-~~~
+```
 
 :::
 
@@ -700,6 +702,7 @@ Values are ordered as follows:
 - `null`
 - Booleans: `false < true --> true`
 - Numbers:
+
     - `NaN` is smaller than any other number, including itself; i.e.
       `nan < nan --> true`
     - `-Infinity`, e.g. `-infinite < -99999999999999999999999999 --> true`
@@ -712,6 +715,7 @@ Values are ordered as follows:
   `[1, 2] < [1, 2, 3] --> true` and
   `[0, 2] < [1] --> true`.
 - Objects: An object `$x` is smaller than an object `$y` either if:
+
   - the keys of `$x` are smaller than the keys of `$y` or
   - the keys of `$x` are equal to the keys of `$y` and
     the values of `$x` are smaller than the values of `$y`.
@@ -720,13 +724,13 @@ Values are ordered as follows:
 
 More precisely, an object `$x` is smaller than an object `$y` if:
 
-~~~
+```
 ($x | to_entries | sort_by(.key)) as $ex |
 ($y | to_entries | sort_by(.key)) as $ey |
 [$ex[].key]   < [$ey[].key] or
 [$ex[].key]  == [$ey[].key] and
 [$ex[].value] < [$ey[].value]
-~~~
+```
 
 :::
 
@@ -757,7 +761,9 @@ The filter `$x - $y` subtracts `$y` from `$x` as follows:
   `[1, 2, 3, 4] - [2, 4] --> [1, 3]`.
 - Subtracting anything else yields an error.
 
-### Multiplication / division {#mul-div}
+{#mul-div}
+
+### Multiplication / division
 
 The filter `$x * $y` multiplies two values as follows:
 
@@ -890,22 +896,22 @@ both run the atomic filter `xs` on its input.
 Suppose that the outputs of `xs` are `x1`, ..., `xn`.
 Then the filters are equivalent to:
 
-~~~
+```
 reduce x1, ..., xn as $x (init; update) :=
 init
 | x1 as $x | update
 | ...
 | xn as $x | update
-~~~
+```
 
-~~~
+```
 foreach x1, ..., xn as $x (init; update; project) :=
 init |
 ( x1 as $x | update | project,
 ( ...
 ( xn as $x | update | project,
 ( empty ))...))
-~~~
+```
 
 Here, both `update` and `project` have access to the current `$x`.
 
@@ -923,16 +929,16 @@ As example, we can calculate the sum and the cumulative sum using
 Let us expand the first and the last example using the equivalences above
 to see what is calculated:
 
-~~~
+```
 # reduce  (1, 2, 3) as $x (0; . + $x)
 0
 | 1 as $x | . + $x  # 1
 | 2 as $x | . + $x  # 3
 | 3 as $x | . + $x  # 6
 --> 6
-~~~
+```
 
-~~~
+```
 # foreach (1, 2, 3) as $x (0; . + $x; [$x, .])
 0 |
 ( 1 as $x | . + $x | [$x, .],  # [1, 1]
@@ -940,7 +946,7 @@ to see what is calculated:
 ( 3 as $x | . + $x | [$x, .],  # [3, 6]
 ( empty ))))
 --> [1, 1] [2, 3] [3, 6]
-~~~
+```
 
 We can also reverse a list via
 `[1, 2, 3] | reduce .[] as $x ([]; [$x] + .) --> [3, 2, 1]`.
