@@ -297,6 +297,21 @@ The filter `recurse` is a short form for `recurse(.[]?)`.
 It returns all values recursively contained in the input, e.g.
 `[1, [2], {a: 3}] | recurse --> [1, [2], {"a": 3}] 1 [2] 2 {"a":3} 3`.
 
+::: Advanced
+We can write a Fibonacci generator as follows:
+
+```
+def fib: def next: [.[1], add]; [0, 1] | recurse(next)[1];
+limit(5; fib) --> 1 1 2 3 5
+```
+
+The `next` filter takes an array with
+the two previous values (`.[0], .[1]`), and
+yields a new array containing
+the second previous value (`.[1]`) as well as
+the sum of the previous two values (`add`).
+:::
+
 
 ## Selection
 

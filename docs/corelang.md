@@ -70,6 +70,11 @@ This is important for filters such as
 [`if-then-else`](#if-then-else) and
 [`//`](#alternation).
 
+::: Advanced
+
+You can get the boolean value of a value by `not | not`; i.e.
+`"" | not | not --> true`.
+
 
 ### Numbers
 
@@ -198,6 +203,19 @@ contain equivalent bytes are considered equal, e.g.
 ::: Compatibility
 
 Byte strings do not exist in `jq`; however, they exist in `fq`.
+
+:::
+
+::: Advanced
+
+To find out whether a value is a byte string, we can use:
+
+```
+def isbytes: isstring and try (.[0] | true) catch false;
+"Hello" | ., tobytes | isbytes --> false true
+```
+
+This works because we can index byte strings, but not text strings.
 
 :::
 
