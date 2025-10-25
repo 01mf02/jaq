@@ -84,6 +84,7 @@ function Pandoc(doc)
   local function walk_blocks(blocks)
     for _, blk in pairs(blocks) do
       if blk.t == "Div" and blk.classes[1] == "section" then
+        blk.identifier = blk.identifier:lower()
         table.insert(current_sections, blk.identifier)
         walk_blocks(blk.content)
         table.remove(current_sections)
