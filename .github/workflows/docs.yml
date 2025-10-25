@@ -1,6 +1,7 @@
 name: Generate documentation and run unit tests
 
 on:
+  workflow_call:
   push:
     branches: [ main ]
     paths:
