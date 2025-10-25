@@ -39,6 +39,10 @@ This should allow users proficient in jq to easily use jaq.
   And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
   Later, I found out about the old French word *jacquet*, meaning "squirrel",
   which makes for a nice *ex post* inspiration for the name.
+  And finally, the
+  [Jacquard machine](https://en.wikipedia.org/wiki/Jacquard_machine)
+  was an important predecessor of the modern computer,
+  automating weaving with punched cards as early as 1804.
 
 
 
