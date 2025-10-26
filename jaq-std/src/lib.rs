@@ -660,11 +660,14 @@ fn format<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
 where
     for<'a> D::V<'a>: ValT,
 {
+    const HTML_PATS: [&str; 5] = ["<", ">", "&", "\'", "\""];
+    const HTML_REPS: [&str; 5] = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
     Box::new([
         ("escape_html", v(0), |cv| {
-            let pats = ["<", ">", "&", "\'", "\""];
-            let reps = ["&lt;", "&gt;", "&amp;", "&apos;", "&quot;"];
-            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
+            bome(cv.1.map_utf8_str(|s| replace(s, &HTML_PATS, &HTML_REPS)))
+        }),
+        ("unescape_html", v(0), |cv| {
+            bome(cv.1.map_utf8_str(|s| replace(s, &HTML_REPS, &HTML_PATS)))
         }),
         ("escape_tsv", v(0), |cv| {
             let pats = ["\n", "\r", "\t", "\\", "\0"];
