@@ -1,5 +1,4 @@
 {#stdlib}
-
 # Standard library
 
 ## Basic
@@ -20,7 +19,6 @@ which uses `empty` under the hood.
 :::
 
 {#error}
-
 ### `error`, `error(f)`
 
 The filter `error` takes its input and throws an error with the input as payload.
@@ -42,7 +40,6 @@ The output of the filter `length` depends on its input type:
 - object: the number of key-value pairs, i.e. `{a: 0, b: 1} | length --> 2`
 
 {#keys}
-
 ### `keys`, `keys_unsorted`
 
 The filter `keys_unsorted` yields an array that contains
@@ -65,7 +62,6 @@ The filter `keys_unsorted` is equivalent to
 :::
 
 {#map}
-
 ### `map(f)`, `map_values(f)`
 
 The filter `map(f)` obtains all values of the input (via `.[]`),
@@ -90,8 +86,63 @@ the filter `map_values(f)` is equivalent to `.[] |= f`.
 
 :::
 
-{#entries}
+{#walk}
+### `walk(f)`
 
+The filter `walk(f)` recursively updates its input with `f`.
+For example:
+
+- `[[1, 2], [3]] | walk(numbers += 1) --> [[2, 3], [4]]`
+
+::: Advanced
+
+In jaq, `walk(f)` is defined as `.. |= f`, whereas
+in `jq`, a definition similar to the following is used:
+
+```
+def walk(f): def rec: (.[]? |= rec) | f; rec;
+```
+
+This is a more efficient version of:
+
+```
+def walk(f): (.[]? |= walk(f)) | f;
+```
+
+We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
+First, let us recall that `.. |= f` is equivalent to the following in jaq:
+
+```
+def rec_up: (.[]? | rec_up), .; rec_up |= f
+```
+
+We can thus unfold `.. |= f`:
+
+```
+..                   |= f  === (unfolding .. |= f)
+rec_up               |= f  === (unfolding rec_up)
+((.[]? | rec_up), .) |= f  === (because (l, r) |= f  ===  (l |= f) | (r |= f))
+((.[]? | rec_up) |= f)  | (. |= f)  === (because . |= f  ===  f)
+((.[]? | rec_up) |= f)  | f         === (because (l | r) |= f  ===  l |= (r |= f))
+(.[]? |= (rec_up |= f)) | f         === (because rec_up |= f  ===  .. |= f)
+(.[]? |= (.. |= f))     | f
+```
+
+We can see thus that
+`.. |= f` is equivalent to
+`(.[]? |= (.. |= f)) | f`.
+In the same sense,
+`walk(f)` is equivalent to
+`(.[]? |= walk(f)) | f`.
+We can conclude that `.. |= f` is equivalent to `walk(f)`.
+
+Note, however, that this equivalence does *not* hold in `jq`,
+because `jq`'s updates work differently than jaq's.
+The difference shows in particular when `f` returns multiple values.
+
+:::
+
+{#entries}
 ### `to_entries`, `from_entries`, `with_entries(f)`
 
 The filter `to_entries` takes as input an array or an object.
@@ -121,7 +172,8 @@ For example:
 ::: Advanced
 
 The filter `not` is equivalent to `if . then false else true end`.
-We can obtain the boolean value of a value by `not | not`.
+We can obtain the boolean value of a value by `not | not`; i.e.
+`"" | not | not --> true`.
 
 :::
 
@@ -150,7 +202,6 @@ if you use it for simple comparisons such as
 ## Stream consumers
 
 {#first-last}
-
 ### `first`, `first(f)`, `last`, `last(f)`
 
 The filter `first(f)` yields the first output of `f` if there is one, else nothing.
@@ -177,7 +228,6 @@ You can use them to retrieve the first/last element of an array, such as
 `[1, 2, 3] | first, last --> 1 3`.
 
 {#limit}
-
 ### `limit($n; f)`
 
 The filter `limit($n; f)` yields the first `$n$` outputs of `f`.
@@ -189,13 +239,10 @@ For example:
 - `limit(-1; 1, 2      ) -->` (no output)
 
 ::: Compatibility
-
 When `$n < 0`, `jq` yields an error instead.
-
 :::
 
 {#skip}
-
 ### `skip($n; f)`
 
 The filter `skip($n; f)` yields all outputs after the first `$n$` outputs of `f`.
@@ -207,7 +254,6 @@ For example:
 - `skip(-1; 1, 2      ) --> 1 2`
 
 {#nth}
-
 ### `nth($i)`, `nth($i; f)`
 
 The filter `nth($i; f)` yields the `$i`-th output of `f`.
@@ -225,7 +271,6 @@ The filter `nth($i)` is a short form for `.[$i]`; e.g.
 ## Stream generators
 
 {#range}
-
 ### `range($upto)`, `range($from; $upto)`, `range($from; $upto; $step)`
 
 The filter `range($from; $upto; $step)`
@@ -245,14 +290,11 @@ For example:
 - `range(2; 5) --> 2 3 4`
 
 ::: Compatibility
-
 In `jq`, `range/1` and `range/2` are more restrictive versions of `range/3`
 that prohibit non-numeric arguments.
-
 :::
 
 ::: Advanced
-
 The filter is equivalent to:
 
 ```
@@ -272,9 +314,9 @@ For that reason, we can also use it with other values than numbers:
 
 This makes it quite easy to accidentally create an infinite sequence, e.g. by
 `range(""; "b"; "a")`.
-
 :::
 
+{#recurse}
 ### `recurse`, `recurse(f)`
 
 The filter `recurse(f)` is equivalent to `., (f | recurse(f))`.
@@ -318,7 +360,6 @@ the sum of the previous two values (`add`).
 The filters in this section classify their inputs or output them selectively.
 
 {#select}
-
 ### `select(p)`
 
 The filter `select(p)` yields its input if `p` yields a `true` value for it.
@@ -326,7 +367,6 @@ For example,
 `(0, 1, -1, 2, -2) | select(. >= 0) --> 0 1 2`.
 
 {#select-type}
-
 ### `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`
 
 Any of these filters yields its input if it is of the given type, else nothing.
@@ -340,17 +380,14 @@ For example:
 - `null, true, 0, "Hi!", [1, 2], {a: 1} | objects  --> {"a": 1}`
 
 ::: Advanced
-
 These filters are equivalent to
 `select(. == null)`,
 `select(isboolean)`,
 ...,
 `select(isobject)`.
-
 :::
 
 {#istype}
-
 ### `isboolean`, `isnumber`, `isstring`, `isarray`, `isobject`
 
 For every filter in this section, like `isboolean`, ..., `isobject`, there is
@@ -363,13 +400,10 @@ For example:
 - `true | isboolean --> true `, because `true | booleans --> true`.
 
 ::: Compatibility
-
 `jq` does not implement these filters.
-
 :::
 
 {#select-number}
-
 ### `normals`, `finites`
 
 These filters return its input if
@@ -395,7 +429,6 @@ Examples:
 - `null, true, 0, "Hi!", [1, 2], {a: 1} | iterables --> [1, 2] {"a": 1}`
 
 {#isnumber}
-
 ### `isnan`, `isinfinite`, `isfinite`, `isnormal`
 
 The filter `isnan` yields `true` if
@@ -422,6 +455,7 @@ Examples:
 
 ## Membership
 
+{#contains-inside}
 ### `contains($x)`, `inside($x)`
 
 The filter `contains($x)` yields `true`
@@ -450,11 +484,10 @@ For example,
 `"world" | inside("Hello, world") --> true`.
 
 ::: Advanced
-
 The filter `inside($x)` is equivalent to `. as $i | $x | contains($i)`.
-
 :::
 
+{#indices}
 ### `indices($x)`
 
 The filter `indices($x)` yields the following:
@@ -484,8 +517,7 @@ def verify($x): all(indices($x)[] as $i | .[$i:][:$x | length]; . == $x);
 
 :::
 
-{#index}
-
+{#index-rindex}
 ### `index($x)`, `rindex($x)`
 
 The filters `index($x)` and `rindex($x)` are shorthand for
@@ -498,6 +530,7 @@ For example:
 - `"Hello world!" | index(", ") --> null`
 - `[0, 1, 2] | rindex(3) --> null`
 
+{#has-in}
 ### `has($k)`, `in($x)`
 
 The filter `has($k)` yields `true` if
@@ -513,13 +546,11 @@ For example,
 `"a" | in({a: 1, b: 2}) --> true`.
 
 ::: Advanced
-
 The filter `has($k)` is a more performant version of `any(keys[]; . == $k)`.
 For example:
 
 - `[1, 2, 3]    | any(keys[]; . ==  0 ) --> true`
 - `{a: 1, b: 2} | any(keys[]; . == "a") --> true`
-
 :::
 
 
@@ -965,7 +996,6 @@ returns and accepts only natural numbers in `explode` and `implode`.
 :::
 
 {#split}
-
 ### `split($s)`
 
 This filter yields `. / $s` if its input `.` and `$s` are both strings, else it fails.
@@ -1048,65 +1078,6 @@ This is inspired by Erlang's `iolist_to_binary` function.
 
 :::
 
-
-## Recursion
-
-{#walk}
-
-### `walk(f)`
-
-The filter `walk(f)` recursively updates its input with `f`.
-For example:
-
-- `[[1, 2], [3]] | walk(numbers += 1) --> [[2, 3], [4]]`
-
-::: Advanced
-
-In jaq, `walk(f)` is defined as `.. |= f`, whereas
-in `jq`, a definition similar to the following is used:
-
-```
-def walk(f): def rec: (.[]? |= rec) | f; rec;
-```
-
-This is a more efficient version of:
-
-```
-def walk(f): (.[]? |= walk(f)) | f;
-```
-
-We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
-First, let us recall that `.. |= f` is equivalent to the following in jaq:
-
-```
-def rec_up: (.[]? | rec_up), .; rec_up |= f
-```
-
-We can thus unfold `.. |= f`:
-
-```
-..                   |= f  === (unfolding .. |= f)
-rec_up               |= f  === (unfolding rec_up)
-((.[]? | rec_up), .) |= f  === (because (l, r) |= f  ===  (l |= f) | (r |= f))
-((.[]? | rec_up) |= f)  | (. |= f)  === (because . |= f  ===  f)
-((.[]? | rec_up) |= f)  | f         === (because (l | r) |= f  ===  l |= (r |= f))
-(.[]? |= (rec_up |= f)) | f         === (because rec_up |= f  ===  .. |= f)
-(.[]? |= (.. |= f))     | f
-```
-
-We can see thus that
-`.. |= f` is equivalent to
-`(.[]? |= (.. |= f)) | f`.
-In the same sense,
-`walk(f)` is equivalent to
-`(.[]? |= walk(f)) | f`.
-We can conclude that `.. |= f` is equivalent to `walk(f)`.
-
-Note, however, that this equivalence does *not* hold in `jq`,
-because `jq`'s updates work differently than jaq's.
-The difference shows in particular when `f` returns multiple values.
-
-:::
 
 ## Serialisation & Deserialisation
 
@@ -1456,7 +1427,6 @@ Example:
 ```
 
 {#splits}
-
 ### `split`, `splits`
 
 The filter `split($re; $flags)` yields an array of
@@ -1518,7 +1488,6 @@ We have following short forms:
 ## I/O
 
 {#inputs}
-
 ### `input`, `inputs`
 
 The filter `inputs` yields all the inputs in the current input file.
@@ -1530,20 +1499,16 @@ for example, to create a cumulative sum over all input integers, you can use
 The filter `input` yields the next input in the current input file.
 
 ::: Compatibility
-
 When there is no more input value left,
 in `jq`, `input` yields an error, whereas in jaq, it yields no output value.
 That is, in jaq, `input` is equivalent to `first(inputs)`.
-
 :::
 
 ::: Advanced
-
 Both `input` and `inputs` have a *side effect*, i.e. they advance the input stream.
 That means that unlike most jq filters, `inputs` is not referentially transparent.
 It is advised to use it sparingly and with caution,
 lest you are devoured by the evil dragons of evaluation order.
-
 :::
 
 

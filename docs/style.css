@@ -45,23 +45,31 @@ section#main {
     flex: 3;
 }
 
-.example {
-    position: relative;
+.run-example::before {
+    margin-left: 0.25em;
+    content: "▶️";
+    font-family: initial;
 }
-
-.example > a {
+.run-example {
+    text-decoration: inherit;
     opacity: 35%;
 }
 
-.example:hover > a {
+code:hover + .run-example,
+.run-example:hover {
     opacity: 100%;
 }
 
-.example.block > a {
+pre {
+    position: relative;
+}
+
+pre > .run-example {
     position: absolute;
     top: 0px;
     right: 0px;
 }
+
 
 code {
     background-color: #eee;

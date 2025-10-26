@@ -1,5 +1,4 @@
 {#corelang}
-
 # Core language
 
 The jq language is a lazy, functional streaming programming language
@@ -71,9 +70,9 @@ This is important for filters such as
 [`//`](#alternation).
 
 ::: Advanced
-
 You can get the boolean value of a value by `not | not`; i.e.
 `"" | not | not --> true`.
+:::
 
 
 ### Numbers
@@ -780,7 +779,6 @@ The filter `$x - $y` subtracts `$y` from `$x` as follows:
 - Subtracting anything else yields an error.
 
 {#mul-div}
-
 ### Multiplication / division
 
 The filter `$x * $y` multiplies two values as follows:
@@ -1041,3 +1039,4 @@ Filters can be defined recursively; for example,
 `def f: 0, f; f` yields an infinite sequence of `0` values.
 An example of a non-terminating filter is
 `def r: r; r`.
+

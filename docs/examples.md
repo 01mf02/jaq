@@ -219,3 +219,4 @@ jaq '.. | select(.t? == "tr").c | [.[].c?[]] | @json "jc(\(.[0]), \(.[1][2:]));"
 ```
 
 I used exactly this command to create a draft for jaq's CBOR parsing test suite.
+

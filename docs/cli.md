@@ -1,12 +1,11 @@
 {#cli}
-
 # Command-line interface
 
 Running
-`jaq`\ \[_OPTION_\]...\ \[_FILTER_\]\ \[_FILE_\]...
+`jaq` \[_OPTION_\]... \[_FILTER_\] \[_FILE_\]...
 performs the following steps:
 
-- Parse _FILTER_ as jq program; see [jq language](#jq-lang)
+- Parse _FILTER_ as jq program; see [jq language](#corelang)
 - For each _FILE_:
 
     - Parse _FILE_ to a stream of values
@@ -53,7 +52,6 @@ You can remedy this by using
 ## Input options
 
 {#--from}
-
 ### `--from` _FORMAT_
 
 Interpret all input files as _FORMAT_.
@@ -71,9 +69,7 @@ That means that
 `jaq . myfile.cbor`.
 
 ::: Compatibility
-
 `jq` does not have this option.
-
 :::
 
 ### `-n`, `--null-input`
@@ -88,7 +84,6 @@ The inputs can still be obtained via the [`inputs`](#inputs) filter; for example
 This can be useful to fold over all inputs with [`reduce` / `foreach`](#reduce-foreach).
 
 {#--raw-input}
-
 ### `-R`, `--raw-input`
 
 Read lines of the input as sequence of strings.
@@ -101,13 +96,11 @@ For example,
 This is equivalent to `--from raw`.
 
 ::: Advanced
-
 When using `-Rs` to load a file (as opposed to standard input),
 jaq loads this file in constant time (if it can be memory-mapped).
 This is because unlike jq, jaq does not validate that strings are valid UTF-8.
 That permits loading arbitrary binary files;
 these can be processed as byte strings via [`tobytes`](#tobytes).
-
 :::
 
 ### `-s`, `--slurp`
@@ -135,7 +128,6 @@ for example, to achieve the output of
 ## Output options
 
 {#--to}
-
 ### `--to` _FORMAT_
 
 Print all output values in the given _FORMAT_.
@@ -181,7 +173,6 @@ This is particularly useful in combination with `--raw-output` (`-r`); for examp
 (with trailing newline).
 
 {#--in-place}
-
 ### `-i`, `--in-place`
 
 Overwrite input file with its output.
@@ -239,7 +230,6 @@ Use _N_ spaces for indentation (default: 2).
 ## Compilation options
 
 {#--from-file}
-
 ### `-f`, `--from-file`
 
 Read filter from a file given by filter argument.
@@ -320,3 +310,4 @@ the former because it comes *before* `--args`, and
 the latter because it would not have been interpreted as input file.
 However, `-c` is collected into the array because it comes after `--`,
 which leads every argument after it to be interpreted as input file.
+

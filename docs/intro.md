@@ -19,17 +19,14 @@ It aims to cover the same concepts as the
 [jq manual](https://jqlang.org/manual/).
 
 ::: Compatibility
-
 This manual points out occasions where jaq diverges from `jq`.
-
 :::
 
 ::: Advanced
-
 For an even deeper understanding of jq semantics,
 feel free to read my jq language specification at
 <https://github.com/01mf02/jq-lang-spec/>.
 
 Feel free to skip these "advanced" blocks if you do not seek enlightenment.
-
 :::
+
