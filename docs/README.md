@@ -1,4 +1,7 @@
 This directory contains the source code of the jaq manual.
+The manual is written using the [Djot](https://djot.net/) file format,
+which is a unambiguously defined markup syntax that
+allows for much faster parsing than Markdown.
 
 To generate HTML and man versions of the manual, run `make -j`.
 This requires:

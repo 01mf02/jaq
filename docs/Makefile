@@ -1,5 +1,5 @@
 JAQ=cargo run --release --
-FILES=intro.md cli.md corelang.dj stdlib.md advanced.md formats.md examples.md
+FILES=intro.dj cli.dj corelang.dj stdlib.dj advanced.dj formats.dj examples.dj
 
 all: MANUAL.xhtml jaq.1 tests broken-links
 clean:
@@ -11,8 +11,8 @@ body.xhtml: header.html $(FILES)
 MANUAL.xhtml: manual.jq body.xhtml style.css template.xhtml
 	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
 
-jaq.1: filter.lua man-prologue.md $(FILES) man-epilogue.md
-	pandoc -V title="JAQ(1)" --lua-filter filter.lua --from djot man-prologue.md $(FILES) man-epilogue.md -s -o $@
+jaq.1: filter.lua man-prologue.dj $(FILES) man-epilogue.dj
+	pandoc -V title="JAQ(1)" --lua-filter filter.lua --from djot man-prologue.dj $(FILES) man-epilogue.dj -s -o $@
 
 tests: body.xhtml
 	$(JAQ) --to raw -f tests.jq $< | $(JAQ) --run-tests

@@ -784,6 +784,13 @@ We have the following correspondences:
 
 ### `group_by(f)`
 
+The filter `group_by(f)` sorts its input array by `f`, then
+groups all values for which `f` produced identical outputs into the same array.
+For example:
+
+- `["foo", "", "bar", "quux", "baz"] | group_by(length) --> [[""], ["foo", "bar", "baz"], ["quux"]]`
+- `[1, 2, 3, 4] | group_by(. % 2) --> [[2, 4], [1, 3]]`
+
 ### `min`, `max`, `min_by(f)`, `max_by(f)`
 
 The filters `min` and `max` yield the smallest and largest element of an array, respectively.
