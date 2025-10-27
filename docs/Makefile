@@ -1,5 +1,5 @@
 JAQ=cargo run --release --
-FILES=intro.md cli.md corelang.md stdlib.md advanced.md formats.md examples.md
+FILES=intro.md cli.md corelang.dj stdlib.md advanced.md formats.md examples.md
 
 all: MANUAL.xhtml jaq.1 tests broken-links
 clean:

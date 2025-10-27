@@ -70,6 +70,7 @@ For example:
 
 - `[1, 2, 3]    | map(., .*2) --> [1, 2, 2, 4, 3, 6]`.
 - `{a: 1, b: 2} | map(., .*2) --> [1, 2, 2, 4]`.
+- `[1, 2, 3, 4] | map(select(. % 2 == 0)) --> [2, 4]`.
 
 The filter `map_values(f)` has the same effect as `map(f)`
 when the input is an array, but when the input is an object,
@@ -230,7 +231,7 @@ You can use them to retrieve the first/last element of an array, such as
 {#limit}
 ### `limit($n; f)`
 
-The filter `limit($n; f)` yields the first `$n$` outputs of `f`.
+The filter `limit($n; f)` yields the first `$n` outputs of `f`.
 If `$n <= 0`, it yields no outputs.
 For example:
 
@@ -245,7 +246,7 @@ When `$n < 0`, `jq` yields an error instead.
 {#skip}
 ### `skip($n; f)`
 
-The filter `skip($n; f)` yields all outputs after the first `$n$` outputs of `f`.
+The filter `skip($n; f)` yields all outputs after the first `$n` outputs of `f`.
 If `$n <= 0`, it yields all outputs of `f`.
 For example:
 
@@ -362,7 +363,7 @@ The filters in this section classify their inputs or output them selectively.
 {#select}
 ### `select(p)`
 
-The filter `select(p)` yields its input if `p` yields a `true` value for it.
+The filter `select(p)` yields its input for each true output of `p`.
 For example,
 `(0, 1, -1, 2, -2) | select(. >= 0) --> 0 1 2`.
 
@@ -669,9 +670,9 @@ For example:
 - `nan | round | isnan --> true`
 - `infinite | round --> Infinity`
 
-### `libm` functions
+### Math
 
-jaq implements many filters via [`libm`](https://docs.rs/libm).
+jaq implements many mathematical functions via [`libm`](https://docs.rs/libm).
 If not specified otherwise, these filters take and return floating-point numbers.
 
 Zero-argument filters:
@@ -742,8 +743,12 @@ Three-argument filters that ignore `.`:
 
 - `fma`
 
-For example, to establish that `sin(pi)` is smaller than `10^-5`, we can use
-`(3.141592 | sin) < (-5 | pow10) --> true`.
+Examples:
+
+- `(3.141592 | sin) < (-5 | pow10) --> true` establishes that
+  `sin(pi)` is smaller than `10^-5`.
+- `fmax(2; 3) --> 3.0`
+- `fma(2; 3; 4) --> 10.0`
 
 
 ## Arrays

@@ -147,13 +147,12 @@ in the range from `U+0020` to `U+10FFFF`, excluding `'"'` and `'\'`.
 For example,
 `"Hello 東京!" --> "Hello 東京!"`.
 
-Furthermore, `...` may contain escape sequences, which
-start with `'\'` and are followed by one of:
+Furthermore, `...` may contain the following escape sequences:
 
-- `b`, `f`, `n`, `r`, or `t`
-- `'"'` or `'\'`
-- `uHHHH`, where `HHHH` is a hexadecimal number
-- `(f)`, where `f` is a jq filter (*string interpolation*)
+- `\b`, `\f`, `\n`, `\r`, or `\t`
+- `\"` or `\\`
+- `\uHHHH`, where `HHHH` is a hexadecimal number
+- `\(f)`, where `f` is a jq filter (*string interpolation*)
 
 Most characters below `U+0020` can only be produced via a Unicode escape sequence, i.e.
 `"NUL = \u0000" --> "NUL = \u0000"`.
@@ -358,6 +357,10 @@ For example,
 When slicing a text string, the `x`-th element refers to the `x`-th *UTF-8 character*.
 For example,
 `"老虎" | .[1:2] --> "虎"`.
+On the other hand, when slicing a byte string, the `x`-th element refers to the `x`-th *byte*.
+For example,
+`"Färber" | tobytes, . | .[2:] | [., length] --> [b"\xa4rber", 5] ["rber", 4]`,
+because the letter 'ä' takes two bytes, but only one character.
 
 Like the indexing operator, the slicing operator
 treats byte string input like an array of numbers and
@@ -866,6 +869,9 @@ There exists a longer form of this filter, namely
 `if p1 then f1 elif p2 then f2 ... else g end`.
 This is equivalent to
 `if p1 then f1 else (if p2 then f2 else (... else g end) end) end`.
+
+When the `else g` part is omitted, it is equivalent to `else .`; for example,
+`0 | if false then .+1 end --> 0`.
 
 ### try-catch
 

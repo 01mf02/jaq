@@ -30,7 +30,7 @@ There are a few rules:
       `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`,
       jaq uses the corresponding format.
     - Otherwise, jaq assumes JSON.
-- If an error is encountered at any point, jaq stops.
+- If an uncaught error is encountered at any point, jaq stops.
 
 When passing filters directly as _FILTER_ argument on the command-line,
 care has to be taken to properly escape the filter.
@@ -109,9 +109,11 @@ Read (slurp) all input values into one array.
 For example,
 `echo "1 2 3" | jaq -s` yields a single output, namely the array `[1, 2, 3]`, whereas
 `echo "1 2 3" | jaq` yields three outputs, namely `1`, `2`, and `3`.
+When combining `--slurp` with [`--raw-input`](#--raw-input), jaq reads
+the full input as a single string; for example,
+`echo "1 2 3" | jaq -Rs` yields the single output `"1 2 3\n"`.
 
 ::: Compatibility
-
 When multiple files are slurped in,
 `jq` combines the inputs of all files into one single array, whereas
 jaq yields an array for every file.
@@ -121,7 +123,6 @@ The behaviour of `jq` can be approximated in jaq;
 for example, to achieve the output of
 `jq -s . a b`, you may use
 `jaq -s . <(cat a b)`.
-
 :::
 
 
