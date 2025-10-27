@@ -1055,6 +1055,16 @@ For example:
 
 ## String formatting
 
+The filters in this section can be prefixed to strings to influence [string interpolation](#strings).
+For example, `"1 + 2 * 3" | @uri "https://duckduckgo.com/?q=\(.)" --> "https://duckduckgo.com/?q=1%20%2B%202%20%2A%203"`.
+However, these filters can also be used outside of string interpolation, such as
+`"1 + 2 * 3" | @uri --> "1%20%2B%202%20%2A%203"`.
+
+::: Compatibility
+Unlike in `jq`, you can define you own filters that start with `@`; for example,
+`def @xml: @html;`
+:::
+
 ### `@json`
 
 ### `@text`
@@ -1063,11 +1073,44 @@ For example:
 
 ### `@tsv`
 
-### `@html`
+### `@html`, `@htmld`
+
+The filter `@html` escapes a string so that it can be embedded in an HTML document.
+It replaces the following characters by HTML version:
+
+| Text | `<`    | `>`    | `&`     | `'`      | `"`      |
+| HTML | `&lt;` | `&gt;` | `&amp;` | `&apos;` | `&quot;` |
+
+The filter `@htmld` reverses the effect of `@html`.
+For example:
+
+```
+"\"1 < 2 & 2 > 1\", that's what he said." | @html | ., @htmld -->
+"&quot;1 &lt; 2 &amp; 2 &gt; 1&quot;, that&apos;s what he said."
+"\"1 < 2 & 2 > 1\", that's what he said."
+```
+
+::: Compatibility
+`jq` does not support `@htmld`.
+:::
 
 ### `@sh`
 
 ### `@base64`, `@base64d`
+
+The filter `@base64` converts its input to a text string and
+[Base64](https://en.wikipedia.org/wiki/Base64)-encodes it.
+The filter `@base64d` reverses this operation.
+For example:
+
+```
+"Hello world!" | @base64 | ., @base64d -->
+"SGVsbG8gd29ybGQh"
+"Hello world!"
+```
+
+Byte strings are encoded like an equivalent text string; e.g.
+`"Hello world!" | (tobytes | @base64) == @base64 --> true`.
 
 ### `@uri`, `@urid`
 
