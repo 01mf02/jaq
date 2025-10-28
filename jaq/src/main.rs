@@ -241,8 +241,9 @@ fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
     let ctx = filter::Ctx::new(&data, vars);
 
     let json = |s: String| json::parse_single(s.as_bytes()).map_err(invalid_data);
+    let jsonn = |s: String| json::parse_many(s.as_bytes()).collect::<Result<Val, _>>();
     let input = json(test.input)?;
-    let expect: Result<Val, _> = test.output.into_iter().map(json).collect();
+    let expect: Result<Val, _> = jsonn(test.output.join("\n")).map_err(invalid_data);
     let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();
     Ok((expect?, unwrap_valr(obtain).map_err(Error::Jaq)?))
 }
