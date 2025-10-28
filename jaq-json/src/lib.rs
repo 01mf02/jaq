@@ -728,10 +728,10 @@ impl fmt::Display for Val {
     }
 }
 
-#[cfg(feature = "formats")]
-type BoxError = Box<dyn std::error::Error + Send + Sync>;
+/// Dynamic & thread-safe [`std::error::Error`].
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-#[cfg(feature = "formats")]
-fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
+/// Create an invalid data I/O error.
+pub fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }

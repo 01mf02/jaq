@@ -1,8 +1,8 @@
 //! Reading input.
-use crate::{invalid_data, BoxError, Format};
+use crate::Format;
 use bytes::Bytes;
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_json::{cbor, json, toml, xml, yaml, Tag, Val};
+use jaq_json::{cbor, invalid_data, json, toml, xml, yaml, BoxError, Tag, Val};
 use std::io::{self, Read};
 use std::path::Path;
 
