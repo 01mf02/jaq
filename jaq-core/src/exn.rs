@@ -8,6 +8,8 @@ use core::fmt::{self, Display};
 ///
 /// This is either an error or control flow data internal to jaq.
 /// Users should only be able to observe errors.
+///
+/// Use [`crate::val::unwrap_valr`] to convert a [`crate::val::ValX`] to an error.
 #[derive(Clone, Debug)]
 pub struct Exn<V>(pub(crate) Inner<V>);
 
