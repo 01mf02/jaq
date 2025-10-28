@@ -21,7 +21,7 @@ prints the outputs of the filter as JSON.
 
 There are a few rules:
 
-- If no _FILTER_ is given, jaq uses `.` (the [identity] filter) as filter.
+- If no _FILTER_ is given, jaq uses `.` (the [identity filter](#identity)) as filter.
 - If no _FILE_ is given, jaq reads from standard input.
 - jaq determines the format to parse a _FILE_ as follows:
 
@@ -150,6 +150,7 @@ yields an error.
 Print JSON compactly, omitting whitespace.
 For example, `jaq -c <<< '[1, 2, 3]'` yields the output `[1,2,3]`.
 
+{#--raw-output}
 ### `-r`, `--raw-output`
 
 Write strings without escaping them and without surrounding them with quotes.

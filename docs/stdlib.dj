@@ -1056,22 +1056,30 @@ For example:
 ## String formatting
 
 The filters in this section can be prefixed to strings to influence [string interpolation](#strings).
-For example, `"1 + 2 * 3" | @uri "https://duckduckgo.com/?q=\(.)" --> "https://duckduckgo.com/?q=1%20%2B%202%20%2A%203"`.
-However, these filters can also be used outside of string interpolation, such as
-`"1 + 2 * 3" | @uri --> "1%20%2B%202%20%2A%203"`.
+However, these filters can also be used outside of string interpolation.
+For example:
+
+- `"1 + 2 * 3" | @uri "https://duckduckgo.com/?q=\(.)" --> "https://duckduckgo.com/?q=1%20%2B%202%20%2A%203"`
+- `"1 + 2 * 3" | @uri --> "1%20%2B%202%20%2A%203"`
+
+If not indicated otherwise, all filters in this section
+convert their input to a string with [`tostring`](#tostring) and
+yield a single string output.
+As result, byte strings are treated like equivalent text strings; e.g.
+`"Hello world!" | (tobytes | @base64) == @base64 --> true`.
 
 ::: Compatibility
 Unlike in `jq`, you can define you own filters that start with `@`; for example,
 `def @xml: @html;`
 :::
 
-### `@json`
-
 ### `@text`
 
-### `@csv`
+The filter `@text` is equivalent to [`tostring`](#tostring).
 
-### `@tsv`
+### `@json`
+
+The filter `@json` is equivalent to [`tojson`](#fromjson-tojson).
 
 ### `@html`, `@htmld`
 
@@ -1094,12 +1102,9 @@ For example:
 `jq` does not support `@htmld`.
 :::
 
-### `@sh`
-
 ### `@base64`, `@base64d`
 
-The filter `@base64` converts its input to a text string and
-[Base64](https://en.wikipedia.org/wiki/Base64)-encodes it.
+The filter `@base64` [Base64](https://en.wikipedia.org/wiki/Base64)-encodes its input.
 The filter `@base64d` reverses this operation.
 For example:
 
@@ -1109,10 +1114,89 @@ For example:
 "Hello world!"
 ```
 
-Byte strings are encoded like an equivalent text string; e.g.
-`"Hello world!" | (tobytes | @base64) == @base64 --> true`.
+::: Compatibility
+In jaq, `@base64d` only succeeds if its whole input is a valid Base64 string.
+In contrast, `jq` accepts also strings where only a part is valid Base64,
+thus potentially leading to hidden data corruption.
+See [#282](https://github.com/01mf02/jaq/issues/282) for a detailed discussion.
+:::
 
 ### `@uri`, `@urid`
+
+The filter `@uri` applies
+[percent-encoding](https://en.wikipedia.org/wiki/Percent-encoding)
+to encode arbitrary data in a uniform resource identifier (URI).
+The filter `@urid` reverses this encoding.
+For example:
+
+- `"Hello, World!" | @uri --> "Hello%2C%20World%21"`
+- `"Hello, World!" | @uri | @urid --> "Hello, World!"`
+
+::: Advanced
+The HTML version of this manual is created with jaq, and
+`@uri` is used to encode the examples to create links to the jaq playground.
+:::
+
+### `@sh`
+
+The filter `@sh` escapes data for constructing Unix command-line prompts.
+It performs different things depending on its input type:
+
+- `null`, boolean, number: Convert to string via [`tostring`](#tostring).
+- String: Replace occurrences of `'` by `'\''` and surround by `'`.
+- Array of scalars: Apply `@sh` to elements and join the results with `" "` as separator.
+- Fail for any other type of value.
+
+Examples:
+
+- `null, true, 1 | @sh --> "null" "true" "1"`
+- `"It's green!" | @sh --> "'It'\\''s green!'"`
+- `["jaq", "-n", "--arg", "slogan", "It's green!", "$slogan"] | @sh -->
+   "'jaq' '-n' '--arg' 'slogan' 'It'\\''s green!' '$slogan'"`
+
+::: Advanced
+When copy-pasting the output of the previous example to your terminal,
+be sure to replace `\\` by `\` before.
+That is, you should end up with `'jaq' '-n' '--arg' 'slogan' 'It'\''s green!' '$slogan'`,
+which you can execute in good conscience.
+Unescaping can be avoided by running `jaq` with [`--raw-output`](#--raw-output),
+which does not escape `\` with `\\` in the first place.)
+:::
+
+### `@csv`
+
+The filter `@csv` takes an array of scalars.
+It transforms each array element depending on its type:
+
+- `null`: Yield `""`.
+- Boolean, number: Transform it via [`tostring`](#tostring).
+- String: Replace occurrences of `"` by `""` and surround by `"`.
+- Fail for any other type of value.
+
+Finally, the filter joins the transformed elements with `","` as separator.
+For example:
+
+```
+[true, null, false, 1, "Give me \"quotes\" or die"] | @csv -->
+"true,,false,1,\"Give me \"\"quotes\"\" or die\""
+```
+
+### `@tsv`
+
+The filter `@tsv` is similar to `@csv`, with the following differences:
+
+- In strings, the characters `'\n'`, `'\r'`, `'\t'`, `'\'`, and `'\u0000'` are
+  replaced by strings `"\\n"`, `"\\r"`, `"\\t"`, `"\\\\"`, `"\\0"`.
+  (In raw output, these look like `\n`, `\r`, `\t`, `\\`, and `\0`.)
+  The result is not surrounded by `"`.
+- The transformed elements are joined with `\t` (tabulator).
+
+For example:
+
+```
+[true, null, false, 1, "Newline\nBackslash\\NUL\u0000"] | @tsv -->
+"true\t\tfalse\t1\tNewline\\nBackslash\\\\NUL\\0"
+```
 
 
 ## Byte strings
