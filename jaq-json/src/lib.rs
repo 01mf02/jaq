@@ -728,10 +728,10 @@ impl fmt::Display for Val {
     }
 }
 
-/// Type alias for a type-erased Error
+/// Dynamic & thread-safe [`std::error::Error`].
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
 
-/// Helper function for creating a [std::io::Error] from an arbitrary error
+/// Create an invalid data I/O error.
 pub fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }
