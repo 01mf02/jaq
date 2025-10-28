@@ -61,8 +61,9 @@ impl<'a, D: DataT> Clone for Ctx<'a, D> {
 impl<'a, D: DataT> Ctx<'a, D> {
     /// Construct a fresh context.
     ///
-    /// If you do not need any inputs, you might get away with [JustLut](crate::data::JustLut)
-    /// as data, instead of implementing your own [DataT].
+    /// If you do not use any filters that need custom data (such as `inputs`)
+    /// and your value type has a `'static` lifetime, then you may use
+    /// [`crate::data::JustLut`] as [`DataT`].
     pub fn new(data: D::Data<'a>, vars: Vars<D::V<'a>>) -> Self {
         Self {
             data,
