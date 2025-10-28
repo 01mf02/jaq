@@ -8,6 +8,17 @@
 jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
 jaq aims to support a large subset of jq's syntax and operations.
 
+jaq is two things at a time:
+
+- A command-line program, `jaq`, that can be used as drop-in replacement for `jq`.
+- A library, [`jaq-core`](https://docs.rs/jaq-core/),
+  that can be used to compile and run jq programs inside of Rust programs.
+  Compared to the `jq` API, `jaq-core`
+  is thoroughly documented,
+  supports [arbitrary data types beyond JSON](https://docs.rs/jaq-core/latest/jaq_core/val/trait.ValT.html), and
+  can be safely used in multi-threaded environments.
+
+jaq has an own [manual](https://gedenkt.at/jaq/manual/).
 You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
 Instructions for the playground can be found [here](jaq-play/).
 
