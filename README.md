@@ -183,18 +183,3 @@ Please make sure that after your change, `cargo test` runs successfully.
 <a href="https://nlnet.nl">NLnet</a> with financial support from the
 European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
 programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.
-
-jaq has also profited from:
-
-* [serde_json] to read and [colored_json] to output JSON,
-* [chumsky] to parse and [ariadne] to pretty-print parse errors,
-* [mimalloc] to boost the performance of memory allocation, and
-* the Rust standard library, in particular its awesome [Iterator],
-  which builds the rock-solid base of jaq's filter execution
-
-[serde_json]: https://docs.rs/serde_json/
-[colored_json]: https://docs.rs/colored_json/
-[chumsky]: https://docs.rs/chumsky/
-[ariadne]: https://docs.rs/ariadne/
-[mimalloc]: https://docs.rs/mimalloc/
-[Iterator]: https://doc.rust-lang.org/std/iter/trait.Iterator.html
