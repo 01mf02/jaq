@@ -514,6 +514,8 @@ def walk(f): (.[]? |= walk(f)) | f;
 ```
 
 We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
+For this, we will use equivalences about [pathless updates](#pathless).
+
 First, let us recall that `.. |= f` is equivalent to the following in jaq:
 
 ```
@@ -546,8 +548,21 @@ The difference shows in particular when `f` returns multiple values.
 
 :::
 
+### `del(f)`
+
+The filter `del(f)` deletes values at the locations given by `f`.
+It is equivalent to `f |= empty`.
+For example:
+
+- `[1, 2, 3, 4] | del(.[] | select(. % 2 == 0)) --> [1, 3]`
+- `[1, 2, 3]    | del(.[1]) --> [1, 3]`
+- `[1, 2, 3]    | del(.[1:]) --> [1]`
+- `{a: 1, b: 2} | del(.a) --> {"b": 2}`
+
+## Paths
+
 {#path}
-### `path(f)`, `getpath($path)`
+### `path(f)`
 
 The filter `path(f)` records for each output of `f` its position in the input,
 and yields that position as a *path*.
@@ -564,14 +579,6 @@ If `f` returns values that do not point to the input, then `path(f)` yields an e
 - `try path(0           ) catch "fail" --> "fail"`
 - `try path(. as $x | $x) catch "fail" --> "fail"`
 
-The inverse filter for `path(f)` is `getpath($path)`.
-If `path(f)` yields no error, then `getpath(path(f))` yields the same outputs as `f`.
-For example:
-
-- `[{a: 1}, {a: 2}] | getpath([0, "a"], [1, "a"]) --> 1 2`
-- `[1, 2, 3] | getpath([{"start": 1}, {"end": -1}]) --> [2]`
-- `[1, 2, 3] | getpath([{"start": 1,   "end": -1}]) --> [2]`
-
 ::: Advanced
 The `path(f)` filter is at the heart of how
 `jq` executes assignments such as `p |= u`,
@@ -580,18 +587,50 @@ See the section on [path-based updates](#path-based) for details on how
 `path(f)` is calculated.
 :::
 
-### `del(f)`
+{#getpath}
+### `getpath($path)`
 
-The filter `del(f)` deletes values at the locations given by `f`.
-It is equivalent to `f |= empty`.
+The filter `getpath($path)` is the inverse filter for `path(f)`.
+If `path(f)` yields no error, then
+`getpath(path(f))` yields the same outputs as `f`.
 For example:
 
-- `[1, 2, 3, 4] | del(.[] | select(. % 2 == 0)) --> [1, 3]`
-- `[1, 2, 3]    | del(.[1]) --> [1, 3]`
-- `[1, 2, 3]    | del(.[1:]) --> [1]`
-- `{a: 1, b: 2} | del(.a) --> {"b": 2}`
+- `[{a: 1}, {a: 2}] | getpath([0, "a"], [1, "a"]) --> 1 2`
+- `[1, 2, 3] | getpath([{"start": 1}, {"end": -1}]) --> [2]`
+- `[1, 2, 3] | getpath([{"start": 1,   "end": -1}]) --> [2]`
+
+### `setpath($path; $v)`
+
+The filter `setpath($path; $v)` sets the value at `$path` to `$v`.
+It is equivalent to `getpath($path) = $v`.
+For example:
+
+- `[[1, 2], [3, 4]] | setpath([1, 0]; 5) --> [[1, 2], [5, 4]]`
 
 ### `pick(f)`
+
+The filter `pick(f)` constructs an object that
+contains only those parts of the input that `f` returns.
+For example:
+
+- `{a: {b: 1, c: 2}, d: 3} | pick(.       ) --> {"a": {"b": 1, "c": 2}, "d": 3}`
+- `{a: {b: 1, c: 2}, d: 3} | pick(.a.c    ) --> {"a": {        "c": 2}        }`
+- `{a: {b: 1, c: 2}, d: 3} | pick(.a.c, .d) --> {"a": {        "c": 2}, "d": 3}`
+
+::: Compatibility
+In `jq`, `pick(f)` also supports paths to arrays; for example:
+
+- `[1, 2, 3] | pick(.[0 ])` yields `[1]`
+- `[1, 2, 3] | pick(.[1 ])` yields `[null, 2]`
+- `[1, 2, 3] | pick(.[1:])` yields `[2, 3]`
+
+While implementing this functionality in jaq, I found many corner cases
+that would have made the proper documentation of this filter very complex.
+I also found a few surprising behaviours in `jq`, e.g. that
+`[1, 2, 3] | pick(.[-1])` yields an error.
+In the end, I decided to support only the simpler and well-understandable
+subset of paths to objects.
+:::
 
 
 ## Reduction
