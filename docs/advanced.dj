@@ -130,3 +130,28 @@ the variants `.[]? |= f` and `.[$i] |= f` return their input in that case.
 
 
 ## Comments
+
+A comment
+starts with `#` and
+ends with the first newline that is not preceded by an uneven number of backslashes (`\`).
+For example:
+
+```
+[
+  1,
+  # comment
+  2,
+  # comment \\
+  3,
+  # comment \
+    comment
+  4,
+  # comment \\\
+    comment \
+    comment
+  5
+]
+```
+
+This is equivalent to `[1, 2, 3, 4, 5]`.
+
