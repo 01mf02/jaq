@@ -572,6 +572,14 @@ For example:
 - `[1, 2, 3] | getpath([{"start": 1}, {"end": -1}]) --> [2]`
 - `[1, 2, 3] | getpath([{"start": 1,   "end": -1}]) --> [2]`
 
+::: Advanced
+The `path(f)` filter is at the heart of how
+`jq` executes assignments such as `p |= u`,
+whereas jaq pursues a different, "pathless" approach.
+See the section on [path-based updates](#path-based) for details on how
+`path(f)` is calculated.
+:::
+
 ### `del(f)`
 
 The filter `del(f)` deletes values at the locations given by `f`.

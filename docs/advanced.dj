@@ -40,29 +40,65 @@ jq fills up the list with `null`s if we update beyond its size.
 In contrast, jaq fails with an out-of-bounds error in such a case.
 :::
 
-### Equivalences
+### Path-based
 
-Unary:
+The path-based update model that is used by `jq` executes `p |= u` similar to
+`getpath(path(p)) |= u`.
+That means that this first collects the paths corresponding to `p`,
+then updates the input at these paths by `u`.
+Note that this is an approximation;
+the actual `jq` update behaviour is rather complex,
+not exhaustively documented, and
+has changed in backwards-incompatible ways between minor versions.
 
-- `.  |= f`: `f`
-- `.. |= f`: `def rec_up: (.[]? | rec_up), .; rec_up |= f`
+We have a few equivalences for `path(f)`:
 
-Binary:
+| `p`           | `path(p)` |
+|:--------------|:----------|
+| `.`           | `[]` |
+| `.[]`         | `keys_unsorted` |
+| `.[$i]`       | `[$i]` |
+| `.[$i:$j]`    | `{start: $i, end: $j}` |
+| `f,  g`       | `path(f), path(g)` |
+| `f | g`       | `path(f) as $p | $p + (getpath($p) | path(g))` |
+| `f as $x | g` | `f as $x | path(g)` |
+| `if $p then f else g end` | `if $p then path(f) else path(g) end` |
 
-- `(l | r) |= f`: `l |= (r |= f)`
-- `(l , r) |= f`: `l |= f | r |= f`
-- `(l as $x | r) |= f`: `(l1 as $x | r) |= f | ... | (ln as $x | r) |= f`
-  (assuming that `l` yields outputs `l1`, ..., `ln`)
-- `l // r |= f`: `if first(l // false) then l |= f else r |= f`
+### Pathless
 
-It follows from the above definitions that
-`empty |= f` is equivalent to `.`.
+The pathless update model that is used by jaq
+reduces updates `p |= u` to simpler expressions, depending on `p`.
+It yields the same results as path-based updates in most common cases,
+while having the following advantages:
 
-Keywords:
+- It does not need to construct paths.
+- It considers multiple outputs by `u`.
+- It avoids iterator invalidation problems that path-based updates are prone to.
 
-- `if $p then t else e end |= f`: `if $p then t |= f else e |= f end`
+However, pathless updates do not support a few operators, most importantly
+`try ... catch`.
+In such cases, you can always fall back to path-based updates in jaq by writing
+`getpath(path(p)) |= u`.
 
-Path operators:
+The following table shows how jaq executes an update `p |= u`.
+In this table, the case for
+`f as $x | g` assumes that
+`f` yields outputs `f1`, ..., `fn`.
+
+| `p`           | `p |= u` |
+|:--------------|:---------|
+| `.`           | `u` |
+| `..`          | `def rec_up: (.[]? | rec_up), .; rec_up |= u` |
+| `(f | g)`     | `f |= (g |= u)` |
+| `(f , g)`     | `f |= u | g |= u` |
+| `f as $x | g` | `(f1 as $x | g) |= u | ... | (fn as $x | g) |= u` |
+| `f // g`      | `if first(f // false) then f |= u else g |= u` |
+| `if $p then f else g end` | `if $p then f |= u else g |= u end` |
+
+It follows from the table that `empty |= f` is equivalent to `.`.
+
+The following list shows how update operators are executed,
+depending on their input type:
 
 - `.[] |= f`:
 
