@@ -6,17 +6,14 @@
 [![Rust 1.69+](https://img.shields.io/badge/rust-1.69+-orange.svg)](https://www.rust-lang.org)
 
 jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
-jaq aims to support a large subset of jq's syntax and operations.
-
-jaq is two things at a time:
+It is two things at a time:
 
 - A command-line program, `jaq`, that can be used as drop-in replacement for `jq`.
 - A library, [`jaq-core`](https://docs.rs/jaq-core/),
   that can be used to compile and run jq programs inside of Rust programs.
   Compared to the `jq` API, `jaq-core`
-  is thoroughly documented,
-  supports [arbitrary data types beyond JSON](https://docs.rs/jaq-core/latest/jaq_core/val/trait.ValT.html), and
-  can be safely used in multi-threaded environments.
+  can be safely used in multi-threaded environments and
+  supports [arbitrary data types beyond JSON](https://docs.rs/jaq-core/latest/jaq_core/val/trait.ValT.html).
 
 jaq has an own [manual](https://gedenkt.at/jaq/manual/).
 You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
@@ -39,12 +36,7 @@ jaq focuses on three goals:
   reduce the potential for bugs and to
   facilitate contributions.
 
-I drew inspiration from another Rust program, namely [jql].
-However, unlike jql, jaq aims to closely imitate jq's syntax and semantics.
-This should allow users proficient in jq to easily use jaq.
-
 [jq]: https://jqlang.github.io/jq/
-[jql]: https://github.com/yamafaktory/jql
 
 [^jacques]: I wanted to create a tool that should be discreet and obliging, like a good waiter.
   And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
