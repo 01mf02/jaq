@@ -180,6 +180,29 @@ that is checked at every commit.
 
 
 
+# User Testimonials
+
+> `jaq` is a well-built library that gave me a massive leg up compared to implementing `jq` support on my own. Extensibility through the `ValT` trait made adding `jq` support to my own types a breeze.
+>
+> @jobarr-amzn (<https://github.com/amazon-ion/ion-cli/pull/193#pullrequestreview-2696367084>, <https://github.com/01mf02/jaq/issues/355#issuecomment-3457076847>)
+
+> My Rust program \[using jaq\] can execute *all queries* over *all files* **three times** while Python is busy executing *one* query across all files using the `jq` PyPI crate and a Python loop.
+>
+> @I-Al-Istannen (<https://github.com/01mf02/jaq/issues/323#issuecomment-3282176968>)
+
+> jaq is very impressive! Running my [wsjq](https://github.com/thaliaarchi/wsjq) interpreter with it is significantly faster than with any other jq implementation and its emphasis on correctness is very admirable.
+> \[On [wsjq benchmarks](https://github.com/01mf02/jaq/issues/294#issuecomment-3046707389), jaq is between 5 and 10 times faster than jq and between 15 and 196 times faster than gojq.\]
+>
+> @thaliaarchi (<https://github.com/01mf02/jaq/issues/355#issuecomment-3460028137>)
+
+> I had been parsing data from certificate transparency logs using certstream-server. It gives a *lot* of data and piping it into jq was causing me issues. I switched to jaq and the faster startup time meant it could easily keep up on the low end VM I was using. Thank you for your work.
+>
+> Oliver (via e-mail)
+
+Add your own testimonials via <https://github.com/01mf02/jaq/issues/355>.
+
+
+
 # Contributing
 
 Contributions to jaq are welcome.
