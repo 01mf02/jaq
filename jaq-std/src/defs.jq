@@ -94,11 +94,14 @@ def unique: unique_by(.);
 
 # Paths
 def paths(f): path_values | if .[1] | f then .[0] else empty end;
-def getpathpart($p): 
-  if (($p | isobject) and (isobject | not))
-  then .[$p.start // 0 : $p.end // length]
-  else .[$p] end;
-def getpath($path): reduce $path[] as $p (.; getpathpart($p));
+def getpath($path): reduce $path[] as $p (.;
+  def slice($s; $e):
+    if   $s and $e then .[$s:$e]
+    elif $s        then .[$s:]
+    elif $e        then .[  :$e]
+    else error("slice object must contain either start or end") end;
+  if . < {} and $p >= {} then slice($p.start; $p.end) else .[$p] end
+);
 def del(f): f |= empty;
 
 # Arrays
