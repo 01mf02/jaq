@@ -15,8 +15,8 @@ It is two things at a time:
   can be safely used in multi-threaded environments and
   supports [arbitrary data types beyond JSON](https://docs.rs/jaq-core/latest/jaq_core/val/trait.ValT.html).
 
-jaq has an own [manual](https://gedenkt.at/jaq/manual/).
-You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
+jaq has an own [manual].
+You can try jaq online on the jaq [playground].
 Instructions for the playground can be found [here](jaq-play/).
 
 jaq focuses on three goals:
@@ -37,6 +37,8 @@ jaq focuses on three goals:
   facilitate contributions.
 
 [jq]: https://jqlang.github.io/jq/
+[manual]: https://gedenkt.at/jaq/manual/
+[playground]: https://gedenkt.at/jaq/
 
 [^jacques]: I wanted to create a tool that should be discreet and obliging, like a good waiter.
   And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
