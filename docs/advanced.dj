@@ -3,66 +3,81 @@
 
 ## Assignments
 
-Like jq, jaq allows for assignments of the form `p |= f`.
-However, jaq interprets these assignments differently.
+jq allows for assignments of the form `p |= f`, where `p` is an arbitrary filter.
+This makes assignments in jq uniquely powerful compared to other languages.
+For example, a program from the jq manual that blew my mind was the following:
+
+```
+(.posts[] | select(.author == "stedolan") | .comments) += ["terrible."]
+```
+
+This iterates over all posts,
+selects those whose author is "stedolan",
+takes its comments, and adds a not very flattering comment to it.
+(This does not reflect my opinion about Stephen Dolan ---
+I think that he did a great job creating jq.)
+
+jaq and `jq` pursue different approaches to execute assignments:
+
+- *Path-based*: In `jq`, an assignment `p |= f` first constructs paths to all values that match `p`.
+  *Only then*, it applies the filter `f` to these values.
+- *Pathless*: In jaq, an assignment `p |= f` applies `f` *immediately* to any value matching `p`.
+  Unlike in `jq`, assignment does not explicitly construct paths.
+
 Fortunately, in most cases, the result is the same.
+The following sections explain the two approaches in more detail,
+and how to write updates that behave the same in both `jq` and jaq.
 
-In jq, an assignment `p |= f` first constructs paths to all values that match `p`.
-*Only then*, it applies the filter `f` to these values.
-
-In jaq, an assignment `p |= f` applies `f` *immediately* to any value matching `p`.
-Unlike in jq, assignment does not explicitly construct paths.
-
-jaq's implementation of assignment likely yields higher performance,
-because it does not construct paths.
-Furthermore, this allows jaq to use multiple outputs of the right-hand side, whereas
-jq uses only the first.
-For example,
-`0 | (., .) |= (., .+1) --> 0 1 1 2` in jaq,
-whereas it yields only `0` in jq.
-However,
-`{a: 1} | .a |= (2, 3) --> {"a": 2}` in both jaq and jq,
-because an object can only associate a single value with any given key,
-so we cannot use multiple outputs in a meaningful way here.
-
-Because jaq does not construct paths,
-it does not allow some filters on the left-hand side of assignments,
-for example `first`, `last`, `limit`:
-For example, `[1, 2, 3] | first(.[]) |= .-1`
-yields `[0, 2, 3]` in jq, but is invalid in jaq.
-Similarly, `[1, 2, 3] | limit(2; .[]) |= .-1`
-yields `[0, 1, 3]` in jq, but is invalid in jaq.
-(Inconsequentially, jq also does not allow for `last`.)
-
-::: Compatibility
-In jq, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
-jq fills up the list with `null`s if we update beyond its size.
-In contrast, jaq fails with an out-of-bounds error in such a case.
-:::
 
 ### Path-based
 
-The path-based update model that is used by `jq` executes `p |= u` similar to
-`getpath(path(p)) |= u`.
-That means that this first collects the paths corresponding to `p`,
-then updates the input at these paths by `u`.
-Note that this is an approximation;
-the actual `jq` update behaviour is rather complex,
-not exhaustively documented, and
+The path-based update model used by `jq` executes `p |= u` by
+first collecting the paths corresponding to `p`,
+then updating the input at these paths by `u`.
+We can approximate this behaviour by `getpath(path(p)) |= u` ---
+the actual `jq` update behaviour is much more complex,
+only sparely documented, and
 has changed in backwards-incompatible ways between minor versions.
 
+::: Advanced
 We have a few equivalences for `path(f)`:
 
 | `p`           | `path(p)` |
 |:--------------|:----------|
 | `.`           | `[]` |
-| `.[]`         | `keys_unsorted` |
+| `.[]`         | `keys_unsorted[] | [.]` |
 | `.[$i]`       | `[$i]` |
-| `.[$i:$j]`    | `{start: $i, end: $j}` |
+| `.[$i:$j]`    | `[{start: $i, end: $j}]` |
 | `f,  g`       | `path(f), path(g)` |
 | `f | g`       | `path(f) as $p | $p + (getpath($p) | path(g))` |
 | `f as $x | g` | `f as $x | path(g)` |
 | `if $p then f else g end` | `if $p then path(f) else path(g) end` |
+
+Examples:
+
+- `true         | path(.)                   --> []`
+- `[1, 2, 3]    | path(.[])                 --> [0] [1] [2]`
+- `[1, 2, 3]    | keys_unsorted[] | [.]     --> [0] [1] [2]`
+- `{a: 1, b: 2} | path(.[])                 --> ["a"] ["b"]`
+- `{a: 1, b: 2} | keys_unsorted[] | [.]     --> ["a"] ["b"]`
+- `[1, 2, 3]    | path(.[0])                --> [0]`
+- `[1, 2, 3]    | path(.[1:-1])             --> [{"start": 1, "end": -1}]`
+- `{a: 1, b: 2} | path(.a, .b)              --> ["a"] ["b"]`
+- `{a: 1, b: 2} | path(.a), path(.b)        --> ["a"] ["b"]`
+- `[[1], [2]]   | path(.[][])               --> [0, 0] [1, 0]`
+- `[[1], [2]]   | path(.[]) as $p | $p +
+                  (getpath($p) | path(.[])) --> [0, 0] [1, 0]`
+- `[1, 2, 3]    | path(0, 2 as $x | .[$x])  --> [0] [2]`
+- `[1, 2, 3]    | 0, 2 as $x | path(.[$x])  --> [0] [2]`
+:::
+
+::: Compatibility
+The filters [`reduce` / `foreach`](#reduce-foreach) are both defined in jaq
+in terms of simpler filters `f` that `path(f)` can evaluate.
+Therefore, in jaq, you can use `reduce` / `foreach` inside `path(f)`,
+as well as on the left-hand side of updates.
+`jq` does not support this.
+:::
 
 ### Pathless
 
@@ -71,19 +86,50 @@ reduces updates `p |= u` to simpler expressions, depending on `p`.
 It yields the same results as path-based updates in most common cases,
 while having the following advantages:
 
-- It does not need to construct paths.
-- It considers multiple outputs by `u`.
+- It does not need to construct paths, resulting in higher performance.
+- It considers multiple outputs by `u` where possible, whereas
+  path-based updates consider at most one output.
+  For example,
+  `0 | (., .) |= (., .+1) --> 0 1 1 2` in jaq,
+  whereas it yields only `0` in jq.
+  However,
+  `{a: 1} | .a |= (2, 3) --> {"a": 2}` in both jaq and jq,
+  because an object can only associate a single value with any given key,
+  so we cannot use multiple outputs in a meaningful way here.
 - It avoids iterator invalidation problems that path-based updates are prone to.
 
-However, pathless updates do not support a few operators, most importantly
-`try ... catch`.
-In such cases, you can always fall back to path-based updates in jaq by writing
-`getpath(path(p)) |= u`.
+However, pathless updates do not support a few filters on the
+left-hand side of updates that path-based updates support, such as:
 
+- [`try f catch g`](#try-catch)
+- [`first(f)`, `last(f)`](#first-last)
+- [`limit($n; f)`](#limit)
+- [`skip($n; f)`](#skip)
+
+For example, the following filters all yield an error in jaq:
+
+- `[1, 2, 3] | try      .[]  -= 1` yields `[0, 1, 2]` in jq.
+- `[1, 2, 3] | first(   .[]) -= 1` yields `[0, 2, 3]` in jq.
+- `[1, 2, 3] | limit(2; .[]) -= 1` yields `[0, 1, 3]` in jq.
+- `[1, 2, 3] | skip (1; .[]) -= 1` yields `[1, 1, 2]` in jq.
+- `[1, 2, 3] | last (   .[]) -= 1` yields an error in jq.
+
+In such cases, you can fall back to path-based updates in jaq by writing
+`getpath(path(p)) |= u` instead of `p |= u`.
+For example, the following filters yield the same outputs in jaq and `jq`:
+
+- `[1, 2, 3] | getpath(path(try      .[] )) -= 1 --> [0, 1, 2]`
+- `[1, 2, 3] | getpath(path(first(   .[]))) -= 1 --> [0, 2, 3]`
+- `[1, 2, 3] | getpath(path(limit(2; .[]))) -= 1 --> [0, 1, 3]`
+- `[1, 2, 3] | getpath(path(skip (1; .[]))) -= 1 --> [1, 1, 2]`
+- `[1, 2, 3] | getpath(path(last (   .[]))) -= 1 --> [1, 2, 2]`
+  (this example yields an error in `jq`, whereas it works in jaq)
+
+::: Advanced
 The following table shows how jaq executes an update `p |= u`.
 In this table, the case for
 `f as $x | g` assumes that
-`f` yields outputs `f1`, ..., `fn`.
+`f` yields single outputs `f1`, ..., `fn`.
 
 | `p`           | `p |= u` |
 |:--------------|:---------|
@@ -95,7 +141,7 @@ In this table, the case for
 | `f // g`      | `if first(f // false) then f |= u else g |= u` |
 | `if $p then f else g end` | `if $p then f |= u else g |= u end` |
 
-It follows from the table that `empty |= f` is equivalent to `.`.
+It follows from the table that `empty |= f` is equivalent to `.` (identity).
 
 The following list shows how update operators are executed,
 depending on their input type:
@@ -113,7 +159,13 @@ depending on their input type:
 
 The operators above throw an error if they encounter an unhandled case, whereas
 the variants `.[]? |= f` and `.[$i] |= f` return their input in that case.
+:::
 
+::: Compatibility
+In jq, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
+jq fills up the list with `null`s if we update beyond its size.
+In contrast, jaq fails with an out-of-bounds error in such a case.
+:::
 
 ## Patterns
 
