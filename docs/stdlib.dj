@@ -546,9 +546,42 @@ The difference shows in particular when `f` returns multiple values.
 
 :::
 
-### `path(f)`
+{#path}
+### `path(f)`, `getpath($path)`
+
+The filter `path(f)` records for each output of `f` its position in the input,
+and yields that position as a *path*.
+A path is an array that may contain indices or "slice objects".
+The latter must contain a `"start"` and/or an `"end"` key with an integer value.
+For example:
+
+- `[{a: 1}, {a: 2}] | path(.[].a) --> [0, "a"] [1, "a"]`
+- `[1, 2, 3] | path(.[1:][:-1]) --> [{"start": 1}, {"end": -1}]`
+- `[1, 2, 3] | path(.[1:   -1]) --> [{"start": 1,   "end": -1}]`
+
+If `f` returns values that do not point to the input, then `path(f)` yields an error.
+
+- `try path(0           ) catch "fail" --> "fail"`
+- `try path(. as $x | $x) catch "fail" --> "fail"`
+
+The inverse filter for `path(f)` is `getpath($path)`.
+If `path(f)` yields no error, then `getpath(path(f))` yields the same outputs as `f`.
+For example:
+
+- `[{a: 1}, {a: 2}] | getpath([0, "a"], [1, "a"]) --> 1 2`
+- `[1, 2, 3] | getpath([{"start": 1}, {"end": -1}]) --> [2]`
+- `[1, 2, 3] | getpath([{"start": 1,   "end": -1}]) --> [2]`
 
 ### `del(f)`
+
+The filter `del(f)` deletes values at the locations given by `f`.
+It is equivalent to `f |= empty`.
+For example:
+
+- `[1, 2, 3, 4] | del(.[] | select(. % 2 == 0)) --> [1, 3]`
+- `[1, 2, 3]    | del(.[1]) --> [1, 3]`
+- `[1, 2, 3]    | del(.[1:]) --> [1]`
+- `{a: 1, b: 2} | del(.a) --> {"b": 2}`
 
 ### `pick(f)`
 
