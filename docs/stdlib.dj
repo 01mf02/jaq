@@ -3,21 +3,6 @@
 
 ## Basic
 
-### `empty`
-
-The filter `empty` yields no output.
-
-::: Advanced
-
-This filter is defined as `([][] as $x | .)`.
-While a simpler filter like `[][]` also yields no outputs,
-this rather contrived-looking definition guarantees that
-`empty` can be used on the left-hand side of [assignments](#assignments).
-This comes into play when you use [`select(p)`](#select),
-which uses `empty` under the hood.
-
-:::
-
 {#error}
 ### `error`, `error(f)`
 
@@ -54,93 +39,9 @@ For example:
 - `[1, 2, 3] | keys          --> [0, 1, 2]`
 
 ::: Advanced
-
 The filter `keys_unsorted` is equivalent to
 `to_entries | .[] |= .key`; for example,
 `{a: 1, b: 2} | to_entries | .[] |= .key --> ["a", "b"]`.
-
-:::
-
-{#map}
-### `map(f)`, `map_values(f)`
-
-The filter `map(f)` obtains all values of the input (via `.[]`),
-applies `f` to the values, and collects all results into an array.
-For example:
-
-- `[1, 2, 3]    | map(., .*2) --> [1, 2, 2, 4, 3, 6]`.
-- `{a: 1, b: 2} | map(., .*2) --> [1, 2, 2, 4]`.
-- `[1, 2, 3, 4] | map(select(. % 2 == 0)) --> [2, 4]`.
-
-The filter `map_values(f)` has the same effect as `map(f)`
-when the input is an array, but when the input is an object,
-`map_values(f)` also outputs an object.
-For example:
-
-- `[1, 2, 3, 4] | map_values(.*2) --> [2, 4, 6, 8]`
-- `{a: 1, b: 2} | map_values(.*2) --> {"a": 2, "b": 4}`
-
-::: Advanced
-
-The filter `map(f)` is equivalent to `[.[] | f]` and
-the filter `map_values(f)` is equivalent to `.[] |= f`.
-
-:::
-
-{#walk}
-### `walk(f)`
-
-The filter `walk(f)` recursively updates its input with `f`.
-For example:
-
-- `[[1, 2], [3]] | walk(numbers += 1) --> [[2, 3], [4]]`
-
-::: Advanced
-
-In jaq, `walk(f)` is defined as `.. |= f`, whereas
-in `jq`, a definition similar to the following is used:
-
-```
-def walk(f): def rec: (.[]? |= rec) | f; rec;
-```
-
-This is a more efficient version of:
-
-```
-def walk(f): (.[]? |= walk(f)) | f;
-```
-
-We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
-First, let us recall that `.. |= f` is equivalent to the following in jaq:
-
-```
-def rec_up: (.[]? | rec_up), .; rec_up |= f
-```
-
-We can thus unfold `.. |= f`:
-
-```
-..                   |= f  === (unfolding .. |= f)
-rec_up               |= f  === (unfolding rec_up)
-((.[]? | rec_up), .) |= f  === (because (l, r) |= f  ===  (l |= f) | (r |= f))
-((.[]? | rec_up) |= f)  | (. |= f)  === (because . |= f  ===  f)
-((.[]? | rec_up) |= f)  | f         === (because (l | r) |= f  ===  l |= (r |= f))
-(.[]? |= (rec_up |= f)) | f         === (because rec_up |= f  ===  .. |= f)
-(.[]? |= (.. |= f))     | f
-```
-
-We can see thus that
-`.. |= f` is equivalent to
-`(.[]? |= (.. |= f)) | f`.
-In the same sense,
-`walk(f)` is equivalent to
-`(.[]? |= walk(f)) | f`.
-We can conclude that `.. |= f` is equivalent to `walk(f)`.
-
-Note, however, that this equivalence does *not* hold in `jq`,
-because `jq`'s updates work differently than jaq's.
-The difference shows in particular when `f` returns multiple values.
-
 :::
 
 {#entries}
@@ -161,23 +62,6 @@ For example, `{a: 1, b: 2} | to_entries | from_entries --> {"a": 1, "b": 2}`.
 The filter `with_entries(f)` is equivalent to `to_entries | map(f) | from_entries`.
 For example, `{"a": 1, "b": 2} | with_entries(.key |= ascii_upcase) --> {"A": 1, "B": 2}`
 
-### `not`
-
-The filter `not` converts its input to its [boolean value](#booleans) and returns its negation.
-For example:
-
-- `true  | not --> false`
-- `false | not --> true`
-- `"foo" | not --> false`
-
-::: Advanced
-
-The filter `not` is equivalent to `if . then false else true end`.
-We can obtain the boolean value of a value by `not | not`; i.e.
-`"" | not | not --> true`.
-
-:::
-
 ### `type`
 
 The filter `type` returns the type of its input value as string. For example:
@@ -192,13 +76,12 @@ The filter `type` returns the type of its input value as string. For example:
 Note that both text strings and byte strings both have the same type `"string"`.
 
 ::: Advanced
-
 The `type` filter can be relatively slow to run;
 if you use it for simple comparisons such as
 `type == "string"`, then you can also use filters like
 [`isstring`](#istype).
-
 :::
+
 
 ## Stream consumers
 
@@ -270,6 +153,19 @@ The filter `nth($i)` is a short form for `.[$i]`; e.g.
 
 
 ## Stream generators
+
+### `empty`
+
+The filter `empty` yields no output.
+
+::: Advanced
+This filter is defined as `([][] as $x | .)`.
+While a simpler filter like `[][]` also yields no outputs,
+this rather contrived-looking definition guarantees that
+`empty` can be used on the left-hand side of [assignments](#assignments).
+This comes into play when you use [`select(p)`](#select),
+which uses `empty` under the hood.
+:::
 
 {#range}
 ### `range($upto)`, `range($from; $upto)`, `range($from; $upto; $step)`
@@ -356,7 +252,7 @@ the sum of the previous two values (`add`).
 :::
 
 
-## Selection
+## Booleans
 
 The filters in this section classify their inputs or output them selectively.
 
@@ -453,6 +349,21 @@ Examples:
 - `0        | isnan, isinfinite, isfinite, isnormal --> false false true  false`
 - `1        | isnan, isinfinite, isfinite, isnormal --> false false true  true`
 
+### `not`
+
+The filter `not` converts its input to its [boolean value](#booleans) and returns its negation.
+For example:
+
+- `true  | not --> false`
+- `false | not --> true`
+- `"foo" | not --> false`
+
+::: Advanced
+The filter `not` is equivalent to `if . then false else true end`.
+We can obtain the boolean value of a value by `not | not`; i.e.
+`"" | not | not --> true`.
+:::
+
 
 ## Membership
 
@@ -506,7 +417,6 @@ This means that `[[1, 2], 3] | indices([1, 2]) --> []`, because
 the input array has neither `1` nor `2`, just `[1, 2]` and `3`.
 
 ::: Advanced
-
 We can verify the property given above:
 
 ```
@@ -515,7 +425,6 @@ def verify($x): all(indices($x)[] as $i | .[$i:][:$x | length]; . == $x);
 ([0, 1, 2, 3, 1, 2, 3]   | verify([1, 2]))
 --> true true
 ```
-
 :::
 
 {#index-rindex}
@@ -555,7 +464,87 @@ For example:
 :::
 
 
-## Paths
+## Updates
+
+{#map}
+### `map(f)`, `map_values(f)`
+
+The filter `map(f)` obtains all values of the input (via `.[]`),
+applies `f` to the values, and collects all results into an array.
+For example:
+
+- `[1, 2, 3]    | map(., .*2) --> [1, 2, 2, 4, 3, 6]`.
+- `{a: 1, b: 2} | map(., .*2) --> [1, 2, 2, 4]`.
+- `[1, 2, 3, 4] | map(select(. % 2 == 0)) --> [2, 4]`.
+
+The filter `map_values(f)` has the same effect as `map(f)`
+when the input is an array, but when the input is an object,
+`map_values(f)` also outputs an object.
+For example:
+
+- `[1, 2, 3, 4] | map_values(.*2) --> [2, 4, 6, 8]`
+- `{a: 1, b: 2} | map_values(.*2) --> {"a": 2, "b": 4}`
+
+::: Advanced
+The filter `map(f)` is equivalent to `[.[] | f]` and
+the filter `map_values(f)` is equivalent to `.[] |= f`.
+:::
+
+{#walk}
+### `walk(f)`
+
+The filter `walk(f)` recursively updates its input with `f`.
+For example:
+
+- `[[1, 2], [3]] | walk(numbers += 1) --> [[2, 3], [4]]`
+
+::: Advanced
+
+In jaq, `walk(f)` is defined as `.. |= f`, whereas
+in `jq`, a definition similar to the following is used:
+
+```
+def walk(f): def rec: (.[]? |= rec) | f; rec;
+```
+
+This is a more efficient version of:
+
+```
+def walk(f): (.[]? |= walk(f)) | f;
+```
+
+We can show that in jaq, `.. |= f` and `jq`'s definition of `walk(f)` are equivalent.
+First, let us recall that `.. |= f` is equivalent to the following in jaq:
+
+```
+def rec_up: (.[]? | rec_up), .; rec_up |= f
+```
+
+We can thus unfold `.. |= f`:
+
+```
+..                   |= f  === (unfolding .. |= f)
+rec_up               |= f  === (unfolding rec_up)
+((.[]? | rec_up), .) |= f  === (because (l, r) |= f  ===  (l |= f) | (r |= f))
+((.[]? | rec_up) |= f)  | (. |= f)  === (because . |= f  ===  f)
+((.[]? | rec_up) |= f)  | f         === (because (l | r) |= f  ===  l |= (r |= f))
+(.[]? |= (rec_up |= f)) | f         === (because rec_up |= f  ===  .. |= f)
+(.[]? |= (.. |= f))     | f
+```
+
+We can see thus that
+`.. |= f` is equivalent to
+`(.[]? |= (.. |= f)) | f`.
+In the same sense,
+`walk(f)` is equivalent to
+`(.[]? |= walk(f)) | f`.
+We can conclude that `.. |= f` is equivalent to `walk(f)`.
+
+Note, however, that this equivalence does *not* hold in `jq`,
+because `jq`'s updates work differently than jaq's.
+The difference shows in particular when `f` returns multiple values.
+
+:::
 
 ### `path(f)`
 
