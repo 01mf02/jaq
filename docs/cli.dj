@@ -107,11 +107,11 @@ these can be processed as byte strings via [`tobytes`](#tobytes).
 
 Read (slurp) all input values into one array.
 For example,
-`echo "1 2 3" | jaq -s` yields a single output, namely the array `[1, 2, 3]`, whereas
-`echo "1 2 3" | jaq` yields three outputs, namely `1`, `2`, and `3`.
+`jaq -s <<< "1 2 3"` yields a single output, namely the array `[1, 2, 3]`, whereas
+`jaq <<< "1 2 3"` yields three outputs, namely `1`, `2`, and `3`.
 When combining `--slurp` with [`--raw-input`](#--raw-input), jaq reads
 the full input as a single string; for example,
-`echo "1 2 3" | jaq -Rs` yields the single output `"1 2 3\n"`.
+`jaq -Rs <<< "1 2 3"` yields the single output `"1 2 3\n"`.
 
 ::: Compatibility
 When multiple files are slurped in,
