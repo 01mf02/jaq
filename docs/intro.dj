@@ -11,21 +11,40 @@ In addition, jaq adds some functionality not present in `jq`:
 - [Objects](#objects) with non-string keys, such as `{0: 1, [2]: 3}`
 - [In-place replacement of input files](#--in-place)
 
-This manual tries to provide a full overview of
-[jaq's command-line interface](#cli),
-[jq's core language](#corelang), and
-[jq's standard library](#stdlib).
-It aims to cover the same concepts as the
-[jq manual](https://jqlang.org/manual/).
+This manual aspires to:
+
+- Be readable, concise, and precise.
+- Document all functionality in jaq, in particular
+  [jaq's command-line interface](#cli),
+  [jq's core language](#corelang), and
+  [jq's standard library](#stdlib).
+  That covers the same concepts as the [jq manual](https://jqlang.org/manual/).
+- Document all divergences between `jq` and jaq.
+
+In case that this manual falls short of these goals,
+please [open an issue](https://github.com/01mf02/jaq/issues) or
+create a pull request.
+The same holds if you wish to propose new functionality for jaq.
+This project lives from your contributions!
 
 ::: Compatibility
-This manual points out occasions where jaq diverges from `jq`.
+This manual uses "compatibility" blocks to
+point out occasions where jaq diverges from `jq`.
+In this manual,
+"`jq`" (monospace font) refers to the C implementation, whereas
+"jq" refers to the jq language.
 :::
 
 ::: Advanced
-For an even deeper understanding of jq semantics,
-feel free to read my jq language specification at
-<https://github.com/01mf02/jq-lang-spec/>.
+These "advanced" blocks are a kind of "making of" for this manual.
+They document experiments I made or ideas I had during the writing of the manual.
+As such, they are not essential for understanding the jq language.
+However, they might be useful if you wish to embark on
+a journey to become a master of the jq language.
+
+To satisfy your hunger for an even deeper understanding of jq semantics,
+my [jq language specification](https://github.com/01mf02/jq-lang-spec/)
+should provide sufficient material.
 
 Feel free to skip these "advanced" blocks if you do not seek enlightenment.
 :::

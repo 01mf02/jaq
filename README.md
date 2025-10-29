@@ -195,13 +195,6 @@ Add your own testimonials via <https://github.com/01mf02/jaq/issues/355>.
 
 
 
-# Contributing
-
-Contributions to jaq are welcome.
-Please make sure that after your change, `cargo test` runs successfully.
-
-
-
 # Acknowledgements
 
 [This project](https://nlnet.nl/project/jaq/) was funded through the
