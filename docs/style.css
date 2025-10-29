@@ -73,6 +73,14 @@ pre > .run-example {
 
 code {
     background-color: #eee;
+    white-space: pre;
+}
+
+table {
+    border: 1px solid;
+}
+th, td {
+    padding-inline: 10px;
 }
 
 .Advanced::before {
