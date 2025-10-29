@@ -302,7 +302,8 @@ jq's path operators
 `.[]` ([iterating](#iterating))
 retrieve parts of their input.
 
-### Indexing
+{#indexing}
+### Indexing (`.[x]`)
 
 The indexing operator `.[x]` yields the `x`-th element of the input.
 For example:
@@ -346,7 +347,8 @@ The same applies to the [slicing](#slicing) operator below.
 
 :::
 
-### Slicing
+{#slicing}
+### Slicing (`.[x:y]`)
 
 The slicing operator `.[x:y]` yields a slice of a string or an array,
 from the `x`-th element to (excluding) the `y`-th element.
@@ -370,7 +372,8 @@ The short form `.[x:]` creates a slice from the index `x` to the end, and
 the short form `.[:y]` creates a slice from the beginning to (excluding) the index `x`.
 For example, `"Hello World!" | .[:5], .[6:] --> "Hello" "World!"`.
 
-### Iterating
+{#iterating}
+### Iterating (`.[]`)
 
 The iteration operator `.[]` yields all values `v1 ... vn` when given
 an array `[v1, ..., vn]` or
@@ -417,13 +420,15 @@ That means that `f[][x]?[y:z]` is equivalent to
 
 A nullary filter does not take any arguments.
 
-### Identity
+{#identity}
+### Identity (`.`)
 
 The filter `.` yields its input as single output.
 For example,
 `1 | . --> 1`.
 
-### Recursion
+{#recursion}
+### Recursion (`..`)
 
 The filter `..` yields its input and all recursively contained values.
 For example:
@@ -442,13 +447,15 @@ For example:
 
 A unary filter takes a single argument.
 
-### Negation
+{#negation}
+### Negation (`-`)
 
 The prefix operator `-f` runs the atomic filter `f` and negates its outputs.
 For example,
 `-1 --> -1` and
 `-(1, 2) --> -1 -2`.
 
+{#error-suppression}
 ### Error suppression (`?`)
 
 The postfix operator `f?` runs the atomic filter `f` and
@@ -487,7 +494,8 @@ That means that for example,
 
 This section lists all binary infix filters sorted by increasing precedence.
 
-### Composition
+{#composition}
+### Composition (`|`)
 
 The filter `f | g` runs `f`, and
 for every output `y` of `f`, it runs `g` with `y` as input and yields its outputs.
@@ -497,7 +505,8 @@ If either `f` or `g` yields an error, then
 `f | g` yields that error, followed by nothing.
 For example, `(1, 2) | (., error)` yields the same as `1, error`.
 
-### Variable binding
+{#variable-binding}
+### Variable binding (`as $x |`)
 
 The filter `f as $x | g` runs `f`, and
 for every output `x` of `f`, it binds the value of `x` to the *variable* `$x`.
@@ -510,12 +519,14 @@ For example,
 Variables can be shadowed, such as
 `0 as $x | (1 as $x | $x), $x --> 1 0`.
 
-### Concatenation
+{#concatenation}
+### Concatenation (`,`)
 
 The filter `f, g` yields the concatenation of the outputs of `f` and `g`.
 For example, `1, 2 --> 1 2`.
 
-### Plain assignment
+{#plain-assignment}
+### Plain assignment (`=`)
 
 The filter `f = g` runs `g` with its input, and
 for every output `y` of `g`, it
@@ -529,7 +540,8 @@ For example:
 [4, 2, 3]
 ```
 
-### Update assignment
+{#update-assignment}
+### Update assignment (`|=`)
 
 The filter `f |= g` returns a copy of its input where
 each value `v` at a position given by `f` is replaced by
@@ -558,7 +570,8 @@ On the other hand, the following updates consider only the first output:
 
 :::
 
-### Arithmetic update assignment
+{#arithmetic-update-assignment}
+### Arithmetic update assignment (`+=`, `-=`, ...)
 
 The filters
 `f += g`,
@@ -577,7 +590,8 @@ For example:
 [5, 2, 3]
 ```
 
-### Alternation
+{#alternation}
+### Alternation (`//`)
 
 The filter `f // g` runs `f` and yields
 all its outputs whose [boolean value](#booleans) is `true`; that is,
@@ -589,7 +603,8 @@ For example:
 - `(null, false) // (3, 4) --> 3 4`
 - `empty // 3 --> 3`
 
-### Logic
+{#logic}
+### Logic (`or`, `and`)
 
 The filter `f or g` (disjunction) evaluates `f` and
 returns `true` if its boolean value is `true`, else it
@@ -660,7 +675,6 @@ For example,
 This property does not hold for the complex binary filters above.
 
 ::: Compatibility
-
 In `jq`, a slightly different property holds, namely that
 `f + g` is equivalent to
 `g as $y | f as $x | $x + $y`.
@@ -671,10 +685,10 @@ As a result, in jaq,
 `(1,2) * (3,4) --> 3 4 6 8` and
 `{a: (1,2), b: (3,4)} | .a * .b --> 3 4 6 8`
 yield the same outputs, whereas `jq` yields `3 6 4 8` for the former example.
-
 :::
 
-### Equality
+{#equality}
+### Equality (`==`, `!=`)
 
 The operator `$x == $y` returns `true` if the two values `$x` and `$y` are equal, else `false`.
 Similarly, `$x != $y` returns the negation of `$x == $y`, i.e. `$x == $y | not`.
@@ -708,7 +722,8 @@ true false
 
 :::
 
-### Ordering
+{#ordering}
+### Ordering (`<`, `>`, `<=`, `>=`)
 
 The operator `$x < $y` returns `true` if `$x` is smaller than `$y`.
 Similarly:
@@ -741,7 +756,6 @@ Values are ordered as follows:
     the values of `$x` are smaller than the values of `$y`.
 
 ::: Advanced
-
 More precisely, an object `$x` is smaller than an object `$y` if:
 
 ```
@@ -751,10 +765,10 @@ More precisely, an object `$x` is smaller than an object `$y` if:
 [$ex[].key]  == [$ey[].key] and
 [$ex[].value] < [$ey[].value]
 ```
-
 :::
 
-### Addition / subtraction
+{#add-sub}
+### Addition / subtraction (`+`, `-`)
 
 The filter `$x + $y` adds two values as follows:
 
@@ -782,7 +796,7 @@ The filter `$x - $y` subtracts `$y` from `$x` as follows:
 - Subtracting anything else yields an error.
 
 {#mul-div}
-### Multiplication / division
+### Multiplication / division (`*`, `/`)
 
 The filter `$x * $y` multiplies two values as follows:
 
@@ -825,17 +839,16 @@ For example:
 :::
 
 ::: Compatibility
-
 In jq, division by 0 yields an error, whereas
 in jaq, `n / 0` yields
 `nan` if `n == 0`,
 ` infinite` if `n > 0`, and
 `-infinite` if `n < 0`.
 jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
-
 :::
 
-### Modulus
+{#mod}
+### Modulus (`%`)
 
 The filter `$x % $y` calculates the modulus of two numbers,
 and fails for anything else.
@@ -983,7 +996,6 @@ For example:
 - `foreach empty as $x (0; . + $x) -->` (no output).
 
 ::: Compatibility
-
 The execution of `reduce` and `foreach` differs between `jq` and jaq
 when `update` yields multiple outputs.
 However, the precise behaviour of `jq` in that case
@@ -997,12 +1009,9 @@ The interpretation of `reduce`/`foreach` in jaq has the following advantages ove
   although it outputs all of them.
 * It makes the implementation of `reduce` and `foreach`
   special cases of the same code, reducing the potential for bugs.
-
-
 :::
 
 ::: Advanced
-
 Consider the following example for an `update` yielding multiple values:
 `foreach (5, 10) as $x (1; .+$x, -.) -->
 6 16 -6 -1 9 1` in jaq, whereas it yields
@@ -1018,7 +1027,6 @@ jaq yields these values too, but it also performs the second iteration
 on all other values returned from the first iteration, namely `6`,
 yielding the values
 ` 6 | 10 as $x | (.+$x, -.) --> 16 -6`.
-
 :::
 
 
