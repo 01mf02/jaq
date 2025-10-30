@@ -145,6 +145,7 @@ yields an error.
 
 :::
 
+{#--compact-output}
 ### `-c`, `--compact-output`
 
 Print JSON compactly, omitting whitespace.

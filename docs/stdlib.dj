@@ -6,11 +6,33 @@
 {#error}
 ### `error`, `error(f)`
 
-The filter `error` takes its input and throws an error with the input as payload.
-The filter `error(f)` is equivalent to `f | error`.
+The filter `error(f)` throws an error for every output of `f`,
+with the output as payload.
+The filter `error` is equivalent to `error(.)`.
+It is possible to use `error(f)` also on the left-hand side of assignments.
 
-For example,
-`try error(41) catch (. + 1) --> 42`.
+Examples:
+
+- `error(empty) -->` (no output)
+- `try error(41)       catch (. + 1) --> 42`
+- `try (41 | error   ) catch (. + 1) --> 42`
+- `try (error(41) = 1) catch (. + 1) --> 42`
+
+{#debug}
+### `debug`, `debug(f)`
+
+The filter `debug(f)` prints a debug message for every output of `f`
+to the standard error stream (stderr), then yields its input.
+For example, the filter `0 | debug(1, 2)` yields
+the following output on the command-line:
+
+```
+["DEBUG:",1]
+["DEBUG:",2]
+0
+```
+
+The filter `debug` is equivalent to `debug(.)`.
 
 ### `length`
 
@@ -151,6 +173,69 @@ For example:
 The filter `nth($i)` is a short form for `.[$i]`; e.g.
 `[1, 2, 3] | nth(0) --> 1`.
 
+{#isempty}
+### `isempty(f)`
+
+The filter `isempty(f)` yields `true` if `f` yields no outputs, else `false`.
+If the first output of `f` is an error, `isempty(f)` yields that error instead.
+For example:
+
+- `isempty(   empty) --> true`
+- `isempty(1,     2) --> false`
+- `isempty(1, error) --> false`
+- `try isempty(error, 1) catch "fail" --> "fail"`
+
+{#any}
+### `any`, `any(p)`, `any(f; p)`
+
+The filter `any(f; p)` yields `true` if
+any output of `f | p` has the boolean value `true`, else `false`.
+For example:
+
+- `any(0, 1, 2; . == 42) --> false`
+- `any(0, 1, 2; . == 42, . == 2) --> true`
+
+The filters `any(p)` and `any` are short forms of
+`any(.[]; p)` and `any(.)`, respectively.
+For example:
+
+- `[1, 2, 3] | any(. % 2 == 0) --> true`
+- `[false, true] | any --> true`
+
+{#all}
+### `all`, `all(p)`, `all(f; p)`
+
+The filter `all(f; p)` yields `true` if
+all outputs of `f | p` have the boolean value `true`, else `false`.
+For example:
+
+- `all(0, 1, 2; . >  0) --> false`
+- `all(0, 1, 2; . >= 0) --> true`
+
+The filters `all(p)` and `all` are defined analogously to `any(p)` and `any`.
+
+### `add`, `add(f)`
+
+The filter `add(f)` yields the sum of all elements yielded by `f`, or
+`null` if `f` yields no outputs.
+For example:
+
+- `add(1, 2, 3) --> 6`
+- `add(empty) --> null`
+
+The filter `add` is a short form of `add(.[])`.
+You can use it to add all values of an array or object:
+
+- `[1, 2, 3]    | add --> 6`
+- `{a: 1, b: 2} | add --> 3`
+
+::: Advanced
+The filter `add(f)` is equivalent to
+`reduce f as $x (null; . + $x)`. For example:
+`reduce (1, 2, 3) as $x (null; . + $x) --> 6`.
+:::
+
+
 
 ## Stream generators
 
@@ -250,6 +335,31 @@ yields a new array containing
 the second previous value (`.[1]`) as well as
 the sum of the previous two values (`add`).
 :::
+
+{#repeat}
+### `repeat(f)`
+
+The filter `repeat(f)` runs `f` and yields its outputs over and over again.
+For example,
+`2 | limit(7; repeat(1, ., 3)) --> 1 2 3 1 2 3 1`.
+
+::: Advanced
+This filter does not cache the outputs of `f`.
+:::
+
+{#while-until}
+### `while(p; f)`, `until(p; f)`
+
+The filter `while(p; f)` yields its input and applies `f` to it,
+while `p` returns true.
+
+The filter `until(p; f)` applies `f` to its input until `p` returns true,
+at which point the filter returns its input.
+
+Examples:
+
+- `0 | while(. <= 3; . + 1) --> 0 1 2 3`
+- `0 | until(. >= 3; . + 1) --> 3`
 
 
 ## Booleans
@@ -631,59 +741,6 @@ I also found a few surprising behaviours in `jq`, e.g. that
 In the end, I decided to support only the simpler and well-understandable
 subset of paths to objects.
 :::
-
-
-## Reduction
-
-### `add`, `add(f)`
-
-The filter `add(f)` yields the sum of all elements yielded by `f`, or
-`null` if `f` yields no outputs.
-For example:
-
-- `add(1, 2, 3) --> 6`
-- `add(empty) --> null`
-
-The filter `add` is a short form of `add(.[])`.
-You can use it to add all values of an array or object:
-
-- `[1, 2, 3]    | add --> 6`
-- `{a: 1, b: 2} | add --> 3`
-
-::: Advanced
-
-The filter `add(f)` is equivalent to
-`reduce f as $x (null; . + $x)`. For example:
-`reduce (1, 2, 3) as $x (null; . + $x) --> 6`.
-
-:::
-
-### `any`, `any(p)`, `any(f; p)`
-
-The filter `any(f; p)` yields `true` if
-any output of `f | p` has the boolean value `true`, else `false`.
-For example:
-
-- `any(0, 1, 2; . == 42) --> false`
-- `any(0, 1, 2; . == 42, . == 2) --> true`
-
-The filters `any(p)` and `any` are short forms of
-`any(.[]; p)` and `any(.)`, respectively.
-For example:
-
-- `[1, 2, 3] | any(. % 2 == 0) --> true`
-- `[false, true] | any --> true`
-
-### `all`, `all(p)`, `all(f; p)`
-
-The filter `all(f; p)` yields `true` if
-all outputs of `f | p` have the boolean value `true`, else `false`.
-For example:
-
-- `all(0, 1, 2; . >  0) --> false`
-- `all(0, 1, 2; . >= 0) --> true`
-
-The filters `all(p)` and `all` are defined analogously to `any(p)` and `any`.
 
 
 ## Numbers
@@ -1729,6 +1786,24 @@ It is advised to use it sparingly and with caution,
 lest you are devoured by the evil dragons of evaluation order.
 :::
 
+{#halt_error}
+### `halt_error`, `halt_error($exit_code)`
+
+The filter `halt_error($exit_code)`
+first prints its input [raw](#--raw-output) and [compact](#--compact-output),
+followed by a newline only if the input is not a text string.
+It then quits the jaq process with the given exit code.
+
+```
+# jaq -n '"Hi!\n" | halt_error(1)'
+Hi!
+# jaq -n '[1, 2, 3] | halt_error(2)'
+[1,2,3]
+# echo $?
+2
+```
+
+The filter `halt_error` is equivalent to `halt_error(5)`.
 
 ## Unsupported
 
