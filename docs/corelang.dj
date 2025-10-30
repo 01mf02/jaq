@@ -1037,20 +1037,94 @@ Here, `x` is an identifier.
 The filter `g` can contain calls to the filter `x`, and
 any such calls will be replaced by the filter `f`.
 
+For example, we can define a filter `iter` by
+`def iter: .[];` and use it subsequently by
+`def iter: .[]; [1, 2, 3] | iter --> 1 2 3`.
+This is equivalent to writing
+`[1, 2, 3] | .[] --> 1 2 3`.
+
+Definitions can be chained and nested. For example:
+
+```
+def foo:
+  def bar: 1;
+  def baz: 2;
+  bar + baz;
+foo --> 3
+```
+
+Here, we chained the definitions of `bar` and `baz`.
+These definitions are only visible inside the definition of `foo`;
+that means that at the place where we call `foo`,
+we can use neither `bar` nor `baz`.
+
+Definitions can be recursive, meaning that they call themselves.
+For example,
+`def f: 0, f; f` yields an infinite sequence of `0` values.
+An example of a non-terminating filter is
+`def r: r; r`.
+Finally, the following filter yields an infinite
+stream of integers starting from its input:
+
+```
+def ints_from: ., (. + 1 | ints_from);
+1 | limit(3; ints_from) --> 1 2 3
+```
+
+Definitions can also take *arguments*:
 The filter `def x(x1; ...; xn): f; g` binds the filter `f` to
 a filter with the name `x` and the arity `n`.
-Here, `x1` to `xn` are identifiers that are called *arguments* of `x`, and
+Here, `x1` to `xn` are identifiers that are the arguments of `x`, and
 `f` can contain references to these arguments.
 The filter `g` can contain calls of the shape `x(g1; ...; gn)`,
 where `g1` to `gn` are filters.
 Any such calls will be replaced by the filter `f`, where
 every argument `xi` is replaced by its corresponding filter `gi`.
 
-An example is the definition of the filter [`map(f)`](#map) in the standard library:
-`def map(f): [.[] | f];`.
+For example, the filter [`map(f)`](#map) in the standard library is defined by
+`def map(f): [.[] | f]`.
+We can use it via
+`[1, 2, 3] | map(   .+1) --> [2, 3, 4]`, which is equivalent to
+`[1, 2, 3] | [.[] | .+1] --> [2, 3, 4]`.
 
-Filters can be defined recursively; for example,
-`def f: 0, f; f` yields an infinite sequence of `0` values.
-An example of a non-terminating filter is
-`def r: r; r`.
+We can use variables as arguments of definitions.
+For example, we can write
+`def singleton($x): [$x]` as short form of
+`def singleton(x): x as $x | [$x]`.
+Note that this is not the same as
+`def singleton(x): [x]`:
 
+- `def singleton($x): [$x]; singleton(1, 2, 3) --> [1] [2] [3]`
+- `def singleton( x): [ x]; singleton(1, 2, 3) --> [1,  2,  3]`
+
+Arguments of definitions may capture variables, labels, and other definitions.
+For example:
+
+```
+def iter_map(f): .[] | f;
+def double: .+.;
+3 as $threshold  |
+label $lbl |
+[1, 2, 3] | iter_map(if . < $threshold then double else break $lbl end) -->
+ 2  4
+```
+
+Here, the argument to `iter_map` captures
+the definition `double`,
+the variable `$threshold`, and
+the label `$lbl`.
+
+::: Advanced
+We can always transform a
+definition with    variable arguments to an equivalent
+definition without variable arguments.
+For that, suppose that `$x` is the rightmost variable argument in a definition
+`def x(...; $x; ...): g`.
+We can replace it by
+`def x(...;  x; ...): x as $x | g`.
+
+For example, consider the definition
+`def f($x1; x2; $x3; x4): g`.
+This is equivalent to
+`def f(x1; x2; x3; x4): x1 as $x1 | x3 as $x3 | g`.
+:::
