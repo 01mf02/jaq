@@ -690,7 +690,7 @@ If `f` returns values that do not point to the input, then `path(f)` yields an e
 - `try path(. as $x | $x) catch "fail" --> "fail"`
 
 ::: Advanced
-The `path(f)` filter is at the heart of how
+The filter `path(f)` is at the heart of how
 `jq` executes assignments such as `p |= u`,
 whereas jaq pursues a different, "pathless" approach.
 See the section on [path-based updates](#path-based) for details on how
@@ -740,6 +740,10 @@ I also found a few surprising behaviours in `jq`, e.g. that
 `[1, 2, 3] | pick(.[-1])` yields an error.
 In the end, I decided to support only the simpler and well-understandable
 subset of paths to objects.
+:::
+
+::: Advanced
+We have the property that `pick(f, g)` is equivalent to `pick(f) * pick(g)`.
 :::
 
 
