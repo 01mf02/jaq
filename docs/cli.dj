@@ -249,21 +249,19 @@ uses the contents of the file `script.jq` as filter.
 Search for [modules](#modules) and data in given directory.
 
 jaq searches for modules and data in a set of directories called "search paths".
-Using `--library-path` adds a new directory to the search paths.
-In these search paths,
-`~` is substituted with the user's home directory
-(given by the environment variable `HOME` on Linux and `USERPROFILE` on Windows) and
-`$ORIGIN` is substituted by the directory in which the `jaq` executable resides.
+Using `--library-path` adds a new directory to the global search paths.
 
 For example,
 `jaq -L . -L .. 'include "script"; foo'`
 looks for `script.jq` first in the current directory, then in the parent directory.
 
-If `--library-path` is not given, the following default search paths are used:
+If `--library-path` is not given, the following global search paths are used:
 
 - `~/.jq`
 - `$ORIGIN/../lib/jq`
 - `$ORIGIN/../lib`
+
+See the [modules](#modules) section for more details.
 
 
 ## Variable options

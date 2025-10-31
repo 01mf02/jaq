@@ -185,11 +185,111 @@ For that reason, jaq yields an error on updates of null with any kind of index.
 
 ## Modules
 
-### `include "path";`
+jq allows dividing programs into multiple files that are called *modules*.
 
-### `import "path" as mod;`
+At the beginning of any jq module, there is a module header that consists of
+a (potentially empty) sequence of instructions listed in this section.
+The module header is then followed by a sequence of [definitions](#def).
+Finally, the main module that is called from the command-line interface
+(via [`--from-file`](#--from-file) or inline)
+must contain a single filter at the end, which is the filter that is executed.
 
-### `import "path" as $data;`
+All `include`/`import` instructions search for files as explained in the
+[search paths](#search-paths) section.
+
+### module meta;
+
+The instruction `module meta;` sets the module metadata to
+the output of `meta`, where `meta` is a filter.
+This instruction may occur
+only at the beginning of the module header and
+only once.
+
+For example, `module "My module"; 1 --> 1`.
+
+::: Compatibility
+jaq ignores `meta`, whereas
+`jq` provides its output via the `modulemeta` filter.
+:::
+
+{#include}
+### `include "mod" [meta];`
+
+The instructions `include "mod";` and `include "mod" meta;` make
+all filters defined in the module `mod.jq` accessible in the current module.
+
+For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
+`jaq -L . -n 'include "foo"; bar'` yields `1`.
+
+### `import "mod" as name [meta];`
+
+The instruction `import "mod" as name;` (potentially with `meta`data)
+makes all definitions in the module `mod.jq` accessible in the current module
+with the prefix `name::`.
+
+For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
+`jaq -L . -n 'import "foo" as myfoo; myfoo::bar'` yields `1`.
+
+### `import "data" as $name [meta];`
+
+The instruction `import "data" as name;` (potentially with `meta`data)
+loads all JSON values in `data.json` to an array,
+binds it to the variable `$name`, and
+makes it accessible in the current module.
+
+For example, if `foo.json` in the current working directory contains `1 2 3`, then
+`jaq -L . -n 'import "foo.json" as $myfoo; $myfoo'` yields `1 2 3`.
+
+### Search paths
+
+An `include`/`import` instruction searches for its given file
+in the following directories, in the following order:
+
+1. The global search paths given via `--library-path`.
+   They are interpreted relative to the current working directory.
+2. The local search paths given via metadata:
+   When an `include`/`import` instruction has `meta` of the shape
+   `{..., search: ..., ...}`, then
+   the value at the key `"search"` sets the local search paths for that instruction to:
+
+   - If the value is a string: Just that string.
+   - If the value is an array: All strings in the array.
+   - Otherwise: Nothing.
+
+   If the module containing the `include`/`import` instruction is a file, then
+   these paths are interpreted relative to the parent directory of that module.
+   Otherwise, these paths are interpreted relative to the current working directory.
+   (That is the case if the module containing the `include`/`import` instruction
+   is given inline on the command-line.)
+
+
+Every global and local search path is substituted as follows:
+
+- If it starts with `~`, then
+  `~` is substituted with the user's home directory,
+  given by the environment variable `HOME` on Linux and `USERPROFILE` on Windows.
+- If it starts with `$ORIGIN`, then
+  `$ORIGIN` is substituted by the directory in which the `jaq` executable resides.
+
+For example,
+`jaq -L ~/foo -L bar 'include "decode" {search: ["baz", "$ORIGIN/quux"]}; 1'`
+searches for the file `decode.jq` at the following paths in the given order:
+
+1. `~/foo/decode.jq` (where `~` is substituted by the user's home directory)
+2. `./bar/decode.jq`
+3. `./baz/decode.jq`
+4. `$ORIGIN/quux/decode.jq`
+   (where `$ORIGIN` is substituted by the parent directory of the `jaq` executable)
+
+The first path that corresponds to an existing file is taken.
+
+Now, suppose that `decode.jq` contains an instruction
+`import "binary" as $binary {search: "."}`.
+This searches for `binary.json` at the following paths:
+
+1. `~/foo/binary.json`
+2. `./bar/binary.json` (relative to the current working directory)
+3. `./binary.json` (relative to the parent directory of `decode.jq`)
 
 
 ## Comments
