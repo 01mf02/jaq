@@ -103,14 +103,10 @@ def getpath($path): reduce $path[] as $p (.;
   if . < {} and $p >= {} then slice($p.start; $p.end) else .[$p] end
 );
 def setpath($path; $x): getpath($path) = $x;
-def pick(f):
-  def rec($input; $path):
-    if $path == [] then $input
-    else
-      if . == null and $input >= {} then {} end |
-      .[$path[0]] |= rec($input[$path[0]]; $path[1:])
-    end;
-  . as $input | reduce path(f) as $path (null; rec($input; $path));
+def pick(f): . as $input |
+  reduce path(f) as $path ({}; . *
+    reduce ($path | reverse[]) as $p ($input | getpath($path); {($p): .})
+  );
 def del(f): f |= empty;
 
 # Arrays
