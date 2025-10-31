@@ -197,9 +197,9 @@ must contain a single filter at the end, which is the filter that is executed.
 All `include`/`import` instructions search for files as explained in the
 [search paths](#search-paths) section.
 
-### module meta;
+### Module metadata
 
-The instruction `module meta;` sets the module metadata to
+The instruction `module meta;` sets the metadata of the current module to
 the output of `meta`, where `meta` is a filter.
 This instruction may occur
 only at the beginning of the module header and
@@ -208,34 +208,40 @@ only once.
 For example, `module "My module"; 1 --> 1`.
 
 ::: Compatibility
-jaq ignores `meta`, whereas
-`jq` provides its output via the `modulemeta` filter.
+jaq ignores this instruction, whereas
+`jq` uses it to provides the output of `meta` via the `modulemeta` filter.
 :::
 
 {#include}
-### `include "mod" [meta];`
+### Module inclusion
 
-The instructions `include "mod";` and `include "mod" meta;` make
-all filters defined in the module `mod.jq` accessible in the current module.
+The instructions
+`include "mod";` and
+`include "mod" meta;`
+make all filters defined in the module `mod.jq` accessible in the current module.
 
 For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
 `jaq -L . -n 'include "foo"; bar'` yields `1`.
 
-### `import "mod" as name [meta];`
+### Module import
 
-The instruction `import "mod" as name;` (potentially with `meta`data)
-makes all definitions in the module `mod.jq` accessible in the current module
+The instructions
+`import "mod" as name;` and
+`import "mod" as name meta;`
+make all definitions in the module `mod.jq` accessible in the current module
 with the prefix `name::`.
 
 For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
 `jaq -L . -n 'import "foo" as myfoo; myfoo::bar'` yields `1`.
 
-### `import "data" as $name [meta];`
+### Data import
 
-The instruction `import "data" as name;` (potentially with `meta`data)
-loads all JSON values in `data.json` to an array,
-binds it to the variable `$name`, and
-makes it accessible in the current module.
+The instructions
+`import "data" as name;` and
+`import "data" as name meta;`
+load all JSON values in `data.json` to an array,
+bind it to the variable `$name`, and
+make it accessible in the current module.
 
 For example, if `foo.json` in the current working directory contains `1 2 3`, then
 `jaq -L . -n 'import "foo.json" as $myfoo; $myfoo'` yields `1 2 3`.
