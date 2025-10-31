@@ -180,7 +180,130 @@ For that reason, jaq yields an error on updates of null with any kind of index.
 
 ## Patterns
 
-`. as {a: [$x, {("b", "c"): $y, $z}]} | $x, $y, $z`
+The filter `f as $x | g` binds the outputs of `f` to a
+[variable](#variable-binding) `$x`.
+At the place of `$x`, we can use a *pattern* to
+_destructure_ the input into multiple variables.
+
+Consider the following filter:
+
+```
+[ 1, {a:  2}] |
+.[0]   as $x  |
+.[1].a as $y  |
+$x, $y -->
+ 1   2
+```
+
+We can write this more compactly using a pattern as follows:
+
+```
+[ 1, {a:  2}] as
+[$x, {a: $y}] |
+ $x,     $y -->
+  1       2
+```
+
+Here, `[$x, {a: $y}]` is a pattern that is used to match the value `[1, {a: 2}]`.
+It binds
+`1` to `$x` and
+`2` to `$y`.
+
+Similarly to [object construction](#objects),
+`{$x}` is equivalent to `{x: $x}` also for object patterns.
+For example, we could have written the previous example equivalently as
+`[1, {a: 2}] as [$x, {$a}] | $x, $a --> 1 2`
+
+When a pattern does not exist in its input,
+its corresponding variables are bound to `null`:
+
+- `[1, {b: 2}] as [$x, {$a}] | $x, $a --> 1 null`
+- `[1        ] as [$x,   $y] | $x, $y --> 1 null`
+- `[1, {a: 2}] as [$x, [$y]] | $x, $y --> 1 null`
+
+If the types of a pattern and its input do not match,
+an error is thrown:
+
+- `try ([1] as {$a} | $a) catch "fail" --> "fail"`
+- `try ( 1  as [$x] | $x) catch "fail" --> "fail"`
+
+Patterns do not have to match their whole input:
+
+- `[   1,    2] as [$x] | $x --> 1`
+- `{a: 1, b: 2} as {$a} | $a --> 1`
+
+Patterns can be arbitrarily nested:
+
+- `{a: [1, {b: [2]}]} as {a: [$x, {b: [$y]}]} | $x, $y --> 1 2`
+- `[[[1]]] as [[[$x]]] | $x --> 1`
+- `{a: {b: {c: 1}}} as {a: {b: {c: $x}}} | $x --> 1`
+
+We can write any filter `(f)` as object key in a pattern:
+
+```
+{a: 1, b: 2, c: 3, d: 4} as
+{("a",  "b"): $x, ("c", "d"): $y} |
+[$x, $y] -->
+[1, 3] [1, 4] [2, 3] [2, 4]
+```
+
+We can also use patterns in `reduce` and `foreach`:
+
+```
+[{"a": 1, "b": 2}, {"a": 3, "b": 4}] |
+foreach .[] as {("a", "b"): $x} ([]; . + [$x]) -->
+[1]
+[1,2]
+[1,2,3]
+[1,2,3,4]
+```
+
+::: Advanced
+A pattern `p` is either:
+
+- a variable `$x`,
+- an array  pattern `[p1, ..., pn]` containing `n` patterns, or
+- an object pattern `{e1, ..., en}` containing `n` object entries.
+  An object entry `e` is either:
+
+  - a variable `$x` or
+  - a key-value pair `(k): p` (where `k` is a filter and `p` is a pattern).
+
+An array  pattern `[p1, ..., pn]` is equivalent to
+an object pattern `{(0): p1, ..., (n): pn}`.
+
+When using a filter `(f)` as object key in a pattern, then
+`f` is run with the input that was matched
+by its parent object pattern, not
+by the whole pattern.
+For example,
+`[{"k": "a", "a": 1}] as [{(.k): $x}] | $x --> 1`
+
+This is equivalent to:
+
+```
+[{"k": "a", "a": 1}] |
+.[0]          as $p0 |
+$p0[$p0 | .k] as $x  |
+$x
+--> 1
+```
+
+Here, we can see that `(.k)` is run with the input `$p0`, which is
+the value that the parent object pattern of `(.k)`, namely `{(.k): $x}`,
+is trying to match.
+Compare this with the following _wrong_ transformation, where
+`(.k)` would be run with the input matched by the whole pattern:
+
+```
+[{"k": "a", "a": 1}] |
+try (
+.[0]     as $p0 |
+$p0[.k]  as $x  | # fails here because .k is run with whole input
+$x
+) catch "fail" --> "fail"
+```
+:::
 
 
 ## Modules
