@@ -624,7 +624,6 @@ where
             ))
         }),
         ("now", v(0), |_| bome(now().map(D::V::from))),
-        ("halt", v(0), |_| std::process::exit(0)),
         ("halt_error", v(1), |mut cv| {
             bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
                 if let Some(s) = cv.1.as_utf8_bytes() {
