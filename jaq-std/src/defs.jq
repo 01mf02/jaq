@@ -104,6 +104,7 @@ def getpath($path): reduce $path[] as $p (.;
   if . < {} and $p >= {} then slice($p.start; $p.end) else .[$p] end
 );
 def setpath($path; $x): getpath($path) = $x;
+def delpaths($paths): reduce $paths[] as $path (.; getpath($path) |= empty);
 def pick(f):
   reduce path_value(f) as [$path, $value] ({}; . *
     reduce ($path | reverse[]) as $p ($value; {($p): .})
