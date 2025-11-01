@@ -18,22 +18,6 @@ Examples:
 - `try (41 | error   ) catch (. + 1) --> 42`
 - `try (error(41) = 1) catch (. + 1) --> 42`
 
-{#debug}
-### `debug`, `debug(f)`
-
-The filter `debug(f)` prints a debug message for every output of `f`
-to the standard error stream (stderr), then yields its input.
-For example, the filter `0 | debug(1, 2)` yields
-the following output on the command-line:
-
-```
-["DEBUG:",1]
-["DEBUG:",2]
-0
-```
-
-The filter `debug` is equivalent to `debug(.)`.
-
 ### `length`
 
 The output of the filter `length` depends on its input type:
@@ -1832,6 +1816,35 @@ It is advised to use it sparingly and with caution,
 lest you are devoured by the evil dragons of evaluation order.
 :::
 
+{#debug}
+### `debug`, `debug(f)`
+
+The filter `debug(f)` prints a debug message for every output of `f`
+to the standard error stream (stderr), then yields its input.
+For example, the filter `0 | debug(1, 2)` yields
+the following output on the command-line:
+
+```
+["DEBUG:",1]
+["DEBUG:",2]
+0
+```
+
+The filter `debug` is equivalent to `debug(.)`.
+
+### `stderr`
+
+The filter `stderr` prints its input in raw and compact mode
+to the standard error stream, then yields its input.
+
+::: Compatibility
+In `jq`, this filter yields no output.
+:::
+
+### `halt`
+
+The filter `halt` terminates jaq with exit code 0.
+
 {#halt_error}
 ### `halt_error`, `halt_error($exit_code)`
 
@@ -1851,23 +1864,41 @@ Hi!
 
 The filter `halt_error` is equivalent to `halt_error(5)`.
 
+{#env}
+### `$ENV`, `env`
+
+The variable `$ENV` holds an object that contains an entry for every environment variable, where
+the key is the name of the variable and the value is its value.
+For example, `{"EDITOR": "vim", "SHELL": "/usr/bin/bash"}`.
+
+The filter `env` is equivalent to `$ENV`.
+
+
 ## Unsupported
 
 This section lists filters present in `jq`, but not in jaq.
 
-### SQL-style
+- [`combinations`](https://jqlang.org/manual/#combinations)
+- [`$__loc__`](https://jqlang.org/manual/#$__loc__)
+- [`modulemeta`](#module-metadata)
+- [`have_literal_numbers`](https://jqlang.org/manual/#have_literal_numbers)
+- [`have_decnum`](https://jqlang.org/manual/#have_decnum)
+- [`$JQ_BUILD_CONFIGURATION`](https://jqlang.org/manual/#$jq_build_configuration)
+- [`builtins`](https://jqlang.org/manual/#builtins)
+- [`input_filename`](https://jqlang.org/manual/#input_filename)
+- [`input_line_number`](https://jqlang.org/manual/#input_line_number)
 
-jaq supports none of jq's SQL-style operators
-`INDEX`,
-`JOIN`, and
-`IN`,
-mostly for aesthetic reasons (uppercase-names) and because jq is not SQL.
+jaq supports none of jq's
+[SQL-style operators](https://jqlang.org/manual/#sql-style-operators),
+mostly for aesthetic reasons (uppercase-names) and because jq is not SQL:
 
-### Streaming
+- `INDEX`
+- `JOIN`
+- `IN`
 
-jaq does not support `jq`'s `--stream` option;
-therefore, it also does not implement the related filters
-`truncate_stream`,
-`fromstream`, and
-`tostream`.
+jaq does not support `jq`'s [`--stream`](https://jqlang.org/manual/#streaming) option;
+therefore, it also does not implement the related filters:
 
+- `truncate_stream`
+- `fromstream`
+- `tostream`

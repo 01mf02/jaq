@@ -258,6 +258,11 @@ foreach .[] as {("a", "b"): $x} ([]; . + [$x]) -->
 [1,2,3,4]
 ```
 
+::: Compatibility
+jaq does not support `jq`'s destructuring alternative operator
+[`?//`](https://jqlang.org/manual/#destructuring-alternative-operator).
+:::
+
 ::: Advanced
 A pattern `p` is either:
 
