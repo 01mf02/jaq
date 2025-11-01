@@ -658,6 +658,7 @@ The difference shows in particular when `f` returns multiple values.
 
 :::
 
+{#del}
 ### `del(f)`
 
 The filter `del(f)` deletes values at the locations given by `f`.
@@ -709,6 +710,7 @@ For example:
 - `[1, 2, 3] | getpath([{"start": 1}, {"end": -1}]) --> [2]`
 - `[1, 2, 3] | getpath([{"start": 1,   "end": -1}]) --> [2]`
 
+{#setpath}
 ### `setpath($path; $v)`
 
 The filter `setpath($path; $v)` sets the value at `$path` to `$v`.
@@ -716,6 +718,17 @@ It is equivalent to `getpath($path) = $v`.
 For example:
 
 - `[[1, 2], [3, 4]] | setpath([1, 0]; 5) --> [[1, 2], [5, 4]]`
+
+{#delpaths}
+### `delpaths($paths)`
+
+The filter `delpaths($paths)` takes an array of paths and
+deletes all corresponding values in the order given by the array.
+For example:
+
+- `[1, 2, 3] | delpaths([[0]])      --> [2, 3]`
+- `[1, 2, 3] | delpaths([[0], [0]]) --> [3]`
+- `[{a: 1, b: 2}, 3] | delpaths([[0, "b"], [1]]) --> [{"a": 1}]`
 
 {#paths}
 ### `paths`, `paths(p)`
