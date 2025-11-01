@@ -93,7 +93,8 @@ def unique_by(f): [group_by(f)[] | .[0]];
 def unique: unique_by(.);
 
 # Paths
-def paths(f): path_values | if .[1] | f then .[0] else empty end;
+def paths:    skip(1; path      (..));
+def paths(p): skip(1; path_value(..)) | if .[1] | p then .[0] else empty end;
 def getpath($path): reduce $path[] as $p (.;
   def slice($s; $e):
     if   $s and $e then .[$s:$e]
@@ -103,9 +104,9 @@ def getpath($path): reduce $path[] as $p (.;
   if . < {} and $p >= {} then slice($p.start; $p.end) else .[$p] end
 );
 def setpath($path; $x): getpath($path) = $x;
-def pick(f): . as $input |
-  reduce path(f) as $path ({}; . *
-    reduce ($path | reverse[]) as $p ($input | getpath($path); {($p): .})
+def pick(f):
+  reduce path_value(f) as [$path, $value] ({}; . *
+    reduce ($path | reverse[]) as $p ($value; {($p): .})
   );
 def del(f): f |= empty;
 
