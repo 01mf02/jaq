@@ -670,6 +670,7 @@ For example:
 - `[1, 2, 3]    | del(.[1:]) --> [1]`
 - `{a: 1, b: 2} | del(.a) --> {"b": 2}`
 
+{#paths-stdlib}
 ## Paths
 
 {#path}
@@ -696,6 +697,31 @@ The filter `path(f)` is at the heart of how
 whereas jaq pursues a different, "pathless" approach.
 See the section on [path-based updates](#path-based) for details on how
 `path(f)` is calculated.
+:::
+
+{#paths}
+### `paths`, `paths(p)`
+
+The filter `paths` yields the paths to all ancestor values of the input.
+It is equivalent to `skip(1; path(..))`.
+
+The filter `paths(p)` yields the paths to all ancestor values of the input
+for which `p` yields true.
+
+Examples:
+
+- `[1, {a: 2}] | paths           --> [0] [1] [1, "a"]`
+- `[1, {a: 2}] | paths(isnumber) --> [0]     [1, "a"]`
+- `[1, {a: 2}] | paths(isobject) -->     [1]         `
+
+::: Advanced
+We have that `paths` is equivalent to `paths(true)`.
+Furthermore, `paths(p)` is equivalent to:
+
+```
+def paths(p): paths as $path | if getpath($path) | p then $path else empty end;
+[1, {a: 2}] | paths(isnumber) --> [0] [1, "a"]
+```
 :::
 
 {#getpath}
@@ -730,31 +756,6 @@ For example:
 - `[1, 2, 3] | delpaths([[0], [0]]) --> [3]`
 - `[{a: 1, b: 2}, 3] | delpaths([[0, "b"], [1]]) --> [{"a": 1}]`
 
-{#paths}
-### `paths`, `paths(p)`
-
-The filter `paths` yields the paths to all ancestor values of the input.
-It is equivalent to `skip(1; path(..))`.
-
-The filter `paths(p)` yields the paths to all ancestor values of the input
-for which `p` yields true.
-
-Examples:
-
-- `[1, {a: 2}] | paths           --> [0] [1] [1, "a"]`
-- `[1, {a: 2}] | paths(isnumber) --> [0]     [1, "a"]`
-- `[1, {a: 2}] | paths(isobject) -->     [1]         `
-
-::: Advanced
-We have that `paths` is equivalent to `paths(true)`.
-Furthermore, `paths(p)` is equivalent to:
-
-```
-def paths(p): paths as $path | if getpath($path) | p then $path else empty end;
-[1, {a: 2}] | paths(isnumber) --> [0] [1, "a"]
-```
-:::
-
 {#pick}
 ### `pick(f)`
 
@@ -786,6 +787,7 @@ We have the property that `pick(f, g)` is equivalent to `pick(f) * pick(g)`.
 :::
 
 
+{#numbers-stdlib}
 ## Numbers
 
 ### `infinite`, `nan`
@@ -920,6 +922,7 @@ Examples:
 - `fma(2; 3; 4) --> 10.0`
 
 
+{#arrays-stdlib}
 ## Arrays
 
 ### `sort`, `sort_by(f)`
@@ -1039,7 +1042,6 @@ def verify: transpose as $t |
 :::
 
 {#flatten}
-
 ### `flatten`, `flatten($depth)`
 
 The filter `flatten` flattens input arrays, and
@@ -1055,7 +1057,6 @@ For example:
 Note that `flatten` does not impact arrays that are descendants of an object.
 
 ::: Advanced
-
 We can define `flatten/0` and `flatten/1` as:
 
 ```
@@ -1069,11 +1070,9 @@ def flatten($d): [flattens($d)];
 [1,  2, [3] , {"a": [1, [2]]}]
 [1,  2,  3  , {"a": [1, [2]]}]
 ```
-
 :::
 
 {#bsearch}
-
 ### `bsearch($x)`
 
 The filter `bsearch($x)` takes a sorted array and
@@ -1091,7 +1090,6 @@ Examples:
 If the input array is not sorted, then the output of this filter is meaningless.
 
 ::: Advanced
-
 We can verify the property above for negative `$i`.
 First, let us search for the value `6` that is not in the input array:
 
@@ -1103,11 +1101,11 @@ which is `--3-1 --> 2`:
 `[0, 4, 8] | .[2:2] = [6] --> [0, 4, 6, 8]`.
 
 We can see that the resulting array is sorted.
-
 :::
 
 
-## Strings
+{#text-strings-stdlib}
+## Text strings
 
 Unless stated otherwise, all filters in this section
 take a text string as input, and fail if the input is of any other type.
@@ -1121,6 +1119,7 @@ which counts the number of *characters*.
 For example,
 `"ゼノギアス" | length, utf8bytelength, (tobytes | length) --> 5 15 15`.
 
+{#starts-endswith}
 ### `startswith($s)`, `endswith($s)`
 
 The filter `startswith($s)` yields
@@ -1131,6 +1130,7 @@ For example:
 - `"ゼノギアス" | startswith("ゼノ") --> true`
 - `"ゼノギアス" | endswith("ギアス") --> true`
 
+{#trim}
 ### `trim`, `ltrim`, `rtrim`
 
 The filters `ltrim` and `rtrim` remove from the input string all
@@ -1145,6 +1145,7 @@ For example:
 
 Note that there are a few quite unusual whitespace characters in this string.
 
+{#trimstr}
 ### `ltrimstr($s)`, `rtrimstr($s)`
 
 The filters `ltrimstr($s)` and `rtrimstr($s)` remove a single occurrence of
@@ -1194,6 +1195,7 @@ See the section on [division](#mul-div) for details.
 
 Note that there is also [`split($re; $flags)`](#splits) that splits by a regex.
 
+{#join}
 ### `join($s)`
 
 The filter `join($s)` takes as input an array `[x1, ..., xn]` and yields
@@ -1222,9 +1224,10 @@ For example:
 - `"Der λΠ-Kalkül" | ascii_upcase   --> "DER λΠ-KALKüL"`
 
 
-## String formatting
+## Text string formatting
 
-The filters in this section can be prefixed to strings to influence [string interpolation](#strings).
+The filters in this section can be prefixed to strings to influence
+[string interpolation](#text-strings).
 However, these filters can also be used outside of string interpolation.
 For example:
 
@@ -1367,7 +1370,7 @@ For example:
 "true\t\tfalse\t1\tNewline\\nBackslash\\\\NUL\\0"
 ```
 
-
+{#byte-strings-stdlib}
 ## Byte strings
 
 ### `tobytes`

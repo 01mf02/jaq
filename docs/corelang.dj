@@ -251,7 +251,7 @@ An object with a single key and value can be constructed by `{(k): v}`,
 where `k` and `v` are both filters.
 For example, `{("a"): 1} --> {"a": 1}`.
 
-If `k` is a [text string filter](#strings) such as `"a"` or a variable such as `$k`,
+If `k` is a [string](#text-strings) such as `"a"` or a variable such as `$k`,
 then you can omit the parentheses, e.g. `{"a": 1}` or `{$k: 1}`.
 If the string is identifier-like,
 then you can also omit the quotes, e.g. `{a: 1}`.
