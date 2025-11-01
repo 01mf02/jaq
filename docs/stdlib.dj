@@ -717,6 +717,32 @@ For example:
 
 - `[[1, 2], [3, 4]] | setpath([1, 0]; 5) --> [[1, 2], [5, 4]]`
 
+{#paths}
+### `paths`, `paths(p)`
+
+The filter `paths` yields the paths to all ancestor values of the input.
+It is equivalent to `skip(1; path(..))`.
+
+The filter `paths(p)` yields the paths to all ancestor values of the input
+for which `p` yields true.
+
+Examples:
+
+- `[1, {a: 2}] | paths           --> [0] [1] [1, "a"]`
+- `[1, {a: 2}] | paths(isnumber) --> [0]     [1, "a"]`
+- `[1, {a: 2}] | paths(isobject) -->     [1]         `
+
+::: Advanced
+We have that `paths` is equivalent to `paths(true)`.
+Furthermore, `paths(p)` is equivalent to:
+
+```
+def paths(p): paths as $path | if getpath($path) | p then $path else empty end;
+[1, {a: 2}] | paths(isnumber) --> [0] [1, "a"]
+```
+:::
+
+{#pick}
 ### `pick(f)`
 
 The filter `pick(f)` constructs an object that
