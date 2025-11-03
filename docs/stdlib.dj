@@ -1466,11 +1466,11 @@ this is not the case, because
 ## Date & Time
 
 The filters in this section serve to
-obtain the current time and to
 convert between different time formats, such as:
 
 - Unix epoch: Marks a point in time by the number of seconds passed since
   January 1, 1970 00:00:00 (UTC).
+  You can obtain the current time as Unix epoch via [`now`](#now).
 - ISO-8601 datetime string: Represents a date, a time, and a time zone as a string,
   such as `"1970-01-01T00:00:00Z"` (corresponding to Unix epoch `0`).
 - "Broken down time" (BDT) array: Represents a date and a time as an array of the shape
@@ -1491,7 +1491,7 @@ You can convert between these representations via:
 
 As example, let us consider the time where the
 Hill Valley courthouse's clock tower was struck by lightning, namely
-[Saturday, November 12, 1955, at 10:04 p.m. PST](https://en.wikipedia.org/wiki/Hill_Valley_(Back_to_the_Future)#Fictional_history).
+[Saturday, November 12, 1955, at 10:04 p.m. PST](https://en.wikipedia.org/wiki/Hill_Valley_(Back_to_the_Future%29#Town_square).
 The corresponding date can be written in ISO 8601 as
 `"1955-11-12T10:04:00-08:00"`.
 We can convert that to a Unix epoch and from there to a (UTC) BDT via:
@@ -1523,10 +1523,6 @@ was the `316`-th day of the year (where `0` is the first day).
 `jq` does not allow time zone information in ISO 8601 datetime strings.
 
 :::
-
-### `now`
-
-This filter yields the Unix epoch as floating-point number.
 
 ### `fromdate`, `todate`, `fromdateiso8601`, `todateiso8601`
 
@@ -1792,6 +1788,9 @@ We have following short forms:
 
 ## I/O
 
+This section contains filters that interact with the system.
+These filters may yield different outputs when given equal inputs.
+
 {#inputs}
 ### `input`, `inputs`
 
@@ -1834,35 +1833,42 @@ The filter `debug` is equivalent to `debug(.)`.
 
 ### `stderr`
 
-The filter `stderr` prints its input in raw and compact mode
-to the standard error stream, then yields its input.
+The filter `stderr` prints its input to the standard error stream
+in [raw](#--raw-output) and [compact](#--compact-output) mode [without newline](#--join-output).
+It then yields its input.
 
-::: Compatibility
-In `jq`, this filter yields no output.
-:::
+### `halt`, `halt($exit_code)`
 
-### `halt`
+The filter `halt($exit_code)` terminates jaq with the given exit code.
 
 The filter `halt` terminates jaq with exit code 0.
+
+::: Compatibility
+`jq` does not implement `halt($exit_code)`, only `halt`.
+:::
 
 {#halt_error}
 ### `halt_error`, `halt_error($exit_code)`
 
-The filter `halt_error($exit_code)`
-first prints its input [raw](#--raw-output) and [compact](#--compact-output),
-followed by a newline only if the input is not a text string.
+The filter `halt_error($exit_code)` prints its input via [`stderr`](#stderr).
 It then quits the jaq process with the given exit code.
 
 ```
-# jaq -n '"Hi!\n" | halt_error(1)'
+# jaq -n '"Hi!\n" | halt_error(42)'
 Hi!
-# jaq -n '[1, 2, 3] | halt_error(2)'
-[1,2,3]
 # echo $?
-2
+42
 ```
 
 The filter `halt_error` is equivalent to `halt_error(5)`.
+
+::: Compatibility
+`jq` prints a newline after the input if it is not a string.
+:::
+
+### `now`
+
+This filter yields the [Unix epoch](#date-time) as floating-point number.
 
 {#env}
 ### `$ENV`, `env`

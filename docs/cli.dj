@@ -154,7 +154,7 @@ For example, `jaq -c <<< '[1, 2, 3]'` yields the output `[1,2,3]`.
 {#--raw-output}
 ### `-r`, `--raw-output`
 
-Write strings without escaping them and without surrounding them with quotes.
+Write (text and byte) strings without escaping them and without surrounding them with quotes.
 For example,
 `jaq -r <<< '"Hello\nWorld"'` outputs two lines; `Hello` and `World`, whereas 
 `jaq <<< '"Hello\nWorld"'` outputs a single line; `"Hello\nWorld"`.
