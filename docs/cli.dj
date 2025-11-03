@@ -165,6 +165,7 @@ For example,
 
 This is equivalent to `--to raw`.
 
+{#--join-output}
 ### `-j`, `--join-output`
 
 Do not print a newline after each value.
@@ -187,11 +188,10 @@ once there is no more output and
 if there has not been any error.
 
 ::: Compatibility
-
 `jq` does not have this option.
-
 :::
 
+{#--sort-keys}
 ### `-S`, `--sort-keys`
 
 Print objects sorted by their keys.
@@ -201,6 +201,7 @@ For example,
 `jaq  -c <<< '{"b": {"d": 3, "c": 2}, "a": 1}'` yields
 `{"b":{"d":3,"c":2},"a":1}`.
 
+{#--color-output}
 ### `-C`, `--color-output`
 
 Always color output, even if jaq does not print to a terminal.
@@ -211,6 +212,7 @@ For example,
 `b"{}"`.
 (Here, `jaq --from raw tobytes` prints a byte representation of its input.)
 
+{#--monochrome-output}
 ### `-M`, `--monochrome-output`
 
 Do not color output.
@@ -225,6 +227,7 @@ For example,
 `jaq      <<< '[1, [2]]' | jaq -Rs` yields
 `"[\n  1,\n  [\n    2\n  ]\n]\n"`.
 
+{#--indent}
 ### `--indent` _N_
 
 Use _N_ spaces for indentation (default: 2).
