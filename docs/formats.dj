@@ -3,10 +3,23 @@
 jaq supports reading and writing several data formats.
 This section describes these data formats.
 
+You can load and write data in these formats using either:
+
+- the command-line options [`--from`](#--from) / [`--to`](#--to), or
+- [(de-)serialisation filters](#serialisation-deserialisation) such as
+  [`fromjson`](#fromjson-tojson) and [`toyaml`](#fromyaml-toyaml)
+
+The command-line options `--from` and `--to` always yield
+better or equal performance than the corresponding filters.
+
 ## JSON
 
-JSON is specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
-A good overview of its syntax is given at <https://www.json.org>.
+[JSON](https://www.json.org) (JavaScript Object Notation)
+is specified in [RFC 8259](https://datatracker.ietf.org/doc/html/rfc8259).
+
+jaq can read all valid JSON values; however, like `jq`,
+it also accepts certain values that are invalid JSON.
+This set of values is documented in the [XJON](#xjon) section.
 
 ## XJON
 
@@ -37,7 +50,6 @@ XJON extends JSON with following constructs:
     - an escape sequence, starting with a backslash (`'\'`) and followed by
       `b`, `f`, `n`, `r`, `t`, `'"'`, `'\'`, or
       `xHH`, where `HH` is a hexadecimal number
-
   For example: `b"Here comes \xFF, dadadada\nHere comes \xFF\nAnd I say: \"It's alright\"\x00"`.
   Byte strings of this shape can also be found in other languages, like
   Rust & Python (with leading `b`) and JavaScript & C (without leading `b`).
@@ -47,7 +59,7 @@ XJON extends JSON with following constructs:
   For example: `{null: 0, true: 1, 2: 3, "str": 4, ["arr"]: 5, {}: 6}`
 
 The goal behind XJON was to
-support a set of values present in YAML and CBOR, namely
+support a set of values present in [YAML](#yaml) and [CBOR](#cbor), namely
 byte strings and objects with non-string keys, while keeping the format
 both human-readable and simple & performant to parse, like JSON.
 
@@ -63,11 +75,103 @@ That means that
 `jaq --from json <<< 'NaN b"Bytes" {1: 2} # Over and out'` yields
 `'NaN b"Bytes" {1: 2}`, although the input is XJON, not valid JSON.
 
+
 ## YAML
+
+[YAML](https://yaml.org/) (YAML Ain't Markup Language™) is
+"a human-friendly data serialization language for all programming languages".
+It is also a JSON and XJON superset.
+That means that every jaq value can be encoded as YAML value.
+
+jaq supports reading YAML with anchors (`&foo`) and aliases (`*foo`).
+These allow the creation of shared data structures. For example:
+
+- `"[&a 1, &b 2, *a, *b]" | fromyaml --> [1, 2, 1, 2]`
+- `"[&b [&a [], *a], *b]" | fromyaml --> [[[], []], [[], []]]`
+
+jaq validates tags for scalar YAML values, such as
+`null`, booleans, numbers, and strings:
+
+- `"!!bool true" | fromyaml --> true`
+- `"!!int  true" | try fromyaml catch "fail" --> "fail"`
+
+On the other hand, jaq ignores tags for arrays and objects:
+
+- `"!!foo []" | fromyaml --> []`
+- `"!!bar {}" | fromyaml --> {}`
+
+jaq produces YAML that is very close to JSON/XJON.
+It differs from XJON only by writing
+byte strings as Base64-encoded `!!binary` string and
+special floating-point values as `.inf`, `-.inf`, and `.nan`:
+
+```
+[infinite, -infinite, nan, ("a" | tobytes), {"a": 1}] | tojson, toyaml -->
+"[Infinity,-Infinity,NaN,b\"a\",{\"a\":1}]"
+"[.inf,-.inf,.nan,!!binary YQ==,{\"a\":1}]"
+```
+
+jaq preserves invalid UTF-8 sequences in text strings when writing YAML.
+However, jaq yields an error when trying to
+parse YAML containing invalid UTF-8 sequences.
+
+When using `--to yaml`, jaq writes
+`---` before every output value and
+`...` after  every output value.
+This is done to indicate the start/end of YAML documents.
+For example:
+
+```
+$ jaq --to yaml <<< '1 2'
+---
+1
+...
+---
+2
+...
+```
+
+Both `--from yaml` and the filter `fromyaml`
+load the full input into memory before parsing it.
+
 
 ## CBOR
 
+[CBOR](https://cbor.io/) (Concise Binary Object Representation)
+is a binary format specified in
+[RFC 8949](https://www.rfc-editor.org/rfc/rfc8949.html).
+
+CBOR values are a superset of jaq values.
+That means that there are CBOR values for which there are no equivalent jaq values, for example:
+
+- [date-time](https://www.rfc-editor.org/rfc/rfc8949.html#name-epoch-based-date-time)
+- [undefined](https://www.rfc-editor.org/rfc/rfc8949.html#name-undefined-values)
+- [decimal fractions and bigfloats](https://www.rfc-editor.org/rfc/rfc8949.html#fractions)
+
+jaq fails when trying to decode such CBOR values.
+
+Every jaq value can be encoded losslessly as CBOR value, except for
+text strings with invalid UTF-8 code units.
+Invalid UTF-8 sequences are replaced with `U+FFFD`, which looks like this: "�".
+
+jaq writes sequences of CBOR values by concatenating them without any separator.
+That means that `--to cbor` is equivalent to `--to cbor --join-output`.
+jaq can also read sequences of concatenated CBOR values.
+
+See [`fromcbor`/`tocbor`](#fromcbor-tocbor).
+
 ## TOML
+
+[TOML](https://toml.io) is a configuration file format.
+Compared to jaq values,
+TOML has date-time values, but
+TOML has neither
+`null`,
+byte strings, nor
+non-string object keys.
+
+When writing TOML, jaq converts invalid UTF-8 sequences like for [CBOR](#cbor).
+
 
 ## XML
 
@@ -80,18 +184,15 @@ You can use tools such as
 
 Mappings between XML to JSON generally have to make a compromise between
 "friendliness" and round-tripping;
-see "[Experiences with JSON and XML Transformations]".
+see "[Experiences with JSON and XML Transformations](https://www.w3.org/2011/10/integration-workshop/p/XML_JSON_mapping_paper.pdf)".
 Here, "friendliness" means that JSON generated from XML has a flat structure,
 making it easy to consume it.
 Stefan Goessner gives a nice discussion of different "friendly" mappings in
-"[Converting Between XML and JSON]".
+"[Converting Between XML and JSON](https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html)".
 The take-away message is: "Friendly" mappings lose information.
 For that reason, jaq does not use a "friendly" mapping, but rather
 a mapping that preserves XML information perfectly,
 making it suitable for round-tripping.
-
-[Experiences with JSON and XML Transformations]: https://www.w3.org/2011/10/integration-workshop/p/XML_JSON_mapping_paper.pdf
-[Converting Between XML and JSON]: https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html
 
 As an example, consider the following input:
 
@@ -119,16 +220,20 @@ This yields the following JSON:
 }
 ```
 
-### Tags or The TAC Architecture
+### TAC objects
 
-Tags are represented by "TAC" objects. A TAC object may have the following fields:
+Tags are represented by _TAC objects_. A TAC object may have the following fields:
 
 - `t`: Name of the tag, such as `h1` for `<h1>...</h1>`.
   This field must always be present in a TAC object.
 - `a`: Attributes of the tag, such as `{"id": "foo", style: "color:blue;"}`.
   If this field is present, it must contain an object with string values.
-- `c`: Children of the tag, usually an array of XML values.
+- `c`: Children of the tag.
   If this field is not present, this tag will be interpreted as self-closing (such as `<br/>`).
+  When a TAC object produced by jaq (either via `--from xml` or `fromxml`)
+  has the `c` field, it always holds an array of XML values.
+  When writing XML values (either via `--to xml` or `toxml`),
+  jaq accepts any XML value at the `c` field.
 
 An example query to obtain all links in an XHTML file:
 
@@ -156,11 +261,12 @@ Finally, we can extract all text from an XML file (discarding CDATA blocks):
 def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
 ```
 
-### Other XML values
+### Other values
 
 - Strings are neither escaped nor unescaped; that means,
    `Tom &amp; Jerry`  in the source XML becomes
   `"Tom &amp; Jerry"` in the target JSON.
+  The [`@html`/`@htmld`](#html-htmld) filters can be used for manual (un-)escaping.
 - A comment such as `<!-- this comment -->`{.xml} is converted to
   `{"comment": " this comment "}`{.json}.
 - A CDATA block such as `<![CDATA[Tom & Jerry]]>`{.xml} is converted to
@@ -235,4 +341,7 @@ Running `jaq . examples/test.xhtml` yields the following output:
   ]
 }
 ```
+
+The output contains several values consisting only of whitespace, such as `"\n    "`.
+These are conserved by jaq because XML is a whitespace-sensitive format.
 

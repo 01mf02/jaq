@@ -350,6 +350,15 @@ Examples:
 
 The filters in this section classify their inputs or output them selectively.
 
+### `toboolean`
+
+The filter `toboolean` is for booleans what [`tonumber`](#tonumber) is for numbers. 
+For example:
+
+- `  true   | toboolean --> true`
+- ` "true"  | toboolean --> true`
+- `"[true]" | try toboolean catch "fail" --> "fail"`
+
 {#select}
 ### `select(p)`
 
@@ -774,6 +783,17 @@ We have the property that `pick(f, g)` is equivalent to `pick(f) * pick(g)`.
 {#numbers-stdlib}
 ## Numbers
 
+### `tonumber`
+
+The filter `tonumber` takes as input either a number or a string.
+If the input is a number, it is returned unchanged;
+if the input is a string, it is parsed to a number, failing if this does not succeed.
+For example:
+
+- `  42   | tonumber --> 42`
+- ` "42"  | tonumber --> 42`
+- `"[42]" | try tonumber catch "fail" --> "fail"`
+
 ### `infinite`, `nan`
 
 The filters `infinite` and `nan` yield the floating-point numbers
@@ -1094,6 +1114,25 @@ We can see that the resulting array is sorted.
 Unless stated otherwise, all filters in this section
 take a text string as input, and fail if the input is of any other type.
 
+### `tostring`
+
+The filter `tostring` converts its input to a string.
+Its output depends on the type of its input:
+
+- Text strings are returned unchanged, i.e. `"Hi" | tostring --> "Hi"`
+- Byte strings are interpreted as text string, i.e. `"Hi" | tobytes | tostring --> "Hi"`
+- Any other value is formatted compactly as if output by `jaq -c`. For example:
+
+  - `null | tostring --> "null"`,
+  - `[0, 1] | tostring --> "[0,1]"`,
+  - `{a: 1} | tostring --> "{\"a\":1}"`.
+
+::: Advanced
+String interpolation without an explicit format, such as
+`"\(null) and \([0, 1])" --> "null and [0,1]"`, behaves as if
+the output of every interpolated filter was piped through `tostring`.
+:::
+
 ### `utf8bytelength`
 
 The filter `utf8bytelength` yields the number of bytes of the input string.
@@ -1377,55 +1416,21 @@ Its output depends on the type of input:
 This is inspired by Erlang's `iolist_to_binary` function.
 
 ::: Compatibility
-
 `jq` does not have byte strings and thus does not have `tobytes`.
 `fq`, which has pioneered the `tobytes` filter, has both.
-
 :::
 
 
 ## Serialisation & Deserialisation
 
-### `tostring`
+The filters in this section read and write data in all formats supported by jaq.
+See the [formats](#formats) section for general information about
+how jaq interprets these formats.
 
-The filter `tostring` converts its input to a string.
-Its output depends on the type of its input:
-
-- Text strings are returned unchanged, i.e. `"Hi" | tostring --> "Hi"`
-- Byte strings are interpreted as text string, i.e. `"Hi" | tobytes | tostring --> "Hi"`
-- Any other value is formatted compactly as if output by `jaq -c`. For example:
-
-  - `null | tostring --> "null"`,
-  - `[0, 1] | tostring --> "[0,1]"`,
-  - `{a: 1} | tostring --> "{\"a\":1}"`.
-
-::: Advanced
-
-String interpolation without an explicit format, such as
-`"\(null) and \([0, 1])" --> "null and [0,1]"`, behaves as if
-the output of every interpolated filter was piped through `tostring`.
-
+::: Compatibility
+`jq` supports only JSON, so it only implements the
+[`fromjson`/`tojson`](#fromjson-tojson) filters in this section.
 :::
-
-### `tonumber`
-
-The filter `tostring` takes as input either a number or a string.
-If the input is a number, it is returned unchanged;
-if the input is a string, it is parsed to a number, failing if this does not succeed.
-For example:
-
-- `  42   | tonumber --> 42`
-- ` "42"  | tonumber --> 42`
-- `"[42]" | try tonumber catch "fail" --> "fail"`
-
-### `toboolean`
-
-The filter `toboolean` is for booleans what `tonumber` is for numbers. 
-For example:
-
-- `  true   | toboolean --> true`
-- ` "true"  | toboolean --> true`
-- `"[true]" | try toboolean catch "fail" --> "fail"`
 
 ### `fromjson`, `tojson`
 
@@ -1453,14 +1458,107 @@ instead of returning it unchanged; i.e.
 `"Hi" | tojson --> "\"Hi\""`.
 
 ::: Compatibility
-
 In `jq`, `fromjson` yields an error when its input string contains multiple JSON values.
 Furthermore, in `jaq`,
 `tojson | fromjson` is equivalent to identity (`.`), whereas in `jq`,
 this is not the case, because
 `nan | tojson | fromjson` yields `null`, not `nan`.
-
 :::
+
+### `fromyaml`, `toyaml`
+
+The filter `fromyaml` takes a text string and parses it as sequence of
+[YAML](#yaml) documents.
+It can yield an arbitrary number of outputs. For example:
+
+- `"---\n 1 \n...\n---\n 2 \n..." | fromyaml --> 1 2`
+- `"" | fromyaml -->` (no output)
+
+The filter `toyaml` always yields exactly one output, namely
+a text string containing the current value encoded as YAML.
+
+### `fromcbor`, `tocbor`
+
+The filter `fromcbor` takes a byte string and parses it as sequence of
+[CBOR](#cbor) values.
+For example:
+
+```
+[0, 1, 32, 64, 96, 128, 160,  244, 245, 246] | tobytes | fromcbor -->
+ 0  1  -1 b""  ""   []   {} false true null
+```
+
+The filter `tocbor` always yields exactly one output, namely
+a byte string containing the current value encoded as CBOR.
+
+### `fromtoml`, `totoml`
+
+The filter `fromtoml` takes a text string and parses it as a single
+[TOML](#toml) document.
+It yields always one output, because every TOML document encodes exactly one value.
+For example:
+
+```
+"
+[database]\n
+enabled = true\n
+ports = [ 8000, 8001, 8002 ]\n
+data = [ [\"delta\", \"phi\"], [3.14] ]\n
+temp_targets = { cpu = 79.5, case = 72.0 }\n
+" | fromtoml -->
+{"database": {
+  "enabled": true,
+  "ports": [8000,8001,8002],
+  "data": [["delta", "phi"], [3.14]],
+  "temp_targets": {"cpu": 79.5, "case": 72.0}
+}}
+```
+
+The filter `totoml` fails if
+the input is not an object or
+the input contains any jaq value not supported by TOML.
+It converts invalid UTF-8 sequences like [CBOR](#cbor).
+
+### `fromxml`, `toxml`
+
+The filter `fromxml` takes a text string and parses it as sequence of
+[XML](#xml) tags.
+For example:
+
+```
+"<?xml version='1.0'?>
+<html>
+<body xmlns='http://www.w3.org/1999/xhtml'>
+Hello HTML!
+</body>
+</html>" | fromxml -->
+{"xmldecl": {"version": "1.0"}}
+{"t": "html","c": [{
+  "t": "body",
+  "a": {"xmlns": "http://www.w3.org/1999/xhtml"},
+  "c": ["Hello HTML!"]
+}]}
+```
+
+The filter `toxml` takes data produced in the format by `fromxml` and
+yields a corresponding text string.
+
+```
+[
+{"xmldecl": {"version": "1.0"}},
+{"t": "html","c": [{
+  "t": "body",
+  "a": {"xmlns": "http://www.w3.org/1999/xhtml"},
+  "c": ["Hello HTML!"]
+}]}
+] | toxml -->
+"<?xml version=\"1.0\"?>
+<html>
+<body xmlns=\"http://www.w3.org/1999/xhtml\">
+Hello HTML!
+</body>
+</html>"
+```
 
 
 ## Date & Time
