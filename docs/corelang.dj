@@ -77,14 +77,12 @@ You can get the boolean value of a value by `not | not`; i.e.
 
 ### Numbers
 
-Numbers corresponding to the regular expression
-`[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?` are
-filters that return their corresponding value, e.g.
+Numbers are filters that return their corresponding value, e.g.
 `0 --> 0`,
 `3.14 --> 3.14`, and
 `2.99e6 --> 2.99e6`.
 Negative numbers can be constructed by
-applying the [negation] operator to a number, e.g. `-1 --> -1`.
+applying the [negation](#negation) operator to a number, e.g. `-1 --> -1`.
 
 Internally, jaq distinguishes
 integers, floating-point numbers (floats), and decimal numbers:
@@ -99,7 +97,8 @@ integers, floating-point numbers (floats), and decimal numbers:
   any number corresponding to the regular expression above,
   such as `1.0e500`, if it occurs in a JSON file or jq filter.
 - When calculating with a decimal number,
-  jaq converts it transparently to a 64-bit IEEE-754 floating-point number.
+  jaq converts it transparently to a 64-bit
+  [IEEE-754](https://en.wikipedia.org/wiki/IEEE_754) floating-point number.
   For example, `1.0e500 + 1 --> Infinity`, because jaq converts
   `1.0e500` to the closest floating-point number, which is `Infinity`.
 
@@ -118,7 +117,6 @@ You can convert a floating-point number to an integer by
 `1.2 | floor, round, ceil --> 1 1 2`.
 
 ::: Compatibility
-
 `jq` uses floats for any number,
 meaning that it does not distinguish integers from floats.
 Many operations in jaq, such as array indexing,
@@ -136,7 +134,11 @@ As a result, in jaq, any value can be round-tripped with `tojson | fromjson`; e.
 `nan | tojson | fromjson | isnan --> true`.
 In `jq`, `tojson | fromjson` does not round-trip, because of
 `NaN` and `Infinity`.
+:::
 
+::: Advanced
+A number corresponds to the regular expression
+`[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`.
 :::
 
 ### Text strings
@@ -296,11 +298,7 @@ This yields an error in `jq`.
 
 ## Path operators
 
-jq's path operators
-`.[x]` ([indexing](#indexing)),
-`.[x:y]` ([slicing](#slicing)), and
-`.[]` ([iterating](#iterating))
-retrieve parts of their input.
+jq's path operators retrieve parts of their input.
 
 {#indexing}
 ### Indexing (`.[x]`)
