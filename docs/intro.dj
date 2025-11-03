@@ -13,7 +13,7 @@ In addition, jaq adds some functionality not present in `jq`:
 
 This manual aspires to:
 
-- Be readable, concise, and precise.
+- Be comprehensible, concise, and complete.
 - Document all functionality in jaq, in particular
   [jaq's command-line interface](#cli),
   [jq's core language](#corelang), and
@@ -27,11 +27,20 @@ create a pull request.
 The same holds if you wish to propose new functionality for jaq.
 This project lives from your contributions!
 
+The creation of this manual was funded through the
+[NGI0 Commons Fund](https://nlnet.nl/commonsfund), a fund established by
+[NLnet](https://nlnet.nl) with financial support from the
+European Commission's [Next Generation Internet](https://ngi.eu)
+programme, under the aegis of [DG Communications Networks, Content and Technology](https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en) under
+grant agreement N^o^ [101135429](https://cordis.europa.eu/project/id/101135429).
+Additional funding is made available by the
+[Swiss State Secretariat for Education, Research and Innovation](https://www.sbfi.admin.ch/sbfi/en/home.html) (SERI).
+
 ::: Compatibility
 This manual uses "compatibility" blocks to
 point out occasions where jaq diverges from `jq`.
 In this manual,
-"`jq`" (monospace font) refers to the C implementation, whereas
+"`jq`" refers to the C implementation, whereas
 "jq" refers to the jq language.
 :::
 
