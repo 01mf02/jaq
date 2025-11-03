@@ -99,8 +99,10 @@ impl<'input, T: Input> State<'input, T> {
     }
 
     fn push_alias(&mut self, val: Val, anchor_id: usize) {
-        self.aliases.push(val);
-        assert!(self.aliases.len() == anchor_id);
+        if self.aliases.len() < anchor_id {
+            self.aliases.resize_with(anchor_id, Val::default)
+        }
+        self.aliases[anchor_id - 1] = val;
     }
 
     fn get_alias(&self, anchor_id: usize) -> Val {
