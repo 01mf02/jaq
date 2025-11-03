@@ -74,7 +74,7 @@ where
 {
     let base_run = base_run().into_vec().into_iter().map(run);
     let base_paths = base_paths().into_vec().into_iter().map(paths);
-    base_run.chain(base_paths).chain([upd(error())])
+    base_run.chain(base_paths)
 }
 
 /// Supplementary set of filters that are generic over the value type.
@@ -90,10 +90,9 @@ pub fn extra_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
 where
     for<'a> D::V<'a>: ValT,
 {
-    [std(), format(), math(), regex(), time()]
+    [std(), format(), math(), regex(), time(), log()]
         .into_iter()
         .flat_map(|fs| fs.into_vec().into_iter().map(run))
-        .chain([debug(), stderr()].map(upd))
 }
 
 /// Values that the standard library can operate on.
@@ -247,16 +246,10 @@ pub fn run<D: DataT>((name, arity, run): Filter<RunPtr<D>>) -> Filter<Native<D>>
 }
 
 type RunPathsPtr<D> = (RunPtr<D>, jaq_core::PathsPtr<D>);
-type RunPathsUpdatePtr<D> = (RunPtr<D>, jaq_core::PathsPtr<D>, jaq_core::UpdatePtr<D>);
 
 /// Convert a filter with a run and an update pointer to a native filter.
 fn paths<D: DataT>((name, arity, (run, paths)): Filter<RunPathsPtr<D>>) -> Filter<Native<D>> {
     (name, arity, Native::new(run).with_paths(paths))
-}
-
-/// Convert a filter with a run, a paths, and an update pointer to a native filter.
-fn upd<D: DataT>((name, arity, (r, p, u)): Filter<RunPathsUpdatePtr<D>>) -> Filter<Native<D>> {
-    (name, arity, Native::new(r).with_paths(p).with_update(u))
 }
 
 /// Sort array by the given function.
@@ -438,6 +431,7 @@ where
 {
     let f = || [Bind::Fun(())].into();
     Box::new([
+        ("error_empty", v(0), (|cv| bome(Err(Error::new(cv.1))))),
         ("path", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
             let cvp = (fc, (cv.1, Default::default()));
@@ -624,15 +618,9 @@ where
             ))
         }),
         ("now", v(0), |_| bome(now().map(D::V::from))),
-        ("halt_error", v(1), |mut cv| {
-            bome(cv.0.pop_var().try_as_isize().map(|exit_code| {
-                if let Some(s) = cv.1.as_utf8_bytes() {
-                    std::print!("{}", BStr::new(s));
-                } else {
-                    std::println!("{}", cv.1);
-                }
-                std::process::exit(exit_code as i32)
-            }))
+        ("halt", v(1), |mut cv| {
+            let exit_code = cv.0.pop_var().try_as_isize();
+            bome(exit_code.map(|exit_code| std::process::exit(exit_code as i32)))
         }),
     ])
 }
@@ -829,46 +817,8 @@ where
     ])
 }
 
-fn error<D: DataT>() -> Filter<RunPathsUpdatePtr<D>> {
-    (
-        "error",
-        v(0),
-        (
-            |cv| bome(Err(Error::new(cv.1))),
-            |cv| box_once(Err(Exn::from(Error::new(cv.1 .0)))),
-            |cv, _| bome(Err(Error::new(cv.1))),
-        ),
-    )
-}
-
 #[cfg(feature = "log")]
-/// Construct a filter that applies an effect function before returning its input.
-macro_rules! id_with {
-    ( $eff:expr ) => {
-        (
-            |cv| {
-                $eff(&cv.1);
-                box_once(Ok(cv.1))
-            },
-            |cv| {
-                $eff(&cv.1 .0);
-                box_once(Ok(cv.1))
-            },
-            |cv, f| {
-                $eff(&cv.1);
-                f(cv.1)
-            },
-        )
-    };
-}
-
-#[cfg(feature = "log")]
-fn debug<D: DataT>() -> Filter<RunPathsUpdatePtr<D>> {
-    ("debug", v(0), id_with!(|x| log::debug!("{x}")))
-}
-
-#[cfg(feature = "log")]
-fn stderr<D: DataT>() -> Filter<RunPathsUpdatePtr<D>>
+fn log<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
 where
     for<'a> D::V<'a>: ValT,
 {
@@ -879,5 +829,17 @@ where
             log::error!("{v}")
         }
     }
-    ("stderr", v(0), id_with!(eprint_raw))
+    /// Construct a filter that applies an effect function before returning nothing.
+    macro_rules! empty_with {
+        ( $eff:expr ) => {
+            |cv| {
+                $eff(&cv.1);
+                Box::new(core::iter::empty())
+            }
+        };
+    }
+    Box::new([
+        ("debug_empty", v(0), empty_with!(|x| log::debug!("{x}"))),
+        ("stderr_empty", v(0), empty_with!(eprint_raw)),
+    ])
 }

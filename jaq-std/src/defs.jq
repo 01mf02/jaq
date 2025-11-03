@@ -1,10 +1,14 @@
 def empty: {}[] as $x | .;
 def null:  [][0];
 
-def debug(msgs): ((msgs | debug) as $x | empty), .;
-def error(msgs):  (msgs | error) as $x | empty    ;
+def debug:       (        debug_empty  as $x | .), .;
+def debug(msgs): ((msgs | debug_empty) as $x | .), .;
+def error:                error_empty  as $x | .    ;
+def error(msgs):  (msgs | error_empty) as $x | .    ;
+def stderr:              stderr_empty  as $x | .    ;
 
-def halt: ""  | halt_error(0);
+def halt: halt(0);
+def halt_error($exit_code): stderr, halt($exit_code);
 def halt_error: halt_error(5);
 
 # Booleans
