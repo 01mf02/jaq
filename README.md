@@ -200,7 +200,13 @@ Add your own testimonials via <https://github.com/01mf02/jaq/issues/355>.
 # Acknowledgements
 
 [This project](https://nlnet.nl/project/jaq/) was funded through the
-<a href="https://nlnet.nl/entrust">NGI0 Entrust</a> Fund, a fund established by
-<a href="https://nlnet.nl">NLnet</a> with financial support from the
-European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
-programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.
+[NGI0 Entrust](https://nlnet.nl/entrust) and
+[NGI0 Commons](https://nlnet.nl/commonsfund) funds established by
+[NLnet](https://nlnet.nl) with financial support from the
+European Commission's [Next Generation Internet](https://ngi.eu)
+programme, under the aegis of [DG Communications Networks, Content and Technology](https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en) under
+grant agreements
+№ [101069594](https://cordis.europa.eu/project/id/101069594) and
+№ [101135429](https://cordis.europa.eu/project/id/101135429).
+Additional funding is made available by the
+[Swiss State Secretariat for Education, Research and Innovation](https://www.sbfi.admin.ch/sbfi/en/home.html) (SERI).
