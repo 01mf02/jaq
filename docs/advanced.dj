@@ -156,12 +156,19 @@ depending on their input type:
   - Array (if `-length <= $i < 0`): `.[length + $i] |= f`
   - Object (if `has($i)`): `with_entries(.[] |= if .key == $i then {key, value: first(.value | f)})`
   - Object (if `has($i) | not`): `. + {($i): first(null | f)}`
+- `.[$i:$j] |= f`: `.[:$i] + (.[$i:$j] | first(f) // null) + .[$j:]`
+  (This is slightly inaccurate because `first(f) // null` yields `null` when
+  `first(f)` is `false`, whereas the actual update operator fails in such a case.)
 
 The operators above throw an error if they encounter an unhandled case, whereas
 the variants `.[]? |= f` and `.[$i] |= f` return their input in that case.
 :::
 
 ::: Compatibility
+In `jq`, `. |= empty` yields `null` for any input, whereas jaq yields no output.
+Similarily,
+in `jq`, `. |= (., .)` yields its input once, whereas jaq yields its input twice.
+
 In `jq`, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
 `jq` fills up the list with `null`s if we update beyond its size.
 In contrast, jaq fails with an out-of-bounds error in such a case.
@@ -276,6 +283,14 @@ A pattern `p` is either:
 
 An array  pattern `[p1, ..., pn]` is equivalent to
 an object pattern `{(0): p1, ..., (n): pn}`.
+Because of this, you can use
+object patterns with integer keys to destructure arrays, or
+array  patterns to destructure objects with integer keys.
+Furthermore, you can also destructure byte strings:
+
+- `[1, 2, 3]  as {(0): $x, (2): $y} | $x, $y --> 1 3`
+- `{(0): 1, (2): 3} as [$x, $_, $y] | $x, $y --> 1 3`
+- `[1, 2, 3] | tobytes as [$x,  $y] | $x, $y --> 1 2`
 
 When using a filter `(f)` as object key in a pattern, then
 `f` is run with the input that was matched

@@ -746,8 +746,33 @@ deletes all corresponding values in the order given by the array.
 For example:
 
 - `[1, 2, 3] | delpaths([[0]])      --> [2, 3]`
-- `[1, 2, 3] | delpaths([[0], [0]]) --> [3]`
 - `[{a: 1, b: 2}, 3] | delpaths([[0, "b"], [1]]) --> [{"a": 1}]`
+
+::: Compatibility
+In `jq`,
+the `$paths` are interpreted relative to the _original_ input value, whereas
+in jaq, they are interpreted relative to the _current_ value. 
+For example,
+`[1, 2, 3] | delpaths([[0], [0]]) --> [3]` in jaq, because
+it first deletes the `0`-th element `1` (yielding `[2, 3]`),
+then it  deletes the `0`-th element `2` (yielding `[3]`).
+Here, `jq` yields `[2, 3]`, because the `0`-th element always
+refers to the `0`-th element of the original input, which is `1`.
+
+To use `delpaths` in an interoperable fashion, use `$paths` such that:
+
+- Paths to descendants come before paths to their ancestors.
+- Paths to array elements to the right come before paths to elements to the left.
+
+For example, `..` returns
+_ancestors_ before descendants and
+array elements to the _left_ before elements to the right.
+To use the output of `..` in `delpaths`, it suffices to
+reverse the order of its outputs:
+
+- `["a", 0, "b", 1] | delpaths([path(.. | strings)] | reverse) --> [0,  1 ]` (right)
+- `["a", 0, "b", 1] | delpaths([path(.. | strings)]          ) --> [0, "b"]` (wrong)
+:::
 
 {#pick}
 ### `pick(f)`
