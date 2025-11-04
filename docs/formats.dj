@@ -63,12 +63,15 @@ support a set of values present in [YAML](#yaml) and [CBOR](#cbor), namely
 byte strings and objects with non-string keys, while keeping the format
 both human-readable and simple & performant to parse, like JSON.
 
-XJON perfectly preserves all values that are processed by jaq.
-The same is not true for JSON and `jq`;
-for example,
-`jq -n 'nan | isnan'` does not yield the same output as
-`jq -n 'nan' | jq 'isnan'`,
-because `jq` prints NaN as `null`, thus losing information.
+XJON can losslessly encode any jaq [value](#values); in particular,
+decoding an XJON-encoded value is equivalent to the original value.
+For example:
+
+- `nan |        .          | isnan --> true` in jaq and `jq`
+- `nan | tojson | fromjson | isnan --> true` in jaq, but `false` in `jq`
+
+That means that `tojson | fromjson` is equivalent to `.` in jaq, whereas
+it is _not_ equivalent in `jq`, in particular because of `NaN` and `Infinity`.
 
 Currently, wherever jaq accepts JSON, it also accepts XJON.
 That means that

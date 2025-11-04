@@ -130,10 +130,7 @@ an error in jaq as opposed to `1` in `jq`.
 
 Furthermore, `jq` prints NaN as `null`; e.g. `nan | tojson` yields `null`.
 In contrast, jaq prints NaN as `NaN`; e.g. `nan | tojson --> "NaN"`.
-As a result, in jaq, any value can be round-tripped with `tojson | fromjson`; e.g.
-`nan | tojson | fromjson | isnan --> true`.
-In `jq`, `tojson | fromjson` does not round-trip, because of
-`NaN` and `Infinity`.
+See the [XJON](#xjon) section for details.
 :::
 
 ::: Advanced
