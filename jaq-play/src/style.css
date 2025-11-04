@@ -136,3 +136,8 @@ ul {
   padding: 0;
   margin: 2px;
 }
+
+a {
+  text-decoration: inherit;
+  color: inherit;
+}
