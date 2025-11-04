@@ -6,9 +6,17 @@
 [![Rust 1.69+](https://img.shields.io/badge/rust-1.69+-orange.svg)](https://www.rust-lang.org)
 
 jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
-jaq aims to support a large subset of jq's syntax and operations.
+It is two things at a time:
 
-You can try jaq online on the [jaq playground](https://gedenkt.at/jaq/).
+- A command-line program, `jaq`, that can be used as drop-in replacement for `jq`.
+- A library, [`jaq-core`](https://docs.rs/jaq-core/),
+  that can be used to compile and run jq programs inside of Rust programs.
+  Compared to the `jq` API, `jaq-core`
+  can be safely used in multi-threaded environments and
+  supports [arbitrary data types beyond JSON](https://docs.rs/jaq-core/latest/jaq_core/val/trait.ValT.html).
+
+jaq has an own [manual].
+You can try jaq online on the jaq [playground].
 Instructions for the playground can be found [here](jaq-play/).
 
 jaq focuses on three goals:
@@ -28,17 +36,18 @@ jaq focuses on three goals:
   reduce the potential for bugs and to
   facilitate contributions.
 
-I drew inspiration from another Rust program, namely [jql].
-However, unlike jql, jaq aims to closely imitate jq's syntax and semantics.
-This should allow users proficient in jq to easily use jaq.
-
 [jq]: https://jqlang.github.io/jq/
-[jql]: https://github.com/yamafaktory/jql
+[manual]: https://gedenkt.at/jaq/manual/
+[playground]: https://gedenkt.at/jaq/
 
 [^jacques]: I wanted to create a tool that should be discreet and obliging, like a good waiter.
   And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
   Later, I found out about the old French word *jacquet*, meaning "squirrel",
   which makes for a nice *ex post* inspiration for the name.
+  And finally, the
+  [Jacquard machine](https://en.wikipedia.org/wiki/Jacquard_machine)
+  was an important predecessor of the modern computer,
+  automating weaving with punched cards as early as 1804.
 
 
 
@@ -79,52 +88,6 @@ If you have cloned this repository, you can also build jaq by executing one of t
 
 jaq should work on any system supported by Rust.
 If it does not, please file an issue.
-
-
-
-# Examples
-
-The following examples should give an impression of what jaq can currently do.
-You should obtain the same outputs by replacing jaq with jq.
-If not, your filing an issue would be appreciated. :)
-The syntax is documented in the [jq manual].
-
-[jq manual]: https://jqlang.github.io/jq/manual/v1.6/
-
-Access a field:
-
-    $ echo '{"a": 1, "b": 2}' | jaq '.a'
-    1
-
-Add values:
-
-    $ echo '{"a": 1, "b": 2}' | jaq 'add'
-    3
-
-Construct an array from an object in two ways and show that they are equal:
-
-    $ echo '{"a": 1, "b": 2}' | jaq '[.a, .b] == [.[]]'
-    true
-
-Apply a filter to all elements of an array and filter the results:
-
-    $ echo '[0, 1, 2, 3]' | jaq 'map(.*2) | [.[] | select(. < 5)]'
-    [0, 2, 4]
-
-Read (slurp) input values into an array and get the average of its elements:
-
-    $ echo '1 2 3 4' | jaq -s 'add / length'
-    2.5
-
-Repeatedly apply a filter to itself and output the intermediate results:
-
-    $ echo '0' | jaq '[recurse(.+1; . < 3)]'
-    [0, 1, 2]
-
-Lazily fold over inputs and output intermediate results:
-
-    $ seq 1000 | jaq -n 'foreach inputs as $x (0; . + $x)'
-    1 3 6 10 15 [...]
 
 
 
@@ -210,370 +173,27 @@ Finally, jaq disposes of a carefully crafted test suite of more than 500 tests
 that is checked at every commit.
 
 
-# Features
 
-Here is an overview that summarises:
+# User Testimonials
 
-* [x] features already implemented, and
-* [ ] features not yet implemented.
+> `jaq` is a well-built library that gave me a massive leg up compared to implementing `jq` support on my own. Extensibility through the `ValT` trait made adding `jq` support to my own types a breeze.
+>
+> @jobarr-amzn (<https://github.com/amazon-ion/ion-cli/pull/193#pullrequestreview-2696367084>, <https://github.com/01mf02/jaq/issues/355#issuecomment-3457076847>)
 
-[Contributions to extend jaq are highly welcome.](#contributing)
+> My Rust program \[using jaq\] can execute *all queries* over *all files* **three times** while Python is busy executing *one* query across all files using the `jq` PyPI crate and a Python loop.
+>
+> @I-Al-Istannen (<https://github.com/01mf02/jaq/issues/323#issuecomment-3282176968>)
 
+> jaq is very impressive! Running my [wsjq](https://github.com/thaliaarchi/wsjq) interpreter with it is significantly faster than with any other jq implementation and its emphasis on correctness is very admirable.
+> \[On [wsjq benchmarks](https://github.com/01mf02/jaq/issues/294#issuecomment-3046707389), jaq is between 5 and 10 times faster than jq and between 15 and 196 times faster than gojq.\]
+>
+> @thaliaarchi (<https://github.com/01mf02/jaq/issues/355#issuecomment-3460028137>)
 
-## Basics
+> I had been parsing data from certificate transparency logs using certstream-server. It gives a *lot* of data and piping it into jq was causing me issues. I switched to jaq and the faster startup time meant it could easily keep up on the low end VM I was using. Thank you for your work.
+>
+> Oliver (via e-mail)
 
-- [x] Identity (`.`)
-- [x] Recursion (`..`)
-- [x] Basic data types (null, boolean, number, string, array, object)
-- [x] if-then-else (`if .a < .b then .a else .b end`)
-- [x] Folding (`reduce .[] as $x (0; . + $x)`, `foreach .[] as $x (0; . + $x; . + .)`)
-- [x] Error handling (`try ... catch ...`)
-- [x] Breaking (`label $x | f | ., break $x`)
-- [x] String interpolation (`"The successor of \(.) is \(.+1)."`)
-- [x] Format strings (`@json`, `@text`, `@csv`, `@tsv`, `@html`, `@sh`, `@base64`, `@base64d`, `@uri`, `@urid`)
-
-
-## Paths
-
-- [x] Indexing of arrays/objects (`.[0]`, `.a`, `.["a"]`)
-- [x] Iterating over arrays/objects (`.[]`)
-- [x] Optional indexing/iteration (`.a?`, `.[]?`)
-- [x] Array slices (`.[3:7]`, `.[0:-1]`)
-- [x] String slices
-
-
-## Operators
-
-- [x] Composition (`|`)
-- [x] Variable binding (`. as $x | $x`)
-- [x] Pattern  binding (`. as {a: [$x, {("b", "c"): $y, $z}]} | $x, $y, $z`)
-- [x] Concatenation (`,`)
-- [x] Plain assignment (`=`)
-- [x] Update assignment (`|=`)
-- [x] Arithmetic update assignment (`+=`, `-=`, ...)
-- [x] Alternation (`//`)
-- [x] Logic (`or`, `and`)
-- [x] Equality and comparison (`.a == .b`, `.a < .b`)
-- [x] Arithmetic (`+`, `-`, `*`, `/`, `%`)
-- [x] Negation (`-`)
-- [x] Error suppression (`?`)
-
-
-## Definitions
-
-- [x] Basic definitions (`def map(f): [.[] | f];`)
-- [x] Recursive definitions (`def r: r; r`)
-
-
-## Core filters
-
-- [x] Empty (`empty`)
-- [x] Errors (`error`)
-- [x] Input (`inputs`)
-- [x] Length (`length`, `utf8bytelength`)
-- [x] Rounding (`floor`, `round`, `ceil`)
-- [x] String <-> JSON (`fromjson`, `tojson`)
-- [x] String <-> integers (`explode`, `implode`)
-- [x] String normalisation (`ascii_downcase`, `ascii_upcase`)
-- [x] String prefix/postfix (`startswith`, `endswith`, `ltrimstr`, `rtrimstr`)
-- [x] String whitespace trimming (`trim`, `ltrim`, `rtrim`)
-- [x] String splitting (`split("foo")`)
-- [x] Array filters (`reverse`, `sort`, `sort_by(-.)`, `group_by`, `min_by`, `max_by`, `bsearch`)
-- [x] Stream consumers (`first`, `last`, `range`, `fold`)
-- [x] Stream generators (`range`, `recurse`)
-- [x] Time (`now`, `fromdateiso8601`, `todateiso8601`)
-- [x] More numeric filters (`sqrt`, `sin`, `log`, `pow`, ...) ([list of numeric filters](#numeric-filters))
-- [x] More time filters (`strptime`, `strftime`, `strflocaltime`, `mktime`, `gmtime`, and `localtime`)
-
-## Standard filters
-
-These filters are defined via more basic filters.
-Their definitions are at [`std.jq`](jaq-std/src/std.jq).
-
-- [x] Undefined (`null`)
-- [x] Booleans (`true`, `false`, `not`)
-- [x] Special numbers (`nan`, `infinite`, `isnan`, `isinfinite`, `isfinite`, `isnormal`)
-- [x] Type (`type`)
-- [x] Filtering (`select(. >= 0)`)
-- [x] Selection (`values`, `nulls`, `booleans`, `numbers`, `strings`, `arrays`, `objects`, `iterables`, `scalars`)
-- [x] Conversion (`tostring`, `tonumber`, `toboolean`)
-- [x] Iterable filters (`map(.+1)`, `map_values(.+1)`, `add`, `join("a")`)
-- [x] Array filters (`transpose`, `first`, `last`, `nth(10)`, `flatten`, `min`, `max`)
-- [x] Object-array conversion (`to_entries`, `from_entries`, `with_entries`)
-- [x] Universal/existential (`all`, `any`)
-- [x] Recursion (`walk`)
-- [x] I/O (`input`)
-- [x] Regular expressions (`test`, `scan`, `match`, `capture`, `splits`, `sub`, `gsub`)
-- [x] Time (`fromdate`, `todate`)
-
-## Numeric filters
-
-jaq imports many filters from [libm](https://crates.io/crates/libm)
-and follows their type signature.
-
-<details><summary>Full list of numeric filters defined in jaq</summary>
-
-Zero-argument filters:
-
-- [x] `acos`
-- [x] `acosh`
-- [x] `asin`
-- [x] `asinh`
-- [x] `atan`
-- [x] `atanh`
-- [x] `cbrt`
-- [x] `cos`
-- [x] `cosh`
-- [x] `erf`
-- [x] `erfc`
-- [x] `exp`
-- [x] `exp10`
-- [x] `exp2`
-- [x] `expm1`
-- [x] `fabs`
-- [x] `frexp`, which returns pairs of (float, integer).
-- [x] `gamma`
-- [x] `ilogb`, which returns integers.
-- [x] `j0`
-- [x] `j1`
-- [x] `lgamma`
-- [x] `log`
-- [x] `log10`
-- [x] `log1p`
-- [x] `log2`
-- [x] `logb`
-- [x] `modf`, which returns pairs of (float, float).
-- [x] `nearbyint`
-- [x] `pow10`
-- [x] `rint`
-- [x] `significand`
-- [x] `sin`
-- [x] `sinh`
-- [x] `sqrt`
-- [x] `tan`
-- [x] `tanh`
-- [x] `tgamma`
-- [x] `trunc`
-- [x] `y0`
-- [x] `y1`
-
-Two-argument filters that ignore `.`:
-
-- [x] `atan2`
-- [x] `copysign`
-- [x] `drem`
-- [x] `fdim`
-- [x] `fmax`
-- [x] `fmin`
-- [x] `fmod`
-- [x] `hypot`
-- [x] `jn`, which takes an integer as first argument.
-- [x] `ldexp`, which takes an integer as second argument.
-- [x] `nextafter`
-- [x] `nexttoward`
-- [x] `pow`
-- [x] `remainder`
-- [x] `scalb`
-- [x] `scalbln`, which takes as integer as second argument.
-- [x] `yn`, which takes an integer as first argument.
-
-Three-argument filters that ignore `.`:
-
-- [x] `fma`
-
-</details>
-
-## Modules
-
-- [x] `include "path";`
-- [x] `import "path" as mod;`
-- [x] `import "path" as $data;`
-
-## Advanced features
-
-jaq currently does *not* aim to support several features of jq, such as:
-
-- SQL-style operators
-- Streaming
-
-
-
-# Differences between jq and jaq
-
-
-## Numbers
-
-jq uses 64-bit floating-point numbers (floats) for any number.
-By contrast, jaq interprets
-numbers such as 0   or -42 as machine-sized integers and
-numbers such as 0.0 or 3e8 as 64-bit floats.
-Many operations in jaq, such as array indexing,
-check whether the passed numbers are indeed integer.
-The motivation behind this is to avoid
-rounding errors that may silently lead to wrong results.
-For example:
-
-    $ jq  -n '[0, 1, 2] | .[1.0000000000000001]'
-    1
-    $ jaq -n '[0, 1, 2] | .[1.0000000000000001]'
-    Error: cannot use 1.0 as integer
-    $ jaq -n '[0, 1, 2] | .[1]'
-    1
-
-The rules of jaq are:
-
-* The sum, difference, product, and remainder of two integers is integer.
-* Any other operation between two numbers yields a float.
-
-Examples:
-
-    $ jaq -n '1 + 2'
-    3
-    $ jaq -n '10 / 2'
-    5.0
-    $ jaq -n '1.0 + 2'
-    3.0
-
-You can convert an integer to a floating-point number e.g.
-by adding 0.0, by multiplying with 1.0, or by dividing with 1.
-You can convert a floating-point number to an integer by
-`round`, `floor`, or `ceil`:
-
-    $ jaq -n '1.2 | [floor, round, ceil]'
-    [1, 1, 2]
-
-### NaN and infinity
-
-In jq, division by 0 yields an error, whereas
-in jaq, `n / 0` yields `nan` if `n == 0`, `infinite` if `n > 0`, and `-infinite` if `n < 0`.
-jaq's behaviour is closer to the IEEE standard for floating-point arithmetic (IEEE 754).
-
-
-## Assignments
-
-Like jq, jaq allows for assignments of the form `p |= f`.
-However, jaq interprets these assignments differently.
-Fortunately, in most cases, the result is the same.
-
-In jq, an assignment `p |= f` first constructs paths to all values that match `p`.
-*Only then*, it applies the filter `f` to these values.
-
-In jaq, an assignment `p |= f` applies `f` *immediately* to any value matching `p`.
-Unlike in jq, assignment does not explicitly construct paths.
-
-jaq's implementation of assignment likely yields higher performance,
-because it does not construct paths.
-Furthermore, this allows jaq to use multiple outputs of the right-hand side, whereas
-jq uses only the first.
-For example, `0 | (., .) |= (., .+1)` yields `0 1 1 2` in jaq,
-whereas it yields only `0` in jq.
-However, `{a: 1} | .a |= (2, 3)` yields `{"a": 2}` in both jaq and jq,
-because an object can only associate a single value with any given key,
-so we cannot use multiple outputs in a meaningful way here.
-
-Because jaq does not construct paths,
-it does not allow some filters on the left-hand side of assignments,
-for example `first`, `last`, `limit`:
-For example, `[1, 2, 3] | first(.[]) |= .-1`
-yields `[0, 2, 3]` in jq, but is invalid in jaq.
-Similarly, `[1, 2, 3] | limit(2; .[]) |= .-1`
-yields `[0, 1, 3]` in jq, but is invalid in jaq.
-(Inconsequentially, jq also does not allow for `last`.)
-
-
-## Folding
-
-jq and jaq provide filters
-`reduce xs as $x (init; update)`,
-`foreach xs as $x (init; update)`, and
-`foreach xs as $x (init; update; project)`, where
-`foreach xs as $x (init; update)` is equivalent to
-`foreach xs as $x (init; update; .)`.
-
-In jaq, the output of these filters is defined very simply:
-Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
-`reduce xs as $x (init; update)` evaluates to
-
-~~~
-init
-| x0 as $x | update
-| ...
-| xn as $x | update
-~~~
-
-and `foreach xs as $x (init; update; project)` evaluates to
-
-~~~ text
-init |
-( x0 as $x | update | project,
-( ...
-( xn as $x | update | project,
-( empty )...)
-~~~
-
-The interpretation of `reduce`/`foreach` in jaq has the following advantages over jq:
-
-* It deals very naturally with filters that yield multiple outputs.
-  In contrast, jq discriminates outputs of `f`,
-  because it recurses only on the last of them,
-  although it outputs all of them.
-  <details><summary>Example</summary>
-
-  `foreach (5, 10) as $x (1; .+$x, -.)` yields
-  `6, -1, 9, 1` in jq, whereas it yields
-  `6, 16, -6, -1, 9, 1` in jaq.
-  We can see that both jq and jaq yield the values `6` and `-1`
-  resulting from the first iteration (where `$x` is 5), namely
-  `1 | 5 as $x | (.+$x, -.)`.
-  However, jq performs the second iteration (where `$x` is 10)
-  *only on the last value* returned from the first iteration, namely `-1`,
-  yielding the values `9` and `1` resulting from
-  `-1 | 10 as $x | (.+$x, -.)`.
-  jaq yields these values too, but it also performs the second iteration
-  on all other values returned from the first iteration, namely `6`,
-  yielding the values `16` and `-6` that result from
-  ` 6 | 10 as $x | (.+$x, -.)`.
-
-  </details>
-* It makes the implementation of `reduce` and `foreach`
-  special cases of the same code, reducing the potential for bugs.
-
-
-## Miscellaneous
-
-* Slurping: When files are slurped in (via the `-s` / `--slurp` option),
-  jq combines the inputs of all files into one single array, whereas
-  jaq yields an array for every file.
-  This is motivated by the `-i` / `--in-place` option,
-  which could not work with the behaviour implemented by jq.
-  The behaviour of jq can be approximated in jaq;
-  for example, to achieve the output of
-  `jq -s . a b`, you may use
-  `jaq -s . <(cat a b)`.
-* Cartesian products:
-  In jq, `[(1,2) * (3,4)]` yields `[3, 6, 4, 8]`, whereas
-  `[{a: (1,2), b: (3,4)} | .a * .b]` yields `[3, 4, 6, 8]`.
-  jaq yields `[3, 4, 6, 8]` in both cases.
-* List updating:
-  In jq, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
-  jq fills up the list with `null`s if we update beyond its size.
-  In contrast, jaq fails with an out-of-bounds error in such a case.
-* Input reading:
-  When there is no more input value left,
-  in jq, `input` yields an error, whereas in jaq, it yields no output value.
-* Joining:
-  When giving an array `[x1, ..., xn]` to `join($sep)`, jaq returns
-  `""` if the array is empty, otherwise `"\(x1)" + $sep + ... + $sep + "\(xn)"`;
-  that is, it concatenates the string representations of the array values interspersed with `$sep`.
-  Unlike jq, jaq does not map `null` values in the array to `""`,
-  nor does it reject array or object values in the array.
-
-
-
-# Contributing
-
-Contributions to jaq are welcome.
-Please make sure that after your change, `cargo test` runs successfully.
+Add your own testimonials via <https://github.com/01mf02/jaq/issues/355>.
 
 
 
@@ -584,18 +204,3 @@ Please make sure that after your change, `cargo test` runs successfully.
 <a href="https://nlnet.nl">NLnet</a> with financial support from the
 European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
 programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.
-
-jaq has also profited from:
-
-* [serde_json] to read and [colored_json] to output JSON,
-* [chumsky] to parse and [ariadne] to pretty-print parse errors,
-* [mimalloc] to boost the performance of memory allocation, and
-* the Rust standard library, in particular its awesome [Iterator],
-  which builds the rock-solid base of jaq's filter execution
-
-[serde_json]: https://docs.rs/serde_json/
-[colored_json]: https://docs.rs/colored_json/
-[chumsky]: https://docs.rs/chumsky/
-[ariadne]: https://docs.rs/ariadne/
-[mimalloc]: https://docs.rs/mimalloc/
-[Iterator]: https://doc.rust-lang.org/std/iter/trait.Iterator.html

@@ -180,7 +180,7 @@ fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, PErro
             Ok(Val::from(s))
         }
         Header::Bytes(len) => Ok(Val::byte_str(parse_bytes(len, decoder)?)),
-        Header::Simple(simple::NULL | simple::UNDEFINED) => Ok(Val::Null),
+        Header::Simple(simple::NULL) => Ok(Val::Null),
         Header::Simple(simple::FALSE) => Ok(Val::Bool(false)),
         Header::Simple(simple::TRUE) => Ok(Val::Bool(true)),
         Header::Simple(simple) => Err(PError::Simple(simple)),

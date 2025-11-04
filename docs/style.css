@@ -1,0 +1,114 @@
+html {
+    font-size: 135%;
+}
+
+body {
+    margin: 0;
+}
+
+.container {
+    display: flex;
+    max-width: 1320px;
+    /* center */
+    margin: 0 auto; 
+}
+
+.container > * {
+    margin: 0 10px;
+    overflow: auto;
+}
+
+nav {
+    flex: 1;
+    position: sticky;
+    top: 0px;
+    /* necessary for scrolling inside nav */
+    max-height: 100vh;
+}
+
+nav > ul {
+    padding-left: 0px;
+}
+
+nav a {
+    text-decoration: none;
+}
+
+h1 > a,
+h2 > a,
+h3 > a {
+    text-decoration: inherit;
+    color: inherit;
+}
+
+section#main {
+    flex: 3;
+}
+
+.run-example::before {
+    margin-left: 0.25em;
+    content: "▶️";
+    font-family: initial;
+}
+.run-example {
+    text-decoration: inherit;
+    opacity: 35%;
+}
+
+code:hover + .run-example,
+.run-example:hover {
+    opacity: 100%;
+}
+
+pre {
+    position: relative;
+}
+
+pre > .run-example {
+    position: absolute;
+    top: 0px;
+    right: 0px;
+}
+
+
+code {
+    background-color: #eee;
+    white-space: pre;
+}
+
+table {
+    border: 1px solid;
+}
+th, td {
+    padding-inline: 10px;
+}
+
+.Advanced::before {
+    content: "Advanced 🔬";
+    color: #0969da;
+    font-weight: bold;
+}
+
+.Advanced {
+    border-left: .25em solid #0969da;
+    padding: 10px 20px;
+    margin: 20px 0;
+}
+
+.Compatibility::before {
+    content: "Compatibility 😬";
+    color: #cf222e;
+    font-weight: bold;
+}
+
+.Compatibility {
+    border-left: .25em solid #cf222e;
+    padding: 10px 20px;
+    margin: 20px 0;
+}
+
+@media(max-width: 660px) {
+    nav {
+        display: none;
+    }
+}

@@ -45,6 +45,16 @@ jobs:
       run: wasm-pack build --target web --no-typescript --no-pack --release
       working-directory: jaq-play
 
+    - name: Install jotdown
+      run: cargo install jotdown@0.8.1 --locked
+    - name: Generate documentation
+      working-directory: docs
+      run: make JAQ="cargo run --" MANUAL.xhtml
+    - name: Move documentation
+      run: |
+        mkdir jaq-play/manual
+        mv docs/MANUAL.xhtml jaq-play/manual/index.html
+
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:

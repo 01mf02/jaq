@@ -345,7 +345,7 @@ fn rtrim() {
 }
 
 yields!(
-    path_values,
-    "[{a: 1, b: [2, 3]} | path_values]",
+    path_value,
+    "[{a: 1, b: [2, 3]} | skip(1; path_value(..))]",
     json!([[["a"], 1], [["b"], [2, 3]], [["b", 0], 2], [["b", 1], 3]])
 );

@@ -1,0 +1,505 @@
+# Advanced features
+
+
+## Assignments
+
+jq allows for assignments of the form `p |= f`, where `p` is an arbitrary filter.
+This makes assignments in jq uniquely powerful compared to other languages.
+For example, a program from the jq manual that blew my mind was the following:
+
+```
+(.posts[] | select(.author == "stedolan") | .comments) += ["terrible."]
+```
+
+This iterates over all posts,
+selects those whose author is "stedolan",
+takes its comments, and adds a not very flattering comment to it.
+(This does not reflect my opinion about Stephen Dolan ---
+I think that he did a great job creating jq.)
+
+jaq and `jq` pursue different approaches to execute assignments:
+
+- *Path-based*: In `jq`, an assignment `p |= f` first constructs paths to all values that match `p`.
+  *Only then*, it applies the filter `f` to these values.
+- *Pathless*: In jaq, an assignment `p |= f` applies `f` *immediately* to any value matching `p`.
+  Unlike in `jq`, assignment does not explicitly construct paths.
+
+Fortunately, in most cases, the result is the same.
+The following sections explain the two approaches in more detail,
+and how to write updates that behave the same in both `jq` and jaq.
+
+
+### Path-based
+
+The path-based update model used by `jq` executes `p |= u` by
+first collecting the paths corresponding to `p`,
+then updating the input at these paths by `u`.
+We can approximate this behaviour by `getpath(path(p)) |= u` ---
+the actual `jq` update behaviour is much more complex,
+only sparely documented, and
+has changed in backwards-incompatible ways between minor versions.
+
+::: Advanced
+We have a few equivalences for `path(f)`:
+
+| `p`           | `path(p)` |
+|:--------------|:----------|
+| `.`           | `[]` |
+| `.[]`         | `keys_unsorted[] | [.]` |
+| `.[$i]`       | `[$i]` |
+| `.[$i:$j]`    | `[{start: $i, end: $j}]` |
+| `f,  g`       | `path(f), path(g)` |
+| `f | g`       | `path(f) as $p | $p + (getpath($p) | path(g))` |
+| `f as $x | g` | `f as $x | path(g)` |
+| `if $p then f else g end` | `if $p then path(f) else path(g) end` |
+
+Examples:
+
+- `true         | path(.)                   --> []`
+- `[1, 2, 3]    | path(.[])                 --> [0] [1] [2]`
+- `[1, 2, 3]    | keys_unsorted[] | [.]     --> [0] [1] [2]`
+- `{a: 1, b: 2} | path(.[])                 --> ["a"] ["b"]`
+- `{a: 1, b: 2} | keys_unsorted[] | [.]     --> ["a"] ["b"]`
+- `[1, 2, 3]    | path(.[0])                --> [0]`
+- `[1, 2, 3]    | path(.[1:-1])             --> [{"start": 1, "end": -1}]`
+- `{a: 1, b: 2} | path(.a, .b)              --> ["a"] ["b"]`
+- `{a: 1, b: 2} | path(.a), path(.b)        --> ["a"] ["b"]`
+- `[[1], [2]]   | path(.[][])               --> [0, 0] [1, 0]`
+- `[[1], [2]]   | path(.[]) as $p | $p +
+                  (getpath($p) | path(.[])) --> [0, 0] [1, 0]`
+- `[1, 2, 3]    | path(0, 2 as $x | .[$x])  --> [0] [2]`
+- `[1, 2, 3]    | 0, 2 as $x | path(.[$x])  --> [0] [2]`
+:::
+
+::: Compatibility
+The filters [`reduce` / `foreach`](#reduce-foreach) are both defined in jaq
+in terms of simpler filters `f` that `path(f)` can evaluate.
+Therefore, in jaq, you can use `reduce` / `foreach` inside `path(f)`,
+as well as on the left-hand side of updates.
+`jq` does not support this.
+:::
+
+### Pathless
+
+The pathless update model that is used by jaq
+reduces updates `p |= u` to simpler expressions, depending on `p`.
+It yields the same results as path-based updates in most common cases,
+while having the following advantages:
+
+- It does not need to construct paths, resulting in higher performance.
+- It considers multiple outputs by `u` where possible, whereas
+  path-based updates consider at most one output.
+  For example,
+  `0 | (., .) |= (., .+1) --> 0 1 1 2` in jaq,
+  whereas it yields only `0` in jq.
+  However,
+  `{a: 1} | .a |= (2, 3) --> {"a": 2}` in both jaq and jq,
+  because an object can only associate a single value with any given key,
+  so we cannot use multiple outputs in a meaningful way here.
+- It avoids iterator invalidation problems that path-based updates are prone to.
+
+However, pathless updates do not support a few filters on the
+left-hand side of updates that path-based updates support, such as:
+
+- [`try f catch g`](#try-catch)
+- [`first(f)`, `last(f)`](#first-last)
+- [`limit($n; f)`](#limit)
+- [`skip($n; f)`](#skip)
+
+For example, the following filters all yield an error in jaq:
+
+- `[1, 2, 3] | try      .[]  -= 1` yields `[0, 1, 2]` in jq.
+- `[1, 2, 3] | first(   .[]) -= 1` yields `[0, 2, 3]` in jq.
+- `[1, 2, 3] | limit(2; .[]) -= 1` yields `[0, 1, 3]` in jq.
+- `[1, 2, 3] | skip (1; .[]) -= 1` yields `[1, 1, 2]` in jq.
+- `[1, 2, 3] | last (   .[]) -= 1` yields an error in jq.
+
+In such cases, you can fall back to path-based updates in jaq by writing
+`getpath(path(p)) |= u` instead of `p |= u`.
+For example, the following filters yield the same outputs in jaq and `jq`:
+
+- `[1, 2, 3] | getpath(path(try      .[] )) -= 1 --> [0, 1, 2]`
+- `[1, 2, 3] | getpath(path(first(   .[]))) -= 1 --> [0, 2, 3]`
+- `[1, 2, 3] | getpath(path(limit(2; .[]))) -= 1 --> [0, 1, 3]`
+- `[1, 2, 3] | getpath(path(skip (1; .[]))) -= 1 --> [1, 1, 2]`
+- `[1, 2, 3] | getpath(path(last (   .[]))) -= 1 --> [1, 2, 2]`
+  (this example yields an error in `jq`, whereas it works in jaq)
+
+::: Advanced
+The following table shows how jaq executes an update `p |= u`.
+In this table, the case for
+`f as $x | g` assumes that
+`f` yields single outputs `f1`, ..., `fn`.
+
+| `p`           | `p |= u` |
+|:--------------|:---------|
+| `.`           | `u` |
+| `..`          | `def rec_up: (.[]? | rec_up), .; rec_up |= u` |
+| `(f | g)`     | `f |= (g |= u)` |
+| `(f , g)`     | `f |= u | g |= u` |
+| `f as $x | g` | `(f1 as $x | g) |= u | ... | (fn as $x | g) |= u` |
+| `f // g`      | `if first(f // false) then f |= u else g |= u` |
+| `if $p then f else g end` | `if $p then f |= u else g |= u end` |
+| `.[]`         | `iter_upd(         u; error)` |
+| `.[$i]`       | `index_upd($i;     u; error)` |
+| `.[$i:$j]`    | `slice_upd($i; $j; u; error)` |
+| `.[]?`        | `iter_upd(         u;     .)` |
+| `.[$i]?`      | `index_upd($i;     u;     .)` |
+| `.[$i:$j]?`   | `slice_upd($i; $j; u;     .)` |
+
+It follows from the table that `empty |= f` is equivalent to `.` (identity).
+We now give definitions for `iter_upd`, `index_upd`, and `slice_upd`:
+
+```
+# .[] |= u
+def iter_upd(u; fail):
+    if isarray  then [.[] | u]
+  elif isobject then with_entries(.value |= u)
+  else fail end;
+all(
+([1, 2, 3]    | iter_upd(.+1             ; .) == [2, 3, 4]),
+([1, 2, 3]    | iter_upd(.+1,.           ; .) == [2, 1, 3, 2, 4, 3]),
+([1, 2, 3]    | iter_upd(select(.%2 == 1); .) == [1,    3]),
+({a: 1, b: 2} | iter_upd(.+1             ; .) == {"a": 2, "b": 3}),
+({a: 1, b: 2} | iter_upd(.+1,.           ; .) == {"a": 2, "b": 3})
+; .) --> true
+```
+
+```
+# .[$i] |= u
+def index_upd($i; u; fail):
+    if isarray then
+        if 0 <= $i and $i < length then .[:$i] + [.[$i] | first(u)] + .[$i+1:]
+      elif -length <= $i and $i < 0 then index_upd(length + $i; u; fail)
+      else fail end
+  elif isobject then
+        if has($i) then with_entries(if .key == $i then {key, value: first(.value | u)} end)
+      else . + ([{key: $i, value: first(null | u)}] | from_entries) end
+  else fail end;
+all(
+([1, 2, 3]    | index_upd( 0 ; .+1  ; .) == [2, 2, 3]),
+([1, 2, 3]    | index_upd( 0 ; .+1,.; .) == [2, 2, 3]),
+([1, 2, 3]    | index_upd( 0 ; empty; .) == [   2, 3]),
+([1, 2, 3]    | index_upd(-1 ; .+1  ; .) == [1, 2, 4]),
+([1, 2, 3]    | index_upd(-3 ; .+1  ; .) == [2, 2, 3]),
+({a: 1, b: 2} | index_upd("a"; .+1  ; .) == {"a": 2, "b": 2}),
+({a: 1, b: 2} | index_upd("a"; .+1,.; .) == {"a": 2, "b": 2}),
+({a: 1, b: 2} | index_upd("a"; empty; .) == {        "b": 2})
+; .) --> true
+```
+
+```
+# .[$i:$j] |= u
+def slice_upd($i; $j; u; fail):
+  first(.[:$i] + (.[$i:$j] | u) + .[$j:]) // .[:$i] + .[$j:];
+all(
+([1, 2, 3, 4] | slice_upd(1; -1; map(.+1)    ; .) == [1, 3, 4, 4]),
+([1, 2, 3, 4] | slice_upd(1; -1; map(.+1),.  ; .) == [1, 3, 4, 4]),
+([1, 2, 3, 4] | slice_upd(1; -1; empty       ; .) == [1,       4]),
+("abcd"       | slice_upd(1; -1; ascii_upcase; .) == "aBCd"      )
+; .) --> true
+```
+:::
+
+::: Compatibility
+In `jq`, `. |= empty` yields `null` for any input, whereas jaq yields no output.
+Similarily,
+in `jq`, `. |= (., .)` yields its input once, whereas jaq yields its input twice.
+
+In `jq`, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
+`jq` fills up the list with `null`s if we update beyond its size.
+In contrast, jaq fails with an out-of-bounds error in such a case.
+
+In `jq`,
+`null | .a   = 1` yields `{"a": 1}` and
+`null | .[0] = 1` yields `[1]`, meaning that
+`jq` treats `null` as empty array or object when
+updating it with a string or integer index.
+Because jaq supports non-string object keys, this is ambiguous, because
+it is not clear whether
+`null | .[0] = 1` should yield
+`{0: 1}` or `[1]`.
+For that reason, jaq yields an error on updates of null with any kind of index.
+:::
+
+## Patterns
+
+The filter `f as $x | g` binds the outputs of `f` to a
+[variable](#variable-binding) `$x`.
+At the place of `$x`, we can use a *pattern* to
+_destructure_ the input into multiple variables.
+
+Consider the following filter:
+
+```
+[ 1, {a:  2}] |
+.[0]   as $x  |
+.[1].a as $y  |
+$x, $y -->
+ 1   2
+```
+
+We can write this more compactly using a pattern as follows:
+
+```
+[ 1, {a:  2}] as
+[$x, {a: $y}] |
+ $x,     $y -->
+  1       2
+```
+
+Here, `[$x, {a: $y}]` is a pattern that is used to match the value `[1, {a: 2}]`.
+It binds
+`1` to `$x` and
+`2` to `$y`.
+
+Similarly to [object construction](#objects),
+`{$x}` is equivalent to `{x: $x}` also for object patterns.
+For example, we could have written the previous example equivalently as
+`[1, {a: 2}] as [$x, {$a}] | $x, $a --> 1 2`
+
+When a pattern does not exist in its input,
+its corresponding variables are bound to `null`:
+
+- `[1, {b: 2}] as [$x, {$a}] | $x, $a --> 1 null`
+- `[1        ] as [$x,   $y] | $x, $y --> 1 null`
+- `[1, {a: 2}] as [$x, [$y]] | $x, $y --> 1 null`
+
+If the types of a pattern and its input do not match,
+an error is thrown:
+
+- `try ([1] as {$a} | $a) catch "fail" --> "fail"`
+- `try ( 1  as [$x] | $x) catch "fail" --> "fail"`
+
+Patterns do not have to match their whole input:
+
+- `[   1,    2] as [$x] | $x --> 1`
+- `{a: 1, b: 2} as {$a} | $a --> 1`
+
+Patterns can be arbitrarily nested:
+
+- `{a: [1, {b: [2]}]} as {a: [$x, {b: [$y]}]} | $x, $y --> 1 2`
+- `[[[1]]] as [[[$x]]] | $x --> 1`
+- `{a: {b: {c: 1}}} as {a: {b: {c: $x}}} | $x --> 1`
+
+We can write any filter `(f)` as object key in a pattern:
+
+```
+{a: 1, b: 2, c: 3, d: 4} as
+{("a",  "b"): $x, ("c", "d"): $y} |
+[$x, $y] -->
+[1, 3] [1, 4] [2, 3] [2, 4]
+```
+
+We can also use patterns in `reduce` and `foreach`:
+
+```
+[{"a": 1, "b": 2}, {"a": 3, "b": 4}] |
+foreach .[] as {("a", "b"): $x} ([]; . + [$x]) -->
+[1]
+[1,2]
+[1,2,3]
+[1,2,3,4]
+```
+
+::: Compatibility
+jaq does not support `jq`'s destructuring alternative operator
+[`?//`](https://jqlang.org/manual/#destructuring-alternative-operator).
+:::
+
+::: Advanced
+A pattern `p` is either:
+
+- a variable `$x`,
+- an array  pattern `[p1, ..., pn]` containing `n` patterns, or
+- an object pattern `{e1, ..., en}` containing `n` object entries.
+  An object entry `e` is either:
+
+  - a variable `$x` or
+  - a key-value pair `(k): p` (where `k` is a filter and `p` is a pattern).
+
+An array  pattern `[p1, ..., pn]` is equivalent to
+an object pattern `{(0): p1, ..., (n): pn}`.
+Because of this, you can use
+object patterns with integer keys to destructure arrays, or
+array  patterns to destructure objects with integer keys.
+Furthermore, you can also destructure byte strings:
+
+- `[1, 2, 3]  as {(0): $x, (2): $y} | $x, $y --> 1 3`
+- `{(0): 1, (2): 3} as [$x, $_, $y] | $x, $y --> 1 3`
+- `[1, 2, 3] | tobytes as [$x,  $y] | $x, $y --> 1 2`
+
+When using a filter `(f)` as object key in a pattern, then
+`f` is run with the input that was matched
+by its parent object pattern, not
+by the whole pattern.
+For example,
+`[{"k": "a", "a": 1}] as [{(.k): $x}] | $x --> 1`
+
+This is equivalent to:
+
+```
+[{"k": "a", "a": 1}] |
+.[0]          as $p0 |
+$p0[$p0 | .k] as $x  |
+$x
+--> 1
+```
+
+Here, we can see that `(.k)` is run with the input `$p0`, which is
+the value that the parent object pattern of `(.k)`, namely `{(.k): $x}`,
+is trying to match.
+Compare this with the following _wrong_ transformation, where
+`(.k)` would be run with the input matched by the whole pattern:
+
+```
+[{"k": "a", "a": 1}] |
+try (
+.[0]     as $p0 |
+$p0[.k]  as $x  | # fails here because .k is run with whole input
+$x
+) catch "fail" --> "fail"
+```
+:::
+
+
+## Modules
+
+jq allows dividing programs into multiple files that are called *modules*.
+
+At the beginning of any jq module, there is a module header that consists of
+a (potentially empty) sequence of instructions listed in this section.
+The module header is then followed by a sequence of [definitions](#def).
+Finally, the main module that is called from the command-line interface
+(via [`--from-file`](#--from-file) or inline)
+must contain a single filter at the end, which is the filter that is executed.
+
+All `include`/`import` instructions search for files as explained in the
+[search paths](#search-paths) section.
+
+### Module metadata
+
+The instruction `module meta;` sets the metadata of the current module to
+the output of `meta`, where `meta` is a filter.
+This instruction may occur
+only at the beginning of the module header and
+only once.
+
+For example, `module "My module"; 1 --> 1`.
+
+::: Compatibility
+jaq ignores this instruction, whereas
+`jq` uses it to provides the output of `meta` via the `modulemeta` filter.
+:::
+
+### Module inclusion
+
+The instructions
+`include "mod";` and
+`include "mod" meta;`
+make all filters defined in the module `mod.jq` accessible in the current module.
+
+For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
+`jaq -L . -n 'include "foo"; bar'` yields `1`.
+
+### Module import
+
+The instructions
+`import "mod" as name;` and
+`import "mod" as name meta;`
+make all definitions in the module `mod.jq` accessible in the current module
+with the prefix `name::`.
+
+For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
+`jaq -L . -n 'import "foo" as myfoo; myfoo::bar'` yields `1`.
+
+### Data import
+
+The instructions
+`import "data" as name;` and
+`import "data" as name meta;`
+load all JSON values in `data.json` to an array,
+bind it to the variable `$name`, and
+make it accessible in the current module.
+
+For example, if `foo.json` in the current working directory contains `1 2 3`, then
+`jaq -L . -n 'import "foo.json" as $myfoo; $myfoo'` yields `1 2 3`.
+
+### Search paths
+
+An `include`/`import` instruction searches for its given file
+in the following directories, in the following order:
+
+1. The global search paths given via `--library-path`.
+   They are interpreted relative to the current working directory.
+2. The local search paths given via metadata:
+   When an `include`/`import` instruction has `meta` of the shape
+   `{..., search: ..., ...}`, then
+   the value at the key `"search"` sets the local search paths for that instruction to:
+
+   - If the value is a string: Just that string.
+   - If the value is an array: All strings in the array.
+   - Otherwise: Nothing.
+
+   If the module containing the `include`/`import` instruction is a file, then
+   these paths are interpreted relative to the parent directory of that module.
+   Otherwise, these paths are interpreted relative to the current working directory.
+   (That is the case if the module containing the `include`/`import` instruction
+   is given inline on the command-line.)
+
+
+Every global and local search path is substituted as follows:
+
+- If it starts with `~`, then
+  `~` is substituted with the user's home directory,
+  given by the environment variable `HOME` on Linux and `USERPROFILE` on Windows.
+- If it starts with `$ORIGIN`, then
+  `$ORIGIN` is substituted by the directory in which the `jaq` executable resides.
+
+For example,
+`jaq -L ~/foo -L bar 'include "decode" {search: ["baz", "$ORIGIN/quux"]}; 1'`
+searches for the file `decode.jq` at the following paths in the given order:
+
+1. `~/foo/decode.jq` (where `~` is substituted by the user's home directory)
+2. `./bar/decode.jq`
+3. `./baz/decode.jq`
+4. `$ORIGIN/quux/decode.jq`
+   (where `$ORIGIN` is substituted by the parent directory of the `jaq` executable)
+
+The first path that corresponds to an existing file is taken.
+
+Now, suppose that `decode.jq` contains an instruction
+`import "binary" as $binary {search: "."}`.
+This searches for `binary.json` at the following paths:
+
+1. `~/foo/binary.json`
+2. `./bar/binary.json` (relative to the current working directory)
+3. `./binary.json` (relative to the parent directory of `decode.jq`)
+
+
+## Comments
+
+A comment
+starts with `#` and
+ends with the first newline that is not preceded by an uneven number of backslashes (`\`).
+For example:
+
+```
+[
+  1,
+  # comment
+  2,
+  # comment \\
+  3,
+  # comment \
+    comment
+  4,
+  # comment \\\
+    comment \
+    comment
+  5
+]
+```
+
+This is equivalent to `[1, 2, 3, 4, 5]`.
+

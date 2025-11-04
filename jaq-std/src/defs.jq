@@ -1,9 +1,14 @@
 def empty: {}[] as $x | .;
 def null:  [][0];
 
-def debug(msgs): ((msgs | debug) as $x | empty), .;
-def error(msgs): ((msgs | error) as $x | empty), .;
+def stderr:      (       stderr_empty  as $x | .), .;
+def debug:       (        debug_empty  as $x | .), .;
+def debug(msgs): ((msgs | debug_empty) as $x | .), .;
+def error:                error_empty  as $x | .    ;
+def error(msgs):  (msgs | error_empty) as $x | .    ;
 
+def halt: halt(0);
+def halt_error($exit_code): stderr, halt($exit_code);
 def halt_error: halt_error(5);
 
 # Booleans
@@ -93,7 +98,8 @@ def unique_by(f): [group_by(f)[] | .[0]];
 def unique: unique_by(.);
 
 # Paths
-def paths(f): path_values | if .[1] | f then .[0] else empty end;
+def paths:    skip(1; path      (..));
+def paths(p): skip(1; path_value(..)) | if .[1] | p then .[0] else empty end;
 def getpath($path): reduce $path[] as $p (.;
   def slice($s; $e):
     if   $s and $e then .[$s:$e]
@@ -102,6 +108,12 @@ def getpath($path): reduce $path[] as $p (.;
     else error("slice object must contain either start or end") end;
   if . < {} and $p >= {} then slice($p.start; $p.end) else .[$p] end
 );
+def setpath($path; $x): getpath($path) = $x;
+def delpaths($paths): reduce $paths[] as $path (.; getpath($path) |= empty);
+def pick(f):
+  reduce path_value(f) as [$path, $value] ({}; . *
+    reduce ($path | reverse[]) as $p ($value; {($p): .})
+  );
 def del(f): f |= empty;
 
 # Arrays

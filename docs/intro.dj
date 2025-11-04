@@ -1,0 +1,60 @@
+jaq is an interpreter for the [jq programming language](#corelang).
+It is designed to be usable as a drop-in replacement for the `jq` program,
+which is the reference interpreter for the jq language written in C.
+
+Written in Rust, jaq focuses on correctness, high performance, and simplicity.
+In addition, jaq adds some functionality not present in `jq`:
+
+- Support for multiple file [formats](#formats), including JSON, YAML, CBOR, TOML, XML
+- Support for invalid UTF-8 code units in [text strings](#text-strings)
+- [Byte strings](#byte-strings)
+- [Objects](#objects) with non-string keys, such as `{0: 1, [2]: 3}`
+- [In-place replacement of input files](#--in-place)
+
+This manual aspires to:
+
+- Be comprehensible, concise, and complete.
+- Document all functionality in jaq, in particular
+  [jaq's command-line interface](#cli),
+  [jq's core language](#corelang), and
+  [jq's standard library](#stdlib).
+  That covers the same concepts as the [jq manual](https://jqlang.org/manual/).
+- Document all divergences between `jq` and jaq.
+
+In case that this manual falls short of these goals,
+please [open an issue](https://github.com/01mf02/jaq/issues) or
+create a pull request.
+The same holds if you wish to propose new functionality for jaq.
+This project lives from your contributions!
+
+The creation of this manual was funded through the
+[NGI0 Commons Fund](https://nlnet.nl/commonsfund), a fund established by
+[NLnet](https://nlnet.nl) with financial support from the
+European Commission's [Next Generation Internet](https://ngi.eu)
+programme, under the aegis of [DG Communications Networks, Content and Technology](https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en) under
+grant agreement N^o^ [101135429](https://cordis.europa.eu/project/id/101135429).
+Additional funding is made available by the
+[Swiss State Secretariat for Education, Research and Innovation](https://www.sbfi.admin.ch/sbfi/en/home.html) (SERI).
+
+::: Compatibility
+This manual uses "compatibility" blocks to
+point out occasions where jaq diverges from `jq`.
+In this manual,
+"`jq`" refers to the C implementation, whereas
+"jq" refers to the jq language.
+:::
+
+::: Advanced
+These "advanced" blocks are a kind of "making of" for this manual.
+They document experiments I made or ideas I had during the writing of the manual.
+As such, they are not essential for understanding the jq language.
+However, they might be useful if you wish to embark on
+a journey to become a master of the jq language.
+
+To satisfy your hunger for an even deeper understanding of jq semantics,
+my [jq language specification](https://github.com/01mf02/jq-lang-spec/)
+should provide sufficient material.
+
+Feel free to skip these "advanced" blocks if you do not seek enlightenment.
+:::
+
