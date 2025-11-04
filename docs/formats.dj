@@ -269,7 +269,7 @@ def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
 - Strings are neither escaped nor unescaped; that means,
    `Tom &amp; Jerry`  in the source XML becomes
   `"Tom &amp; Jerry"` in the target JSON.
-  The [`@html`/`@htmld`](#html-htmld) filters can be used for manual (un-)escaping.
+  The [`@html`/`@htmld`](#athtml) filters can be used for manual (un-)escaping.
 - A comment such as `<!-- this comment -->`{.xml} is converted to
   `{"comment": " this comment "}`{.json}.
 - A CDATA block such as `<![CDATA[Tom & Jerry]]>`{.xml} is converted to

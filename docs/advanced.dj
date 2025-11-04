@@ -392,7 +392,6 @@ jaq ignores this instruction, whereas
 `jq` uses it to provides the output of `meta` via the `modulemeta` filter.
 :::
 
-{#include}
 ### Module inclusion
 
 The instructions

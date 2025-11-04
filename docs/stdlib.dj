@@ -1,6 +1,9 @@
 {#stdlib}
 # Standard library
 
+This section lists all named filters that are available by default in any jq module.
+These filters are also known as "builtins".
+
 ## Basic
 
 {#error}
@@ -198,6 +201,7 @@ For example:
 
 The filters `all(p)` and `all` are defined analogously to `any(p)` and `any`.
 
+{#add}
 ### `add`, `add(f)`
 
 The filter `add(f)` yields the sum of all elements yielded by `f`, or
@@ -346,6 +350,7 @@ Examples:
 - `0 | until(. >= 3; . + 1) --> 3`
 
 
+{#booleans-stdlib}
 ## Booleans
 
 The filters in this section classify their inputs or output them selectively.
@@ -954,6 +959,7 @@ Examples:
 {#arrays-stdlib}
 ## Arrays
 
+{#sort}
 ### `sort`, `sort_by(f)`
 
 The filter `sort` takes an array and sorts it.
@@ -983,6 +989,7 @@ We have the following correspondences:
 
 :::
 
+{#group}
 ### `group_by(f)`
 
 The filter `group_by(f)` sorts its input array by `f`, then
@@ -992,6 +999,7 @@ For example:
 - `["foo", "", "bar", "quux", "baz"] | group_by(length) --> [[""], ["foo", "bar", "baz"], ["quux"]]`
 - `[1, 2, 3, 4] | group_by(. % 2) --> [[2, 4], [1, 3]]`
 
+{#unique}
 ### `unique`, `unique_by(f)`
 
 The filter `unique_by(f)` sorts its input array by `f`.
@@ -1006,6 +1014,7 @@ The filter `unique` is equivalent to `unique_by(.)`.
 It sorts the input array and removes any duplicates; e.g.
 `[3, 2, 1, 3, 4] | unique --> [1, 2, 3, 4]`.
 
+{#min-max}
 ### `min`, `max`, `min_by(f)`, `max_by(f)`
 
 The filters `min` and `max` yield the smallest and largest element of an array, respectively.
@@ -1262,6 +1271,7 @@ nor does it reject array or object values in the array.
 
 :::
 
+{#ascii_case}
 ### `ascii_downcase`, `ascii_upcase`
 
 The filters `ascii_downcase` and `ascii_upcase` convert all
@@ -1293,14 +1303,17 @@ Unlike in `jq`, you can define you own filters that start with `@`; for example,
 `def @xml: @html;`
 :::
 
+{#attext}
 ### `@text`
 
 The filter `@text` is equivalent to [`tostring`](#tostring).
 
+{#atjson}
 ### `@json`
 
 The filter `@json` is equivalent to [`tojson`](#fromjson-tojson).
 
+{#athtml}
 ### `@html`, `@htmld`
 
 The filter `@html` escapes a string so that it can be embedded in an HTML document.
@@ -1322,6 +1335,7 @@ For example:
 `jq` does not support `@htmld`.
 :::
 
+{#atbase64}
 ### `@base64`, `@base64d`
 
 The filter `@base64` [Base64](https://en.wikipedia.org/wiki/Base64)-encodes its input.
@@ -1341,6 +1355,7 @@ thus potentially leading to hidden data corruption.
 See [#282](https://github.com/01mf02/jaq/issues/282) for a detailed discussion.
 :::
 
+{#aturi}
 ### `@uri`, `@urid`
 
 The filter `@uri` applies
@@ -1357,6 +1372,7 @@ The HTML version of this manual is created with jaq, and
 `@uri` is used to encode the examples to create links to the jaq playground.
 :::
 
+{#atsh}
 ### `@sh`
 
 The filter `@sh` escapes data for constructing Unix command-line prompts.
@@ -1383,6 +1399,7 @@ Unescaping can be avoided by running `jaq` with [`--raw-output`](#--raw-output),
 which does not escape `\` with `\\` in the first place.)
 :::
 
+{#atcsv}
 ### `@csv`
 
 The filter `@csv` takes an array of scalars.
@@ -1401,6 +1418,7 @@ For example:
 "true,,false,1,\"Give me \"\"quotes\"\" or die\""
 ```
 
+{#attsv}
 ### `@tsv`
 
 The filter `@tsv` is similar to `@csv`, with the following differences:
@@ -1647,6 +1665,7 @@ was the `316`-th day of the year (where `0` is the first day).
 
 :::
 
+{#fromdate-todate}
 ### `fromdate`, `todate`, `fromdateiso8601`, `todateiso8601`
 
 These filters convert between Unix time and ISO-8601 timestamps.
@@ -1669,6 +1688,7 @@ The filters
 `fromdateiso8601` and `todateiso8601` are synonyms of
 `fromdate` and `todate`, respectively.
 
+{#strftime}
 ### `strftime($fmt)`, `strflocaltime($fmt)`
 
 The filters `strftime($fmt)` and `strflocaltime($fmt)` take as input either
@@ -1698,6 +1718,7 @@ GMT is not the same as UTC.
 
 :::
 
+{#strptime}
 ### `strptime($fmt)`
 
 The filter `strptime($fmt)` takes a string and parses it using the format `$fmt`,
@@ -1708,6 +1729,7 @@ For example:
 - `"1970-01-01 00:00:00" | strptime("%F %T") --> [1970, 0, 1, 0, 0, 0, 4, 0]`
 - `"1970-01-01 00:00:00 Europe/Vienna" | strptime("%F %T %Q") --> [1970, 0, 1, 0, 0, 0, 4, 0]`
 
+{#gmtime-localtime}
 ### `gmtime`, `localtime`
 
 The filters `gmtime` and `localtime` take a Unix epoch as input and
@@ -1719,6 +1741,7 @@ For example, if the user is in the CET zone (+0100):
 - `0 | gmtime --> [1970, 0, 1, 0, 0, 0, 4, 0]`
 - `0 | localtime` yields `[1970, 0, 1, 1, 0, 0, 4, 0]`
 
+{#mktime}
 ### `mktime`
 
 The filter `mktime` takes a BDT array that is assumed to be in UTC,
@@ -1960,6 +1983,7 @@ The filter `stderr` prints its input to the standard error stream
 in [raw](#--raw-output) and [compact](#--compact-output) mode [without newline](#--join-output).
 It then yields its input.
 
+{#halt}
 ### `halt`, `halt($exit_code)`
 
 The filter `halt($exit_code)` terminates jaq with the given exit code.

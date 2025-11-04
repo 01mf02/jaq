@@ -72,6 +72,7 @@ That means that
 `jq` does not have this option.
 :::
 
+{#--null-input}
 ### `-n`, `--null-input`
 
 Feed `null` as input to the main program, ignoring any input files.
@@ -103,6 +104,7 @@ That permits loading arbitrary binary files;
 these can be processed as byte strings via [`tobytes`](#tobytes).
 :::
 
+{#--slurp}
 ### `-s`, `--slurp`
 
 Read (slurp) all input values into one array.
@@ -247,6 +249,7 @@ For example,
 `jaq --from-file -n script.jq`
 uses the contents of the file `script.jq` as filter.
 
+{#--library-path}
 ### `-L`, `--library-path` _DIR_
 
 Search for [modules](#modules) and data in given directory.
@@ -269,6 +272,7 @@ See the [modules](#modules) section for more details.
 
 ## Variable options
 
+{#--arg}
 ### `--arg` _A_ _V_
 
 Set variable `$A` to string _V_.
@@ -276,6 +280,7 @@ Set variable `$A` to string _V_.
 For example,
 `jaq --arg name "John Doe" -n '"Welcome, " + $name'` yields `"Welcome, John Doe"`.
 
+{#--argjson}
 ### `--argjson` _A_ _V_
 
 Set variable `$A` to JSON value _V_.
@@ -287,6 +292,7 @@ yields
 
 If _V_ contains more than a single value, e.g. `1 2`, then jaq yields an error.
 
+{#--slurpfile}
 ### `--slurpfile` _A_ _F_
 
 Set variable `$A` to array containing the JSON values in file _F_.
@@ -294,6 +300,7 @@ Set variable `$A` to array containing the JSON values in file _F_.
 For example, if `values.json` contains `1 2 3`, then
 `jaq --slurpfile xs values.json -n '$xs'` yields `[1, 2, 3]`.
 
+{#--rawfile}
 ### `--rawfile` _A_ _F_
 
 Set variable `$A` to string containing the contents of file _F_.
