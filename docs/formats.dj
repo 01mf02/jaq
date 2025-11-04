@@ -153,7 +153,7 @@ That means that there are CBOR values for which there are no equivalent jaq valu
 
 jaq fails when trying to decode such CBOR values.
 
-Every jaq value can be encoded losslessly as CBOR value, except for
+Every jaq value can be encoded losslessly as a CBOR value, except for
 text strings with invalid UTF-8 code units.
 Invalid UTF-8 sequences are replaced with `U+FFFD`, which looks like this: "�".
 
@@ -173,7 +173,7 @@ TOML has neither
 byte strings, nor
 non-string object keys.
 
-When writing TOML, jaq converts invalid UTF-8 sequences like for [CBOR](#cbor).
+When writing TOML, jaq converts invalid UTF-8 sequences as for [CBOR](#cbor).
 
 
 ## XML
