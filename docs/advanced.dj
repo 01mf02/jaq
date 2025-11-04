@@ -140,28 +140,65 @@ In this table, the case for
 | `f as $x | g` | `(f1 as $x | g) |= u | ... | (fn as $x | g) |= u` |
 | `f // g`      | `if first(f // false) then f |= u else g |= u` |
 | `if $p then f else g end` | `if $p then f |= u else g |= u end` |
+| `.[]`         | `iter_upd(         u; error)` |
+| `.[$i]`       | `index_upd($i;     u; error)` |
+| `.[$i:$j]`    | `slice_upd($i; $j; u; error)` |
+| `.[]?`        | `iter_upd(         u;     .)` |
+| `.[$i]?`      | `index_upd($i;     u;     .)` |
+| `.[$i:$j]?`   | `slice_upd($i; $j; u;     .)` |
 
 It follows from the table that `empty |= f` is equivalent to `.` (identity).
+We now give definitions for `iter_upd`, `index_upd`, and `slice_upd`:
 
-The following list shows how update operators are executed,
-depending on their input type:
+```
+# .[] |= u
+def iter_upd(u; fail):
+    if isarray  then [.[] | u]
+  elif isobject then with_entries(.value |= u)
+  else fail end;
+all(
+([1, 2, 3]    | iter_upd(.+1             ; .) == [2, 3, 4]),
+([1, 2, 3]    | iter_upd(.+1,.           ; .) == [2, 1, 3, 2, 4, 3]),
+([1, 2, 3]    | iter_upd(select(.%2 == 1); .) == [1,    3]),
+({a: 1, b: 2} | iter_upd(.+1             ; .) == {"a": 2, "b": 3}),
+({a: 1, b: 2} | iter_upd(.+1,.           ; .) == {"a": 2, "b": 3})
+; .) --> true
+```
 
-- `.[] |= f`:
+```
+# .[$i] |= u
+def index_upd($i; u; fail):
+    if isarray then
+        if 0 <= $i and $i < length then .[:$i] + [.[$i] | first(u)] + .[$i+1:]
+      elif -length <= $i and $i < 0 then index_upd(length + $i; u; fail)
+      else fail end
+  elif isobject then
+        if has($i) then with_entries(if .key == $i then {key, value: first(.value | u)} end)
+      else . + ([{key: $i, value: first(null | u)}] | from_entries) end
+  else fail end;
+all(
+([1, 2, 3]    | index_upd( 0 ; .+1  ; .) == [2, 2, 3]),
+([1, 2, 3]    | index_upd( 0 ; .+1,.; .) == [2, 2, 3]),
+([1, 2, 3]    | index_upd( 0 ; empty; .) == [   2, 3]),
+([1, 2, 3]    | index_upd(-1 ; .+1  ; .) == [1, 2, 4]),
+([1, 2, 3]    | index_upd(-3 ; .+1  ; .) == [2, 2, 3]),
+({a: 1, b: 2} | index_upd("a"; .+1  ; .) == {"a": 2, "b": 2}),
+({a: 1, b: 2} | index_upd("a"; .+1,.; .) == {"a": 2, "b": 2}),
+({a: 1, b: 2} | index_upd("a"; empty; .) == {        "b": 2})
+; .) --> true
+```
 
-  - Array: `[.[] | f]`
-  - Object: `with_entries(.[].value |= f)`
-- `.[$i] |= f`:
-
-  - Array (if `0 <= $i < length`): `.[:$i] + [.[$i] | first(f)] + .[$i+1:]`
-  - Array (if `-length <= $i < 0`): `.[length + $i] |= f`
-  - Object (if `has($i)`): `with_entries(.[] |= if .key == $i then {key, value: first(.value | f)})`
-  - Object (if `has($i) | not`): `. + {($i): first(null | f)}`
-- `.[$i:$j] |= f`: `.[:$i] + (.[$i:$j] | first(f) // null) + .[$j:]`
-  (This is slightly inaccurate because `first(f) // null` yields `null` when
-  `first(f)` is `false`, whereas the actual update operator fails in such a case.)
-
-The operators above throw an error if they encounter an unhandled case, whereas
-the variants `.[]? |= f` and `.[$i] |= f` return their input in that case.
+```
+# .[$i:$j] |= u
+def slice_upd($i; $j; u; fail):
+  first(.[:$i] + (.[$i:$j] | u) + .[$j:]) // .[:$i] + .[$j:];
+all(
+([1, 2, 3, 4] | slice_upd(1; -1; map(.+1)    ; .) == [1, 3, 4, 4]),
+([1, 2, 3, 4] | slice_upd(1; -1; map(.+1),.  ; .) == [1, 3, 4, 4]),
+([1, 2, 3, 4] | slice_upd(1; -1; empty       ; .) == [1,       4]),
+("abcd"       | slice_upd(1; -1; ascii_upcase; .) == "aBCd"      )
+; .) --> true
+```
 :::
 
 ::: Compatibility
