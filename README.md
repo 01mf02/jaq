@@ -5,8 +5,14 @@
 [![Documentation](https://docs.rs/jaq-core/badge.svg)](https://docs.rs/jaq-core)
 [![Rust 1.69+](https://img.shields.io/badge/rust-1.69+-orange.svg)](https://www.rust-lang.org)
 
-jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of the JSON data processing tool [jq].
-It is two things at a time:
+jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of
+the JSON data processing tool [`jq`](https://jqlang.github.io/jq/).
+It has a few features not present in `jq`, such as
+support for the data formats YAML, CBOR, TOML, and XML.
+jaq has an own [manual](https://gedenkt.at/jaq/manual/).
+You can try jaq on the [playground](https://gedenkt.at/jaq/).
+
+jaq is two things at a time:
 
 - A command-line program, `jaq`, that can be used as drop-in replacement for `jq`.
 - A library, [`jaq-core`](https://docs.rs/jaq-core/),
@@ -14,10 +20,6 @@ It is two things at a time:
   Compared to the `jq` API, `jaq-core`
   can be safely used in multi-threaded environments and
   supports [arbitrary data types beyond JSON](https://docs.rs/jaq-core/latest/jaq_core/val/trait.ValT.html).
-
-jaq has an own [manual].
-You can try jaq online on the jaq [playground].
-Instructions for the playground can be found [here](jaq-play/).
 
 jaq focuses on three goals:
 
@@ -35,10 +37,6 @@ jaq focuses on three goals:
   jaq aims to have a simple and small implementation, in order to
   reduce the potential for bugs and to
   facilitate contributions.
-
-[jq]: https://jqlang.github.io/jq/
-[manual]: https://gedenkt.at/jaq/manual/
-[playground]: https://gedenkt.at/jaq/
 
 [^jacques]: I wanted to create a tool that should be discreet and obliging, like a good waiter.
   And when I think of a typical name for a (French) waiter, to my mind comes "Jacques".
@@ -200,7 +198,13 @@ Add your own testimonials via <https://github.com/01mf02/jaq/issues/355>.
 # Acknowledgements
 
 [This project](https://nlnet.nl/project/jaq/) was funded through the
-<a href="https://nlnet.nl/entrust">NGI0 Entrust</a> Fund, a fund established by
-<a href="https://nlnet.nl">NLnet</a> with financial support from the
-European Commission's <a href="https://ngi.eu">Next Generation Internet</a>
-programme, under the aegis of <a href="https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en">DG Communications Networks, Content and Technology</a> under grant agreement N<sup>o</sup> 101069594.
+[NGI0 Entrust](https://nlnet.nl/entrust) and
+[NGI0 Commons](https://nlnet.nl/commonsfund) funds established by
+[NLnet](https://nlnet.nl) with financial support from the
+European Commission's [Next Generation Internet](https://ngi.eu)
+programme, under the aegis of [DG Communications Networks, Content and Technology](https://commission.europa.eu/about-european-commission/departments-and-executive-agencies/communications-networks-content-and-technology_en) under
+grant agreements
+№ [101069594](https://cordis.europa.eu/project/id/101069594) and
+№ [101135429](https://cordis.europa.eu/project/id/101135429).
+Additional funding is made available by the
+[Swiss State Secretariat for Education, Research and Innovation](https://www.sbfi.admin.ch/sbfi/en/home.html) (SERI).

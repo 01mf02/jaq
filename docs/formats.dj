@@ -34,13 +34,13 @@ XJON extends JSON with following constructs:
   Every number that may be prefixed with `-` (minus)
   may also be prefixed with `+` (plus), e.g.
   `+7`, `+Infinity`.
-- UTF-8 strings with invalid code points:
+- UTF-8 strings with invalid code units:
   The JSON standard is slightly ambiguous whether
-  strings may contain invalid UTF-8 code points.
-  XJON explicitly allows for invalid code points in UTF-8 strings,
+  strings may contain invalid UTF-8 code units.
+  XJON explicitly allows for invalid code units in UTF-8 strings,
   e.g. the output of `printf '"\xFF"'`.
   This increases compatibility with tools that output such strings (e.g. file names).
-  Furthermore, it allows for constant-time loading of strings via [`--raw-input`](#--raw-input),
+  Furthermore, it allows for constant-time loading of strings via [`--rawfile`](#--rawfile),
   where jq takes linear time due to UTF-8 validation.
 - Byte strings:
   A byte string is created via `b"..."`, where `...` is a sequence of:
@@ -161,7 +161,6 @@ jaq writes sequences of CBOR values by concatenating them without any separator.
 That means that `--to cbor` is equivalent to `--to cbor --join-output`.
 jaq can also read sequences of concatenated CBOR values.
 
-See [`fromcbor`/`tocbor`](#fromcbor-tocbor).
 
 ## TOML
 

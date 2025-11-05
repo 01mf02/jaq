@@ -198,13 +198,10 @@ contain equivalent bytes are considered equal, e.g.
 `"Hello" | . == tobytes --> true`.
 
 ::: Compatibility
-
 Byte strings do not exist in `jq`; however, they exist in `fq`.
-
 :::
 
 ::: Advanced
-
 To find out whether a value is a byte string, we can use:
 
 ```
@@ -213,10 +210,7 @@ def isbytes: isstring and try (.[0] | true) catch false;
 ```
 
 This works because we can index byte strings, but not text strings.
-
 :::
-
-
 
 ### Arrays
 
@@ -278,7 +272,6 @@ Note that here, it is necessary to surround `1, 2` with parentheses,
 in order to clarify that `,` does not start a new key-value pair.
 
 ::: Compatibility
-
 In jq, keys must be strings, whereas
 in jaq, keys can be arbitrary values.
 Because object keys can be arbitrary values in jaq, you can write e.g.:
@@ -288,8 +281,10 @@ Because object keys can be arbitrary values in jaq, you can write e.g.:
 { 0 : 1, "2": 3,  [4] : 5,  {} : 6}
 ```
 
-This yields an error in `jq`.
+Note that in a jq filter, non-string keys must be surrounded with parentheses,
+whereas in XJON, parentheses must not be used.
 
+This yields an error in `jq`.
 :::
 
 

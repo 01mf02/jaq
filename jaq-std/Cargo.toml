@@ -1,6 +1,6 @@
 [package]
 name = "jaq-std"
-version = "2.1.2"
+version = "3.0.0-alpha"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -19,7 +19,7 @@ math = ["libm"]
 time = ["jiff"]
 
 [dependencies]
-jaq-core = { version = "2.1.0", path = "../jaq-core" }
+jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
 
 bstr = "1"
 jiff = { version = "0.2.15", optional = true }

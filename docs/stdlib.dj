@@ -1153,8 +1153,9 @@ take a text string as input, and fail if the input is of any other type.
 The filter `tostring` converts its input to a string.
 Its output depends on the type of its input:
 
-- Text strings are returned unchanged, i.e. `"Hi" | tostring --> "Hi"`
-- Byte strings are interpreted as text string, i.e. `"Hi" | tobytes | tostring --> "Hi"`
+- Text strings are returned unchanged, i.e. `"Hi" | tostring --> "Hi"`.
+- Byte strings are interpreted as text string, i.e. `"Hi" | tobytes | tostring --> "Hi"`.
+  This takes constant time.
 - Any other value is formatted compactly as if output by `jaq -c`. For example:
 
   - `null | tostring --> "null"`,
@@ -1216,8 +1217,8 @@ For example:
 ### `explode`, `implode`
 
 The filter `explode` yields an array containing
-a positive number for each valid Unicode code points of the input string and
-a negative number for each byte of each invalid Unicode code point.
+a positive number for each valid Unicode code point of the input string and
+a negative number for each byte of each invalid Unicode code unit.
 For example:
 
 ```
@@ -1238,10 +1239,8 @@ The inverse filter of `explode` is `implode`:
 (I omitted the `FF` byte at the end, because it is hard to save in a text editor.)
 
 ::: Compatibility
-
-`jq` does not permit invalid code points in text strings, so it
+`jq` does not permit invalid code units in text strings, so it
 returns and accepts only natural numbers in `explode` and `implode`. 
-
 :::
 
 {#split}
@@ -1265,10 +1264,8 @@ For example, to memorise the hierarchy of values in jq:
 "null < boolean < number < string < array < object"`.
 
 ::: Compatibility
-
 Unlike jq, jaq does not map `null` values in the array to `""`,
 nor does it reject array or object values in the array.
-
 :::
 
 {#ascii_case}
@@ -1450,6 +1447,7 @@ Its output depends on the type of input:
 - Text string:
   Yields a byte string containing the underlying bytes of the text string, e.g.
   `"Hi" | tobytes --> b"Hi"`.
+  This takes constant time.
 - Byte string: Yields the byte string unchanged.
 - Array: Converts each element to a byte string and yields their concatenation, e.g.
   `[0, "Hi", [1, 255]] | tobytes --> b"\x00Hi\x01\xFF"`.
@@ -2027,6 +2025,7 @@ For example, `{"EDITOR": "vim", "SHELL": "/usr/bin/bash"}`.
 The filter `env` is equivalent to `$ENV`.
 
 
+{#unsupported-stdlib}
 ## Unsupported
 
 This section lists filters present in `jq`, but not in jaq.
