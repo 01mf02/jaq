@@ -19,12 +19,23 @@ I think that he did a great job creating jq.)
 
 jaq and `jq` pursue different approaches to execute assignments:
 
-- *Path-based*: In `jq`, an assignment `p |= f` first constructs paths to all values that match `p`.
-  *Only then*, it applies the filter `f` to these values.
-- *Pathless*: In jaq, an assignment `p |= f` applies `f` *immediately* to any value matching `p`.
-  Unlike in `jq`, assignment does not explicitly construct paths.
+- *Path-based*: In `jq`, an assignment `p |= f`
+  constructs paths to all values that match `p` and
+  applies the filter `f` to these values.
+- *Pathless*: In jaq, an assignment `p |= f` is transformed to
+  a different filter that does not construct any paths.
 
-Fortunately, in most cases, the result is the same.
+For example, consider the update
+`[1, 2, 3] | .[] |= .+1 --> [2, 3, 4]`:
+When `jq` executes this, it calculates
+`[1, 2, 3] | path(.[]) --> [0] [1] [2]` and applies
+`.+1` on each value at these paths.
+On the other hand, jaq transforms the update to
+`[1, 2, 3] | [.[] | .+1] --> [2, 3, 4]` ---
+the assignment does not involve any path construction.
+
+Fortunately, like in the example above, in most cases,
+the result of the both approaches is the same.
 The following sections explain the two approaches in more detail,
 and how to write updates that behave the same in both `jq` and jaq.
 
@@ -423,7 +434,7 @@ bind it to the variable `$name`, and
 make it accessible in the current module.
 
 For example, if `foo.json` in the current working directory contains `1 2 3`, then
-`jaq -L . -n 'import "foo.json" as $myfoo; $myfoo'` yields `1 2 3`.
+`jaq -L . -n 'import "foo.json" as $myfoo; $myfoo'` yields `[1, 2, 3]`.
 
 ### Search paths
 
@@ -475,6 +486,19 @@ This searches for `binary.json` at the following paths:
 1. `~/foo/binary.json`
 2. `./bar/binary.json` (relative to the current working directory)
 3. `./binary.json` (relative to the parent directory of `decode.jq`)
+
+::: Compatibility
+If a file to load has been given without extension,
+such as `decode` and `binary` above, then
+jaq adds an extension (`.jq` for modules or `.json` for data).
+`jq` adds an extension _unconditionally_; that is,
+even if an extension has been given as part of the file name,
+`jq` adds an extension.
+
+jaq's behaviour is motivated by allowing instructions like
+`import "binary.cbor" as $binary` in the future.
+Here, unconditionally adding the `.json` extension would be counterproductive.
+:::
 
 
 ## Comments
