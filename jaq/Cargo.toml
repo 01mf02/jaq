@@ -1,6 +1,6 @@
 [package]
 name = "jaq"
-version = "2.3.0"
+version = "3.0.0-alpha"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
@@ -15,9 +15,9 @@ rust-version = "1.70"
 default = ["mimalloc"]
 
 [dependencies]
-jaq-core = { version = "2.1.1", path = "../jaq-core" }
-jaq-std  = { version = "2.1.0", path = "../jaq-std" }
-jaq-json = { version = "1.1.1", path = "../jaq-json" }
+jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
+jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
+jaq-json = { version = "2.0.0-alpha", path = "../jaq-json" }
 
 bstr = "1"
 bytes = "1.10.1"
