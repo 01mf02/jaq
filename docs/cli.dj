@@ -12,6 +12,7 @@ performs the following steps:
     - For each input value in the file:
 
         - Run _FILTER_ on the input value and print its output values
+- If an uncaught error is encountered at any point, jaq stops.
 
 For example, `jaq '.name?' persons.json`
 parses the filter `.name?`, then
@@ -19,37 +20,17 @@ reads all values in `persons.json` one-by-one.
 It then executes the filter `.name?` on each of the values and
 prints the outputs of the filter as JSON.
 
-There are a few rules:
 
-- If no _FILTER_ is given, jaq uses `.` (the [identity filter](#identity)) as filter.
-- If no _FILE_ is given, jaq reads from standard input.
-- jaq determines the format to parse a _FILE_ as follows:
+## Input
 
-    - If [`--from`](#--from) _FORMAT_ is used, jaq uses that format.
-    - Otherwise, if _FILE_ has a file extension known by jaq, such as
-      `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`,
-      jaq uses the corresponding format.
-    - Otherwise, jaq assumes JSON.
-- If an uncaught error is encountered at any point, jaq stops.
+If no _FILE_ is given, jaq reads from standard input.
+jaq determines the format to parse a _FILE_ as follows:
 
-When passing filters directly as _FILTER_ argument on the command-line,
-care has to be taken to properly escape the filter.
-How to do this depends from platform to platform, but on Unixoid systems,
-surrounding the filter with single quotes (`'`) and
-replacing occurrences of `'` in filters by `'\''` suffices.
-For example, to run the filter `"'"` that
-produces a string containing a single quote, you can use
-`jaq -n '"'\''"'`.
-
-Running filters that start with the [negation operator](#negation),
-such as `jaq '-1'`, fails because `-` is interpreted as
-start of a command-line switch rather than negation.
-You can remedy this by using
-`jaq -- '-1'` instead, or by surrounding the filter in parentheses, i.e.
-`jaq '(-1)'`.
-
-
-## Input options
+- If [`--from`](#--from) _FORMAT_ is used, jaq uses that format.
+- Otherwise, if _FILE_ has a file extension known by jaq, such as
+  `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`,
+  jaq uses the corresponding format.
+- Otherwise, jaq assumes JSON.
 
 {#--from}
 ### `--from` _FORMAT_
@@ -126,7 +107,7 @@ for example, to achieve the output of
 :::
 
 
-## Output options
+## Output
 
 {#--to}
 ### `--to` _FORMAT_
@@ -233,7 +214,25 @@ For example,
 Use _N_ spaces for indentation (default: 2).
 
 
-## Compilation options
+## Compilation
+
+If no _FILTER_ is given, jaq uses `.` (the [identity filter](#identity)) as filter.
+
+When passing filters directly as _FILTER_ argument on the command-line,
+care has to be taken to properly escape the filter.
+How to do this depends from platform to platform, but on Unixoid systems,
+surrounding the filter with single quotes (`'`) and
+replacing occurrences of `'` in filters by `'\''` suffices.
+For example, to run the filter `"'"` that
+produces a string containing a single quote, you can use
+`jaq -n '"'\''"'`.
+
+Running filters that start with the [negation operator](#negation),
+such as `jaq '-1'`, fails because `-` is interpreted as
+start of a command-line switch rather than negation.
+You can remedy this by using
+`jaq -- '-1'` instead, or by surrounding the filter in parentheses, i.e.
+`jaq '(-1)'`.
 
 {#--from-file}
 ### `-f`, `--from-file`
@@ -268,7 +267,7 @@ If `--library-path` is not given, the following global search paths are used:
 See the [modules](#modules) section for more details.
 
 
-## Variable options
+## Variables
 
 {#--arg}
 ### `--arg` _A_ _V_
@@ -333,3 +332,70 @@ the latter because it would not have been interpreted as input file.
 However, `-c` is collected into the array because it comes after `--`,
 which leads every argument after it to be interpreted as input file.
 
+
+## Miscellanea
+
+{#--exit-status}
+### `-e`, `--exit-status`
+
+Use the last output value as exit status code.
+
+This enables the use of the exit codes 1 and 4, which are not used otherwise.
+
+jaq uses the following exit codes:
+
+- 0: No errors.
+- 1: The last output value is `false` or `null`.
+- 2: I/O error, e.g. file not found.
+- 3: Filter parse/compilation error.
+- 4: The filter did not yield any output.
+- 5: Any other error, e.g. call to the filter [`error`](#error).
+
+The filters [`halt`](#halt) and [`halt_error`](#halt_error)
+can be used to exit jaq with arbitrary exit codes.
+
+For example:
+
+```
+$ jaq -n empty; echo $?
+0
+$ jaq -n false >/dev/null; echo $?
+0
+$ jaq -en false >/dev/null; echo $?
+1
+$ jaq . does_not_exit.json 2>/dev/null; echo $?
+2
+$ jaq '+' 2>/dev/null; echo $?
+3
+$ jaq -en empty; echo $?
+4
+$ jaq -n error 2>/dev/null; echo $?
+5
+$ jaq -n 'halt(9)'; echo $?
+9
+```
+
+
+{#--help}
+### `-h`, `--help`
+
+Print summary of CLI options.
+
+{#--version}
+### `-V`, `--version`
+
+Print jaq version.
+
+
+{#unsupported-cli}
+## Unsupported
+
+The following command-line options are supported by `jq`, but not by jaq:
+
+- `--ascii-output`, `-a`
+- `--raw-output0`
+- `--unbuffered`
+- `--stream`
+- `--stream-errors`
+- `--seq`
+- `--jsonargs`

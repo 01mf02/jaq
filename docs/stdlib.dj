@@ -2025,6 +2025,7 @@ For example, `{"EDITOR": "vim", "SHELL": "/usr/bin/bash"}`.
 The filter `env` is equivalent to `$ENV`.
 
 
+{#unsupported-stdlib}
 ## Unsupported
 
 This section lists filters present in `jq`, but not in jaq.
