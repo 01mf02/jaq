@@ -90,19 +90,14 @@ This can be useful to fold over all inputs with [`reduce` / `foreach`](#reduce-f
 Read lines of the input as sequence of strings.
 For example,
 `echo -e "Hello\nWorld" | jaq -R` yields two outputs; `"Hello"` and `"World"`.
-When combined with `-s` (`--slurp`), this yields the whole input as a single string.
+
+When combined with [`--slurp`](#--slurp),
+this yields the whole input as a single string.
 For example,
 `echo -e "Hello\nWorld" | jaq -Rs` yields `"Hello\nWorld\n"`.
+See [`--rawfile`](#--rawfile).
 
 This is equivalent to `--from raw`.
-
-::: Advanced
-When using `-Rs` to load a file (as opposed to standard input),
-jaq loads this file in constant time (if it can be memory-mapped).
-This is because unlike jq, jaq does not validate that strings are valid UTF-8.
-That permits loading arbitrary binary files;
-these can be processed as byte strings via [`tobytes`](#tobytes).
-:::
 
 {#--slurp}
 ### `-s`, `--slurp`
@@ -111,9 +106,12 @@ Read (slurp) all input values into one array.
 For example,
 `jaq -s <<< "1 2 3"` yields a single output, namely the array `[1, 2, 3]`, whereas
 `jaq <<< "1 2 3"` yields three outputs, namely `1`, `2`, and `3`.
-When combining `--slurp` with [`--raw-input`](#--raw-input), jaq reads
-the full input as a single string; for example,
+
+When combined with [`--raw-input`](#--raw-input),
+jaq reads the full input as a single string.
+For example,
 `jaq -Rs <<< "1 2 3"` yields the single output `"1 2 3\n"`.
+See [`--rawfile`](#--rawfile).
 
 ::: Compatibility
 When multiple files are slurped in,
@@ -304,6 +302,19 @@ For example, if `values.json` contains `1 2 3`, then
 ### `--rawfile` _A_ _F_
 
 Set variable `$A` to string containing the contents of file _F_.
+
+jaq tries to load the file via memory mapping,
+taking constant time and allowing to load files that do not fit into memory.
+If this fails, jaq loads the file regularly, taking linear time.
+This is also what happens when using
+`-Rs` ([--raw-input](#--raw-input) and [--slurp](#--slurp))
+to load a file (as opposed to standard input).
+
+::: Compatibility
+Unlike `jq`, jaq does not verify that the file is valid UTF-8.
+That permits loading arbitrary binary files;
+these can be processed as byte strings via [`tobytes`](#tobytes).
+:::
 
 ### `--args`
 
