@@ -1217,8 +1217,8 @@ For example:
 ### `explode`, `implode`
 
 The filter `explode` yields an array containing
-a positive number for each valid Unicode code points of the input string and
-a negative number for each byte of each invalid Unicode code point.
+a positive number for each valid Unicode code point of the input string and
+a negative number for each byte of each invalid Unicode code unit.
 For example:
 
 ```
@@ -1239,10 +1239,8 @@ The inverse filter of `explode` is `implode`:
 (I omitted the `FF` byte at the end, because it is hard to save in a text editor.)
 
 ::: Compatibility
-
-`jq` does not permit invalid code points in text strings, so it
+`jq` does not permit invalid code units in text strings, so it
 returns and accepts only natural numbers in `explode` and `implode`. 
-
 :::
 
 {#split}
@@ -1266,10 +1264,8 @@ For example, to memorise the hierarchy of values in jq:
 "null < boolean < number < string < array < object"`.
 
 ::: Compatibility
-
 Unlike jq, jaq does not map `null` values in the array to `""`,
 nor does it reject array or object values in the array.
-
 :::
 
 {#ascii_case}
