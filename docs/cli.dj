@@ -346,7 +346,7 @@ jaq uses the following exit codes:
 
 - 0: No errors.
 - 1: The last output value is `false` or `null`.
-- 2: I/O error, e.g. file not found.
+- 2: I/O or CLI error, e.g. file not found or unknown CLI option.
 - 3: Filter parse/compilation error.
 - 4: The filter did not yield any output.
 - 5: Any other error, e.g. call to the filter [`error`](#error).
@@ -364,6 +364,8 @@ $ jaq -n false >/dev/null; echo $?
 $ jaq -en false >/dev/null; echo $?
 1
 $ jaq . does_not_exit.json 2>/dev/null; echo $?
+2
+$ jaq --foo 2>/dev/null; echo $?
 2
 $ jaq '+' 2>/dev/null; echo $?
 3
