@@ -57,7 +57,8 @@ such as indexing a non-existing key in an array or object, e.g.
 
 ### Booleans
 
-The filters `true` and `false` return the boolean values `true` and `false`.
+The filters [`true` and `false`](#true-false)
+return the boolean values `true` and `false`.
 Booleans can also be produced by comparison operations, e.g.
 `0  ==  0 --> true` or
 `[] == {} --> false`.
