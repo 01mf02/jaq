@@ -57,8 +57,8 @@ We have a few equivalences for `path(f)`:
 |:--------------|:----------|
 | `.`           | `[]` |
 | `.[]`         | `keys_unsorted[] | [.]` |
-| `.[$i]`       | `[$i]` |
-| `.[$i:$j]`    | `[{start: $i, end: $j}]` |
+| `.[$i]`       | `.[$i] | [$i]` |
+| `.[$i:$j]`    | `.[$i:$j] | [{start: $i, end: $j}]` |
 | `f,  g`       | `path(f), path(g)` |
 | `f | g`       | `path(f) as $p | $p + (getpath($p) | path(g))` |
 | `f as $x | g` | `f as $x | path(g)` |
