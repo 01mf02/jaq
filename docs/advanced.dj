@@ -221,6 +221,8 @@ In `jq`, `[0, 1] | .[3] = 3` yields `[0, 1, null, 3]`; that is,
 `jq` fills up the list with `null`s if we update beyond its size.
 In contrast, jaq fails with an out-of-bounds error in such a case.
 
+`jq` does not support updating string slices, whereas jaq does.
+
 In `jq`,
 `null | .a   = 1` yields `{"a": 1}` and
 `null | .[0] = 1` yields `[1]`, meaning that
