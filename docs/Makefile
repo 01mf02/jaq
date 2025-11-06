@@ -12,7 +12,7 @@ MANUAL.xhtml: manual.jq body.xhtml style.css template.xhtml
 	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
 
 jaq.1: filter.lua man-prologue.dj $(FILES) man-epilogue.dj
-	pandoc -V title="JAQ(1)" --lua-filter filter.lua --from djot man-prologue.dj $(FILES) man-epilogue.dj -s -o $@
+	pandoc -V title=JAQ -V section=1 --lua-filter filter.lua --from djot man-prologue.dj $(FILES) man-epilogue.dj -s -o $@
 
 tests: body.xhtml
 	$(JAQ) --to raw -f tests.jq $< | $(JAQ) --run-tests
