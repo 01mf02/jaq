@@ -59,6 +59,8 @@ We have a few equivalences for `path(f)`:
 | `..`          | `path(recurse)` |
 | `.[]`         | `keys_unsorted[] | [.]` |
 | `.[$i]`       | `.[$i] | [$i]` |
+| `.[$i:  ]`    | `.[$i:$j] | [{start: $i         }]` |
+| `.[  :$j]`    | `.[  :$j] | [{           end: $j}]` |
 | `.[$i:$j]`    | `.[$i:$j] | [{start: $i, end: $j}]` |
 | `f?`          | `path(try f catch empty)` |
 | `f,  g`       | `path(f), path(g)` |
@@ -122,6 +124,14 @@ For example, `try path([] | empty) catch "fail" --> "fail"`, because jaq reduces
 Conversely, `jq` yields no output for this filter.
 Interestingly, `path([] | .[])` yields an error in both jaq and `jq`,
 so I do not understand why the example with `empty` does not yield an error, too.
+
+In jaq,
+`[] | path(.[0: ]) --> [{"start": 0}]` and
+`[] | path(.[ :0]) --> [{"end"  : 0}]`, whereas `jq` yields
+`[{start: 0   , end: null}]` and
+`[{start: null, end: 0   }]`, respectively.
+That means that `jq` always adds missing `start`/`end` indices as `null`,
+whereas jaq omits them.
 :::
 
 ### Pathless
@@ -185,14 +195,14 @@ In this table, the case for
 | `f as $x | g` | `(f1 as $x | g) |= u | ... | (fn as $x | g) |= u` |
 | `f // g`      | `if first(f // false) then f else g end |= u` |
 | `if $p then f else g end` | `if $p then f |= u else g |= u end` |
-| `.[]`         | `iter_upd(         u; error)` |
-| `.[$i]`       | `index_upd($i;     u; error)` |
-| `.[$i:$j]`    | `slice_upd($i; $j; u; error)` |
-| `.[]?`        | `iter_upd(         u;     .)` |
-| `.[$i]?`      | `index_upd($i;     u;     .)` |
-| `.[$i:$j]?`   | `slice_upd($i; $j; u;     .)` |
+| `.[]`         | ` iter_upd(            u; error)` |
+| `.[$i]`       | `index_upd($i;         u; error)` |
+| `.[$i:  ]`    | `slice_upd($i; length; u; error)` |
+| `.[  :$j]`    | `slice_upd(0 ; $j    ; u; error)` |
+| `.[$i:$j]`    | `slice_upd($i; $j    ; u; error)` |
 
 It follows from the table that `empty |= f` is equivalent to `.` (identity).
+
 We now give definitions for `iter_upd`, `index_upd`, and `slice_upd`:
 
 ```
@@ -249,6 +259,17 @@ eq("abcd"      ; 1; -1; .+.         ; "abcbcd"    ),
 eq("abcd"      ; 1; -1; empty       ; "ad"        )
 ; .) --> true
 ```
+
+Similar as for `path`, we can also use
+[compound paths](#compound-paths) such as
+`.[]?` and `.a[]` on the left-hand side of updates.
+The error-suppressing operators
+`.[]?`,
+`.[$i]?`, ...,
+`.[$i:$j]?` are executed like their regular counterparts, but using
+`.` instead of `error` as last argument (`fail`) for the `*_upd` filters.
+That means that if an error-suppressing operator fails,
+it returns its input unchanged instead of throwing an error.
 :::
 
 ::: Compatibility
