@@ -107,10 +107,8 @@ enum Type {
     */
     /// `-"a"`, `"a" | round`
     Num,
-    /*
     /// `{(0): 1}` or `0 | fromjson` or `0 | explode` or `"a b c" | split(0)`
     Str,
-    */
     /// `0 | sort` or `0 | implode` or `[] | .[0:] = 0`
     Arr,
     /// `0 | .[]` or `0 | .[0]` or `0 | keys` (array or object)
@@ -125,7 +123,7 @@ impl Type {
             Self::Int => "integer",
             //Self::Float => "floating-point number",
             Self::Num => "number",
-            //Self::Str => "string",
+            Self::Str => "string",
             Self::Arr => "array",
             Self::Iter => "iterable (array or object)",
             Self::Range => "rangeable (array or string)",
@@ -195,23 +193,9 @@ impl jaq_core::ValT for Val {
 
     fn range(self, range: val::Range<&Self>) -> ValR {
         match self {
-            Val::Str(b, t @ Tag::Bytes) => Self::range_int(range)
-                .map(|range| skip_take(range, b.len()))
-                .map(|(skip, take)| Val::Str(b.slice(skip..skip + take), t)),
-            Val::Str(s, Tag::Utf8) => Self::range_int(range).map(|range_char| {
-                let byte_index = |num::PosUsize(pos, c)| {
-                    let mut chars = s.char_indices().map(|(start, ..)| start);
-                    if pos {
-                        chars.nth(c).unwrap_or(s.len())
-                    } else {
-                        chars.nth_back(c - 1).unwrap_or(0)
-                    }
-                };
-                let from_byte = range_char.start.map_or(0, byte_index);
-                let upto_byte = range_char.end.map_or(s.len(), byte_index);
-                let slice = &s[from_byte..core::cmp::max(upto_byte, from_byte)];
-                Val::Str(s.slice_ref(slice), Tag::Utf8)
-            }),
+            Val::Str(s, t) => Self::range_int(range)
+                .map(|range_char| skip_take_str(t, range_char, &s))
+                .map(|(skip, take)| Val::Str(s.slice(skip..skip + take), t)),
             Val::Arr(a) => Self::range_int(range)
                 .map(|range| skip_take(range, a.len()))
                 .map(|(skip, take)| a.iter().skip(skip).take(take).cloned().collect()),
@@ -288,18 +272,31 @@ impl jaq_core::ValT for Val {
         opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX {
-        if let Val::Arr(ref mut a) = self {
-            let (skip, take) = match Self::range_int(range) {
-                Ok(range) => skip_take(range, a.len()),
-                Err(e) => return opt.fail(self, |_| Exn::from(e)),
-            };
-            let arr = a.iter().skip(skip).take(take).cloned().collect();
-            let y = f(arr).map(|y| y?.into_arr().map_err(Exn::from)).next();
-            let y = y.transpose()?.unwrap_or_default();
-            Rc::make_mut(a).splice(skip..skip + take, (*y).clone());
-            Ok(self)
-        } else {
-            opt.fail(self, |v| Exn::from(Error::typ(v, Type::Arr.as_str())))
+        match self {
+            Val::Arr(ref mut a) => {
+                let (skip, take) = match Self::range_int(range) {
+                    Ok(range) => skip_take(range, a.len()),
+                    Err(e) => return opt.fail(self, |_| Exn::from(e)),
+                };
+                let arr = a.iter().skip(skip).take(take).cloned().collect();
+                let y = f(arr).map(|y| y?.into_arr().map_err(Exn::from)).next();
+                let y = y.transpose()?.unwrap_or_default();
+                Rc::make_mut(a).splice(skip..skip + take, (*y).clone());
+                Ok(self)
+            }
+            Val::Str(b, t) => {
+                let (skip, take) = match Self::range_int(range) {
+                    Ok(range) => skip_take_str(t, range, &b),
+                    Err(e) => return opt.fail(Val::Str(b, t), |_| Exn::from(e)),
+                };
+                let str = Val::Str(b.slice(skip..skip + take), t);
+                let y = f(str).map(|y| y?.into_str(t).map_err(Exn::from)).next();
+                let y = y.transpose()?.unwrap_or_default();
+                let mut b = BytesMut::from(b);
+                bytes_splice(&mut b, skip, take, &y);
+                Ok(Val::Str(b.freeze(), t))
+            }
+            _ => opt.fail(self, |v| Exn::from(Error::typ(v, Type::Arr.as_str()))),
         }
     }
 
@@ -377,6 +374,39 @@ fn skip_take(range: val::Range<num::PosUsize>, len: usize) -> (usize, usize) {
     (from, upto.saturating_sub(from))
 }
 
+fn skip_take_str(tag: Tag, range: val::Range<num::PosUsize>, b: &[u8]) -> (usize, usize) {
+    let byte_index = |num::PosUsize(pos, c)| {
+        let mut chars = b.char_indices().map(|(start, ..)| start);
+        if pos {
+            chars.nth(c).unwrap_or(b.len())
+        } else {
+            chars.nth_back(c - 1).unwrap_or(0)
+        }
+    };
+    match tag {
+        Tag::Bytes => skip_take(range, b.len()),
+        Tag::Utf8 => {
+            let from_byte = range.start.map_or(0, byte_index);
+            let upto_byte = range.end.map_or(b.len(), byte_index);
+            (from_byte, upto_byte.saturating_sub(from_byte))
+        }
+    }
+}
+
+fn bytes_splice(b: &mut BytesMut, skip: usize, take: usize, replace: &[u8]) {
+    let final_len = b.len() - take + replace.len();
+    let post_take = skip + take..b.len();
+
+    if replace.len() > take {
+        b.resize(final_len, 0);
+    }
+    b.copy_within(post_take, skip + replace.len());
+    b[skip..skip + replace.len()].copy_from_slice(replace);
+    if replace.len() < take {
+        b.truncate(final_len);
+    }
+}
+
 /// If a range bound is given, absolutise and clip it between 0 and `len`,
 /// else return `default`.
 fn abs_bound(i: Option<num::PosUsize>, len: usize, default: usize) -> usize {
@@ -415,6 +445,13 @@ impl Val {
     fn as_pos_usize(&self) -> Result<num::PosUsize, Error> {
         let fail = || Error::typ(self.clone(), Type::Int.as_str());
         self.as_num().and_then(Num::as_pos_usize).ok_or_else(fail)
+    }
+
+    fn into_str(self, t: Tag) -> Result<Bytes, Error> {
+        match self {
+            Self::Str(b, t_) if t == t_ => Ok(b),
+            _ => Err(Error::typ(self, Type::Str.as_str())),
+        }
     }
 
     /// If the value is an array, return it, else fail.
