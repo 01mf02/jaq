@@ -434,6 +434,8 @@ For example:
 "3"
 ```
 
+It yields the same outputs as [`recurse`](#recurse).
+
 ## Unary
 
 A unary filter takes a single argument.

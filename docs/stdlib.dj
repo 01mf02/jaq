@@ -288,6 +288,7 @@ For example:
 The filter `recurse` is a short form for `recurse(.[]?)`.
 It returns all values recursively contained in the input, e.g.
 `[1, [2], {a: 3}] | recurse --> [1, [2], {"a": 3}] 1 [2] 2 {"a":3} 3`.
+It yields the same outputs as `..` ([recursion](#recursion)).
 
 ::: Advanced
 We can write a Fibonacci generator as follows:
