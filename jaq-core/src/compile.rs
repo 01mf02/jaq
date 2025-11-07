@@ -67,8 +67,9 @@ pub(crate) enum Tailrec {
     Catch,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) enum Term<T = TermId> {
+    #[default]
     /// Identity (`.`)
     Id,
     /// Recursion (`..`)
@@ -149,12 +150,6 @@ pub(crate) enum Term<T = TermId> {
 pub(crate) enum Fold<T> {
     Reduce,
     Foreach(Option<T>),
-}
-
-impl<T> Default for Term<T> {
-    fn default() -> Self {
-        Self::Id
-    }
 }
 
 #[derive(Clone, Debug)]
