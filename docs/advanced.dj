@@ -56,13 +56,19 @@ We have a few equivalences for `path(f)`:
 | `p`           | `path(p)` |
 |:--------------|:----------|
 | `.`           | `[]` |
+| `..`          | `path(recurse)` |
 | `.[]`         | `keys_unsorted[] | [.]` |
 | `.[$i]`       | `.[$i] | [$i]` |
 | `.[$i:$j]`    | `.[$i:$j] | [{start: $i, end: $j}]` |
+| `f?`          | `path(try f catch empty)` |
 | `f,  g`       | `path(f), path(g)` |
 | `f | g`       | `path(f) as $p | $p + (getpath($p) | path(g))` |
+| `f // g`      | `path(if first(f // false) then f else g end)` |
 | `f as $x | g` | `f as $x | path(g)` |
 | `if $p then f else g end` | `if $p then path(f) else path(g) end` |
+| `try f catch g` | `try path(f) catch (g | error)` |
+| `label $x | f` | `label $x | path(f)` |
+| `break $x` | `break $x` |
 
 Examples:
 
@@ -82,12 +88,40 @@ Examples:
 - `[1, 2, 3]    | (0, 2) as $x | path(.[$x])  --> [0] [2]`
 :::
 
-::: Compatibility
 The filters [`reduce` / `foreach`](#reduce-foreach) are both defined in jaq
 in terms of simpler filters `f` that `path(f)` can evaluate.
 Therefore, in jaq, you can use `reduce` / `foreach` inside `path(f)`,
 as well as on the left-hand side of updates.
-`jq` does not support this.
+For example:
+
+- `[{a: 1}] | path(reduce  (0, "a") as $i (.; .[$i])) -->     [0, "a"]`
+- `[{a: 1}] | path(foreach (0, "a") as $i (.; .[$i])) --> [0] [0, "a"]`
+
+Similarly, you can use [compound paths](#compound-paths):
+
+- `[1, 2, 3]   | path(.[]?) --> [0] [1] [2]`
+- `""          | path(.[]?) -->` (no output)
+- `{a: [1, 2]} | path(.a[]) --> ["a", 0] ["a", 1]`
+
+All other filters defined in the [core language](#corelang) yield an error,
+because they construct new values instead of returning references to their inputs.
+For example:
+
+- `try path(0    ) catch "fail" --> "fail"`
+- `try path(1 + 2) catch "fail" --> "fail"`
+- `try path(1 = 2) catch "fail" --> "fail"`
+
+
+::: Compatibility
+`jq` does not support `reduce` / `foreach` in `path`.
+
+On the other hand, `jq` is more permissive with paths of intermediate values.
+For example, `try path([] | empty) catch "fail" --> "fail"`, because jaq reduces
+`path([] | empty)` to
+`path([]) as $p | ...`, which fails because `path([])` is not defined.
+Conversely, `jq` yields no output for this filter.
+Interestingly, `path([] | .[])` yields an error in both jaq and `jq`,
+so I do not understand why the example with `empty` does not yield an error, too.
 :::
 
 ### Pathless
@@ -146,10 +180,10 @@ In this table, the case for
 |:--------------|:---------|
 | `.`           | `u` |
 | `..`          | `def rec_up: (.[]? | rec_up), .; rec_up |= u` |
-| `(f | g)`     | `f |= (g |= u)` |
-| `(f , g)`     | `f |= u | g |= u` |
+| `f | g`       | `f |= (g |= u)` |
+| `f , g`       | `f |= u | g |= u` |
 | `f as $x | g` | `(f1 as $x | g) |= u | ... | (fn as $x | g) |= u` |
-| `f // g`      | `if first(f // false) then f |= u else g |= u` |
+| `f // g`      | `if first(f // false) then f else g end |= u` |
 | `if $p then f else g end` | `if $p then f |= u else g |= u end` |
 | `.[]`         | `iter_upd(         u; error)` |
 | `.[$i]`       | `index_upd($i;     u; error)` |
