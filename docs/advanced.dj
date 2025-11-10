@@ -211,7 +211,7 @@ def iter_upd(u; fail):
     if isarray  then [.[] | u]
   elif isobject then with_entries(.value |= u)
   else fail end;
-def eq($x; u; $y): $x | (.[] |= u) == $y and iter_upd(u; .) == $y;
+def eq($x; u; $y): $x | (.[] |= u) == $y and iter_upd(u; error) == $y;
 all(
 eq([1, 2, 3]   ; .+1             ; [2, 3, 4]         ),
 eq([1, 2, 3]   ; .+1,.           ; [2, 1, 3, 2, 4, 3]),
@@ -225,7 +225,9 @@ eq({a: 1, b: 2}; .+1,.           ; {"a": 2, "b": 3}  )
 # .[$i] |= u
 def index_upd($i; u; fail):
     if (isstring or isarray) and ($i | isobject and (has("start") or has("end"))) then
-      .[$i.start // 0 : $i.end // length] |= u
+      if $i | has("start") then $i.start else 0      end as $s |
+      if $i | has("end"  ) then $i.end   else length end as $e |
+      ([.[:$s], .[$s:$e], .[$e:]]? | .[1] |= u | add) // fail
   elif isarray then
         if 0 <= $i and $i < length then .[:$i] + [.[$i] | first(u)] + .[$i+1:]
       elif -length <= $i and $i < 0 then index_upd(length + $i; u; fail)
@@ -234,7 +236,7 @@ def index_upd($i; u; fail):
         if has($i) then with_entries(if .key == $i then {key, value: first(.value | u)} end)
       else . + ([{key: $i, value: first(null | u)}] | from_entries) end
   else fail end;
-def eq($x; $i; u; $y): $x | (.[$i] |= u) == $y and index_upd($i; u; .) == $y;
+def eq($x; $i; u; $y): $x | (.[$i] |= u) == $y and index_upd($i; u; error) == $y;
 all(
 eq([1, 2, 3]   ;  0 ; .+1  ; [2, 2, 3]       ),
 eq([1, 2, 3]   ;  0 ; .+1,.; [2, 2, 3]       ),
@@ -251,7 +253,7 @@ eq({a: 1, b: 2}; "a"; empty; {        "b": 2})
 # .[$i:$j] |= u
 def slice_upd($i; $j; u; fail):
   ([.[:$i], .[$i:$j], .[$j:]]? | .[1] |= u | add) // fail;
-def eq($x; $i; $j; u; $y): $x | (.[$i:$j] |= u) == $y and slice_upd($i; $j; u; .) == $y;
+def eq($x; $i; $j; u; $y): $x | (.[$i:$j] |= u) == $y and slice_upd($i; $j; u; error) == $y;
 all(
 eq([1, 2, 3, 4]; 1; -1; map(.+1)    ; [1, 3, 4, 4]),
 eq([1, 2, 3, 4]; 1; -1; map(.+1),.  ; [1, 3, 4, 4]),
