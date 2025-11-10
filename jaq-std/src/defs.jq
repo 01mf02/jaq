@@ -100,14 +100,7 @@ def unique: unique_by(.);
 # Paths
 def paths:    skip(1; path      (..));
 def paths(p): skip(1; path_value(..)) | if .[1] | p then .[0] else empty end;
-def getpath($path): reduce $path[] as $p (.;
-  def slice($s; $e):
-    if   $s and $e then .[$s:$e]
-    elif $s        then .[$s:]
-    elif $e        then .[  :$e]
-    else error("slice object must contain either start or end") end;
-  if . < {} and $p >= {} then slice($p.start; $p.end) else .[$p] end
-);
+def getpath($path): reduce $path[] as $p (.; .[$p]);
 def setpath($path; $x): getpath($path) = $x;
 def delpaths($paths): reduce $paths[] as $path (.; getpath($path) |= empty);
 def pick(f):

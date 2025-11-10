@@ -185,6 +185,9 @@ impl jaq_core::ValT for Val {
                 .as_pos_usize()
                 .and_then(|i| abs_index(i, a.len()))
                 .map_or(Val::Null, |i| a[i].clone())),
+            (v @ (Val::Str(..) | Val::Arr(_)), Val::Obj(o)) => {
+                v.range(o.get(&Val::utf8_str("start"))..o.get(&Val::utf8_str("end")))
+            }
             (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
             (s @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
             (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
@@ -224,6 +227,10 @@ impl jaq_core::ValT for Val {
         opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX {
+        if let (Val::Str(..) | Val::Arr(_), Val::Obj(o)) = (&self, index) {
+            let range = o.get(&Val::utf8_str("start"))..o.get(&Val::utf8_str("end"));
+            return self.map_range(range, opt, f);
+        };
         match self {
             Val::Obj(ref mut o) => {
                 use indexmap::map::Entry::{Occupied, Vacant};
@@ -470,10 +477,13 @@ impl Val {
     }
 
     fn range_int(range: val::Range<&Self>) -> Result<val::Range<num::PosUsize>, Error> {
-        let (from, upto) = (range.start, range.end);
-        let from = from.as_ref().map(|i| i.as_pos_usize()).transpose();
-        let upto = upto.as_ref().map(|i| i.as_pos_usize()).transpose();
-        Ok(from?..upto?)
+        let f = |i: Option<&Self>| {
+            i.as_ref()
+                .filter(|i| !matches!(i, Val::Null))
+                .map(|i| i.as_pos_usize())
+                .transpose()
+        };
+        Ok(f(range.start)?..f(range.end)?)
     }
 
     fn to_json(&self) -> Vec<u8> {
