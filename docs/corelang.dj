@@ -302,7 +302,7 @@ For example:
 - `[1, 2, 3] | .[1] --> 2`
 - `{a: 1, b: 2} | .["a"] --> 1`
 
-If there is no element at that index in the input, then this operator returns `null`.
+If there is no element at the index `x` in the input, then this operator returns `null`.
 For example:
 
 - `[1, 2, 3] | .[3] --> null`
@@ -312,10 +312,6 @@ This operator treats byte string input like an array of numbers in the range 0..
 For example,
 `"@ABC" | tobytes | .[0] --> 64`,
 because the character `'@'` is encoded in UTF-8 as single byte `64` (`0x40`).
-
-This operator yields an error either
-if the input is neither an array or an object, or
-if the input is an array and the index is not an integer.
 
 For identifier-like strings like `name`,
 you can write `.name` as short form for `.["name"]`.
@@ -329,13 +325,30 @@ which will be interpreted as index counting from the end of the array.
 For example,
 `[1, 2, 3] | .[-1] --> 3`.
 
-::: Compatibility
+If the input of this operator is a string or an array and the index is an object,
+then this operator is equivalent to the following [slicing](#slicing) operators:
 
+- `.[x.start : x.end]` if `x` has the keys `"start"` and `"end"`
+- `.[x.start :      ]` if `x` has the key `"start"`, but not `"end"`
+- `.[        : x.end]` if `x` has the key `"end"`, but not `"start"`
+
+Otherwise, this operator yields an error if neither:
+
+- the input is an array and the index is an integer, nor
+- the input is an object.
+
+For example:
+
+- `[1, 2, 3] | .[{start: 1         }] --> [2, 3]`
+- `[1, 2, 3] | .[{          end: -1}] --> [1, 2]`
+- `[1, 2, 3] | .[{start: 1, end: -1}] --> [2]`
+- `[1, 2, 3] | try .[{}] catch "fail" --> "fail"`
+
+::: Compatibility
 `jq` accepts floating-point numbers as array indices; e.g.
 `[1, 2] | .[1.5]` yields `2`.
 In jaq, indexing an array with a floating-point number yields an error.
 The same applies to the [slicing](#slicing) operator below.
-
 :::
 
 {#slicing}
