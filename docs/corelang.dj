@@ -336,11 +336,13 @@ For example:
 - `[1, 2, 3] | .[{start: 1, end: -1}] --> [2]`
 - `[1, 2, 3] | .[{                 }] --> [1, 2, 3]`
 
-This operator yields a non-error output if either:
+This operator yields a value if either:
 
 - the input is a      string or an array and the index is an object (slicing),
 - the input is a byte string or an array and the index is an integer, or
 - the input is `null` or an object.
+
+Otherwise, it yields an error.
 
 ::: Compatibility
 `jq` accepts floating-point numbers as array indices; e.g.
@@ -387,6 +389,15 @@ For example:
 - `"Hello World!" | .[    :5], .[6:    ] --> "Hello" "World!"`
 - `"Hello World!" | .[null:5], .[6:null] --> "Hello" "World!"`
 - `"Hello World!" | .[null    :    null] --> "Hello World!"`
+
+This operator yields a value if
+its input is a string or an array, and
+its indices `x` and `y` are either `null` or integer.
+Otherwise, it yields an error.
+For example:
+
+- `[] | try .["a":] catch "fail" --> "fail"`
+- `{} | try .[1:-1] catch "fail" --> "fail"`
 
 ::: Compatibility
 jaq fails when trying to slice `null`, i.e.
