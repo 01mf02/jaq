@@ -405,11 +405,11 @@ For example,
 `{a: 1, b: 2} | .[] --> 1 2`.
 
 ::: Advanced
+It holds that `.[]` has the same effect as `.[keys_unsorted[]]`.
+For example:
 
-It holds that `.[]` has the same effect as `.[keys[]]`.
-For example,
-`[1, 2, 3] | .[keys[]] --> 1 2 3`.
-
+- `[1, 2, 3]    | .[keys_unsorted[]] --> 1 2 3`
+- `{a: 1, b: 2} | .[keys_unsorted[]] --> 1 2`
 :::
 
 ### Compound paths
