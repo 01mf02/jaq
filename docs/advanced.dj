@@ -224,10 +224,9 @@ eq({a: 1, b: 2}; .+1,.           ; {"a": 2, "b": 3}  )
 ```
 # .[$i] |= u
 def index_upd($i; u; fail):
-    if (isstring or isarray) and ($i | isobject and (has("start") or has("end"))) then
-      if $i | has("start") then $i.start else 0      end as $s |
-      if $i | has("end"  ) then $i.end   else length end as $e |
-      ([.[:$s], .[$s:$e], .[$e:]]? | .[1] |= u | add) // fail
+    if (isstring or isarray) and ($i | isobject) then
+      # see `slice_upd` below
+      ([.[:$i.start], .[$i.start:$i.end], .[$i.end:]]? | .[1] |= u | add) // fail
   elif isarray then
         if 0 <= $i and $i < length then .[:$i] + [.[$i] | first(u)] + .[$i+1:]
       elif -length <= $i and $i < 0 then index_upd(length + $i; u; fail)
