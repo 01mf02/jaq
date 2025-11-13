@@ -99,11 +99,9 @@ pub enum Term<S> {
 
     /// Negation
     Neg(Box<Self>),
-    /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
-    Pipe(Box<Self>, Option<Pattern<S>>, Box<Self>),
 
     /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
-    BinOp(Box<Self>, BinaryOp, Box<Self>),
+    BinOp(Box<Self>, BinaryOp<S>, Box<Self>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
@@ -141,7 +139,9 @@ pub enum Pattern<S> {
 
 /// Binary operators, such as `|`, `,`, `//`, ...
 #[derive(Debug)]
-pub enum BinaryOp {
+pub enum BinaryOp<S> {
+    /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
+    Pipe(Option<Pattern<S>>),
     /// Concatenation, i.e. `l, r`
     Comma,
     /// Alternation, i.e. `l // r`
@@ -339,10 +339,16 @@ impl<'s, 't> Parser<'s, 't> {
     }
 
     /// Parse a binary operator, including `,` if `with_comma` is true.
-    fn op(&mut self, with_comma: bool) -> Option<BinaryOp> {
+    fn op(&mut self, with_comma: bool) -> Result<'s, 't, Option<BinaryOp<&'s str>>> {
         use ops::{Cmp, Math};
-        self.maybe(|p| match p.i.next() {
-            Some(Token(s, _)) => Some(match *s {
+        self.try_maybe(|p| match p.i.next() {
+            Some(Token(s, _)) => Ok(Some(match *s {
+                "|" => BinaryOp::Pipe(None),
+                "as" => {
+                    let x = p.pattern()?;
+                    p.just("|")?;
+                    BinaryOp::Pipe(Some(x))
+                }
                 "," if with_comma => BinaryOp::Comma,
                 "+" => BinaryOp::Math(Math::Add),
                 "-" => BinaryOp::Math(Math::Sub),
@@ -366,9 +372,9 @@ impl<'s, 't> Parser<'s, 't> {
                 "//=" => BinaryOp::UpdateAlt,
                 "or" => BinaryOp::Or,
                 "and" => BinaryOp::And,
-                _ => return None,
-            }),
-            None => None,
+                _ => return Ok(None),
+            })),
+            None => Ok(None),
         })
     }
 
@@ -439,23 +445,11 @@ impl<'s, 't> Parser<'s, 't> {
     /// then this would be parsed like `{k1: (v1, k2): v2}`, which is invalid.
     fn term_with_comma(&mut self, with_comma: bool) -> Result<'s, 't, Term<&'s str>> {
         let head = self.atom()?;
-        let tail = core::iter::from_fn(|| self.op(with_comma).map(|op| Ok((op, self.atom()?))))
-            .collect::<Result<Vec<_>>>()?;
-        let tm = prec_climb::climb(head, tail);
-
-        let pipe = self.try_maybe(|p| match p.i.next() {
-            Some(Token("|", _)) => Ok(Some(None)),
-            Some(Token("as", _)) => {
-                let x = p.pattern()?;
-                p.just("|")?;
-                Ok(Some(Some(x)))
-            }
-            _ => Ok(None),
-        })?;
-        Ok(match pipe {
-            None => tm,
-            Some(x) => Term::Pipe(Box::new(tm), x, Box::new(self.term_with_comma(with_comma)?)),
-        })
+        let mut tail = Vec::new();
+        while let Some(op) = self.op(with_comma)? {
+            tail.push((op, self.atom()?))
+        }
+        Ok(prec_climb::climb(head, tail))
     }
 
     /// Parse an atomic term.
@@ -840,10 +834,11 @@ impl<S, F> Def<S, F> {
     }
 }
 
-impl prec_climb::Op for BinaryOp {
+impl<S> prec_climb::Op for BinaryOp<S> {
     fn precedence(&self) -> usize {
         use ops::{Cmp, Math};
         match self {
+            Self::Pipe(_) => 0,
             Self::Comma => 1,
             Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 2,
             Self::Alt => 3,
@@ -860,7 +855,7 @@ impl prec_climb::Op for BinaryOp {
     fn associativity(&self) -> prec_climb::Associativity {
         use prec_climb::Associativity;
         match self {
-            Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => {
+            Self::Pipe(_) | Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => {
                 Associativity::Right
             }
             _ => Associativity::Left,
@@ -868,8 +863,8 @@ impl prec_climb::Op for BinaryOp {
     }
 }
 
-impl<S> prec_climb::Expr<BinaryOp> for Term<S> {
-    fn from_op(lhs: Self, op: BinaryOp, rhs: Self) -> Self {
+impl<S> prec_climb::Expr<BinaryOp<S>> for Term<S> {
+    fn from_op(lhs: Self, op: BinaryOp<S>, rhs: Self) -> Self {
         Self::BinOp(Box::new(lhs), op, Box::new(rhs))
     }
 }
