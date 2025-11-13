@@ -52,6 +52,9 @@ pub use alloc::rc::Rc;
 #[cfg(feature = "sync")]
 pub use alloc::sync::Arc as Rc;
 
+#[cfg(feature = "serde")]
+mod serde;
+
 /// JSON superset with binary data and non-string object keys.
 ///
 /// This is the default value type for jaq.
