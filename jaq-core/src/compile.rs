@@ -635,12 +635,6 @@ impl<'s, F> Compiler<&'s str, F> {
             Recurse => Term::Recurse,
             Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
             Neg(t) => Term::Neg(self.iterm(*t)),
-            Pipe(l, None, r) => Term::Pipe(self.iterm(*l), None, self.iterm_tr(*r, tr)),
-            Pipe(l, Some(pat), r) => {
-                let vars: Vec<_> = pat.vars().copied().collect();
-                let r = self.with_vars(&vars, |c| c.iterm_tr(*r, tr));
-                Term::Pipe(self.iterm(*l), Some(self.pattern(pat)), r)
-            }
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
@@ -708,9 +702,15 @@ impl<'s, F> Compiler<&'s str, F> {
                 let (l, r) = match op {
                     Comma => (self.iterm_tr(*l, tr), self.iterm_tr(*r, tr)),
                     Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
+                    Pipe(ref pat) => {
+                        let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
+                        let r = self.with_vars(&vars, |c| c.iterm_tr(*r, tr));
+                        (self.iterm(*l), r)
+                    }
                     _ => (self.iterm(*l), self.iterm(*r)),
                 };
                 match op {
+                    Pipe(pat) => Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r),
                     Comma => Term::Comma(l, r),
                     Math(op) => Term::Math(l, op, r),
                     Assign => Term::Assign(l, r),
