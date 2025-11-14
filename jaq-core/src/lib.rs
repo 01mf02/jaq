@@ -6,15 +6,13 @@
 //! See the implementation in the `jaq` crate if you are interested in
 //! more complex use cases, such as lazy JSON file loading, error handling etc.
 //!
-//! (This example requires enabling the `serde_json` feature for `jaq-json`.)
-//!
 //! ~~~
 //! use jaq_core::{data, unwrap_valr, Compiler, Ctx, Vars};
 //! use jaq_core::load::{Arena, File, Loader};
-//! use jaq_json::Val;
-//! use serde_json::{json, Value};
+//! use jaq_json::{json, Val};
 //!
-//! let input = json!(["Hello", "world"]);
+//! let input = r#"["Hello", "world"]"#;
+//! let input = json::parse_single(&input.as_bytes()).unwrap();
 //! let program = File { code: ".[]", path: () };
 //!
 //! let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
@@ -32,10 +30,10 @@
 //! // context for filter execution
 //! let ctx = Ctx::<data::JustLut<Val>>::new(&filter.lut, Vars::new([]));
 //! // iterator over the output values
-//! let mut out = filter.id.run((ctx, Val::from(input))).map(unwrap_valr);
+//! let mut out = filter.id.run((ctx, input)).map(unwrap_valr);
 //!
-//! assert_eq!(out.next(), Some(Ok(Val::from(json!("Hello")))));;
-//! assert_eq!(out.next(), Some(Ok(Val::from(json!("world")))));;
+//! assert_eq!(out.next(), Some(Ok(Val::from("Hello".to_owned()))));;
+//! assert_eq!(out.next(), Some(Ok(Val::from("world".to_owned()))));;
 //! assert_eq!(out.next(), None);;
 //! ~~~
 #![no_std]
