@@ -207,18 +207,16 @@ fn climb<S>(head: Term<S>, mut tail: impl Iterator<Item = (BinaryOp<S>, Term<S>)
     // rightmost pipe/comma-term pair, followed by remaining operator-term pairs
     let mut from_pc = None;
 
-    let transfer = |before: &mut Vec<_>, from: Option<_>| {
-        if let Some((pc, tail)) = from {
-            before.push(pc);
-            before.extend(tail);
-        };
+    // concatenate head and tail of from_pc
+    let pcht = |from: Option<_>| {
+        from.into_iter()
+            .flat_map(|(hd, tl)| core::iter::once(hd).chain(tl))
     };
 
     while let Some((op, tm)) = tail.next() {
         match op {
             BinaryOp::Comma | BinaryOp::Pipe(None) => {
-                transfer(&mut before_pc, from_pc.take());
-                from_pc = Some(((op, tm), Vec::new()))
+                before_pc.extend(pcht(from_pc.replace(((op, tm), Vec::new()))))
             }
             BinaryOp::Pipe(Some(_)) => {
                 let before_pc = prec_climb::climb(head, before_pc).into();
@@ -237,7 +235,7 @@ fn climb<S>(head: Term<S>, mut tail: impl Iterator<Item = (BinaryOp<S>, Term<S>)
                 .push((op, tm)),
         }
     }
-    transfer(&mut before_pc, from_pc.take());
+    before_pc.extend(pcht(from_pc.take()));
     prec_climb::climb(head, before_pc)
 }
 
