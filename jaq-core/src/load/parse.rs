@@ -201,6 +201,46 @@ impl<S> Pattern<S> {
     }
 }
 
+fn climb<S>(head: Term<S>, mut tail: impl Iterator<Item = (BinaryOp<S>, Term<S>)>) -> Term<S> {
+    // every operator-term pair before the rightmost pipe (`|`) or comma (`,`)
+    let mut before_pc = Vec::new();
+    // rightmost pipe/comma-term pair, followed by remaining operator-term pairs
+    let mut from_pc = None;
+
+    let transfer = |before: &mut Vec<_>, from: Option<_>| {
+        if let Some((pc, tail)) = from {
+            before.push(pc);
+            before.extend(tail);
+        };
+    };
+
+    while let Some((op, tm)) = tail.next() {
+        match op {
+            BinaryOp::Comma | BinaryOp::Pipe(None) => {
+                transfer(&mut before_pc, from_pc.take());
+                from_pc = Some(((op, tm), Vec::new()))
+            }
+            BinaryOp::Pipe(Some(_)) => {
+                let before_pc = prec_climb::climb(head, before_pc).into();
+                let as_rhs = climb(tm, tail).into();
+                return match from_pc {
+                    None => Term::BinOp(before_pc, op, as_rhs),
+                    Some((pc, pc_tail)) => {
+                        let as_lhs = prec_climb::climb(pc.1, pc_tail).into();
+                        Term::BinOp(before_pc, pc.0, Term::BinOp(as_lhs, op, as_rhs).into())
+                    }
+                };
+            }
+            _ => from_pc
+                .as_mut()
+                .map_or(&mut before_pc, |(_pc, tl)| tl)
+                .push((op, tm)),
+        }
+    }
+    transfer(&mut before_pc, from_pc.take());
+    prec_climb::climb(head, before_pc)
+}
+
 impl<'s, 't> Parser<'s, 't> {
     /// Initialise a new parser on a sequence of [`Token`]s.
     #[must_use]
@@ -449,7 +489,7 @@ impl<'s, 't> Parser<'s, 't> {
         while let Some(op) = self.op(with_comma)? {
             tail.push((op, self.atom()?))
         }
-        Ok(prec_climb::climb(head, tail))
+        Ok(climb(head, tail.into_iter()))
     }
 
     /// Parse an atomic term.
