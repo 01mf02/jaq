@@ -202,41 +202,17 @@ impl<S> Pattern<S> {
 }
 
 fn climb<S>(head: Term<S>, mut tail: impl Iterator<Item = (BinaryOp<S>, Term<S>)>) -> Term<S> {
-    // every operator-term pair before the rightmost pipe (`|`) or comma (`,`)
-    let mut before_pc = Vec::new();
-    // rightmost pipe/comma-term pair, followed by remaining operator-term pairs
-    let mut from_pc = None;
-
-    // concatenate head and tail of from_pc
-    let pcht = |from: Option<_>| {
-        from.into_iter()
-            .flat_map(|(hd, tl)| core::iter::once(hd).chain(tl))
-    };
-
+    let mut before = Vec::new();
     while let Some((op, tm)) = tail.next() {
-        match op {
-            BinaryOp::Comma | BinaryOp::Pipe(None) => {
-                before_pc.extend(pcht(from_pc.replace(((op, tm), Vec::new()))))
-            }
-            BinaryOp::Pipe(Some(_)) => {
-                let before_pc = prec_climb::climb(head, before_pc).into();
-                let as_rhs = climb(tm, tail).into();
-                return match from_pc {
-                    None => Term::BinOp(before_pc, op, as_rhs),
-                    Some((pc, pc_tail)) => {
-                        let as_lhs = prec_climb::climb(pc.1, pc_tail).into();
-                        Term::BinOp(before_pc, pc.0, Term::BinOp(as_lhs, op, as_rhs).into())
-                    }
-                };
-            }
-            _ => from_pc
-                .as_mut()
-                .map_or(&mut before_pc, |(_pc, tl)| tl)
-                .push((op, tm)),
+        // ensure that `... as $x | ...` is handled like `... as $x | (...)`
+        if let BinaryOp::Pipe(Some(_)) = op {
+            before.push((op, climb(tm, tail)));
+            break;
+        } else {
+            before.push((op, tm))
         }
     }
-    before_pc.extend(pcht(from_pc.take()));
-    prec_climb::climb(head, before_pc)
+    prec_climb::climb(head, before)
 }
 
 impl<'s, 't> Parser<'s, 't> {
@@ -876,10 +852,11 @@ impl<S> prec_climb::Op for BinaryOp<S> {
     fn precedence(&self) -> usize {
         use ops::{Cmp, Math};
         match self {
-            Self::Pipe(_) => 0,
+            Self::Pipe(None) => 0,
             Self::Comma => 1,
-            Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 2,
-            Self::Alt => 3,
+            Self::Pipe(Some(_)) => 2,
+            Self::Assign | Self::Update | Self::UpdateMath(_) | Self::UpdateAlt => 3,
+            Self::Alt => 4,
             Self::Or => Self::Alt.precedence() + 1,
             Self::And => Self::Or.precedence() + 1,
             Self::Cmp(Cmp::Eq | Cmp::Ne) => Self::And.precedence() + 1,
