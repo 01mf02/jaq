@@ -26,8 +26,7 @@ extern crate std;
 /// Once Rust has [internal references](https://smallcultfollowing.com/babysteps/blog/2024/06/02/the-borrow-checker-within/#step-4-internal-references),
 /// this should become unnecessary.
 /// I can't wait for it to happen!
-#[derive(Default)]
-pub struct Arena(typed_arena::Arena<String>);
+pub type Arena = typed_arena::Arena<String>;
 
 /// Combined file loader, lexer, and parser for multiple modules.
 pub struct Loader<S, P, R> {
@@ -375,7 +374,7 @@ impl<'s, P: Clone + Eq, R: FnMut(Import<&'s str, P>) -> ReadResult<P>> Loader<&'
             return Err("circular include/import".into());
         }
 
-        let code = &**arena.0.alloc(file.code);
+        let code = &**arena.alloc(file.code);
         self.open.push(file.path.clone());
         let defs = parse_defs(code).and_then(|m| {
             m.map(|path, meta| {
