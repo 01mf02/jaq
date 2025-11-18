@@ -189,6 +189,17 @@ impl<S> Term<S> {
         // `{}[]`
         Term::Path(obj.into(), Path(Vec::from([path])))
     }
+
+    fn climb(self, mut tail: impl Iterator<Item = (BinaryOp<S>, Self)> + Default) -> Self {
+        // ensure that `... as $x | ...` is handled like `... as $x | (...)`
+        let tail = core::iter::from_fn(|| {
+            tail.next().map(|(op, tm)| match op {
+                BinaryOp::Pipe(Some(_)) => (op, tm.climb(core::mem::take(&mut tail))),
+                _ => (op, tm),
+            })
+        });
+        prec_climb::climb(self, tail)
+    }
 }
 
 impl<S> Pattern<S> {
@@ -199,20 +210,6 @@ impl<S> Pattern<S> {
             Pattern::Obj(o) => Box::new(o.iter().flat_map(|(_k, p)| p.vars())),
         }
     }
-}
-
-fn climb<S>(head: Term<S>, mut tail: impl Iterator<Item = (BinaryOp<S>, Term<S>)>) -> Term<S> {
-    let mut before = Vec::new();
-    while let Some((op, tm)) = tail.next() {
-        // ensure that `... as $x | ...` is handled like `... as $x | (...)`
-        if let BinaryOp::Pipe(Some(_)) = op {
-            before.push((op, climb(tm, tail)));
-            break;
-        } else {
-            before.push((op, tm))
-        }
-    }
-    prec_climb::climb(head, before)
 }
 
 impl<'s, 't> Parser<'s, 't> {
@@ -463,7 +460,7 @@ impl<'s, 't> Parser<'s, 't> {
         while let Some(op) = self.op(with_comma)? {
             tail.push((op, self.atom()?))
         }
-        Ok(climb(head, tail.into_iter()))
+        Ok(head.climb(tail.into_iter()))
     }
 
     /// Parse an atomic term.
