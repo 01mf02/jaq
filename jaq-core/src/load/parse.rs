@@ -190,8 +190,10 @@ impl<S> Term<S> {
         Term::Path(obj.into(), Path(Vec::from([path])))
     }
 
+    /// Perform precedence climbing of a term followed by operator-term pairs.
+    ///
+    /// Ensures that `... as $x | ...` is handled like `... as $x | (...)`.
     fn climb(self, tail: &mut impl Iterator<Item = (BinaryOp<S>, Self)>) -> Self {
-        // ensure that `... as $x | ...` is handled like `... as $x | (...)`
         let tail = core::iter::from_fn(|| {
             tail.next().map(|(op, tm)| match op {
                 BinaryOp::Pipe(Some(_)) => (op, tm.climb(tail)),
