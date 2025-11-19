@@ -190,11 +190,11 @@ impl<S> Term<S> {
         Term::Path(obj.into(), Path(Vec::from([path])))
     }
 
-    fn climb(self, mut tail: impl Iterator<Item = (BinaryOp<S>, Self)> + Default) -> Self {
+    fn climb(self, tail: &mut impl Iterator<Item = (BinaryOp<S>, Self)>) -> Self {
         // ensure that `... as $x | ...` is handled like `... as $x | (...)`
         let tail = core::iter::from_fn(|| {
             tail.next().map(|(op, tm)| match op {
-                BinaryOp::Pipe(Some(_)) => (op, tm.climb(core::mem::take(&mut tail))),
+                BinaryOp::Pipe(Some(_)) => (op, tm.climb(tail)),
                 _ => (op, tm),
             })
         });
@@ -460,7 +460,7 @@ impl<'s, 't> Parser<'s, 't> {
         while let Some(op) = self.op(with_comma)? {
             tail.push((op, self.atom()?))
         }
-        Ok(head.climb(tail.into_iter()))
+        Ok(head.climb(&mut tail.into_iter()))
     }
 
     /// Parse an atomic term.
