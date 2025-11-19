@@ -495,6 +495,12 @@ If either `f` or `g` yields an error, then
 `f | g` yields that error, followed by nothing.
 For example, `(1, 2) | (., error)` yields the same as `1, error`.
 
+{#concatenation}
+### Concatenation (`,`)
+
+The filter `f, g` yields the concatenation of the outputs of `f` and `g`.
+For example, `1, 2 --> 1 2`.
+
 {#variable-binding}
 ### Variable binding (`as $x |`)
 
@@ -509,11 +515,24 @@ For example,
 Variables can be shadowed, such as
 `0 as $x | (1 as $x | $x), $x --> 1 0`.
 
-{#concatenation}
-### Concatenation (`,`)
+::: Advanced
+The filter `... as $x | ...` is interpreted like `... as $x | (...)`, where
+the parentheses extend as far as possible to the right.
+That means that for example:
 
-The filter `f, g` yields the concatenation of the outputs of `f` and `g`.
-For example, `1, 2 --> 1 2`.
+- ` 0 as $x  |  1 | $x  --> 0` is interpreted like
+- ` 0 as $x  | (1 | $x) --> 0`, not like
+- `(0 as $x) | (1 | $x)`, which does not compile.
+
+You could say that the precedence of `as $x |` is
+lower than any other operator to its _right_.
+However, to its _left_, the regular precedences apply.
+That means that:
+
+- ` 1,  2  as $x | [$x]  -->  1  [2]` is interpreted like
+- ` 1, (2  as $x | [$x]) -->  1  [2]`, not like
+- `(1,  2) as $x | [$x]  --> [1] [2]`.
+:::
 
 {#plain-assignment}
 ### Plain assignment (`=`)
