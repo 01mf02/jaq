@@ -56,13 +56,21 @@ We have a few equivalences for `path(f)`:
 | `p`           | `path(p)` |
 |:--------------|:----------|
 | `.`           | `[]` |
+| `..`          | `path(recurse)` |
 | `.[]`         | `keys_unsorted[] | [.]` |
-| `.[$i]`       | `[$i]` |
-| `.[$i:$j]`    | `[{start: $i, end: $j}]` |
+| `.[$i]`       | `.[$i] | [$i]` |
+| `.[$i:  ]`    | `.[$i:$j] | [{start: $i         }]` |
+| `.[  :$j]`    | `.[  :$j] | [{           end: $j}]` |
+| `.[$i:$j]`    | `.[$i:$j] | [{start: $i, end: $j}]` |
+| `f?`          | `path(try f catch empty)` |
 | `f,  g`       | `path(f), path(g)` |
 | `f | g`       | `path(f) as $p | $p + (getpath($p) | path(g))` |
+| `f // g`      | `path(if first(f // false) then f else g end)` |
 | `f as $x | g` | `f as $x | path(g)` |
 | `if $p then f else g end` | `if $p then path(f) else path(g) end` |
+| `try f catch g` | `try path(f) catch (g | error)` |
+| `label $x | f` | `label $x | path(f)` |
+| `break $x` | `break $x` |
 
 Examples:
 
@@ -82,12 +90,48 @@ Examples:
 - `[1, 2, 3]    | (0, 2) as $x | path(.[$x])  --> [0] [2]`
 :::
 
-::: Compatibility
 The filters [`reduce` / `foreach`](#reduce-foreach) are both defined in jaq
 in terms of simpler filters `f` that `path(f)` can evaluate.
 Therefore, in jaq, you can use `reduce` / `foreach` inside `path(f)`,
 as well as on the left-hand side of updates.
-`jq` does not support this.
+For example:
+
+- `[{a: 1}] | path(reduce  (0, "a") as $i (.; .[$i])) -->     [0, "a"]`
+- `[{a: 1}] | path(foreach (0, "a") as $i (.; .[$i])) --> [0] [0, "a"]`
+
+Similarly, you can use [compound paths](#compound-paths):
+
+- `[1, 2, 3]   | path(.[]?) --> [0] [1] [2]`
+- `""          | path(.[]?) -->` (no output)
+- `{a: [1, 2]} | path(.a[]) --> ["a", 0] ["a", 1]`
+
+All other filters defined in the [core language](#corelang) yield an error,
+because they construct new values instead of returning references to their inputs.
+For example:
+
+- `try path(0    ) catch "fail" --> "fail"`
+- `try path(1 + 2) catch "fail" --> "fail"`
+- `try path(1 = 2) catch "fail" --> "fail"`
+
+
+::: Compatibility
+`jq` does not support `reduce` / `foreach` in `path`.
+
+On the other hand, `jq` is more permissive with paths of intermediate values.
+For example, `try path([] | empty) catch "fail" --> "fail"`, because jaq reduces
+`path([] | empty)` to
+`path([]) as $p | ...`, which fails because `path([])` is not defined.
+Conversely, `jq` yields no output for this filter.
+Interestingly, `path([] | .[])` yields an error in both jaq and `jq`,
+so I do not understand why the example with `empty` does not yield an error, too.
+
+In jaq,
+`[] | path(.[0: ]) --> [{"start": 0}]` and
+`[] | path(.[ :0]) --> [{"end"  : 0}]`, whereas `jq` yields
+`[{start: 0   , end: null}]` and
+`[{start: null, end: 0   }]`, respectively.
+That means that `jq` always adds missing `start`/`end` indices as `null`,
+whereas jaq omits them.
 :::
 
 ### Pathless
@@ -146,19 +190,19 @@ In this table, the case for
 |:--------------|:---------|
 | `.`           | `u` |
 | `..`          | `def rec_up: (.[]? | rec_up), .; rec_up |= u` |
-| `(f | g)`     | `f |= (g |= u)` |
-| `(f , g)`     | `f |= u | g |= u` |
+| `f | g`       | `f |= (g |= u)` |
+| `f , g`       | `f |= u | g |= u` |
 | `f as $x | g` | `(f1 as $x | g) |= u | ... | (fn as $x | g) |= u` |
-| `f // g`      | `if first(f // false) then f |= u else g |= u` |
+| `f // g`      | `if first(f // false) then f else g end |= u` |
 | `if $p then f else g end` | `if $p then f |= u else g |= u end` |
-| `.[]`         | `iter_upd(         u; error)` |
-| `.[$i]`       | `index_upd($i;     u; error)` |
-| `.[$i:$j]`    | `slice_upd($i; $j; u; error)` |
-| `.[]?`        | `iter_upd(         u;     .)` |
-| `.[$i]?`      | `index_upd($i;     u;     .)` |
-| `.[$i:$j]?`   | `slice_upd($i; $j; u;     .)` |
+| `.[]`         | ` iter_upd(            u; error)` |
+| `.[$i]`       | `index_upd($i;         u; error)` |
+| `.[$i:  ]`    | `slice_upd($i; length; u; error)` |
+| `.[  :$j]`    | `slice_upd(0 ; $j    ; u; error)` |
+| `.[$i:$j]`    | `slice_upd($i; $j    ; u; error)` |
 
 It follows from the table that `empty |= f` is equivalent to `.` (identity).
+
 We now give definitions for `iter_upd`, `index_upd`, and `slice_upd`:
 
 ```
@@ -167,7 +211,7 @@ def iter_upd(u; fail):
     if isarray  then [.[] | u]
   elif isobject then with_entries(.value |= u)
   else fail end;
-def eq($x; u; $y): $x | (.[] |= u) == $y and iter_upd(u; .) == $y;
+def eq($x; u; $y): $x | (.[] |= u) == $y and iter_upd(u; error) == $y;
 all(
 eq([1, 2, 3]   ; .+1             ; [2, 3, 4]         ),
 eq([1, 2, 3]   ; .+1,.           ; [2, 1, 3, 2, 4, 3]),
@@ -180,7 +224,10 @@ eq({a: 1, b: 2}; .+1,.           ; {"a": 2, "b": 3}  )
 ```
 # .[$i] |= u
 def index_upd($i; u; fail):
-    if isarray then
+    if (isstring or isarray) and ($i | isobject) then
+      # see `slice_upd` below
+      ([.[:$i.start], .[$i.start:$i.end], .[$i.end:]]? | .[1] |= u | add) // fail
+  elif isarray then
         if 0 <= $i and $i < length then .[:$i] + [.[$i] | first(u)] + .[$i+1:]
       elif -length <= $i and $i < 0 then index_upd(length + $i; u; fail)
       else fail end
@@ -188,7 +235,7 @@ def index_upd($i; u; fail):
         if has($i) then with_entries(if .key == $i then {key, value: first(.value | u)} end)
       else . + ([{key: $i, value: first(null | u)}] | from_entries) end
   else fail end;
-def eq($x; $i; u; $y): $x | (.[$i] |= u) == $y and index_upd($i; u; .) == $y;
+def eq($x; $i; u; $y): $x | (.[$i] |= u) == $y and index_upd($i; u; error) == $y;
 all(
 eq([1, 2, 3]   ;  0 ; .+1  ; [2, 2, 3]       ),
 eq([1, 2, 3]   ;  0 ; .+1,.; [2, 2, 3]       ),
@@ -204,8 +251,8 @@ eq({a: 1, b: 2}; "a"; empty; {        "b": 2})
 ```
 # .[$i:$j] |= u
 def slice_upd($i; $j; u; fail):
-  first(.[:$i] + (.[$i:$j] | u) + .[$j:]) // .[:$i] + .[$j:];
-def eq($x; $i; $j; u; $y): $x | (.[$i:$j] |= u) == $y and slice_upd($i; $j; u; .) == $y;
+  ([.[:$i], .[$i:$j], .[$j:]]? | .[1] |= u | add) // fail;
+def eq($x; $i; $j; u; $y): $x | (.[$i:$j] |= u) == $y and slice_upd($i; $j; u; error) == $y;
 all(
 eq([1, 2, 3, 4]; 1; -1; map(.+1)    ; [1, 3, 4, 4]),
 eq([1, 2, 3, 4]; 1; -1; map(.+1),.  ; [1, 3, 4, 4]),
@@ -215,6 +262,17 @@ eq("abcd"      ; 1; -1; .+.         ; "abcbcd"    ),
 eq("abcd"      ; 1; -1; empty       ; "ad"        )
 ; .) --> true
 ```
+
+Similar as for `path`, we can also use
+[compound paths](#compound-paths) such as
+`.[]?` and `.a[]` on the left-hand side of updates.
+The error-suppressing operators
+`.[]?`,
+`.[$i]?`, ...,
+`.[$i:$j]?` are executed like their regular counterparts, but using
+`.` instead of `error` as last argument (`fail`) for the `*_upd` filters.
+That means that if an error-suppressing operator fails,
+it returns its input unchanged instead of throwing an error.
 :::
 
 ::: Compatibility

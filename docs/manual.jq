@@ -17,22 +17,11 @@ def li:
     {t: "ul", c: .c[1:] | map(li)}
   ]};
 
-def nav:
-  {t: "nav", c: [
-    {t: "h2", c: "Contents"},
-    {t: "ul", c: [.c[] | sections | li]}
-  ]};
-
-def body:
-  {t: "div", a: {class: "container"}, c: [
-    nav,
-    {t: "section", a: {id: "main"}, c: .c}
-  ]};
-
 def transform_section_headers:
   (.. | select(.t? == "section") | .a.id) |= ascii_downcase;
 
 def transform_code:
+  # XML encoding of `-->`
   "--&gt;" as $arrow |
 
   def is_test:
@@ -62,5 +51,7 @@ def transform_body:
   transform_section_headers |
   transform_code;
 
-(.. | select(.t? == "style")).c = [$style] |
-(.. | select(.t? == "body" ))   = ($body | fromxml | transform_body | body)
+($body | fromxml | transform_body) as $body |
+(.. | select(.t?    == "style")).c = [$style] |
+(.. | select(.t?    == "ul"   )).c = [$body.c[] | sections | li] |
+(.. | select(.a?.id == "main" )).c =  $body.c
