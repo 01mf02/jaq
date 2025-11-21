@@ -12,6 +12,7 @@ A program written in the jq language is called a jq program or _filter_.
 A filter is a function that
 takes an input value and
 yields a stream of output values.
+By convention, we write `f` and `g` to denote arbitrary filters.
 
 The stream of output values can be infinite; for example, the jq filter
 `repeat("Hi")` yields an infinite sequence of strings `"Hi"`.
