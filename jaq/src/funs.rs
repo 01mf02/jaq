@@ -56,7 +56,7 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
         let cli = cv.0.data().cli;
         repl_with(cli, depth, |s| match eval(cli, s, cv.1.clone()) {
             Ok(()) => (),
-            Err(e) => eprint!("{e}"),
+            Err(e) => e.print(&cli),
         })
         .unwrap();
         REPL_DEPTH.fetch_sub(1, Ordering::Relaxed);

@@ -24,11 +24,11 @@ crate-type = ["cdylib", "rlib"]
 jaq-core = { path = "../jaq-core" }
 jaq-std  = { path = "../jaq-std" }
 jaq-json = { path = "../jaq-json" }
+jaq-bla  = { path = "../jaq-bla" }
 
 aho-corasick = "1.1.2"
 codesnake = { version = "0.2" }
 log = "0.4.17"
-unicode-width = "0.1.13"
 
 console_log = { version = "1.0", features = ["color"] }
 getrandom = { version = "0.2", features = ["js"] }

@@ -5,7 +5,7 @@ use std::io::{self, Write};
 pub struct Style<S = &'static str> {
     pub red: S,
     pub green: S,
-    //pub yellow: S,
+    pub yellow: S,
     pub bold: S,
     pub reset: S,
 }
@@ -13,7 +13,7 @@ pub struct Style<S = &'static str> {
 pub const ANSI: Style = Style {
     red: "\x1b[31m",
     green: "\x1b[32m",
-    //yellow: "\x1b[33m",
+    yellow: "\x1b[33m",
     bold: "\x1b[1m",
     reset: "\x1b[0m",
 };

@@ -1,6 +1,7 @@
 //! Writing output.
 use crate::style::{Style, ANSI};
 use crate::{invalid_data, Cli, Format};
+use jaq_bla::write_seq;
 use jaq_json::{cbor, toml, xml, yaml};
 use jaq_json::{write_byte, write_bytes, write_utf8, Tag, Val};
 use std::io::{self, IsTerminal, Write};
@@ -16,36 +17,12 @@ struct Pp {
 }
 
 impl Pp {
-    fn indent(&self, w: &mut dyn Write, level: usize) -> Result {
-        if !self.compact {
-            write!(w, "{}", self.indent.repeat(level))?;
-        }
-        Ok(())
-    }
-
-    fn newline(&self, w: &mut dyn Write) -> Result {
-        if !self.compact {
-            writeln!(w)?;
-        }
-        Ok(())
-    }
-
     fn write_seq<T, I, F>(&self, w: &mut dyn Write, level: usize, xs: I, f: F) -> Result
     where
         I: IntoIterator<Item = T>,
         F: Fn(&mut dyn Write, T) -> Result,
     {
-        self.newline(w)?;
-        let mut iter = xs.into_iter().peekable();
-        while let Some(x) = iter.next() {
-            self.indent(w, level + 1)?;
-            f(w, x)?;
-            if iter.peek().is_some() {
-                write!(w, ",")?;
-            }
-            self.newline(w)?;
-        }
-        self.indent(w, level)
+        write_seq!(w, self, level, xs, f)
     }
 }
 
