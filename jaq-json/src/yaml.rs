@@ -4,6 +4,7 @@ use alloc::{borrow::Cow, format, string::String, vec::Vec};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Tag};
+use std::io;
 
 /// Parse a stream of YAML documents.
 pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
@@ -13,25 +14,34 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
 }
 
 macro_rules! write_yaml {
-    ($w:ident, $v:ident, $f:expr) => {{
+    ($w:ident, $pp:ident, $v:ident, $f:expr) => {{
+        macro_rules! color {
+            ($style:ident, $g:expr) => {{
+                write!($w, "{}", $pp.colors.$style)?;
+                $g?;
+                write!($w, "{}", $pp.colors.reset)
+            }};
+        }
         match $v {
-            Val::Str(b, crate::Tag::Bytes) => write!($w, "!!binary {}", BASE64.encode(b)),
-            Val::Num(Num::Float(f64::INFINITY)) => write!($w, ".inf"),
-            Val::Num(Num::Float(f64::NEG_INFINITY)) => write!($w, "-.inf"),
-            Val::Num(Num::Float(fl)) if fl.is_nan() => write!($w, ".nan"),
+            Val::Str(b, crate::Tag::Bytes) => {
+                color!(bstr, write!($w, "!!binary {}", BASE64.encode(b)))
+            }
+            Val::Num(Num::Float(f64::INFINITY)) => color!(num, write!($w, ".inf")),
+            Val::Num(Num::Float(f64::NEG_INFINITY)) => color!(num, write!($w, "-.inf")),
+            Val::Num(Num::Float(fl)) if fl.is_nan() => color!(num, write!($w, ".nan")),
             _ => $f,
         }
     }};
 }
 
 /// Format a value as YAML document, without explicit document start/end markers.
-pub fn format(w: &mut Formatter, v: &Val) -> fmt::Result {
-    write_yaml!(w, v, write::format_with(w, v, format))
+pub fn format(w: &mut Formatter, pp: &write::Pp, level: usize, v: &Val) -> fmt::Result {
+    write_yaml!(w, pp, v, write::format_with(w, &pp, level, v, format))
 }
 
 /// Write a value as YAML document, without explicit document start/end markers.
-pub fn write(w: &mut dyn std::io::Write, v: &Val) -> std::io::Result<()> {
-    write_yaml!(w, v, write::write_with(w, v, |w, v| write(w, v)))
+pub fn write(w: &mut dyn io::Write, pp: &write::Pp, level: usize, v: &Val) -> io::Result<()> {
+    write_yaml!(w, pp, v, write::write_with(w, &pp, level, v, write))
 }
 
 /// Lex error.

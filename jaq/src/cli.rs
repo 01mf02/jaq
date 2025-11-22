@@ -249,8 +249,12 @@ impl Cli {
         *self.color_stdout.get_or_init(init)
     }
 
-    pub fn indent(&self) -> usize {
-        self.indent.unwrap_or(2)
+    pub fn indent(&self) -> String {
+        if self.tab {
+            "\t".into()
+        } else {
+            " ".repeat(self.indent.unwrap_or(2))
+        }
     }
 }
 

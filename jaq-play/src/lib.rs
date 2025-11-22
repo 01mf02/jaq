@@ -4,9 +4,10 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_bla::{compile_errors, load_errors, write_seq, Color};
+use jaq_bla::{compile_errors, load_errors, Color};
 use jaq_core::{compile, data, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
-use jaq_json::{bstr, json, write_byte, write_bytes, write_utf8, Tag, Val};
+use jaq_json::write::{Colors, Pp};
+use jaq_json::{bstr, json, write_bytes, write_utf8, Tag, Val};
 use jaq_std::input::{self, HasInputs, Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 
@@ -44,51 +45,45 @@ impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
     }
 }
 
-struct PpOpts {
-    compact: bool,
-    indent: String,
-}
+fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
+    macro_rules! color {
+        ($style:ident, $g:expr) => {{
+            write!(w, "{}", pp.colors.$style)?;
+            $g?;
+            write!(w, "{}", pp.colors.reset)
+        }};
+    }
 
-fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     match v {
-        Val::Null => span(f, "null", "null"),
-        Val::Bool(b) => span(f, "boolean", b),
-        Val::Num(n) => span(f, "number", n),
         Val::Str(b, Tag::Bytes) => {
             let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
-            span(f, "bytes", escape_str(&fun.to_string()))
+            color!(bstr, write!(w, "{}", escape_str(&fun.to_string())))
         }
         Val::Str(s, Tag::Utf8) => {
             let fun = FormatterFn(move |f: &mut Formatter| {
                 write_utf8!(f, s, |part| bstr(&escape_bytes(part)).fmt(f))
             });
-            span(f, "string", fun)
+            color!(str, write!(w, "{}", fun))
         }
-        Val::Arr(a) if a.is_empty() => write!(f, "[]"),
-        Val::Arr(a) => {
-            write!(f, "[")?;
-            write_seq!(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
-            write!(f, "]")
-        }
-        Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
-        Val::Obj(o) => {
-            write!(f, "{{")?;
-            write_seq!(f, opts, level, &**o, |f: &mut _, (k, v)| {
-                use jaq_std::ValT;
-                fmt_val(f, opts, level + 1, k)?;
-                write!(f, ":")?;
-                if !opts.compact || !k.is_utf8_str() {
-                    write!(f, " ")?;
-                }
-                fmt_val(f, opts, level + 1, v)
-            })?;
-            write!(f, "}}")
-        }
+        _ => jaq_json::write::format_with(w, pp, level, v, fmt_json),
     }
 }
 
-fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
-    write!(f, "<span class=\"{cls}\">{el}</span>")
+fn html_colors() -> Colors {
+    let span = |cls| format!(r#"<span class="{cls}">"#);
+    Colors {
+        null: span("null"),
+        r#true: span("boolean"),
+        r#false: span("boolean"),
+        num: span("number"),
+        str: span("string"),
+        arr: span("array"),
+        obj: span("object"),
+
+        bstr: span("bytes"),
+
+        reset: "</span>".into(),
+    }
 }
 
 const AC_PATTERNS: &[&str] = &["&", "<", ">"];
@@ -152,21 +147,23 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let settings = Settings::try_from(settings).unwrap();
     log::trace!("{settings:?}");
 
-    let indent = if settings.tab {
-        "\t".to_string()
-    } else {
-        " ".repeat(settings.indent)
+    let indent = || {
+        if settings.tab {
+            "\t".to_string()
+        } else {
+            " ".repeat(settings.indent)
+        }
     };
-
-    let pp_opts = PpOpts {
-        compact: settings.compact,
-        indent,
+    let pp = Pp {
+        indent: (!settings.compact).then(indent),
+        colors: html_colors(),
+        sort_keys: false,
     };
 
     let post_value = |y| {
         let s = FormatterFn(|f: &mut Formatter| match &y {
-            Val::Str(s, _) if settings.raw_output => span(f, "string", bstr(&escape_bytes(s))),
-            y => fmt_val(f, &pp_opts, 0, y),
+            Val::Str(s, _) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
+            y => fmt_json(f, &pp, 0, y),
         });
         scope.post_message(&s.to_string().into()).unwrap();
     };
