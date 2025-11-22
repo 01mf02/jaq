@@ -5,6 +5,7 @@
 //! writers ([std::io::Write]) from the same code.
 
 use crate::{Tag, Val};
+use alloc::string::String;
 use core::fmt::{self, Formatter};
 use std::io::{self, Write};
 
@@ -42,7 +43,7 @@ macro_rules! write_utf8 {
             match s.split_last() {
                 Some((last, init)) if is_special(*last) => {
                     $f(init)?;
-                    write_byte!($w, *last, write!($w, "\\u{last:04x}"))?
+                    $crate::write_byte!($w, *last, write!($w, "\\u{last:04x}"))?
                 }
                 _ => $f(s)?,
             }
@@ -59,21 +60,85 @@ macro_rules! write_bytes {
     ($w:ident, $s: ident) => {{
         write!($w, "b\"")?;
         $s.iter()
-            .try_for_each(|c| write_byte!($w, *c, write!($w, "\\x{c:02x}")))?;
+            .try_for_each(|c| $crate::write_byte!($w, *c, write!($w, "\\x{c:02x}")))?;
         write!($w, "\"")
     }};
 }
 
 macro_rules! write_seq {
-    ($w:ident, $iter:ident, $f:expr) => {{
-        if let Some(x) = $iter.next() {
-            $f(x)?;
+    ($w:ident, $indent:expr, $level:expr, $xs:expr, $f:expr) => {{
+        if $indent.is_some() {
+            writeln!($w)?;
         }
-        $iter.try_for_each(|x| {
-            write!($w, ",")?;
-            $f(x)
-        })
+        let mut iter = $xs.into_iter().peekable();
+        while let Some(x) = iter.next() {
+            if let Some(indent) = $indent {
+                write!($w, "{}", indent.repeat($level + 1))?;
+            }
+            $f(x)?;
+            if iter.peek().is_some() {
+                write!($w, ",")?;
+            }
+            if $indent.is_some() {
+                writeln!($w)?;
+            }
+        }
+        if let Some(indent) = $indent {
+            write!($w, "{}", indent.repeat($level))
+        } else {
+            Ok(())
+        }
     }};
+}
+
+#[derive(Default)]
+pub struct Colors<S = String> {
+    pub null: S,
+    pub r#false: S,
+    pub r#true: S,
+    pub num: S,
+    pub str: S,
+    pub arr: S,
+    pub obj: S,
+
+    // byte strings
+    pub bstr: S,
+
+    pub reset: S,
+}
+
+impl Colors {
+    pub fn ansi() -> Self {
+        let mut cols = Colors::default();
+        cols.parse("90:39:39:39:32:1;39:1;39");
+        cols.bstr = "\x1b[31m".into();
+        cols.reset = "\x1b[0m".into();
+        cols
+    }
+
+    pub fn parse(&mut self, s: &str) {
+        let fields = [
+            &mut self.null,
+            &mut self.r#false,
+            &mut self.r#true,
+            &mut self.num,
+            &mut self.str,
+            &mut self.arr,
+            &mut self.obj,
+        ];
+        for (color, field) in s.split(':').zip(fields) {
+            use alloc::format;
+            *field = color.split(';').map(|s| format!("\x1b[{s}m")).collect();
+        }
+    }
+}
+
+/// Pretty printer.
+#[derive(Default)]
+pub struct Pp<S = String> {
+    pub indent: Option<S>,
+    pub sort_keys: bool,
+    pub colors: Colors<S>,
 }
 
 /// Write a value as JSON superset, using a function `$f` to write sub-values.
@@ -84,58 +149,86 @@ macro_rules! write_seq {
 /// formatters, which require all output to be valid UTF-8.
 /// However, the JSON/YAML writers usually override this behaviour,
 /// yielding invalid UTF-8 characters as-is.
-#[macro_export]
 macro_rules! write_val {
-    ($w:ident, $v:ident, $f:expr) => {{
-        use $crate::{bstr, Tag, Val};
+    ($w:ident, $pp:ident, $level:expr, $v:ident, $f:expr) => {{
+        macro_rules! color {
+            ($style:ident, $g:expr) => {{
+                write!($w, "{}", $pp.colors.$style)?;
+                $g?;
+                write!($w, "{}", $pp.colors.reset)
+            }};
+        }
+        let indent = &$pp.indent;
         match $v {
-            Val::Null => write!($w, "null"),
-            Val::Bool(b) => write!($w, "{b}"),
-            Val::Num(n) => write!($w, "{n}"),
-            Val::Str(b, Tag::Bytes) => write_bytes!($w, b),
-            Val::Str(s, Tag::Utf8) => write_utf8!($w, s, |part| write!($w, "{}", bstr(part))),
+            Val::Null => color!(null, write!($w, "null")),
+            Val::Bool(true) => color!(r#true, write!($w, "true")),
+            Val::Bool(false) => color!(r#false, write!($w, "false")),
+            Val::Num(n) => color!(num, write!($w, "{n}")),
+            Val::Str(b, Tag::Bytes) => color!(bstr, $crate::write_bytes!($w, b)),
+            Val::Str(s, Tag::Utf8) => color!(
+                str,
+                write_utf8!($w, s, |part| write!($w, "{}", $crate::bstr(part)))
+            ),
             Val::Arr(a) => {
-                write!($w, "[")?;
-                let mut iter = a.iter();
-                write_seq!($w, iter, $f)?;
-                write!($w, "]")
+                color!(arr, write!($w, "["))?;
+                if !a.is_empty() {
+                    write_seq!($w, indent, $level, &**a, |x| $f($level + 1, x))?;
+                }
+                color!(arr, write!($w, "]"))
             }
             Val::Obj(o) => {
-                write!($w, "{{")?;
-                let mut iter = o.iter();
-                write_seq!($w, iter, |(k, v)| {
-                    use jaq_std::ValT;
-                    $f(k)?;
-                    // YAML interprets {1:2}  as {"1:2": null}, whereas
-                    // it   interprets {1: 2} as {1: 2}
-                    // in order to keep compatibility with jq,
-                    // we add a space between ':' and the value
-                    // only if the key is a UTF-8 string
-                    write!($w, ":{}", if k.is_utf8_str() { "" } else { " " })?;
-                    $f(v)
-                })?;
-                write!($w, "}}")
+                color!(obj, write!($w, "{{"))?;
+                macro_rules! kv {
+                    ($kv:expr) => {{
+                        let (k, v) = $kv;
+                        use jaq_std::ValT;
+                        $f($level + 1, k)?;
+                        color!(obj, write!($w, ":"))?;
+                        // YAML interprets {1:2}  as {"1:2": null}, whereas
+                        // it   interprets {1: 2} as {1: 2}
+                        // in order to keep compatibility with jq,
+                        // we add a space between ':' and the value
+                        // only if the key is a UTF-8 string
+                        if indent.is_some() || !k.is_utf8_str() {
+                            write!($w, " ")?;
+                        }
+                        $f($level + 1, v)
+                    }};
+                }
+                if !o.is_empty() {
+                    if $pp.sort_keys {
+                        let mut o: alloc::vec::Vec<_> = o.iter().collect();
+                        o.sort_by_key(|(k, _v)| *k);
+                        write_seq!($w, indent, $level, o, |x| kv!(x))
+                    } else {
+                        write_seq!($w, indent, $level, &**o, |x| kv!(x))
+                    }?
+                }
+                color!(obj, write!($w, "}}"))
             }
         }
     }};
 }
 
-type WriteFn<T> = fn(&mut dyn Write, &T) -> io::Result<()>;
-type FormatFn<T> = fn(&mut Formatter, &T) -> fmt::Result;
+type WriteFn = fn(&mut dyn Write, &Pp, usize, &Val) -> io::Result<()>;
+type FormatFn = fn(&mut Formatter, &Pp, usize, &Val) -> fmt::Result;
 
-pub(crate) fn write_with(w: &mut dyn Write, v: &Val, f: WriteFn<Val>) -> io::Result<()> {
+pub fn write_with(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, f: WriteFn) -> io::Result<()> {
     match v {
-        Val::Str(b, Tag::Bytes) => write_bytes!(w, b),
-        Val::Str(s, Tag::Utf8) => write_utf8!(w, s, |part| w.write_all(part)),
-        _ => write_val!(w, v, |v: &Val| f(w, v)),
+        Val::Str(s, Tag::Utf8) => {
+            write!(w, "{}", pp.colors.bstr)?;
+            write_utf8!(w, s, |part| w.write_all(part))?;
+            write!(w, "{}", pp.colors.reset)
+        }
+        _ => write_val!(w, pp, level, v, |level, x| f(w, pp, level, x)),
     }
 }
 
 /// Format a value as compact JSON, using a custom function to format child values.
 ///
 /// This is useful to override how certain values are printed, e.g. for YAML.
-pub(crate) fn format_with(w: &mut Formatter, v: &Val, f: FormatFn<Val>) -> fmt::Result {
-    write_val!(w, v, |v: &Val| f(w, v))
+pub fn format_with(w: &mut Formatter, pp: &Pp, level: usize, v: &Val, f: FormatFn) -> fmt::Result {
+    write_val!(w, pp, level, v, |level, x| f(w, pp, level, x))
 }
 
 /// Write a value as JSON.
@@ -165,6 +258,10 @@ pub(crate) fn format_with(w: &mut Formatter, v: &Val, f: FormatFn<Val>) -> fmt::
 /// jq may cause silent information loss, whereas
 /// jaq may yield invalid JSON values.
 /// Choose your poison.
-pub fn write(w: &mut dyn io::Write, v: &Val) -> io::Result<()> {
-    write_with(w, v, |w, v| write(w, v))
+pub fn write(w: &mut dyn io::Write, pp: &Pp, level: usize, v: &Val) -> io::Result<()> {
+    write_with(w, pp, level, v, write)
+}
+
+pub(crate) fn format(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
+    format_with(w, pp, level, v, format)
 }

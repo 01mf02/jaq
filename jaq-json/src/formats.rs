@@ -111,7 +111,7 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         }),
         ("toyaml", v(0), |cv| {
             let mut buf = Vec::new();
-            yaml::write(&mut buf, &cv.1).unwrap();
+            yaml::write(&mut buf, &Default::default(), 0, &cv.1).unwrap();
             box_once(Ok(Val::utf8_str(buf)))
         }),
         ("totoml", v(0), |cv| {

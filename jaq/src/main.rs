@@ -22,6 +22,8 @@ use write::{print, with_stdout};
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+extern crate alloc;
+
 fn main() -> ExitCode {
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "jaq=debug"))

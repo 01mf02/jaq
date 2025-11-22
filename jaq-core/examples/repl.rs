@@ -10,7 +10,7 @@
 
 use jaq_core::load::{Arena, File, Loader};
 use jaq_core::{data, unwrap_valr, Compiler, Ctx, Vars};
-use jaq_json::Val;
+use jaq_json::{write, Val};
 use std::io::{stdin, stdout, Write};
 
 fn eval_print(code: &str) -> std::io::Result<()> {
@@ -30,7 +30,7 @@ fn eval_print(code: &str) -> std::io::Result<()> {
 
     // iterator over the output values
     for y in filter.id.run((ctx, Val::default())).map(unwrap_valr) {
-        jaq_json::json::write(&mut stdout, &y.unwrap())?;
+        write::write(&mut stdout, &write::Pp::default(), 0, &y.unwrap())?;
         writeln!(stdout)?;
     }
     Ok(())

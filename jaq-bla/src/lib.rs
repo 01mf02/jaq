@@ -135,29 +135,3 @@ impl Report {
         })
     }
 }
-
-#[macro_export]
-macro_rules! write_seq {
-    ($w:ident, $pp:ident, $level:expr, $xs:expr, $f:expr) => {{
-        if !$pp.compact {
-            writeln!($w)?;
-        }
-        let mut iter = $xs.into_iter().peekable();
-        while let Some(x) = iter.next() {
-            if !$pp.compact {
-                write!($w, "{}", $pp.indent.repeat($level + 1))?;
-            }
-            $f($w, x)?;
-            if iter.peek().is_some() {
-                write!($w, ",")?;
-            }
-            if !$pp.compact {
-                writeln!($w)?;
-            }
-        }
-        if !$pp.compact {
-            write!($w, "{}", $pp.indent.repeat($level))?;
-        }
-        Ok(())
-    }};
-}

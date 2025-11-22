@@ -15,7 +15,7 @@ mod formats;
 mod funs;
 mod num;
 #[macro_use]
-mod write;
+pub mod write;
 
 #[cfg(feature = "cbor")]
 pub mod cbor;
@@ -488,7 +488,7 @@ impl Val {
 
     fn to_json(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        write::write(&mut buf, self).unwrap();
+        write::write(&mut buf, &write::Pp::default(), 0, self).unwrap();
         buf
     }
 }
@@ -771,7 +771,7 @@ pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display
 
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write_val!(f, self, |v: &Val| v.fmt(f))
+        write::format(f, &write::Pp::default(), 0, self)
     }
 }
 
