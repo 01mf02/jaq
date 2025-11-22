@@ -1,0 +1,10 @@
+[package]
+name = "jaq-bla"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
+
+codesnake = { version = "0.2" }
+unicode-width = "0.1.13"

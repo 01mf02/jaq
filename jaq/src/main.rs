@@ -8,8 +8,9 @@ mod windows;
 mod write;
 
 use cli::{Cli, Format};
-use core::fmt::{self, Display, Formatter};
-use filter::{run, FileReports, Filter};
+use core::fmt::{self, Formatter};
+use filter::{run, Filter};
+use jaq_bla::{Color, FileReports};
 use jaq_core::{load, unwrap_valr, Vars};
 use jaq_json::{invalid_data, json, Val};
 use std::io::{self, BufRead, Write};
@@ -48,17 +49,10 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    // yansi may only be used for writing to stderr
-    if cli.color_stdio(io::stderr()) {
-        yansi::enable();
-    } else {
-        yansi::disable();
-    };
-
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            eprint!("{e}");
+            e.print(&cli);
             e.report()
         }
     }
@@ -183,7 +177,7 @@ fn args(positional: &[Val], named: &[(String, Val)]) -> Val {
 #[derive(Debug)]
 enum Error {
     Io(Option<String>, io::Error),
-    Report(Vec<FileReports>),
+    Report(Vec<FileReports<PathBuf>>),
     Parse(String),
     Jaq(jaq_core::Error<Val>),
     Persist(tempfile::PersistError),
@@ -191,8 +185,26 @@ enum Error {
     NoOutput,
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl Error {
+    fn print(&self, cli: &Cli) {
+        use style::FormatterFn;
+        eprint!("{}", FormatterFn(|f: &mut Formatter| self.fmt(f, &cli)));
+    }
+
+    fn fmt(&self, f: &mut Formatter, cli: &Cli) -> fmt::Result {
+        let color = if cli.color_stdio(io::stderr()) {
+            |color, text| {
+                let style = style::ANSI;
+                let open = match color {
+                    Color::Yellow => style.yellow,
+                    Color::Red => style.red,
+                };
+                let x = style.display(open, text).to_string();
+                x
+            }
+        } else {
+            |_, text| text
+        };
         match self {
             Self::FalseOrNull | Self::NoOutput => Ok(()),
             Self::Io(prefix, e) => {
@@ -205,7 +217,15 @@ impl Display for Error {
             Self::Persist(e) => {
                 writeln!(f, "Error: {e}")
             }
-            Self::Report(reports) => reports.iter().try_for_each(|fr| write!(f, "{fr}")),
+            Self::Report(reports) => reports.iter().try_for_each(|(file, reports)| {
+                let idx = codesnake::LineIndex::new(&file.code);
+                reports.iter().try_for_each(|e| {
+                    writeln!(f, "Error: {}", e.message)?;
+                    let block = e.to_block(&idx, color);
+                    writeln!(f, "{}[{}]", block.prologue(), file.path.display())?;
+                    writeln!(f, "{}{}", block, block.epilogue())
+                })
+            }),
             Self::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
             Self::Jaq(e) => writeln!(f, "Error: {e}"),
         }
@@ -258,7 +278,7 @@ fn run_tests(read: impl BufRead) -> ExitCode {
         match run_test(test) {
             Err(e) => eprintln!("{e:?}"),
             Ok((expect, obtain)) if expect != obtain => {
-                eprintln!("expected {expect}, obtained {obtain}",);
+                eprintln!("expected {expect}, obtained {obtain}");
             }
             Ok(_) => passed += 1,
         }
