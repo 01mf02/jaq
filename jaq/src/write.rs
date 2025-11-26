@@ -10,18 +10,18 @@ fn map_err_to_string<T, E: core::fmt::Display>(r: Result<T, E>) -> Result<T> {
     r.map_err(|e| invalid_data(e.to_string()))
 }
 
-struct Writer {
+pub struct Writer {
     format: Format,
     pp: Pp,
     join: bool,
 }
 
 impl Writer {
-    fn new(cli: &Cli) -> Self {
+    pub fn new(cli: &Cli) -> Self {
         let pp = Pp {
             indent: (!cli.compact_output).then(|| cli.indent()),
             sort_keys: cli.sort_keys,
-            colors: if cli.color_stdout() {
+            colors: if cli.color_stdio(io::stdout()) {
                 Colors::ansi()
             } else {
                 Colors::default()
@@ -35,8 +35,8 @@ impl Writer {
     }
 }
 
-pub fn print(w: &mut dyn Write, cli: &Cli, val: &Val) -> Result {
-    let Writer { format, pp, join } = &Writer::new(cli);
+pub fn print(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
+    let Writer { format, pp, join } = writer;
 
     if matches!(format, Format::Yaml) {
         // start of YAML document

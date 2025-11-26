@@ -2,7 +2,6 @@ mod cli;
 mod filter;
 mod funs;
 mod read;
-mod style;
 #[cfg(target_os = "windows")]
 mod windows;
 mod write;
@@ -54,7 +53,7 @@ fn main() -> ExitCode {
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            e.print(&cli);
+            eprint!("{}", ErrorColor::new(&e, cli.color_stdio(io::stderr())));
             e.report()
         }
     }
@@ -83,12 +82,14 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     ctx.extend(vals);
     //println!("Filter: {:?}", filter);
 
+    let writer = &write::Writer::new(&cli);
+
     let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or(Format::Json);
     let last = if cli.files.is_empty() {
         let format = unwrap_or_json(cli.from);
         let s = read::stdin_string(format)?;
         let inputs = read::from_stdin(format, &s, cli.slurp);
-        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
+        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, writer, &v)))?
     } else {
         let mut last = None;
         for file in &cli.files {
@@ -107,17 +108,19 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                     .tempfile_in(location)?;
 
                 last = run(cli, &filter, ctx.clone(), inputs, |output| {
-                    print(tmp.as_file_mut(), cli, &output)
+                    print(tmp.as_file_mut(), writer, &output)
                 })?;
 
                 // replace the input file with the temporary file
                 std::mem::drop(bytes);
                 let perms = std::fs::metadata(path)?.permissions();
-                tmp.persist(path).map_err(Error::Persist)?;
+                tmp.persist(path).map_err(|e| Error::Io(None, e.into()))?;
                 std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(|out| {
-                    run(cli, &filter, ctx.clone(), inputs, |v| print(out, cli, &v))
+                    run(cli, &filter, ctx.clone(), inputs, |v| {
+                        print(out, writer, &v)
+                    })
                 })?;
             }
         }
@@ -182,54 +185,41 @@ enum Error {
     Report(Vec<FileReports<PathBuf>>),
     Parse(String),
     Jaq(jaq_core::Error<Val>),
-    Persist(tempfile::PersistError),
     FalseOrNull,
     NoOutput,
 }
 
-impl Error {
-    fn print(&self, cli: &Cli) {
-        use style::FormatterFn;
-        eprint!("{}", FormatterFn(|f: &mut Formatter| self.fmt(f, &cli)));
-    }
+struct ErrorColor<'e>(&'e Error, fn(Color, String) -> String);
 
-    fn fmt(&self, f: &mut Formatter, cli: &Cli) -> fmt::Result {
-        let color = if cli.color_stdio(io::stderr()) {
-            |color, text| {
-                let style = style::ANSI;
-                let open = match color {
-                    Color::Yellow => style.yellow,
-                    Color::Red => style.red,
-                };
-                let x = style.display(open, text).to_string();
-                x
-            }
-        } else {
-            |_, text| text
-        };
-        match self {
-            Self::FalseOrNull | Self::NoOutput => Ok(()),
-            Self::Io(prefix, e) => {
+impl<'e> ErrorColor<'e> {
+    fn new(e: &'e Error, color: bool) -> Self {
+        Self(e, if color { Color::ansi } else { |_, text| text })
+    }
+}
+
+impl fmt::Display for ErrorColor<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let Self(error, color) = self;
+        match error {
+            Error::FalseOrNull | Error::NoOutput => Ok(()),
+            Error::Io(prefix, e) => {
                 write!(f, "Error: ")?;
                 if let Some(p) = prefix {
                     write!(f, "{p}: ")?;
                 }
                 writeln!(f, "{e}")
             }
-            Self::Persist(e) => {
-                writeln!(f, "Error: {e}")
-            }
-            Self::Report(reports) => reports.iter().try_for_each(|(file, reports)| {
+            Error::Report(reports) => reports.iter().try_for_each(|(file, reports)| {
                 let idx = codesnake::LineIndex::new(&file.code);
                 reports.iter().try_for_each(|e| {
                     writeln!(f, "Error: {}", e.message)?;
-                    let block = e.to_block(&idx, color);
+                    let block = e.to_block(&idx, *color);
                     writeln!(f, "{}[{}]", block.prologue(), file.path.display())?;
                     writeln!(f, "{}{}", block, block.epilogue())
                 })
             }),
-            Self::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
-            Self::Jaq(e) => writeln!(f, "Error: {e}"),
+            Error::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
+            Error::Jaq(e) => writeln!(f, "Error: {e}"),
         }
     }
 }
@@ -238,7 +228,7 @@ impl Termination for Error {
     fn report(self) -> ExitCode {
         ExitCode::from(match self {
             Self::FalseOrNull => 1,
-            Self::Io(_, _) | Self::Persist(_) => 2,
+            Self::Io(_, _) => 2,
             Self::Report(_) => 3,
             Self::NoOutput => 4,
             Self::Parse(_) | Self::Jaq(_) => 5,

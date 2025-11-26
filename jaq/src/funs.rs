@@ -1,9 +1,10 @@
-use crate::{filter, run, style, write, Cli, Error, Val};
+use crate::{filter, run, write, Cli, Error, ErrorColor, Val};
 use jaq_core::{data, DataT, Lut, Native, RunPtr};
 use jaq_std::input::{self, Inputs};
 use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use std::io::{stderr, stdout};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct DataKind;
@@ -56,7 +57,7 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
         let cli = cv.0.data().cli;
         repl_with(cli, depth, |s| match eval(cli, s, cv.1.clone()) {
             Ok(()) => (),
-            Err(e) => e.print(&cli),
+            Err(e) => eprint!("{}", ErrorColor::new(&e, cli.color_stdio(stderr()))),
         })
         .unwrap();
         REPL_DEPTH.fetch_sub(1, Ordering::Relaxed);
@@ -69,22 +70,22 @@ fn eval(cli: &Cli, code: String, input: Val) -> Result<(), Error> {
     let (ctx, filter) =
         filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
     let inputs = core::iter::once(Ok(input));
-    crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| write::print(out, cli, &v)))?;
+    let writer = &write::Writer::new(&cli);
+    crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| write::print(out, writer, &v)))?;
     Ok(())
 }
 
 fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     use rustyline::config::{Behavior, Config};
-    use style::ANSI;
     let config = Config::builder()
         .behavior(Behavior::PreferTerm)
         .auto_add_history(true)
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
     let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
-    let style = ANSI.if_color(cli.color_stdout());
+    let color = cli.color_stdio(stdout());
+    let prompt = if color { "\x1b[1m>\x1b[0m"} else { ">" };
     let _ = history.iter().try_for_each(|h| rl.load_history(h));
-    let prompt = style.display(style.bold, '>');
     let prompt = format!("{}{} ", str::repeat("  ", depth), prompt);
     let mut first = true;
     loop {
