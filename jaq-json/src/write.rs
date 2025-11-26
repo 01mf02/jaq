@@ -91,7 +91,7 @@ macro_rules! write_seq {
     }};
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Colors<S = String> {
     pub null: S,
     pub r#false: S,
@@ -134,11 +134,19 @@ impl Colors {
 }
 
 /// Pretty printer.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Pp<S = String> {
     pub indent: Option<S>,
     pub sort_keys: bool,
     pub colors: Colors<S>,
+}
+
+impl<S: Clone> Pp<S> {
+    pub(crate) fn unindented(&self) -> Self {
+        let mut new = self.clone();
+        new.indent = None;
+        new
+    }
 }
 
 /// Write a value as JSON superset, using a function `$f` to write sub-values.
@@ -164,8 +172,8 @@ macro_rules! write_val {
             Val::Bool(true) => color!(r#true, write!($w, "true")),
             Val::Bool(false) => color!(r#false, write!($w, "false")),
             Val::Num(n) => color!(num, write!($w, "{n}")),
-            Val::Str(b, Tag::Bytes) => color!(bstr, $crate::write_bytes!($w, b)),
-            Val::Str(s, Tag::Utf8) => color!(
+            Val::Str(b, $crate::Tag::Bytes) => color!(bstr, $crate::write_bytes!($w, b)),
+            Val::Str(s, $crate::Tag::Utf8) => color!(
                 str,
                 write_utf8!($w, s, |part| write!($w, "{}", $crate::bstr(part)))
             ),

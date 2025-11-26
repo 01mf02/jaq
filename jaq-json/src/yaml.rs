@@ -14,34 +14,73 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, PError>> + '_ {
 }
 
 macro_rules! write_yaml {
-    ($w:ident, $pp:ident, $v:ident, $f:expr) => {{
+    ($w:ident, $pp:ident, $level:ident, $v:ident, $f:expr, $g:expr) => {{
         macro_rules! color {
-            ($style:ident, $g:expr) => {{
+            ($style:ident, $h:expr) => {{
                 write!($w, "{}", $pp.colors.$style)?;
-                $g?;
+                $h?;
                 write!($w, "{}", $pp.colors.reset)
+            }};
+        }
+        let indent = $pp.indent.as_ref();
+        macro_rules! nested {
+            ($x:ident, $iter:ident, $pre:expr) => {{
+                write!($w, "{}", indent.unwrap().repeat($level))?;
+                $pre?;
+                if match $x {
+                    Val::Arr(a) => !a.is_empty(),
+                    Val::Obj(o) => !o.is_empty(),
+                    _ => false,
+                } {
+                    writeln!($w)?
+                };
+                $f($w, $pp, $level + 1, $x)?;
+                if $iter.peek().is_some() {
+                    writeln!($w)
+                } else {
+                    Ok(())
+                }
             }};
         }
         match $v {
             Val::Str(b, crate::Tag::Bytes) => {
                 color!(bstr, write!($w, "!!binary {}", BASE64.encode(b)))
             }
+            Val::Arr(a) if !a.is_empty() && indent.is_some() => {
+                let mut iter = a.iter().peekable();
+                while let Some(v) = iter.next() {
+                    nested!(v, iter, write!($w, "- "))?
+                }
+                Ok(())
+            }
+            Val::Obj(o) if !o.is_empty() && indent.is_some() => {
+                let mut iter = o.iter().peekable();
+                while let Some((k, v)) = iter.next() {
+                    nested!(v, iter, {
+                        $f($w, &$pp.unindented(), $level, k)?;
+                        write!($w, ": ")
+                    })?
+                }
+                Ok(())
+            }
             Val::Num(Num::Float(f64::INFINITY)) => color!(num, write!($w, ".inf")),
             Val::Num(Num::Float(f64::NEG_INFINITY)) => color!(num, write!($w, "-.inf")),
             Val::Num(Num::Float(fl)) if fl.is_nan() => color!(num, write!($w, ".nan")),
-            _ => $f,
+            _ => $g,
         }
     }};
 }
 
 /// Format a value as YAML document, without explicit document start/end markers.
-pub fn format(w: &mut Formatter, pp: &write::Pp, level: usize, v: &Val) -> fmt::Result {
-    write_yaml!(w, pp, v, write::format_with(w, &pp, level, v, format))
+pub fn format(w: &mut Formatter, pp: &write::Pp, lvl: usize, v: &Val) -> fmt::Result {
+    use write::format_with;
+    write_yaml!(w, pp, lvl, v, format, format_with(w, pp, lvl, v, format))
 }
 
 /// Write a value as YAML document, without explicit document start/end markers.
 pub fn write(w: &mut dyn io::Write, pp: &write::Pp, level: usize, v: &Val) -> io::Result<()> {
-    write_yaml!(w, pp, v, write::write_with(w, &pp, level, v, write))
+    use write::write_with;
+    write_yaml!(w, pp, level, v, write, write_with(w, pp, level, v, write))
 }
 
 /// Lex error.
