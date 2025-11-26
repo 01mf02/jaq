@@ -57,22 +57,19 @@ pub(crate) fn run(
     mut f: impl FnMut(Val) -> io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
-    let iter = iter.map(|r| r.map_err(|e| e.to_string()));
 
-    let iter = Box::new(iter) as Box<dyn Iterator<Item = _>>;
+    let iter = Box::new(iter.map(|r| r.map_err(|e| e.to_string()))) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
     let iter = &RcIter::new(iter);
     let null = &RcIter::new(null);
 
-    let vars = Vars::new(vars);
+    let data = funs::Data::new(cli, &filter.lut, iter);
+    let ctx = Ctx::new(&data, Vars::new(vars));
 
-    for item in if cli.null_input { null } else { iter } {
-        let data = funs::Data::new(cli, &filter.lut, iter);
-        let ctx = Ctx::new(&data, vars.clone());
-        let input = item.map_err(Error::Parse)?;
+    for input in if cli.null_input { null } else { iter } {
         //println!("Got {:?}", input);
-        for output in filter.id.run((ctx.clone(), input)) {
+        for output in filter.id.run((ctx.clone(), input.map_err(Error::Parse)?)) {
             let output = unwrap_valr(output).map_err(Error::Jaq)?;
             last = Some(output.as_bool());
             f(output)?;
