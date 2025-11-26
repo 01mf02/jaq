@@ -36,8 +36,15 @@ pub struct Report {
 
 #[derive(Copy, Clone, Debug)]
 pub enum Color {
-    Yellow,
-    Red,
+    Red = 31,
+    Yellow = 33,
+}
+
+impl Color {
+    pub fn ansi(self, text: impl core::fmt::Display) -> String {
+        let ansi = |i| format!("\x1b[{i}m");
+        format!("{}{text}{}", ansi(self as usize), ansi(0))
+    }
 }
 
 fn report_io(code: &str, (path, error): (&str, String)) -> Report {
