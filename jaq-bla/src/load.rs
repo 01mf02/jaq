@@ -1,7 +1,10 @@
+//! Pretty-printing compilation errors.
 use jaq_core::{compile, load};
 
+/// File and corresponding error reports.
 pub type FileReports<P> = (load::File<String, P>, Vec<Report>);
 
+/// Report errors that may occur when loading a module.
 pub fn load_errors<P>(errs: load::Errors<&str, P>) -> Vec<FileReports<P>> {
     use load::Error;
 
@@ -17,6 +20,7 @@ pub fn load_errors<P>(errs: load::Errors<&str, P>) -> Vec<FileReports<P>> {
     errs.collect()
 }
 
+/// Report errors that may occur when compiling a module.
 pub fn compile_errors<P>(errs: compile::Errors<&str, P>) -> Vec<FileReports<P>> {
     let errs = errs.into_iter().map(|(file, errs)| {
         let code = file.code;
@@ -28,19 +32,25 @@ pub fn compile_errors<P>(errs: compile::Errors<&str, P>) -> Vec<FileReports<P>> 
 
 type StringColors = Vec<(String, Option<Color>)>;
 
+/// Error report.
 #[derive(Debug)]
 pub struct Report {
+    /// error summary
     pub message: String,
     labels: Vec<(core::ops::Range<usize>, StringColors, Color)>,
 }
 
+/// Error color.
 #[derive(Copy, Clone, Debug)]
 pub enum Color {
+    /// used for most errors
     Red = 31,
+    /// used for unclosed delimiters
     Yellow = 33,
 }
 
 impl Color {
+    /// Format a string with ANSI colors.
     pub fn ansi(self, text: impl core::fmt::Display) -> String {
         let ansi = |i| format!("\x1b[{i}m");
         format!("{}{text}{}", ansi(self as usize), ansi(0))
@@ -119,6 +129,7 @@ fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Repor
 type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
 
 impl Report {
+    /// Convert report to a code block.
     pub fn to_block(
         &self,
         idx: &codesnake::LineIndex,

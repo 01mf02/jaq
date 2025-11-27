@@ -1,21 +1,23 @@
 mod cli;
 mod filter;
 mod funs;
+mod tests;
 #[cfg(target_os = "windows")]
 mod windows;
 
 use cli::{Cli, Format};
 use core::fmt::{self, Formatter};
 use filter::run;
-use jaq_bla::data::{Ctx, Data, Filter};
-use jaq_bla::{read, write, Color, FileReports, Runner, Writer};
-use jaq_core::{load, unwrap_valr, Vars};
+use jaq_bla::data::{Filter, Runner, Writer};
+use jaq_bla::load::{Color, FileReports};
+use jaq_bla::read;
+use jaq_bla::write::{with_stdout, write};
+use jaq_core::Vars;
 use jaq_json::write::{Colors, Pp};
-use jaq_json::{invalid_data, json, Val};
-use std::io::{self, BufRead, Write};
+use jaq_json::{json, Val};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
-use write::{print, with_stdout};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -94,8 +96,8 @@ impl Cli {
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     if let Some(test_files) = &cli.run_tests {
         return Ok(match test_files.last() {
-            Some(file) => run_tests(io::BufReader::new(std::fs::File::open(file)?)),
-            None => run_tests(io::stdin().lock()),
+            Some(file) => tests::run(io::BufReader::new(std::fs::File::open(file)?)),
+            None => tests::run(io::stdin().lock()),
         });
     }
 
@@ -124,7 +126,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         let format = unwrap_or_json(cli.from);
         let s = read::stdin_string(format)?;
         let inputs = read::from_stdin(format, &s, cli.slurp);
-        with_stdout(|out| run(runner, &filter, vars, inputs, |v| print(out, writer, &v)))?
+        with_stdout(|out| run(runner, &filter, vars, inputs, |v| write(out, writer, &v)))?
     } else {
         let mut last = None;
         for file in &cli.files {
@@ -143,7 +145,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                     .tempfile_in(location)?;
 
                 last = run(runner, &filter, vars.clone(), inputs, |output| {
-                    print(tmp.as_file_mut(), writer, &output)
+                    write(tmp.as_file_mut(), writer, &output)
                 })?;
 
                 // replace the input file with the temporary file
@@ -154,7 +156,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
             } else {
                 last = with_stdout(|out| {
                     run(runner, &filter, vars.clone(), inputs, |v| {
-                        print(out, writer, &v)
+                        write(out, writer, &v)
                     })
                 })?;
             }
@@ -274,51 +276,5 @@ impl Termination for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(None, e)
-    }
-}
-
-fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
-    let (vars, filter) =
-        filter::parse_compile(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
-
-    let vars = Vars::new(vars);
-    let data = Data {
-        runner: &Runner::default(),
-        lut: &filter.lut,
-        inputs: &jaq_std::input::RcIter::new(Box::new(core::iter::empty())),
-    };
-    let ctx = Ctx::new(&data, vars);
-
-    let json = |s: String| json::parse_single(s.as_bytes()).map_err(invalid_data);
-    let jsonn = |s: String| json::parse_many(s.as_bytes()).collect::<Result<Val, _>>();
-    let input = json(test.input)?;
-    let expect: Result<Val, _> = jsonn(test.output.join("\n")).map_err(invalid_data);
-    let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();
-    Ok((expect?, unwrap_valr(obtain).map_err(Error::Jaq)?))
-}
-
-fn run_tests(read: impl BufRead) -> ExitCode {
-    let lines = read.lines().map(Result::unwrap);
-    let tests = load::test::Parser::new(lines);
-
-    let (mut passed, mut total) = (0, 0);
-    for test in tests {
-        println!("Testing {}", test.filter);
-        match run_test(test) {
-            Err(e) => eprintln!("{e:?}"),
-            Ok((expect, obtain)) if expect != obtain => {
-                eprintln!("expected {expect}, obtained {obtain}");
-            }
-            Ok(_) => passed += 1,
-        }
-        total += 1;
-    }
-
-    println!("{passed} out of {total} tests passed");
-
-    if total > passed {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
     }
 }

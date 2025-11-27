@@ -1,7 +1,7 @@
 //! Filter parsing, compilation, and execution.
 use crate::{funs, read, Error, Runner, Val};
 use jaq_bla::data::{Ctx, Data, Filter};
-use jaq_bla::{compile_errors, load_errors, FileReports};
+use jaq_bla::load::{compile_errors, load_errors, FileReports};
 use jaq_core::{compile, load, unwrap_valr, ValT, Vars};
 use jaq_std::input::RcIter;
 use std::{io, path::PathBuf};

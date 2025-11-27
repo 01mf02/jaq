@@ -1,4 +1,4 @@
-use crate::{filter, run, write, Error, ErrorColor, Runner, Val};
+use crate::{filter, run, with_stdout, write, Error, ErrorColor, Runner, Val};
 use jaq_bla::data::DataKind;
 use jaq_core::{Native, RunPtr, Vars};
 use jaq_std::{v, Filter};
@@ -36,11 +36,7 @@ fn eval(runner: &Runner, code: String, input: Val) -> Result<(), Error> {
     let ctx = Vars::new(ctx);
     let inputs = core::iter::once(Ok(input));
     let writer = &runner.writer;
-    crate::with_stdout(|out| {
-        run(runner, &filter, ctx, inputs, |v| {
-            write::print(out, writer, &v)
-        })
-    })?;
+    with_stdout(|out| run(runner, &filter, ctx, inputs, |v| write(out, writer, &v)))?;
     Ok(())
 }
 
