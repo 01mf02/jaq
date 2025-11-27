@@ -91,23 +91,33 @@ macro_rules! write_seq {
     }};
 }
 
+/// Colors used to pretty-print values.
 #[derive(Clone, Default)]
 pub struct Colors<S = String> {
+    /// null
     pub null: S,
+    /// false
     pub r#false: S,
+    /// true
     pub r#true: S,
+    /// numbers
     pub num: S,
+    /// strings
     pub str: S,
+    /// arrays
     pub arr: S,
+    /// objects
     pub obj: S,
 
-    // byte strings
+    /// byte strings
     pub bstr: S,
 
+    /// reset pretty printer
     pub reset: S,
 }
 
 impl Colors {
+    /// Default ANSI colors
     pub fn ansi() -> Self {
         let mut cols = Colors::default();
         cols.parse("90:39:39:39:32:1;39:1;39");
@@ -116,6 +126,7 @@ impl Colors {
         cols
     }
 
+    /// Overwrite colors with those present in `JQ_COLORS` environment variable.
     pub fn parse(&mut self, s: &str) {
         let fields = [
             &mut self.null,
@@ -136,8 +147,11 @@ impl Colors {
 /// Pretty printer.
 #[derive(Clone, Default)]
 pub struct Pp<S = String> {
+    /// indent by repeating given string `n` times
     pub indent: Option<S>,
+    /// sort objects by keys
     pub sort_keys: bool,
+    /// colors for different types of values
     pub colors: Colors<S>,
 }
 
@@ -221,6 +235,7 @@ macro_rules! write_val {
 type WriteFn = fn(&mut dyn Write, &Pp, usize, &Val) -> io::Result<()>;
 type FormatFn = fn(&mut Formatter, &Pp, usize, &Val) -> fmt::Result;
 
+/// Write a value as JSON, using a custom function for child values.
 pub fn write_with(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, f: WriteFn) -> io::Result<()> {
     match v {
         Val::Str(s, Tag::Utf8) => {
@@ -232,7 +247,7 @@ pub fn write_with(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, f: WriteFn)
     }
 }
 
-/// Format a value as compact JSON, using a custom function to format child values.
+/// Format a value as JSON, using a custom function for child values.
 ///
 /// This is useful to override how certain values are printed, e.g. for YAML.
 pub fn format_with(w: &mut Formatter, pp: &Pp, level: usize, v: &Val, f: FormatFn) -> fmt::Result {
