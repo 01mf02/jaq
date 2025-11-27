@@ -1,5 +1,6 @@
 //! Writing output.
-use crate::{Format, Writer};
+use crate::data::Writer;
+use crate::Format;
 use jaq_json::{cbor, invalid_data, toml, xml, yaml, Val};
 use std::io::{self, IsTerminal, Write};
 
@@ -9,7 +10,8 @@ fn map_err_to_string<T, E: core::fmt::Display>(r: Result<T, E>) -> Result<T> {
     r.map_err(|e| invalid_data(e.to_string()))
 }
 
-pub fn print(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
+/// Write value.
+pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
     let Writer { format, pp, join } = writer;
 
     if matches!(format, Format::Yaml) {
@@ -42,6 +44,7 @@ pub fn print(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
     Ok(())
 }
 
+/// Buffer writes if stdout is terminal, else just lock stdout.
 pub fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {
     let stdout = io::stdout();
     if stdout.is_terminal() {

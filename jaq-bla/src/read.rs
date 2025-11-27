@@ -17,6 +17,7 @@ pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
     })
 }
 
+/// Read JSON values in a file to an array.
 pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
     json::parse_many(&load_file(path.as_ref())?)
         .map(map_invalid_data)
@@ -45,6 +46,7 @@ pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
     })
 }
 
+/// Read value from stdin or `s`, depending on format.
 pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     let stdin = || io::stdin().lock();
     use bstr::io::BufReadExt;
@@ -63,6 +65,7 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     }
 }
 
+/// Parse value from file or `s`, depending on format.
 pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals<'a> {
     use bstr::ByteSlice;
     match fmt {
@@ -76,6 +79,7 @@ pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> 
     }
 }
 
+/// Collect iterator into a single array if `slurp`, else return iterator.
 pub fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     slurp: bool,
     iter: impl Iterator<Item = Result<T, E>> + 'a,

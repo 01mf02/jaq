@@ -1,45 +1,37 @@
+//! jaq utilities.
+//!
+//! This crate contains all kind of functions and data types that
+//! might be useful to integrate jaq into a real-world application.
+#![warn(missing_docs)]
+
 pub mod data;
-mod load;
+pub mod load;
 pub mod read;
 pub mod write;
 
-use jaq_json::write::Pp;
-pub use load::*;
-
-#[derive(Default)]
-pub struct Runner {
-    pub null_input: bool,
-    pub color_err: bool,
-    pub writer: Writer,
-}
-
-#[derive(Default)]
-pub struct Writer {
-    pub format: Format,
-    pub pp: Pp,
-    pub join: bool,
-}
-
-impl Runner {
-    pub fn color_stdout(&self) -> bool {
-        !self.writer.pp.colors.reset.is_empty()
-    }
-}
-
+/// Input/Output format.
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Format {
+    /// Raw text string
+    ///
     /// When the option `--slurp` is used additionally,
     /// then the whole input is read into a single string.
     Raw,
+    /// JavaScript Object Notation
     #[default]
     Json,
+    /// Concise Binary Object Representation
     Cbor,
+    /// Tom's Obvious, Minimal Language
     Toml,
+    /// Extensible Markup Language
     Xml,
+    /// YAML Ain't Markup Language™
     Yaml,
 }
 
-pub const FMTS: &str = "raw, json, cbor, toml, xml, yaml";
+/// List of all currently supported formats.
+pub const FMTS: &str = "raw, json, cbor, yaml, toml, xml";
 
 impl Format {
     /// Determine a file format from a path.
