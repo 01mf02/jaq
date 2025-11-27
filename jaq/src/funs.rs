@@ -1,49 +1,13 @@
-use crate::{filter, run, write, Cli, Error, ErrorColor, Val};
-use jaq_core::{data, DataT, Lut, Native, RunPtr};
-use jaq_std::input::{self, Inputs};
+use crate::{filter, run, write, Error, ErrorColor, Runner, Val};
+use jaq_bla::data::DataKind;
+use jaq_core::{Native, RunPtr, Vars};
 use jaq_std::{v, Filter};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::io::{stderr, stdout};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub struct DataKind;
-
-impl DataT for DataKind {
-    type V<'a> = Val;
-    type Data<'a> = &'a Data<'a>;
-}
-
-pub struct Data<'a> {
-    cli: &'a Cli,
-    lut: &'a Lut<DataKind>,
-    inputs: Inputs<'a, Val>,
-}
-
-impl<'a> Data<'a> {
-    pub fn new(cli: &'a Cli, lut: &'a Lut<DataKind>, inputs: Inputs<'a, Val>) -> Self {
-        Self { cli, lut, inputs }
-    }
-}
-
-impl<'a> data::HasLut<'a, DataKind> for &'a Data<'a> {
-    fn lut(&self) -> &'a Lut<DataKind> {
-        self.lut
-    }
-}
-
-impl<'a> input::HasInputs<'a, Val> for &'a Data<'a> {
-    fn inputs(&self) -> Inputs<'a, Val> {
-        self.inputs
-    }
-}
-
 pub fn funs() -> impl Iterator<Item = Filter<Native<DataKind>>> {
-    let run = jaq_std::run::<DataKind>;
-    let std = jaq_std::funs::<DataKind>();
-    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
-    let repl = core::iter::once(run(repl()));
-    std.chain(jaq_json::funs()).chain(input).chain(repl)
+    jaq_bla::data::funs().chain([jaq_std::run::<DataKind>(repl())])
 }
 
 /// counter that increases for each nested invocation of `repl`
@@ -54,10 +18,10 @@ static REPL_KILL_DEPTH: AtomicUsize = AtomicUsize::new(0);
 pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
         let depth = REPL_DEPTH.fetch_add(1, Ordering::Relaxed);
-        let cli = cv.0.data().cli;
-        repl_with(cli, depth, |s| match eval(cli, s, cv.1.clone()) {
+        let runner = cv.0.data().runner;
+        repl_with(runner, depth, |s| match eval(runner, s, cv.1.clone()) {
             Ok(()) => (),
-            Err(e) => eprint!("{}", ErrorColor::new(&e, cli.color_stdio(stderr()))),
+            Err(e) => eprint!("{}", ErrorColor::new(&e, runner.color_err)),
         })
         .unwrap();
         REPL_DEPTH.fetch_sub(1, Ordering::Relaxed);
@@ -66,16 +30,21 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
     })
 }
 
-fn eval(cli: &Cli, code: String, input: Val) -> Result<(), Error> {
+fn eval(runner: &Runner, code: String, input: Val) -> Result<(), Error> {
     let (ctx, filter) =
         filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
+    let ctx = Vars::new(ctx);
     let inputs = core::iter::once(Ok(input));
-    let writer = &write::Writer::new(&cli);
-    crate::with_stdout(|out| run(cli, &filter, ctx, inputs, |v| write::print(out, writer, &v)))?;
+    let writer = &runner.writer;
+    crate::with_stdout(|out| {
+        run(runner, &filter, ctx, inputs, |v| {
+            write::print(out, writer, &v)
+        })
+    })?;
     Ok(())
 }
 
-fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
+fn repl_with(runner: &Runner, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {
     use rustyline::config::{Behavior, Config};
     let config = Config::builder()
         .behavior(Behavior::PreferTerm)
@@ -83,7 +52,7 @@ fn repl_with(cli: &Cli, depth: usize, f: impl Fn(String)) -> Result<(), Readline
         .build();
     let mut rl = DefaultEditor::with_config(config)?;
     let history = dirs::cache_dir().map(|dir| dir.join("jaq-history"));
-    let color = cli.color_stdio(stdout());
+    let color = runner.color_stdout();
     let prompt = if color { "\x1b[1m>\x1b[0m" } else { ">" };
     let _ = history.iter().try_for_each(|h| rl.load_history(h));
     let prompt = format!("{}{} ", str::repeat("  ", depth), prompt);

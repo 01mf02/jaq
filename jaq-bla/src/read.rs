@@ -76,7 +76,7 @@ pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> 
     }
 }
 
-fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
+pub fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     slurp: bool,
     iter: impl Iterator<Item = Result<T, E>> + 'a,
 ) -> BoxIter<'a, Result<T, E>> {

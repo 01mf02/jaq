@@ -1,38 +1,12 @@
 //! Writing output.
-use crate::{invalid_data, Cli, Format};
-use jaq_json::write::{Colors, Pp};
-use jaq_json::{cbor, toml, xml, yaml, Val};
+use crate::{Format, Writer};
+use jaq_json::{cbor, invalid_data, toml, xml, yaml, Val};
 use std::io::{self, IsTerminal, Write};
 
 type Result<T = (), E = io::Error> = core::result::Result<T, E>;
 
 fn map_err_to_string<T, E: core::fmt::Display>(r: Result<T, E>) -> Result<T> {
     r.map_err(|e| invalid_data(e.to_string()))
-}
-
-pub struct Writer {
-    format: Format,
-    pp: Pp,
-    join: bool,
-}
-
-impl Writer {
-    pub fn new(cli: &Cli) -> Self {
-        let pp = Pp {
-            indent: (!cli.compact_output).then(|| cli.indent()),
-            sort_keys: cli.sort_keys,
-            colors: if cli.color_stdio(io::stdout()) {
-                Colors::ansi()
-            } else {
-                Colors::default()
-            },
-        };
-
-        let format = cli.to.unwrap_or(Format::Json);
-        let join = cli.join_output;
-
-        Self { pp, format, join }
-    }
 }
 
 pub fn print(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
