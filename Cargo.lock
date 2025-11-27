@@ -314,8 +314,13 @@ dependencies = [
 name = "jaq-bla"
 version = "0.1.0"
 dependencies = [
+ "bstr",
+ "bytes",
  "codesnake",
  "jaq-core",
+ "jaq-json",
+ "jaq-std",
+ "memmap2",
  "unicode-width",
 ]
 

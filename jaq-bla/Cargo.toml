@@ -5,6 +5,11 @@ edition = "2021"
 
 [dependencies]
 jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
+jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
+jaq-json = { version = "2.0.0-alpha", path = "../jaq-json" }
 
+bstr = "1"
+bytes = "1.10.1"
 codesnake = { version = "0.2" }
+memmap2 = "0.9"
 unicode-width = "0.1.13"

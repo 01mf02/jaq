@@ -1,12 +1,10 @@
 //! Filter parsing, compilation, and execution.
-use crate::{funs, read, Cli, Error, Val};
+use crate::{funs, read, Error, Runner, Val};
+use jaq_bla::data::{Ctx, Data, Filter};
 use jaq_bla::{compile_errors, load_errors, FileReports};
 use jaq_core::{compile, load, unwrap_valr, ValT, Vars};
 use jaq_std::input::RcIter;
 use std::{io, path::PathBuf};
-
-pub type Filter = jaq_core::Filter<funs::DataKind>;
-pub type Ctx<'a> = jaq_core::Ctx<'a, funs::DataKind>;
 
 pub fn parse_compile(
     path: &PathBuf,
@@ -50,9 +48,9 @@ pub fn parse_compile(
 /// This function cannot return an `Iterator` because it creates an `RcIter`.
 /// This is most unfortunate. We should think about how to simplify this ...
 pub(crate) fn run(
-    cli: &Cli,
+    runner: &Runner,
     filter: &Filter,
-    vars: Vec<Val>,
+    vars: Vars<Val>,
     iter: impl Iterator<Item = io::Result<Val>>,
     mut f: impl FnMut(Val) -> io::Result<()>,
 ) -> Result<Option<bool>, Error> {
@@ -61,13 +59,16 @@ pub(crate) fn run(
     let iter = Box::new(iter.map(|r| r.map_err(|e| e.to_string()))) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    let iter = &RcIter::new(iter);
     let null = &RcIter::new(null);
 
-    let data = funs::Data::new(cli, &filter.lut, iter);
-    let ctx = Ctx::new(&data, Vars::new(vars));
+    let data = Data {
+        runner,
+        lut: &filter.lut,
+        inputs: &RcIter::new(iter),
+    };
+    let ctx = Ctx::new(&data, vars);
 
-    for input in if cli.null_input { null } else { iter } {
+    for input in if runner.null_input { null } else { data.inputs } {
         //println!("Got {:?}", input);
         for output in filter.id.run((ctx.clone(), input.map_err(Error::Parse)?)) {
             let output = unwrap_valr(output).map_err(Error::Jaq)?;

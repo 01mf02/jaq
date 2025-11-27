@@ -4,38 +4,15 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_bla::{compile_errors, load_errors, Color};
-use jaq_core::{compile, data, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
+use jaq_bla::data::{Ctx, Data, Filter};
+use jaq_bla::{compile_errors, load_errors, read};
+use jaq_bla::{Color, FileReports, Runner, Writer};
+use jaq_core::{compile, unwrap_valr, Vars};
 use jaq_json::write::{Colors, Pp};
 use jaq_json::{bstr, json, write_bytes, write_utf8, Tag, Val};
-use jaq_std::input::{self, HasInputs, Inputs, RcIter};
+use jaq_std::input::{Inputs, RcIter};
 use wasm_bindgen::prelude::*;
-
-struct DataKind;
-
-impl DataT for DataKind {
-    type V<'a> = Val;
-    type Data<'a> = Data<'a>;
-}
-
-#[derive(Clone)]
-struct Data<'a> {
-    lut: &'a Lut<DataKind>,
-    inputs: Inputs<'a, Val>,
-}
-
-impl<'a> data::HasLut<'a, DataKind> for Data<'a> {
-    fn lut(&self) -> &'a Lut<DataKind> {
-        self.lut
-    }
-}
-impl<'a> HasInputs<'a, Val> for Data<'a> {
-    fn inputs(&self) -> Inputs<'a, Val> {
-        self.inputs
-    }
-}
-
-type Filter = jaq_core::Filter<DataKind>;
+use web_sys::DedicatedWorkerGlobalScope as Scope;
 
 struct FormatterFn<F>(F);
 
@@ -127,14 +104,36 @@ impl Settings {
             tab: get_bool("tab")?,
         })
     }
+
+    fn indent(&self) -> String {
+        if self.tab {
+            "\t".to_string()
+        } else {
+            " ".repeat(self.indent)
+        }
+    }
+
+    fn pp(&self) -> Pp {
+        Pp {
+            indent: (!self.compact).then(|| self.indent()),
+            colors: html_colors(),
+            sort_keys: false,
+        }
+    }
+
+    fn runner(&self) -> Runner {
+        Runner {
+            color_err: true,
+            null_input: self.null_input,
+            writer: Writer {
+                pp: self.pp(),
+                ..Default::default()
+            },
+        }
+    }
 }
 
-use web_sys::DedicatedWorkerGlobalScope as Scope;
-
-type FileReports = jaq_bla::FileReports<()>;
-
 enum Error {
-    Report(Vec<FileReports>),
     Hifijson(String),
     Jaq(jaq_core::Error<Val>),
 }
@@ -146,52 +145,36 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 
     let settings = Settings::try_from(settings).unwrap();
     log::trace!("{settings:?}");
+    let runner = &settings.runner();
 
-    let indent = || {
-        if settings.tab {
-            "\t".to_string()
-        } else {
-            " ".repeat(settings.indent)
-        }
-    };
-    let pp = Pp {
-        indent: (!settings.compact).then(indent),
-        colors: html_colors(),
-        sort_keys: false,
-    };
-
-    let post_value = |y| {
+    let post = |s: String| scope.post_message(&s.into()).unwrap();
+    let post_value = |y: Val| {
         let s = FormatterFn(|f: &mut Formatter| match &y {
             Val::Str(s, _) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
-            y => fmt_json(f, &pp, 0, y),
+            y => fmt_json(f, &runner.writer.pp, 0, y),
         });
-        scope.post_message(&s.to_string().into()).unwrap();
+        post(s.to_string())
     };
-    match process(filter, input, &settings, post_value) {
-        Ok(()) => (),
-        Err(Error::Report(file_reports)) => {
+    let inputs = read_str(&settings, input);
+    match parse(filter, &[]) {
+        Err(file_reports) => {
             for (file, reports) in file_reports {
                 let idx = codesnake::LineIndex::new(&file.code);
                 for e in reports {
                     let error = format!("⚠️ Error: {}", e.message);
-                    scope.post_message(&error.into()).unwrap();
+                    post(error);
 
                     let block = e.to_block(&idx, color);
                     let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
-                    scope.post_message(&block.into()).unwrap();
+                    post(block);
                 }
             }
         }
-        Err(Error::Hifijson(e)) => {
-            scope
-                .post_message(&format!("⚠️ Parse error: {e}").into())
-                .unwrap();
-        }
-        Err(Error::Jaq(e)) => {
-            scope
-                .post_message(&format!("⚠️ Error: {e}").into())
-                .unwrap();
-        }
+        Ok((vals, filter)) => match process(runner, &filter, Vars::new(vals), inputs, post_value) {
+            Ok(()) => (),
+            Err(Error::Hifijson(e)) => post(format!("⚠️ Parse error: {e}")),
+            Err(Error::Jaq(e)) => post(format!("⚠️ Error: {e}")),
+        },
     }
 
     // signal that we are done
@@ -206,7 +189,7 @@ fn read_str<'a>(
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
         let vals = json::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
-        Box::new(collect_if(settings.slurp, vals))
+        Box::new(read::collect_if(settings.slurp, vals))
     }
 }
 
@@ -218,36 +201,26 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     }
 }
 
-fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
-    slurp: bool,
-    iter: impl Iterator<Item = Result<T, E>> + 'a,
-) -> Box<dyn Iterator<Item = Result<T, E>> + 'a> {
-    if slurp {
-        Box::new(core::iter::once(iter.collect()))
-    } else {
-        Box::new(iter)
-    }
-}
-
-fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let (vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
-
-    let inputs = read_str(settings, input);
-
+fn process(
+    runner: &Runner,
+    filter: &Filter,
+    vars: Vars<Val>,
+    inputs: impl Iterator<Item = Result<Val, String>>,
+    f: impl Fn(Val),
+) -> Result<(), Error> {
     let iter = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
 
-    let iter: Inputs<_> = &RcIter::new(iter);
     let null: Inputs<_> = &RcIter::new(null);
 
-    let data = Data {
-        inputs: iter,
+    let data = &Data {
+        runner,
+        inputs: &RcIter::new(iter),
         lut: &filter.lut,
     };
-    let vars = Vars::new(vals);
-    let ctx = Ctx::<DataKind>::new(data, vars);
+    let ctx = Ctx::new(data, vars);
 
-    for x in if settings.null_input { null } else { iter } {
+    for x in if runner.null_input { null } else { data.inputs } {
         let x = x.map_err(Error::Hifijson)?;
         for y in filter.id.run((ctx.clone(), x)) {
             f(unwrap_valr(y).map_err(Error::Jaq)?);
@@ -256,14 +229,7 @@ fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> R
     Ok(())
 }
 
-fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
-    let run = jaq_std::run::<DataKind>;
-    let std = jaq_std::funs::<DataKind>();
-    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
-    std.chain(jaq_json::funs()).chain(input)
-}
-
-fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
+fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports<()>>> {
     use compile::Compiler;
     use jaq_core::load::{import, Arena, File, Loader};
 
@@ -278,7 +244,7 @@ fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileRepo
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
     let compiler = Compiler::default()
-        .with_funs(funs())
+        .with_funs(jaq_bla::data::funs())
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok((vals, filter))
