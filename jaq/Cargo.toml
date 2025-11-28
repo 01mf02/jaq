@@ -18,6 +18,7 @@ default = ["mimalloc"]
 jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
 jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
 jaq-json = { version = "2.0.0-alpha", path = "../jaq-json" }
+jaq-bla  = { version = "0.1"        , path = "../jaq-bla" }
 
 bstr = "1"
 bytes = "1.10.1"
@@ -29,5 +30,3 @@ memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
 rustyline = { version = "13.0.0", default-features = false, features = ["with-file-history"] }
 tempfile = "3.3.0"
-unicode-width = "0.1.13"
-yansi = "1.0.1"

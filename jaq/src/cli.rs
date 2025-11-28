@@ -1,49 +1,9 @@
 //! Command-line argument parsing
 use core::fmt;
+pub use jaq_bla::{Format, FMTS};
 use std::env::ArgsOs;
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-
-#[derive(Copy, Clone, Debug)]
-pub enum Format {
-    /// When the option `--slurp` is used additionally,
-    /// then the whole input is read into a single string.
-    Raw,
-    Json,
-    Cbor,
-    Toml,
-    Xml,
-    Yaml,
-}
-
-const FMTS: &str = "raw, json, cbor, toml, xml, yaml";
-
-impl Format {
-    /// Determine a file format from a path.
-    pub fn determine(path: &Path) -> Option<Self> {
-        match path.extension()?.to_str()? {
-            "cbor" => Some(Format::Cbor),
-            "toml" => Some(Format::Toml),
-            "xml" | "xhtml" => Some(Format::Xml),
-            "yml" | "yaml" => Some(Format::Yaml),
-            "json" => Some(Format::Json),
-            _ => None,
-        }
-    }
-
-    /// Parse a format name.
-    fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "cbor" => Some(Format::Cbor),
-            "raw" => Some(Format::Raw),
-            "json" => Some(Format::Json),
-            "toml" => Some(Format::Toml),
-            "xml" => Some(Format::Xml),
-            "yaml" => Some(Format::Yaml),
-            _ => None,
-        }
-    }
-}
+use std::path::PathBuf;
 
 #[derive(Debug, Default)]
 pub struct Cli {
@@ -95,8 +55,6 @@ pub struct Cli {
     pub exit_status: bool,
     pub version: bool,
     pub help: bool,
-
-    color_stdout: std::cell::OnceCell<bool>,
 }
 
 #[derive(Debug)]
@@ -244,13 +202,12 @@ impl Cli {
         self.color_if(|| io.is_terminal() && !no_color()) && enabled()
     }
 
-    pub fn color_stdout(&self) -> bool {
-        let init = || self.color_stdio(std::io::stdout());
-        *self.color_stdout.get_or_init(init)
-    }
-
-    pub fn indent(&self) -> usize {
-        self.indent.unwrap_or(2)
+    pub fn indent(&self) -> String {
+        if self.tab {
+            "\t".into()
+        } else {
+            " ".repeat(self.indent.unwrap_or(2))
+        }
     }
 }
 
@@ -287,7 +244,7 @@ impl From<OsString> for Error {
 fn parse_format(arg: &'static str, args: &mut ArgsOs) -> Result<Format, Error> {
     let err = || Error::Format(arg);
     let fmt = args.next().and_then(|a| a.into_string().ok());
-    Format::from_str(&fmt.ok_or_else(err)?).ok_or_else(err)
+    Format::parse(&fmt.ok_or_else(err)?).ok_or_else(err)
 }
 
 fn parse_key_val(arg: &'static str, args: &mut ArgsOs) -> Result<(String, OsString), Error> {
