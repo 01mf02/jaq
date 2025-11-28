@@ -119,15 +119,14 @@ pub struct Colors<S = String> {
 impl Colors {
     /// Default ANSI colors
     pub fn ansi() -> Self {
-        let mut cols = Colors::default();
-        cols.parse("90:39:39:39:32:1;39:1;39");
+        let mut cols = Colors::default().parse("90:39:39:39:32:1;39:1;39");
         cols.bstr = "\x1b[31m".into();
         cols.reset = "\x1b[0m".into();
         cols
     }
 
     /// Overwrite colors with those present in `JQ_COLORS` environment variable.
-    pub fn parse(&mut self, s: &str) {
+    pub fn parse(mut self, s: &str) -> Self {
         let fields = [
             &mut self.null,
             &mut self.r#false,
@@ -141,6 +140,7 @@ impl Colors {
             use alloc::format;
             *field = color.split(';').map(|s| format!("\x1b[{s}m")).collect();
         }
+        self
     }
 }
 

@@ -89,6 +89,10 @@ impl Cli {
     fn colors(&self) -> Colors {
         self.color_stdio(io::stdout())
             .then(Colors::ansi)
+            .map(|c| match std::env::var("JQ_COLORS") {
+                Err(_) => c,
+                Ok(s) => c.parse(&s),
+            })
             .unwrap_or_default()
     }
 }
