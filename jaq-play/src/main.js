@@ -62,9 +62,9 @@ function receiveFromWorker(data) {
 }
 
 function showRunButton(show) {
-    const display = b => b ? "block" : "none";
-    document.getElementById("run" ).style.display = display(show);
-    document.getElementById("stop").style.display = display(!show);
+    const display = b => b ? "visible" : "hidden";
+    document.getElementById("run" ).style.visibility = display(show);
+    document.getElementById("stop").style.visibility = display(!show);
 }
 
 function stopWorker() {
@@ -74,11 +74,20 @@ function stopWorker() {
     worker = initWorker();
 }
 
-document.getElementById("run").onclick = async () => startWorker();
-document.getElementById("stop").onclick = async () => stopWorker();
+document.getElementById("run-stop").onclick = async () => {
+    if (document.getElementById("run").style.visibility === "visible") {
+        startWorker()
+    } else {
+        stopWorker()
+    }
+};
 
 document.getElementById("input" ).oninput = async () => startWorker();
 document.getElementById("filter").oninput = async () => startWorker();
+
+document.querySelectorAll(".settings input").forEach((input) => {
+    input.oninput = async () => startWorker();
+});
 
 getParams();
 startWorker();

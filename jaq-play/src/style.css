@@ -70,7 +70,8 @@ button {
 
 button:hover { background: #3a3e41; }
 
-#stop { display: none; }
+#run-stop { display: inline-flex; }
+#stop { visibility: hidden; position: absolute; }
 
 h1 {
   font-size: 1rem;
