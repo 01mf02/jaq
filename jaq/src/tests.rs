@@ -1,6 +1,6 @@
 //! Unit tests.
 
-use crate::{filter, Error};
+use crate::Error;
 use alloc::vec::Vec;
 use jaq_bla::data::{Ctx, Data};
 use jaq_core::{unwrap_valr, Vars};
@@ -42,15 +42,14 @@ impl<S: core::ops::Deref<Target = str>, I: Iterator<Item = S>> Iterator for Test
 }
 
 fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
-    let (vars, filter) = filter::parse_compile(&Default::default(), &test.filter, &[], &[])
-        .map_err(Error::Report)?;
+    let filter = jaq_bla::compile(&test.filter, &[]).map_err(Error::Report)?;
 
     let data = Data {
         runner: &Default::default(),
         lut: &filter.lut,
         inputs: &jaq_std::input::RcIter::new(Box::new(core::iter::empty())),
     };
-    let ctx = Ctx::new(&data, Vars::new(vars));
+    let ctx = Ctx::new(&data, Vars::new([]));
 
     let json = |s: String| json::parse_single(s.as_bytes()).map_err(invalid_data);
     let jsonn = |s: String| json::parse_many(s.as_bytes()).collect::<Result<Val, _>>();
