@@ -239,7 +239,7 @@ type FormatFn = fn(&mut Formatter, &Pp, usize, &Val) -> fmt::Result;
 pub fn write_with(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, f: WriteFn) -> io::Result<()> {
     match v {
         Val::Str(s, Tag::Utf8) => {
-            write!(w, "{}", pp.colors.bstr)?;
+            write!(w, "{}", pp.colors.str)?;
             write_utf8!(w, s, |part| w.write_all(part))?;
             write!(w, "{}", pp.colors.reset)
         }
