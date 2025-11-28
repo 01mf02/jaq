@@ -5,9 +5,8 @@ use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_bla::data::{Ctx, Data, Filter, Runner, Writer};
-use jaq_bla::load::{compile_errors, load_errors, Color, FileReports};
-use jaq_bla::read;
-use jaq_core::{compile, unwrap_valr, Vars};
+use jaq_bla::{compile, load::Color, read};
+use jaq_core::{unwrap_valr, Vars};
 use jaq_json::write::{Colors, Pp};
 use jaq_json::{bstr, json, write_bytes, write_utf8, Tag, Val};
 use jaq_std::input::{Inputs, RcIter};
@@ -156,7 +155,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
         post(s.to_string())
     };
     let inputs = read_str(&settings, input);
-    match parse(filter, &[]) {
+    match compile::<()>(filter, &[]) {
         Err(file_reports) => {
             for (file, reports) in file_reports {
                 let idx = codesnake::LineIndex::new(&file.code);
@@ -170,7 +169,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
                 }
             }
         }
-        Ok((vals, filter)) => match process(runner, &filter, Vars::new(vals), inputs, post_value) {
+        Ok(filter) => match process(runner, &filter, inputs, post_value) {
             Ok(()) => (),
             Err(Error::Hifijson(e)) => post(format!("⚠️ Parse error: {e}")),
             Err(Error::Jaq(e)) => post(format!("⚠️ Error: {e}")),
@@ -204,7 +203,6 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
 fn process(
     runner: &Runner,
     filter: &Filter,
-    vars: Vars<Val>,
     inputs: impl Iterator<Item = Result<Val, String>>,
     f: impl Fn(Val),
 ) -> Result<(), Error> {
@@ -218,7 +216,7 @@ fn process(
         inputs: &RcIter::new(iter),
         lut: &filter.lut,
     };
-    let ctx = Ctx::new(data, vars);
+    let ctx = Ctx::new(data, Vars::new([]));
 
     for x in if runner.null_input { null } else { data.inputs } {
         let x = x.map_err(Error::Hifijson)?;
@@ -227,27 +225,6 @@ fn process(
         }
     }
     Ok(())
-}
-
-fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports<()>>> {
-    use compile::Compiler;
-    use jaq_core::load::{import, Arena, File, Loader};
-
-    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
-    let arena = Arena::default();
-    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
-    let modules = loader
-        .load(&arena, File { path: (), code })
-        .map_err(load_errors)?;
-
-    let vals = Vec::new();
-    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
-
-    let compiler = Compiler::default()
-        .with_funs(jaq_bla::data::funs())
-        .with_global_vars(vars.iter().map(|v| &**v));
-    let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok((vals, filter))
 }
 
 fn color(color: Color, text: String) -> String {

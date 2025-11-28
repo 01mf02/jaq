@@ -9,6 +9,34 @@ pub mod load;
 pub mod read;
 pub mod write;
 
+use data::Filter;
+use load::{compile_errors, load_errors, FileReports};
+
+/// Compile a filter without access to external files.
+pub fn compile<P: Clone + Default + Eq>(
+    code: &str,
+    vars: &[String],
+) -> Result<Filter, Vec<FileReports<P>>> {
+    use jaq_core::compile::Compiler;
+    use jaq_core::load::{import, Arena, File, Loader};
+
+    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
+    let arena = Arena::default();
+    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+    let path = P::default();
+    let modules = loader
+        .load(&arena, File { path, code })
+        .map_err(load_errors)?;
+
+    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
+
+    let compiler = Compiler::default()
+        .with_funs(data::funs())
+        .with_global_vars(vars.iter().map(|v| &**v));
+    let filter = compiler.compile(modules).map_err(compile_errors)?;
+    Ok(filter)
+}
+
 /// Input/Output format.
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Format {
