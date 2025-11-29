@@ -115,6 +115,7 @@ impl Settings {
     fn pp(&self) -> Pp {
         Pp {
             indent: (!self.compact).then(|| self.indent()),
+            sep_space: !self.compact,
             colors: html_colors(),
             sort_keys: false,
         }

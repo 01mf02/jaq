@@ -3,7 +3,7 @@ use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::fmt;
 use jaq_core::box_iter::box_once;
 use jaq_core::{DataT, RunPtr};
-use jaq_json::{Error, Val};
+use jaq_json::{write::Pp, Error, Val};
 use jaq_std::{bome, v, Filter};
 
 /// Serialisation filters.
@@ -16,7 +16,11 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         }),
         ("toyaml", v(0), |cv| {
             let mut buf = Vec::new();
-            yaml::write(&mut buf, &Default::default(), 0, &cv.1).unwrap();
+            let pp = Pp {
+                sep_space: true,
+                ..Pp::default()
+            };
+            yaml::write(&mut buf, &pp, 0, &cv.1).unwrap();
             box_once(Ok(Val::utf8_str(buf)))
         }),
         ("totoml", v(0), |cv| {
