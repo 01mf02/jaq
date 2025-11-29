@@ -9,10 +9,10 @@
 //! ~~~
 //! use jaq_core::{data, unwrap_valr, Compiler, Ctx, Vars};
 //! use jaq_core::load::{Arena, File, Loader};
-//! use jaq_json::{json, Val};
+//! use jaq_json::{read, Val};
 //!
 //! let input = r#"["Hello", "world"]"#;
-//! let input = json::parse_single(&input.as_bytes()).unwrap();
+//! let input = read::parse_single(&input.as_bytes()).unwrap();
 //! let program = File { code: ".[]", path: () };
 //!
 //! let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));

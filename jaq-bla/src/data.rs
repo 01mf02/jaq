@@ -73,12 +73,6 @@ impl Runner {
 pub fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
     let run = jaq_std::run::<DataKind>;
     let std = jaq_std::funs::<DataKind>();
-    let rest = [
-        input::funs::<DataKind>(),
-        read::funs::<DataKind>(),
-        write::funs::<DataKind>(),
-    ]
-    .into_iter()
-    .flat_map(move |funs| funs.into_vec().into_iter().map(run));
-    std.chain(jaq_json::funs()).chain(rest)
+    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    std.chain(jaq_json::funs()).chain(input).chain(crate::rw_funs())
 }

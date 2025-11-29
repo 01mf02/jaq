@@ -18,10 +18,11 @@ use jaq_json::{invalid_data, BoxError, Tag, Val};
 use std::io::{self, Read};
 use std::path::Path;
 
+type Result<T, E = io::Error> = core::result::Result<T, E>;
 type Vals<'a> = BoxIter<'a, io::Result<Val>>;
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
-pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
+pub fn load_file(path: impl AsRef<Path>) -> Result<Bytes> {
     let file = std::fs::File::open(path.as_ref())?;
     Ok(match unsafe { memmap2::Mmap::map(&file) } {
         Ok(mmap) => Bytes::from_owner(mmap),
@@ -30,7 +31,7 @@ pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
 }
 
 /// Read JSON values in a file to an array.
-pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
+pub fn json_array(path: impl AsRef<Path>) -> Result<Val> {
     json::parse_many(&load_file(path.as_ref())?)
         .map(map_invalid_data)
         .collect()
@@ -39,7 +40,7 @@ pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
 /// Load standard input to string for certain formats.
 ///
 /// This has to be synchronised with [`from_stdin`].
-pub fn stdin_string(fmt: Format) -> io::Result<String> {
+pub fn stdin_string(fmt: Format) -> Result<String> {
     use Format::*;
     Ok(match fmt {
         Raw | Json | Cbor => String::new(),
@@ -50,7 +51,7 @@ pub fn stdin_string(fmt: Format) -> io::Result<String> {
 /// Convert bytes to string for certain formats.
 ///
 /// This has to be synchronised with [`from_file`].
-pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
+pub fn file_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
         Raw | Json | Cbor => "",
@@ -103,6 +104,6 @@ pub fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     }
 }
 
-fn map_invalid_data<T>(r: Result<T, impl Into<BoxError>>) -> io::Result<T> {
+fn map_invalid_data<T>(r: Result<T, impl Into<BoxError>>) -> Result<T> {
     r.map_err(invalid_data)
 }
