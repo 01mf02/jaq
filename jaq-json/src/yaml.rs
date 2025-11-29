@@ -43,6 +43,9 @@ macro_rules! write_yaml {
             }};
         }
         match $v {
+            Val::Str(b, crate::Tag::Utf8) if !must_quote(b) => {
+                color!(str, write!($w, "{}", $crate::bstr(b)))
+            }
             Val::Str(b, crate::Tag::Bytes) => {
                 color!(bstr, write!($w, "!!binary {}", BASE64.encode(b)))
             }
@@ -71,6 +74,41 @@ macro_rules! write_yaml {
     }};
 }
 
+fn must_quote(s: &[u8]) -> bool {
+    if s.last().filter(|c| c.is_ascii_whitespace()).is_some() {
+        return true;
+    }
+
+    let null = ["null", "Null", "NULL"];
+    let on = ["on", "On", "ON"];
+    let off = ["off", "Off", "OFF"];
+    let yes = ["yes", "Yes", "YES"];
+    let no = ["no", "No", "NO"];
+    let true_ = ["True", "TRUE", "true"];
+    let false_ = ["False", "FALSE", "false"];
+    let kws = [&null, &on, &off, &yes, &no, &true_, &false_].map(|a| a.map(str::as_bytes));
+    if s == b"~" || kws.iter().any(|ss| ss.contains(&s)) {
+        return true;
+    }
+
+    let good_head = |c| b"$()./;^_~".contains(c);
+    let good_tail = |c| b" !%&*+-<=>?@|".contains(c) || good_head(c);
+
+    let mut iter = s.iter();
+    match iter.next() {
+        None => return true,
+        Some(c) if c.is_ascii() && !c.is_ascii_alphabetic() && !good_head(c) => return true,
+        _ => (),
+    }
+
+    while let Some(c) = iter.next() {
+        if c.is_ascii() && !c.is_ascii_alphanumeric() && !good_tail(c) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Format a value as YAML document, without explicit document start/end markers.
 pub fn format(w: &mut Formatter, pp: &write::Pp, lvl: usize, v: &Val) -> fmt::Result {
     use write::format_with;
@@ -80,7 +118,10 @@ pub fn format(w: &mut Formatter, pp: &write::Pp, lvl: usize, v: &Val) -> fmt::Re
 /// Write a value as YAML document, without explicit document start/end markers.
 pub fn write(w: &mut dyn io::Write, pp: &write::Pp, level: usize, v: &Val) -> io::Result<()> {
     use write::write_with;
-    write_yaml!(w, pp, level, v, write, write_with(w, pp, level, v, write))
+    match v {
+        Val::Str(s, crate::Tag::Utf8) if !must_quote(s) => pp.write_str(w, |w| w.write_all(s)),
+        _ => write_yaml!(w, pp, level, v, write, write_with(w, pp, level, v, write)),
+    }
 }
 
 /// Lex error.

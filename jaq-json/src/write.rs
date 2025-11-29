@@ -57,7 +57,7 @@ macro_rules! write_utf8 {
 /// This maps all non-ASCII `u8`s to `\xXX`.
 #[macro_export]
 macro_rules! write_bytes {
-    ($w:ident, $s: ident) => {{
+    ($w:ident, $s:ident) => {{
         write!($w, "b\"")?;
         $s.iter()
             .try_for_each(|c| $crate::write_byte!($w, *c, write!($w, "\\x{c:02x}")))?;
@@ -163,6 +163,18 @@ impl<S: Clone> Pp<S> {
     }
 }
 
+impl Pp {
+    pub(crate) fn write_str(
+        &self,
+        w: &mut dyn Write,
+        f: impl FnOnce(&mut dyn Write) -> io::Result<()>,
+    ) -> io::Result<()> {
+        write!(w, "{}", self.colors.str)?;
+        f(w)?;
+        write!(w, "{}", self.colors.reset)
+    }
+}
+
 /// Write a value as JSON superset, using a function `$f` to write sub-values.
 ///
 /// This macro writes strings by replacing invalid UTF-8 characters with the
@@ -238,11 +250,7 @@ type FormatFn = fn(&mut Formatter, &Pp, usize, &Val) -> fmt::Result;
 /// Write a value as JSON, using a custom function for child values.
 pub fn write_with(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, f: WriteFn) -> io::Result<()> {
     match v {
-        Val::Str(s, Tag::Utf8) => {
-            write!(w, "{}", pp.colors.str)?;
-            write_utf8!(w, s, |part| w.write_all(part))?;
-            write!(w, "{}", pp.colors.reset)
-        }
+        Val::Str(s, Tag::Utf8) => pp.write_str(w, |w| write_utf8!(w, s, |part| w.write_all(part))),
         _ => write_val!(w, pp, level, v, |level, x| f(w, pp, level, x)),
     }
 }
