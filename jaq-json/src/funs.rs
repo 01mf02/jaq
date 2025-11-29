@@ -119,11 +119,13 @@ impl Val {
         self.is_utf8_str().then(|| self.as_bytes_owned()).flatten()
     }
 
+    /// Return bytes if the value is a (byte or text) string.
     pub fn try_as_bytes_owned(&self) -> Result<Bytes, Error> {
         self.as_bytes_owned()
             .ok_or_else(|| Error::typ(self.clone(), "string"))
     }
 
+    /// Return bytes if the value is a text string.
     pub fn try_as_utf8_bytes_owned(&self) -> Result<Bytes, Error> {
         self.as_utf8_bytes_owned()
             .ok_or_else(|| Error::typ(self.clone(), "string"))
@@ -157,8 +159,9 @@ impl Iterator for BytesValRs {
 
 type ValRs<'a> = BoxIter<'a, ValR>;
 
-pub fn parse_bytes(b: Bytes, parse: impl FnOnce(&[u8]) -> ValRs) -> ValRs<'static> {
-    Box::new(BytesValRs::new(b, |b| parse(b)))
+/// Apply a function to bytes and yield the resulting value results.
+pub fn bytes_valrs(b: Bytes, f: impl FnOnce(&[u8]) -> ValRs) -> ValRs<'static> {
+    Box::new(BytesValRs::new(b, |b| f(b)))
 }
 
 /// Functions of the standard library.
@@ -171,7 +174,7 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         ("fromjson", v(0), |cv| {
             bmme(then(cv.1.try_as_utf8_bytes_owned(), |s| {
                 let fail = move |r: Result<_, _>| r.map_err(|e| parse_fail(&cv.1, "JSON", e));
-                parse_bytes(s, |s| Box::new(read::parse_many(s).map(fail)))
+                bytes_valrs(s, |s| Box::new(read::parse_many(s).map(fail)))
             }))
         }),
         ("tojson", v(0), |cv| bome(Ok(Val::utf8_str(cv.1.to_json())))),

@@ -156,6 +156,7 @@ pub struct Pp<S = String> {
 }
 
 impl Pp {
+    /// Write a string with color.
     pub fn write_str(
         &self,
         w: &mut dyn Write,

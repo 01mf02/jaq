@@ -178,7 +178,7 @@ fn parse_radix(s: &str) -> Option<(u32, &str)> {
 fn parse_int(s: &str) -> Option<Val> {
     let (pos, s) = parse_sign(s);
     let (radix, s) = parse_radix(s)?;
-    let n = Num::try_from_int_str(s, radix)?;
+    let n = Num::from_str_radix(s, radix)?;
     Some(Val::Num(if pos == Some('-') { -n } else { n }))
 }
 

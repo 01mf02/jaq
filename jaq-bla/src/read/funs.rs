@@ -4,16 +4,17 @@ use bytes::Bytes;
 use core::fmt;
 use jaq_core::box_iter::{then, BoxIter};
 use jaq_core::{DataT, Exn, RunPtr};
-use jaq_json::parse_bytes;
+use jaq_json::bytes_valrs;
 use jaq_json::{Error, Val, ValR, ValX};
 use jaq_std::{bome, v, Filter, ValT as _};
 
+/// Deserialisation filters.
 pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("fromcbor", v(0), |cv| {
             bmme(then(cv.1.try_as_bytes_owned(), |s| {
                 let fail = move |r: Result<_, _>| r.map_err(|e| parse_fail(&cv.1, "CBOR", e));
-                parse_bytes(s, |s| Box::new(cbor::parse_many(s).map(fail)))
+                bytes_valrs(s, |s| Box::new(cbor::parse_many(s).map(fail)))
             }))
         }),
         ("fromyaml", v(0), |cv| {
@@ -48,7 +49,7 @@ fn parse_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Error {
 type ValRs<'a> = BoxIter<'a, ValR>;
 
 fn parse_byte_str(b: Bytes, parse: impl FnOnce(&str) -> ValRs) -> ValRs<'static> {
-    parse_bytes(b, |b| {
+    bytes_valrs(b, |b| {
         then(core::str::from_utf8(b).map_err(Error::str), parse)
     })
 }
