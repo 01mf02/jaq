@@ -13,10 +13,9 @@ use alloc::string::String;
 use ciborium_io::Write;
 use ciborium_ll::{simple, tag, Encoder, Header};
 use jaq_json::{Num, Tag, Val};
-use std::io;
 
 /// Write a value as CBOR.
-pub fn write(w: &mut dyn io::Write, v: &Val) -> io::Result<()> {
+pub fn write(w: &mut dyn std::io::Write, v: &Val) -> std::io::Result<()> {
     write_one(v, w)
 }
 

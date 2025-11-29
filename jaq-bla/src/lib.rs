@@ -13,6 +13,8 @@ pub mod read;
 pub mod write;
 
 use data::Filter;
+use jaq_core::{DataT, Native};
+use jaq_json::Val;
 use load::{compile_errors, load_errors, FileReports};
 
 /// Compile a filter without access to external files.
@@ -38,6 +40,13 @@ pub fn compile<P: Clone + Default + Eq>(
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok(filter)
+}
+
+pub fn rw_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = jaq_std::Filter<Native<D>>>
+{
+    [read::funs::<D>(), write::funs::<D>()]
+        .into_iter()
+        .flat_map(move |funs| funs.into_vec().into_iter().map(jaq_std::run::<D>))
 }
 
 /// Input/Output format.

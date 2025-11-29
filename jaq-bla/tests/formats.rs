@@ -1,5 +1,5 @@
 use core::{fmt::Debug, num::ParseIntError};
-use jaq_bla::fmts::{cbor, json, toml, xml};
+use jaq_bla::{read, write};
 
 fn unwrap_collect<T, E: Debug>(iter: impl Iterator<Item = Result<T, E>>) -> Vec<T> {
     iter.collect::<Result<Vec<_>, _>>().unwrap()
@@ -15,20 +15,20 @@ pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
 
 fn jc(json: &str, cbor_hex: &str) {
     //dbg!(json);
-    let json_val = unwrap_collect(json::parse_many(json.as_bytes()));
+    let json_val = unwrap_collect(read::json::parse_many(json.as_bytes()));
 
     let cbor_bin = decode_hex(cbor_hex).unwrap();
     //dbg!(&cbor_bin);
-    let cbor_val = unwrap_collect(cbor::parse_many(&*cbor_bin));
+    let cbor_val = unwrap_collect(read::cbor::parse_many(&*cbor_bin));
     assert_eq!(json_val, cbor_val);
 
     let mut cbor_bin2 = Vec::new();
     for v in &cbor_val {
-        cbor::write(&mut cbor_bin2, v).unwrap()
+        write::cbor::write(&mut cbor_bin2, v).unwrap()
     }
     //dbg!(&cbor_bin2);
 
-    let cbor_val2 = unwrap_collect(cbor::parse_many(&*cbor_bin2));
+    let cbor_val2 = unwrap_collect(read::cbor::parse_many(&*cbor_bin2));
     assert_eq!(cbor_val, cbor_val2);
 }
 
@@ -132,8 +132,8 @@ fn toml() {
     let json = include_bytes!("toml/test.json");
     let toml = include_str!("toml/test.toml");
 
-    let json_val = json::parse_single(json).unwrap();
-    let toml_val = toml::parse(toml).unwrap();
+    let json_val = read::json::parse_single(json).unwrap();
+    let toml_val = read::toml::parse(toml).unwrap();
 
     assert_eq!(json_val, toml_val);
 }
@@ -143,11 +143,11 @@ fn xml() {
     let json = include_bytes!("xml/test.json");
     let xml = include_str!("xml/test.xhtml");
 
-    let json_val = unwrap_collect(json::parse_many(json));
-    let xml_val = unwrap_collect(xml::parse_many(xml));
+    let json_val = unwrap_collect(read::json::parse_many(json));
+    let xml_val = unwrap_collect(read::xml::parse_many(xml));
     assert_eq!(json_val, xml_val);
 
-    let serialise = |v| format!("{}\n", xml::Xml::try_from(v).unwrap());
+    let serialise = |v| format!("{}\n", write::xml::Xml::try_from(v).unwrap());
     let xml2: Vec<_> = json_val.iter().map(serialise).collect();
     assert_eq!(xml, xml2.concat());
 }

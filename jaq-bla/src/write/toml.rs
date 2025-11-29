@@ -6,7 +6,7 @@ use toml_edit::{DocumentMut, Formatted, Item, Table, Value};
 
 /// Serialisation error.
 #[derive(Debug)]
-pub enum SError {
+pub enum Error {
     /// non-string key in object
     Key(Val),
     /// non-table value as root
@@ -15,7 +15,7 @@ pub enum SError {
     Val(Val),
 }
 
-impl fmt::Display for SError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Key(v) => write!(f, "TOML keys must be strings, found: {v}"),
@@ -25,7 +25,7 @@ impl fmt::Display for SError {
     }
 }
 
-impl std::error::Error for SError {}
+impl std::error::Error for Error {}
 
 /// TOML root value.
 pub struct Toml(DocumentMut);
@@ -37,17 +37,17 @@ impl Display for Toml {
 }
 
 impl TryFrom<&Val> for Toml {
-    type Error = SError;
+    type Error = Error;
     fn try_from(v: &Val) -> Result<Self, Self::Error> {
-        let obj = val_obj(v).ok_or_else(|| SError::Root(v.clone()));
+        let obj = val_obj(v).ok_or_else(|| Error::Root(v.clone()));
         obj.and_then(obj_table).map(DocumentMut::from).map(Self)
     }
 }
 
-fn obj_table(o: &Map) -> Result<Table, SError> {
+fn obj_table(o: &Map) -> Result<Table, Error> {
     use jaq_std::ValT;
     let kvs = o.iter().map(|(k, v)| {
-        let k = k.as_utf8_bytes().ok_or_else(|| SError::Key(k.clone()))?;
+        let k = k.as_utf8_bytes().ok_or_else(|| Error::Key(k.clone()))?;
         Ok((String::from_utf8_lossy(k).into_owned(), val_item(v)?))
     });
     kvs.collect::<Result<_, _>>()
@@ -60,7 +60,7 @@ fn val_obj(v: &Val) -> Option<&Map> {
     }
 }
 
-fn val_item(v: &Val) -> Result<Item, SError> {
+fn val_item(v: &Val) -> Result<Item, Error> {
     if let Val::Obj(o) = v {
         return obj_table(o).map(Item::Table);
     } else if let Val::Arr(a) = v {
@@ -72,8 +72,8 @@ fn val_item(v: &Val) -> Result<Item, SError> {
     val_value(v).map(Item::Value)
 }
 
-fn val_value(v: &Val) -> Result<Value, SError> {
-    let fail = || SError::Val(v.clone());
+fn val_value(v: &Val) -> Result<Value, Error> {
+    let fail = || Error::Val(v.clone());
     Ok(match v {
         Val::Null | Val::Str(_, Tag::Bytes) => Err(fail())?,
         Val::Bool(b) => Value::Boolean(Formatted::new(*b)),

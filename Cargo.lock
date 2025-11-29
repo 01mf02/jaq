@@ -327,6 +327,7 @@ dependencies = [
  "memmap2",
  "num-bigint",
  "saphyr-parser",
+ "serde_json",
  "toml_edit",
  "unicode-width",
  "xmlparser",

@@ -1,19 +1,18 @@
 //! XML support.
-use alloc::string::{String, ToString};
-use alloc::{borrow::ToOwned, boxed::Box, format, vec::Vec};
+use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::fmt::{self, Formatter};
 use jaq_json::{bstr, Map, Val};
 
 /// Serialisation error.
 #[derive(Debug)]
-pub enum SError {
+pub enum Error {
     /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
     InvalidEntry(&'static str, Val, Val),
     /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`
     SingletonObj(Val),
 }
 
-impl fmt::Display for SError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::InvalidEntry(o, k, v) => {
@@ -24,7 +23,7 @@ impl fmt::Display for SError {
     }
 }
 
-impl std::error::Error for SError {}
+impl std::error::Error for Error {}
 
 /// XML value.
 pub enum Xml<S> {
@@ -61,12 +60,12 @@ pub enum Xml<S> {
 }
 
 impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
-    type Error = SError;
+    type Error = Error;
     fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
         use jaq_std::ValT;
         let from_kv = |(k, v): (&'a _, &'a _)| match (k, v) {
             (Val::Str(k, _), Val::Str(v, _)) => Ok((&**k, &**v)),
-            _ => Err(SError::InvalidEntry("attribute", k.clone(), v.clone())),
+            _ => Err(Error::InvalidEntry("attribute", k.clone(), v.clone())),
         };
         let from_kvs = |a: &'a Map| a.iter().map(from_kv).collect::<Result<_, _>>();
 
@@ -75,7 +74,7 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
             let mut a = Vec::new();
             let mut c = None;
             for (k, v) in o.iter() {
-                let fail = || SError::InvalidEntry("tac", k.clone(), v.clone());
+                let fail = || Error::InvalidEntry("tac", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"t", Val::Str(s, _)) => t = s,
@@ -91,7 +90,7 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
             let mut external = None;
             let mut internal = None;
             for (k, v) in o.iter() {
-                let fail = || SError::InvalidEntry("doctype", k.clone(), v.clone());
+                let fail = || Error::InvalidEntry("doctype", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"name", Val::Str(s, _)) => name = s,
@@ -110,7 +109,7 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
             let mut target = &b""[..];
             let mut content = None;
             for (k, v) in o.iter() {
-                let fail = || SError::InvalidEntry("pi", k.clone(), v.clone());
+                let fail = || Error::InvalidEntry("pi", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"target", Val::Str(s, _)) => target = s,
@@ -132,9 +131,9 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
                 let mut o = o.iter();
                 let (k, v) = match (o.next(), o.next()) {
                     (Some(kv), None) => kv,
-                    _ => Err(SError::SingletonObj(v.clone()))?,
+                    _ => Err(Error::SingletonObj(v.clone()))?,
                 };
-                let fail = || SError::InvalidEntry("unknown", k.clone(), v.clone());
+                let fail = || Error::InvalidEntry("unknown", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
                     (b"xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
