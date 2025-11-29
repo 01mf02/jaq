@@ -42,6 +42,7 @@ pub fn compile<P: Clone + Default + Eq>(
     Ok(filter)
 }
 
+/// (De-)Serialisation filters.
 pub fn rw_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = jaq_std::Filter<Native<D>>>
 {
     [read::funs::<D>(), write::funs::<D>()]

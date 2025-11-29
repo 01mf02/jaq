@@ -30,21 +30,23 @@ pub enum Num {
 }
 
 impl Num {
+    /// Create a big integer.
     pub fn big_int(i: BigInt) -> Self {
         Self::BigInt(i.into())
     }
 
     pub(crate) fn from_str(s: &str) -> Self {
-        Self::try_from_int_str(s, 10).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
+        Self::from_str_radix(s, 10).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
+    /// Convert from an integral type to a machine-sized or big integer.
     pub fn from_integral<T: Copy + TryInto<isize> + Into<BigInt>>(x: T) -> Self {
         x.try_into()
             .map_or_else(|_| Num::big_int(x.into()), Num::Int)
     }
 
-    // TODO: rename to from_str_radix!
-    pub fn try_from_int_str(i: &str, radix: u32) -> Option<Self> {
+    /// Try to parse an integer from a string with given radix.
+    pub fn from_str_radix(i: &str, radix: u32) -> Option<Self> {
         let big = || BigInt::parse_bytes(i.as_bytes(), radix).map(Self::big_int);
         isize::from_str_radix(i, radix)
             .ok()

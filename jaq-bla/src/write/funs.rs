@@ -6,6 +6,7 @@ use jaq_core::{DataT, RunPtr};
 use jaq_json::{Error, Val};
 use jaq_std::{bome, v, Filter};
 
+/// Serialisation filters.
 pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
         ("tocbor", v(0), |cv| {

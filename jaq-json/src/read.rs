@@ -60,7 +60,7 @@ fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::
     let (num, parts) = lexer.num_string(prefix)?;
     // if we are dealing with an integer ...
     Ok(if parts.dot.is_none() && parts.exp.is_none() {
-        Num::try_from_int_str(&num, 10).unwrap()
+        Num::from_str_radix(&num, 10).unwrap()
     } else {
         Num::Dec(num.to_string().into())
     })

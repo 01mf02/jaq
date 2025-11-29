@@ -1,3 +1,4 @@
+//! Write values in different formats.
 #[cfg(feature = "cbor")]
 pub mod cbor;
 #[cfg(feature = "toml")]

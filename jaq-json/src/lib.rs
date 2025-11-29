@@ -31,8 +31,8 @@ use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
 
 // TODO!!!
+pub use funs::bytes_valrs;
 pub use funs::funs;
-pub use funs::parse_bytes;
 pub use num::Num;
 
 #[cfg(not(feature = "sync"))]
