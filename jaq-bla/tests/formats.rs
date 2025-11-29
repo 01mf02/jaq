@@ -1,5 +1,5 @@
 use core::{fmt::Debug, num::ParseIntError};
-use jaq_json::{cbor, json, toml, xml};
+use jaq_bla::fmts::{cbor, json, toml, xml};
 
 fn unwrap_collect<T, E: Debug>(iter: impl Iterator<Item = Result<T, E>>) -> Vec<T> {
     iter.collect::<Result<Vec<_>, _>>().unwrap()

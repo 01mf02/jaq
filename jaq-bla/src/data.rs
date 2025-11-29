@@ -1,5 +1,5 @@
 //! Commonly used data for filter execution.
-use crate::Format;
+use crate::{read, write, Format};
 use jaq_core::{data, DataT, Lut, Native};
 use jaq_json::{write::Pp, Val};
 use jaq_std::input::{self, Inputs};
@@ -73,6 +73,12 @@ impl Runner {
 pub fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
     let run = jaq_std::run::<DataKind>;
     let std = jaq_std::funs::<DataKind>();
-    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
-    std.chain(jaq_json::funs()).chain(input)
+    let rest = [
+        input::funs::<DataKind>(),
+        read::funs::<DataKind>(),
+        write::funs::<DataKind>(),
+    ]
+    .into_iter()
+    .flat_map(move |funs| funs.into_vec().into_iter().map(run));
+    std.chain(jaq_json::funs()).chain(rest)
 }

@@ -4,7 +4,7 @@ use crate::Error;
 use alloc::vec::Vec;
 use jaq_bla::data::{Ctx, Data};
 use jaq_core::{unwrap_valr, Vars};
-use jaq_json::{invalid_data, json, Val};
+use jaq_json::{invalid_data, Val};
 use std::io::BufRead;
 use std::process::ExitCode;
 
@@ -51,8 +51,9 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
     };
     let ctx = Ctx::new(&data, Vars::new([]));
 
-    let json = |s: String| json::parse_single(s.as_bytes()).map_err(invalid_data);
-    let jsonn = |s: String| json::parse_many(s.as_bytes()).collect::<Result<Val, _>>();
+    use jaq_json::read::{parse_many, parse_single};
+    let json = |s: String| parse_single(s.as_bytes()).map_err(invalid_data);
+    let jsonn = |s: String| parse_many(s.as_bytes()).collect::<Result<Val, _>>();
     let input = json(test.input)?;
     let expect: Result<Val, _> = jsonn(test.output.join("\n")).map_err(invalid_data);
     let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();
