@@ -3,6 +3,16 @@ name = "jaq-bla"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["formats"]
+formats = ["cbor", "json", "toml", "xml", "yaml"]
+
+cbor = ["ciborium-ll", "ciborium-io"]
+json = ["hifijson"]
+toml = ["toml_edit"]
+xml = ["xmlparser"]
+yaml = ["saphyr-parser", "base64"]
+
 [dependencies]
 jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
 jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
@@ -13,3 +23,14 @@ bytes = "1.10.1"
 codesnake = { version = "0.2" }
 memmap2 = "0.9"
 unicode-width = "0.1.13"
+
+num-bigint = { version = "0.4.6", default-features = false }
+
+# parsers
+base64 = { version = "0.22", optional = true }
+ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
+ciborium-ll = { version = "0.2.2", optional = true }
+hifijson = { version = "0.4.0", default-features = false, features = ["alloc", "std"], optional = true }
+saphyr-parser = { version = "0.0.6", optional = true }
+toml_edit = { version = "0.23.2", optional = true }
+xmlparser = { version = "0.13.6", optional = true }

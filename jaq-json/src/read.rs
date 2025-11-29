@@ -5,8 +5,6 @@ use hifijson::token::{Expect, Lex};
 use hifijson::{IterLexer, LexAlloc, SliceLexer};
 use std::io;
 
-pub use crate::write::write;
-
 /// Eat whitespace/comments, then peek at next character.
 fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     loop {

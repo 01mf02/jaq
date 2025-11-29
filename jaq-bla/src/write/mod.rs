@@ -1,7 +1,19 @@
-//! Writing output.
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "toml")]
+pub mod toml;
+#[cfg(feature = "xml")]
+pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
+pub use jaq_json::write as json;
+
+mod funs;
+pub use funs::funs;
+
 use crate::data::Writer;
 use crate::Format;
-use jaq_json::{cbor, invalid_data, toml, xml, yaml, Val};
+use jaq_json::{invalid_data, Val};
 use std::io::{self, IsTerminal, Write};
 
 type Result<T = (), E = io::Error> = core::result::Result<T, E>;

@@ -155,16 +155,8 @@ pub struct Pp<S = String> {
     pub colors: Colors<S>,
 }
 
-impl<S: Clone> Pp<S> {
-    pub(crate) fn unindented(&self) -> Self {
-        let mut new = self.clone();
-        new.indent = None;
-        new
-    }
-}
-
 impl Pp {
-    pub(crate) fn write_str(
+    pub fn write_str(
         &self,
         w: &mut dyn Write,
         f: impl FnOnce(&mut dyn Write) -> io::Result<()>,

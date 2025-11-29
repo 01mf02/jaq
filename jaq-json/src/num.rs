@@ -30,7 +30,7 @@ pub enum Num {
 }
 
 impl Num {
-    pub(crate) fn big_int(i: BigInt) -> Self {
+    pub fn big_int(i: BigInt) -> Self {
         Self::BigInt(i.into())
     }
 
@@ -38,12 +38,13 @@ impl Num {
         Self::try_from_int_str(s, 10).unwrap_or_else(|| Self::Dec(Rc::new(s.to_string())))
     }
 
-    pub(crate) fn from_integral<T: Copy + TryInto<isize> + Into<BigInt>>(x: T) -> Self {
+    pub fn from_integral<T: Copy + TryInto<isize> + Into<BigInt>>(x: T) -> Self {
         x.try_into()
             .map_or_else(|_| Num::big_int(x.into()), Num::Int)
     }
 
-    pub(crate) fn try_from_int_str(i: &str, radix: u32) -> Option<Self> {
+    // TODO: rename to from_str_radix!
+    pub fn try_from_int_str(i: &str, radix: u32) -> Option<Self> {
         let big = || BigInt::parse_bytes(i.as_bytes(), radix).map(Self::big_int);
         isize::from_str_radix(i, radix)
             .ok()
@@ -52,7 +53,7 @@ impl Num {
     }
 
     /// Try to parse a decimal string to a [`Self::Float`], else return NaN.
-    pub(crate) fn from_dec_str(n: &str) -> Self {
+    pub fn from_dec_str(n: &str) -> Self {
         // TODO: changed to NaN!
         n.parse().map_or(Self::Float(f64::NAN), Self::Float)
     }
@@ -62,7 +63,7 @@ impl Num {
     }
 
     /// If the value is a machine-sized integer, return it, else fail.
-    pub(crate) fn as_isize(&self) -> Option<isize> {
+    pub fn as_isize(&self) -> Option<isize> {
         match self {
             Self::Int(i) => Some(*i),
             Self::BigInt(i) => i.to_isize(),

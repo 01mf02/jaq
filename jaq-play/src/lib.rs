@@ -8,7 +8,7 @@ use jaq_bla::data::{Ctx, Data, Filter, Runner, Writer};
 use jaq_bla::{compile, load::Color, read};
 use jaq_core::{unwrap_valr, Vars};
 use jaq_json::write::{Colors, Pp};
-use jaq_json::{bstr, json, write_bytes, write_utf8, Tag, Val};
+use jaq_json::{bstr, write_bytes, write_utf8, Tag, Val};
 use jaq_std::input::{Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 use web_sys::DedicatedWorkerGlobalScope as Scope;
@@ -187,7 +187,8 @@ fn read_str<'a>(
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
-        let vals = json::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
+        let vals =
+            jaq_json::read::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
         Box::new(read::collect_if(settings.slurp, vals))
     }
 }

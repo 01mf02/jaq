@@ -14,7 +14,7 @@ use jaq_bla::read;
 use jaq_bla::write::{with_stdout, write};
 use jaq_core::Vars;
 use jaq_json::write::{Colors, Pp};
-use jaq_json::{json, Val};
+use jaq_json::Val;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -185,7 +185,10 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     });
     let argjson = cli.argjson.iter().map(|(k, s)| {
         let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
-        Ok((k.to_owned(), json::parse_single(s.as_bytes()).map_err(err)?))
+        Ok((
+            k.to_owned(),
+            jaq_json::read::parse_single(s.as_bytes()).map_err(err)?,
+        ))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = read::load_file(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));

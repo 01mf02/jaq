@@ -314,14 +314,22 @@ dependencies = [
 name = "jaq-bla"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bstr",
  "bytes",
+ "ciborium-io",
+ "ciborium-ll",
  "codesnake",
+ "hifijson",
  "jaq-core",
  "jaq-json",
  "jaq-std",
  "memmap2",
+ "num-bigint",
+ "saphyr-parser",
+ "toml_edit",
  "unicode-width",
+ "xmlparser",
 ]
 
 [[package]]
@@ -341,11 +349,8 @@ dependencies = [
 name = "jaq-json"
 version = "2.0.0-alpha"
 dependencies = [
- "base64",
  "bstr",
  "bytes",
- "ciborium-io",
- "ciborium-ll",
  "foldhash",
  "hifijson",
  "indexmap",
@@ -354,11 +359,8 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "ryu",
- "saphyr-parser",
  "self_cell",
  "serde_json",
- "toml_edit",
- "xmlparser",
 ]
 
 [[package]]

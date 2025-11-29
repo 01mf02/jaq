@@ -4,6 +4,9 @@
 //! might be useful to integrate jaq into a real-world application.
 #![warn(missing_docs)]
 
+extern crate alloc;
+extern crate std;
+
 pub mod data;
 pub mod load;
 pub mod read;

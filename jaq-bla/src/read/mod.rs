@@ -1,8 +1,20 @@
-//! Reading input.
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "toml")]
+pub mod toml;
+#[cfg(feature = "xml")]
+pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
+pub use jaq_json::read as json;
+
+mod funs;
+pub use funs::funs;
+
 use crate::Format;
 use bytes::Bytes;
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_json::{cbor, invalid_data, json, toml, xml, yaml, BoxError, Tag, Val};
+use jaq_json::{invalid_data, BoxError, Tag, Val};
 use std::io::{self, Read};
 use std::path::Path;
 
