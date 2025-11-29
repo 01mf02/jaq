@@ -66,24 +66,28 @@ macro_rules! write_bytes {
 }
 
 macro_rules! write_seq {
-    ($w:ident, $indent:expr, $level:expr, $xs:expr, $f:expr) => {{
-        if $indent.is_some() {
+    ($w:ident, $pp:expr, $level:expr, $xs:expr, $f:expr) => {{
+        let indent = &$pp.indent;
+        if indent.is_some() {
             writeln!($w)?;
         }
         let mut iter = $xs.into_iter().peekable();
         while let Some(x) = iter.next() {
-            if let Some(indent) = $indent {
+            if let Some(indent) = indent {
                 write!($w, "{}", indent.repeat($level + 1))?;
             }
             $f(x)?;
             if iter.peek().is_some() {
                 write!($w, ",")?;
+                if $pp.sep_space && indent.is_none() {
+                    write!($w, " ")?
+                }
             }
-            if $indent.is_some() {
-                writeln!($w)?;
+            if indent.is_some() {
+                writeln!($w)?
             }
         }
-        if let Some(indent) = $indent {
+        if let Some(indent) = indent {
             write!($w, "{}", indent.repeat($level))
         } else {
             Ok(())
@@ -153,6 +157,12 @@ pub struct Pp<S = String> {
     pub sort_keys: bool,
     /// colors for different types of values
     pub colors: Colors<S>,
+    /// put a space after ':'
+    ///
+    /// This is necessary for YAML, which interprets
+    /// {1:2}  as {"1:2": null}, whereas it interprets
+    /// {1: 2} as {1: 2}.
+    pub sep_space: bool,
 }
 
 impl Pp {
@@ -185,7 +195,6 @@ macro_rules! write_val {
                 write!($w, "{}", $pp.colors.reset)
             }};
         }
-        let indent = &$pp.indent;
         match $v {
             Val::Null => color!(null, write!($w, "null")),
             Val::Bool(true) => color!(r#true, write!($w, "true")),
@@ -199,7 +208,7 @@ macro_rules! write_val {
             Val::Arr(a) => {
                 color!(arr, write!($w, "["))?;
                 if !a.is_empty() {
-                    write_seq!($w, indent, $level, &**a, |x| $f($level + 1, x))?;
+                    write_seq!($w, $pp, $level, &**a, |x| $f($level + 1, x))?;
                 }
                 color!(arr, write!($w, "]"))
             }
@@ -208,15 +217,9 @@ macro_rules! write_val {
                 macro_rules! kv {
                     ($kv:expr) => {{
                         let (k, v) = $kv;
-                        use jaq_std::ValT;
                         $f($level + 1, k)?;
                         color!(obj, write!($w, ":"))?;
-                        // YAML interprets {1:2}  as {"1:2": null}, whereas
-                        // it   interprets {1: 2} as {1: 2}
-                        // in order to keep compatibility with jq,
-                        // we add a space between ':' and the value
-                        // only if the key is a UTF-8 string
-                        if indent.is_some() || !k.is_utf8_str() {
+                        if $pp.sep_space {
                             write!($w, " ")?;
                         }
                         $f($level + 1, v)
@@ -226,9 +229,9 @@ macro_rules! write_val {
                     if $pp.sort_keys {
                         let mut o: alloc::vec::Vec<_> = o.iter().collect();
                         o.sort_by_key(|(k, _v)| *k);
-                        write_seq!($w, indent, $level, o, |x| kv!(x))
+                        write_seq!($w, $pp, $level, o, |x| kv!(x))
                     } else {
-                        write_seq!($w, indent, $level, &**o, |x| kv!(x))
+                        write_seq!($w, $pp, $level, &**o, |x| kv!(x))
                     }?
                 }
                 color!(obj, write!($w, "}}"))

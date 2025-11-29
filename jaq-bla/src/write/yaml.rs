@@ -24,6 +24,8 @@ macro_rules! write_yaml {
                     _ => false,
                 } {
                     writeln!($w)?
+                } else if $pp.sep_space {
+                    write!($w, " ")?;
                 };
                 $f($w, $pp, $level + 1, $x)?;
                 if $iter.peek().is_some() {
@@ -43,7 +45,7 @@ macro_rules! write_yaml {
             Val::Arr(a) if !a.is_empty() && indent.is_some() => {
                 let mut iter = a.iter().peekable();
                 while let Some(v) = iter.next() {
-                    nested!(v, iter, color!(arr, write!($w, "- ")))?
+                    nested!(v, iter, color!(arr, write!($w, "-")))?
                 }
                 Ok(())
             }
@@ -54,7 +56,7 @@ macro_rules! write_yaml {
                 while let Some((k, v)) = iter.next() {
                     nested!(v, iter, {
                         $f($w, &unindented, $level, k)?;
-                        color!(obj, write!($w, ": "))
+                        color!(obj, write!($w, ":"))
                     })?
                 }
                 Ok(())

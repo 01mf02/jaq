@@ -83,6 +83,7 @@ impl Cli {
             indent: (!self.compact_output).then(|| self.indent()),
             sort_keys: self.sort_keys,
             colors: self.colors(),
+            sep_space: !self.compact_output || matches!(self.to, Some(Format::Yaml)),
         }
     }
 
