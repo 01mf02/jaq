@@ -27,9 +27,10 @@ fn map_err_to_string<T, E: core::fmt::Display>(r: Result<T, E>) -> Result<T> {
 pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
     let Writer { format, pp, join } = writer;
 
-    if matches!(format, Format::Yaml) {
+    let yaml_doc = !join && matches!(format, Format::Yaml);
+    if yaml_doc {
         // start of YAML document
-        writeln!(w, "---")?;
+        writeln!(w, "---")?
     }
 
     match (val, format) {
@@ -41,18 +42,22 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
     };
 
-    if *join || matches!(format, Format::Cbor) {
-        // when running `jaq -jn '"prompt> " | (., input)'`,
-        // this flush is necessary to make "prompt> " appear first
-        w.flush()
-    } else {
-        // this also flushes output, because stdout is line-buffered in Rust
-        writeln!(w)
-    }?;
+    if match format {
+        Format::Cbor => false,
+        Format::Yaml => true,
+        _ => !join,
+    } {
+        // this flushes output, because stdout is line-buffered in Rust
+        writeln!(w)?
+    };
 
-    if matches!(format, Format::Yaml) {
+    // when running `jaq -jn '"prompt> " | (., input)'`,
+    // this flush is necessary to make "prompt> " appear first
+    w.flush()?;
+
+    if yaml_doc {
         // end of YAML document
-        writeln!(w, "...")?;
+        writeln!(w, "...")?
     }
     Ok(())
 }
