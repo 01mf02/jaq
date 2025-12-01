@@ -139,7 +139,7 @@ impl Cli {
             'c' => self.compact_output = true,
             'j' => {
                 self.join_output = true;
-                self.short('r', args)?
+                self.to.get_or_insert(Format::Raw);
             }
             'i' => self.in_place = true,
             'S' => self.sort_keys = true,
