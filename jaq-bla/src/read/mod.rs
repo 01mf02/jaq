@@ -1,15 +1,29 @@
-//! Reading input.
-use crate::Format;
+//! Read values in different formats.
+#[cfg(feature = "cbor")]
+pub mod cbor;
+#[cfg(feature = "toml")]
+pub mod toml;
+#[cfg(feature = "xml")]
+pub mod xml;
+#[cfg(feature = "yaml")]
+pub mod yaml;
+pub use jaq_json::read as json;
+
+mod funs;
+pub use funs::funs;
+
+use crate::{invalid_data, BoxError, Format};
 use bytes::Bytes;
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_json::{cbor, invalid_data, json, toml, xml, yaml, BoxError, Tag, Val};
+use jaq_json::{Tag, Val};
 use std::io::{self, Read};
 use std::path::Path;
 
+type Result<T, E = io::Error> = core::result::Result<T, E>;
 type Vals<'a> = BoxIter<'a, io::Result<Val>>;
 
 /// Try to load file by memory mapping and fall back to regular loading if it fails.
-pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
+pub fn load_file(path: impl AsRef<Path>) -> Result<Bytes> {
     let file = std::fs::File::open(path.as_ref())?;
     Ok(match unsafe { memmap2::Mmap::map(&file) } {
         Ok(mmap) => Bytes::from_owner(mmap),
@@ -17,7 +31,8 @@ pub fn load_file(path: impl AsRef<Path>) -> io::Result<Bytes> {
     })
 }
 
-pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
+/// Read JSON values in a file to an array.
+pub fn json_array(path: impl AsRef<Path>) -> Result<Val> {
     json::parse_many(&load_file(path.as_ref())?)
         .map(map_invalid_data)
         .collect()
@@ -26,7 +41,7 @@ pub fn json_array(path: impl AsRef<Path>) -> io::Result<Val> {
 /// Load standard input to string for certain formats.
 ///
 /// This has to be synchronised with [`from_stdin`].
-pub fn stdin_string(fmt: Format) -> io::Result<String> {
+pub fn stdin_string(fmt: Format) -> Result<String> {
     use Format::*;
     Ok(match fmt {
         Raw | Json | Cbor => String::new(),
@@ -37,7 +52,7 @@ pub fn stdin_string(fmt: Format) -> io::Result<String> {
 /// Convert bytes to string for certain formats.
 ///
 /// This has to be synchronised with [`from_file`].
-pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
+pub fn file_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
         Raw | Json | Cbor => "",
@@ -45,6 +60,7 @@ pub fn file_str(fmt: Format, bytes: &[u8]) -> io::Result<&str> {
     })
 }
 
+/// Read value from stdin or `s`, depending on format.
 pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     let stdin = || io::stdin().lock();
     use bstr::io::BufReadExt;
@@ -63,6 +79,7 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     }
 }
 
+/// Parse value from file or `s`, depending on format.
 pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals<'a> {
     use bstr::ByteSlice;
     match fmt {
@@ -76,7 +93,8 @@ pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> 
     }
 }
 
-fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
+/// Collect iterator into a single array if `slurp`, else return iterator.
+pub fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     slurp: bool,
     iter: impl Iterator<Item = Result<T, E>> + 'a,
 ) -> BoxIter<'a, Result<T, E>> {
@@ -87,6 +105,6 @@ fn collect_if<'a, T: FromIterator<T> + 'a, E: 'a>(
     }
 }
 
-fn map_invalid_data<T>(r: Result<T, impl Into<BoxError>>) -> io::Result<T> {
+fn map_invalid_data<T>(r: Result<T, impl Into<BoxError>>) -> Result<T> {
     r.map_err(invalid_data)
 }

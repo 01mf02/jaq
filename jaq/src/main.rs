@@ -1,25 +1,29 @@
 mod cli;
 mod filter;
 mod funs;
-mod read;
-mod style;
+mod tests;
 #[cfg(target_os = "windows")]
 mod windows;
-mod write;
 
 use cli::{Cli, Format};
-use core::fmt::{self, Display, Formatter};
-use filter::{run, FileReports, Filter};
-use jaq_core::{load, unwrap_valr, Vars};
-use jaq_json::{invalid_data, json, Val};
-use std::io::{self, BufRead, Write};
+use core::fmt::{self, Formatter};
+use filter::run;
+use jaq_bla::data::{Filter, Runner, Writer};
+use jaq_bla::load::{Color, FileReports};
+use jaq_bla::read;
+use jaq_bla::write::{with_stdout, write};
+use jaq_core::Vars;
+use jaq_json::write::{Colors, Pp};
+use jaq_json::Val;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
-use write::{print, with_stdout};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+extern crate alloc;
 
 fn main() -> ExitCode {
     use env_logger::Env;
@@ -48,51 +52,86 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    // yansi may only be used for writing to stderr
-    if cli.color_stdio(io::stderr()) {
-        yansi::enable();
-    } else {
-        yansi::disable();
-    };
-
     match real_main(&cli) {
         Ok(exit) => exit,
         Err(e) => {
-            eprint!("{e}");
+            eprint!("{}", ErrorColor::new(&e, cli.color_stdio(io::stderr())));
             e.report()
         }
+    }
+}
+
+impl Cli {
+    fn runner(&self) -> Runner {
+        Runner {
+            null_input: self.null_input,
+            color_err: self.color_stdio(io::stderr()),
+            writer: self.writer(),
+        }
+    }
+
+    fn writer(&self) -> Writer {
+        Writer {
+            pp: self.pp(),
+            format: self.to.unwrap_or_default(),
+            join: self.join_output,
+        }
+    }
+
+    fn pp(&self) -> Pp {
+        Pp {
+            indent: (!self.compact_output).then(|| self.indent()),
+            sort_keys: self.sort_keys,
+            colors: self.colors(),
+            sep_space: !self.compact_output || matches!(self.to, Some(Format::Yaml)),
+        }
+    }
+
+    fn colors(&self) -> Colors {
+        self.color_stdio(io::stdout())
+            .then(Colors::ansi)
+            .map(|c| match std::env::var("JQ_COLORS") {
+                Err(_) => c,
+                Ok(s) => c.parse(&s),
+            })
+            .unwrap_or_default()
     }
 }
 
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     if let Some(test_files) = &cli.run_tests {
         return Ok(match test_files.last() {
-            Some(file) => run_tests(io::BufReader::new(std::fs::File::open(file)?)),
-            None => run_tests(io::stdin().lock()),
+            Some(file) => tests::run(io::BufReader::new(std::fs::File::open(file)?)),
+            None => tests::run(io::stdin().lock()),
         });
     }
 
-    let (vars, mut ctx): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
+    let (var_names, mut vars): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
 
-    let (vals, filter) = match &cli.filter {
+    let (var_vals, filter) = match &cli.filter {
         None => (Vec::new(), Filter::default()),
         Some(filter) => {
             let (path, code) = match filter {
                 cli::Filter::FromFile(path) => (path.into(), std::fs::read_to_string(path)?),
                 cli::Filter::Inline(filter) => ("<inline>".into(), filter.clone()),
             };
-            filter::parse_compile(&path, &code, &vars, &cli.library_path).map_err(Error::Report)?
+            filter::parse_compile(&path, &code, &var_names, &cli.library_path)
+                .map_err(Error::Report)?
         }
     };
-    ctx.extend(vals);
+    vars.extend(var_vals);
+    let vars = Vars::new(vars);
     //println!("Filter: {:?}", filter);
 
-    let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or(Format::Json);
+    let runner = &cli.runner();
+    let writer = &runner.writer;
+
+    let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or_default();
     let last = if cli.files.is_empty() {
         let format = unwrap_or_json(cli.from);
         let s = read::stdin_string(format)?;
         let inputs = read::from_stdin(format, &s, cli.slurp);
-        with_stdout(|out| run(cli, &filter, ctx, inputs, |v| print(out, cli, &v)))?
+        with_stdout(|out| run(runner, &filter, vars, inputs, |v| write(out, writer, &v)))?
     } else {
         let mut last = None;
         for file in &cli.files {
@@ -110,18 +149,20 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                last = run(cli, &filter, ctx.clone(), inputs, |output| {
-                    print(tmp.as_file_mut(), cli, &output)
+                last = run(runner, &filter, vars.clone(), inputs, |output| {
+                    write(tmp.as_file_mut(), writer, &output)
                 })?;
 
                 // replace the input file with the temporary file
                 std::mem::drop(bytes);
                 let perms = std::fs::metadata(path)?.permissions();
-                tmp.persist(path).map_err(Error::Persist)?;
+                tmp.persist(path).map_err(|e| Error::Io(None, e.into()))?;
                 std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(|out| {
-                    run(cli, &filter, ctx.clone(), inputs, |v| print(out, cli, &v))
+                    run(runner, &filter, vars.clone(), inputs, |v| {
+                        write(out, writer, &v)
+                    })
                 })?;
             }
         }
@@ -145,7 +186,10 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     });
     let argjson = cli.argjson.iter().map(|(k, s)| {
         let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
-        Ok((k.to_owned(), json::parse_single(s.as_bytes()).map_err(err)?))
+        Ok((
+            k.to_owned(),
+            jaq_json::read::parse_single(s.as_bytes()).map_err(err)?,
+        ))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let s = read::load_file(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
@@ -183,31 +227,44 @@ fn args(positional: &[Val], named: &[(String, Val)]) -> Val {
 #[derive(Debug)]
 enum Error {
     Io(Option<String>, io::Error),
-    Report(Vec<FileReports>),
+    Report(Vec<FileReports<PathBuf>>),
     Parse(String),
     Jaq(jaq_core::Error<Val>),
-    Persist(tempfile::PersistError),
     FalseOrNull,
     NoOutput,
 }
 
-impl Display for Error {
+struct ErrorColor<'e>(&'e Error, fn(Color, String) -> String);
+
+impl<'e> ErrorColor<'e> {
+    fn new(e: &'e Error, color: bool) -> Self {
+        Self(e, if color { Color::ansi } else { |_, text| text })
+    }
+}
+
+impl fmt::Display for ErrorColor<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::FalseOrNull | Self::NoOutput => Ok(()),
-            Self::Io(prefix, e) => {
+        let Self(error, color) = self;
+        match error {
+            Error::FalseOrNull | Error::NoOutput => Ok(()),
+            Error::Io(prefix, e) => {
                 write!(f, "Error: ")?;
                 if let Some(p) = prefix {
                     write!(f, "{p}: ")?;
                 }
                 writeln!(f, "{e}")
             }
-            Self::Persist(e) => {
-                writeln!(f, "Error: {e}")
-            }
-            Self::Report(reports) => reports.iter().try_for_each(|fr| write!(f, "{fr}")),
-            Self::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
-            Self::Jaq(e) => writeln!(f, "Error: {e}"),
+            Error::Report(reports) => reports.iter().try_for_each(|(file, reports)| {
+                let idx = codesnake::LineIndex::new(&file.code);
+                reports.iter().try_for_each(|e| {
+                    writeln!(f, "Error: {}", e.message)?;
+                    let block = e.to_block(&idx, *color);
+                    writeln!(f, "{}[{}]", block.prologue(), file.path.display())?;
+                    writeln!(f, "{}{}", block, block.epilogue())
+                })
+            }),
+            Error::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
+            Error::Jaq(e) => writeln!(f, "Error: {e}"),
         }
     }
 }
@@ -216,7 +273,7 @@ impl Termination for Error {
     fn report(self) -> ExitCode {
         ExitCode::from(match self {
             Self::FalseOrNull => 1,
-            Self::Io(_, _) | Self::Persist(_) => 2,
+            Self::Io(_, _) => 2,
             Self::Report(_) => 3,
             Self::NoOutput => 4,
             Self::Parse(_) | Self::Jaq(_) => 5,
@@ -227,49 +284,5 @@ impl Termination for Error {
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Self::Io(None, e)
-    }
-}
-
-fn run_test(test: load::test::Test<String>) -> Result<(Val, Val), Error> {
-    let (ctx, filter) =
-        filter::parse_compile(&PathBuf::new(), &test.filter, &[], &[]).map_err(Error::Report)?;
-
-    let vars = Vars::new(ctx);
-    let cli = Cli::default();
-    let inputs = &jaq_std::input::RcIter::new(Box::new(core::iter::empty()));
-    let data = funs::Data::new(&cli, &filter.lut, inputs);
-    let ctx = filter::Ctx::new(&data, vars);
-
-    let json = |s: String| json::parse_single(s.as_bytes()).map_err(invalid_data);
-    let jsonn = |s: String| json::parse_many(s.as_bytes()).collect::<Result<Val, _>>();
-    let input = json(test.input)?;
-    let expect: Result<Val, _> = jsonn(test.output.join("\n")).map_err(invalid_data);
-    let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();
-    Ok((expect?, unwrap_valr(obtain).map_err(Error::Jaq)?))
-}
-
-fn run_tests(read: impl BufRead) -> ExitCode {
-    let lines = read.lines().map(Result::unwrap);
-    let tests = load::test::Parser::new(lines);
-
-    let (mut passed, mut total) = (0, 0);
-    for test in tests {
-        println!("Testing {}", test.filter);
-        match run_test(test) {
-            Err(e) => eprintln!("{e:?}"),
-            Ok((expect, obtain)) if expect != obtain => {
-                eprintln!("expected {expect}, obtained {obtain}",);
-            }
-            Ok(_) => passed += 1,
-        }
-        total += 1;
-    }
-
-    println!("{passed} out of {total} tests passed");
-
-    if total > passed {
-        ExitCode::FAILURE
-    } else {
-        ExitCode::SUCCESS
     }
 }

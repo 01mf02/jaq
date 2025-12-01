@@ -5,8 +5,6 @@ use hifijson::token::{Expect, Lex};
 use hifijson::{IterLexer, LexAlloc, SliceLexer};
 use std::io;
 
-pub use crate::write::write;
-
 /// Eat whitespace/comments, then peek at next character.
 fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     loop {
@@ -26,7 +24,7 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Er
 
 /// Read a sequence of JSON values.
 pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    use crate::invalid_data;
+    let invalid_data = |e| io::Error::new(io::ErrorKind::InvalidData, e);
     let mut lexer = IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
         let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));
@@ -62,7 +60,7 @@ fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::
     let (num, parts) = lexer.num_string(prefix)?;
     // if we are dealing with an integer ...
     Ok(if parts.dot.is_none() && parts.exp.is_none() {
-        Num::try_from_int_str(&num, 10).unwrap()
+        Num::from_str_radix(&num, 10).unwrap()
     } else {
         Num::Dec(num.to_string().into())
     })

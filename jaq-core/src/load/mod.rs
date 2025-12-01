@@ -5,7 +5,6 @@ mod arbitrary;
 pub mod lex;
 pub mod parse;
 mod prec_climb;
-pub mod test;
 
 use crate::{ops, path};
 #[cfg(feature = "std")]

@@ -299,6 +299,7 @@ dependencies = [
  "codesnake",
  "dirs",
  "env_logger",
+ "jaq-bla",
  "jaq-core",
  "jaq-json",
  "jaq-std",
@@ -307,8 +308,29 @@ dependencies = [
  "mimalloc",
  "rustyline",
  "tempfile",
+]
+
+[[package]]
+name = "jaq-bla"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bstr",
+ "bytes",
+ "ciborium-io",
+ "ciborium-ll",
+ "codesnake",
+ "hifijson",
+ "jaq-core",
+ "jaq-json",
+ "jaq-std",
+ "memmap2",
+ "num-bigint",
+ "saphyr-parser",
+ "serde_json",
+ "toml_edit",
  "unicode-width",
- "yansi",
+ "xmlparser",
 ]
 
 [[package]]
@@ -328,11 +350,8 @@ dependencies = [
 name = "jaq-json"
 version = "2.0.0-alpha"
 dependencies = [
- "base64",
  "bstr",
  "bytes",
- "ciborium-io",
- "ciborium-ll",
  "foldhash",
  "hifijson",
  "indexmap",
@@ -341,11 +360,8 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "ryu",
- "saphyr-parser",
  "self_cell",
  "serde_json",
- "toml_edit",
- "xmlparser",
 ]
 
 [[package]]
@@ -356,12 +372,12 @@ dependencies = [
  "codesnake",
  "console_log",
  "getrandom 0.2.16",
+ "jaq-bla",
  "jaq-core",
  "jaq-json",
  "jaq-std",
  "js-sys",
  "log",
- "unicode-width",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -1029,9 +1045,3 @@ name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
-
-[[package]]
-name = "yansi"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
