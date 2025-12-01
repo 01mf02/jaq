@@ -13,8 +13,8 @@ mod funs;
 pub use funs::funs;
 
 use crate::data::Writer;
-use crate::Format;
-use jaq_json::{invalid_data, Val};
+use crate::{invalid_data, Format};
+use jaq_json::Val;
 use std::io::{self, IsTerminal, Write};
 
 type Result<T = (), E = io::Error> = core::result::Result<T, E>;

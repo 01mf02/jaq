@@ -2,11 +2,8 @@
 
 use crate::Error;
 use alloc::vec::Vec;
-use jaq_bla::data::{Ctx, Data};
-use jaq_core::{unwrap_valr, Vars};
-use jaq_json::{invalid_data, Val};
-use std::io::BufRead;
-use std::process::ExitCode;
+use jaq_json::Val;
+use std::{io::BufRead, process::ExitCode};
 
 /// A single jq unit test.
 pub struct Test<S> {
@@ -42,22 +39,21 @@ impl<S: core::ops::Deref<Target = str>, I: Iterator<Item = S>> Iterator for Test
 }
 
 fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
-    let filter = jaq_bla::compile(&test.filter, &[]).map_err(Error::Report)?;
-
-    let data = Data {
-        runner: &Default::default(),
-        lut: &filter.lut,
-        inputs: &jaq_std::input::RcIter::new(Box::new(core::iter::empty())),
-    };
-    let ctx = Ctx::new(&data, Vars::new([]));
-
     use jaq_json::read::{parse_many, parse_single};
-    let json = |s: String| parse_single(s.as_bytes()).map_err(invalid_data);
+
+    let mut obtain = Vec::new();
+    let runner = &Default::default();
+    let filter = jaq_bla::data::compile(&test.filter, &[]).map_err(Error::Report)?;
+    let vars = jaq_core::Vars::new([]);
+    let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
+    jaq_bla::data::run(runner, &filter, vars, input, Error::Parse, |v| {
+        obtain.push(v.map_err(Error::Jaq)?);
+        Ok(())
+    })?;
+
     let jsonn = |s: String| parse_many(s.as_bytes()).collect::<Result<Val, _>>();
-    let input = json(test.input)?;
-    let expect: Result<Val, _> = jsonn(test.output.join("\n")).map_err(invalid_data);
-    let obtain: Result<Val, _> = filter.id.run((ctx, input)).collect();
-    Ok((expect?, unwrap_valr(obtain).map_err(Error::Jaq)?))
+    let expect = jsonn(test.output.join("\n")).map_err(|e| Error::Parse(e.to_string()));
+    Ok((expect?, obtain.into_iter().collect()))
 }
 
 pub fn run(read: impl BufRead) -> ExitCode {

@@ -24,7 +24,7 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Er
 
 /// Read a sequence of JSON values.
 pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    use crate::invalid_data;
+    let invalid_data = |e| io::Error::new(io::ErrorKind::InvalidData, e);
     let mut lexer = IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
         let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));

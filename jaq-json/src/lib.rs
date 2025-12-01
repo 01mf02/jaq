@@ -762,11 +762,3 @@ impl fmt::Display for Val {
         write::format(f, &write::Pp::default(), 0, self)
     }
 }
-
-/// Dynamic & thread-safe [`std::error::Error`].
-pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
-
-/// Create an invalid data I/O error.
-pub fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
-}
