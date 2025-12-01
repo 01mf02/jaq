@@ -1,7 +1,7 @@
 //! Commonly used data for filter execution.
-use jaq_core::{data, DataT, Lut, Native};
+use jaq_core::{data, unwrap_valr, DataT, Lut, Native, Vars};
 use jaq_json::{write::Pp, Val};
-use jaq_std::input::{self, Inputs};
+use jaq_std::input::{self, Inputs, RcIter};
 
 /// Filter for given kind of data.
 pub type Filter = jaq_core::Filter<DataKind>;
@@ -76,4 +76,35 @@ pub fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
     std.chain(jaq_json::funs())
         .chain(input)
         .chain(crate::rw_funs())
+}
+
+/// Run a filter with given input values and run `f` for every value output.
+///
+/// This function cannot return an `Iterator` because it creates an `RcIter`.
+/// This is most unfortunate. We should think about how to simplify this ...
+pub fn run<E>(
+    runner: &Runner,
+    filter: &Filter,
+    vars: Vars<Val>,
+    inputs: impl Iterator<Item = Result<Val, String>>,
+    fi: impl Fn(String) -> E,
+    mut f: impl FnMut(jaq_core::ValR<Val>) -> Result<(), E>,
+) -> Result<(), E> {
+    let inputs = Box::new(inputs) as Box<dyn Iterator<Item = _>>;
+    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
+
+    let null = &RcIter::new(null);
+
+    let data = Data {
+        runner,
+        lut: &filter.lut,
+        inputs: &RcIter::new(inputs),
+    };
+    let ctx = Ctx::new(&data, vars);
+
+    let outputs = |x| filter.id.run((ctx.clone(), x));
+    (if runner.null_input { null } else { data.inputs }).try_for_each(|x| match x {
+        Ok(x) => outputs(x).try_for_each(|y| f(unwrap_valr(y))),
+        Err(e) => Err(fi(e)),
+    })
 }

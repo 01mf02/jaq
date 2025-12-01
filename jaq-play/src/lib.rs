@@ -4,12 +4,11 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_bla::data::{Ctx, Data, Filter, Runner, Writer};
+use jaq_bla::data::{self, Runner, Writer};
 use jaq_bla::{compile, load::Color, read};
-use jaq_core::{unwrap_valr, Vars};
+use jaq_core::Vars;
 use jaq_json::write::{Colors, Pp};
 use jaq_json::{bstr, write_bytes, write_utf8, Tag, Val};
-use jaq_std::input::{Inputs, RcIter};
 use wasm_bindgen::prelude::*;
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
@@ -148,14 +147,18 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let runner = &settings.runner();
 
     let post = |s: String| scope.post_message(&s.into()).unwrap();
-    let post_value = |y: Val| {
+    let post_value = |y: jaq_json::ValR| {
+        let y = y.map_err(Error::Jaq)?;
         let s = FormatterFn(|f: &mut Formatter| match &y {
             Val::Str(s, _) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
             y => fmt_json(f, &runner.writer.pp, 0, y),
         });
-        post(s.to_string())
+        post(s.to_string());
+        Ok(())
     };
+    let vars = Vars::new([]);
     let inputs = read_str(&settings, input);
+
     match compile::<()>(filter, &[]) {
         Err(file_reports) => {
             for (file, reports) in file_reports {
@@ -170,7 +173,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
                 }
             }
         }
-        Ok(filter) => match process(runner, &filter, inputs, post_value) {
+        Ok(filter) => match data::run(runner, &filter, vars, inputs, Error::Hifijson, post_value) {
             Ok(()) => (),
             Err(Error::Hifijson(e)) => post(format!("⚠️ Parse error: {e}")),
             Err(Error::Jaq(e)) => post(format!("⚠️ Error: {e}")),
@@ -200,33 +203,6 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     } else {
         Box::new(input.lines()) as Box<dyn Iterator<Item = _>>
     }
-}
-
-fn process(
-    runner: &Runner,
-    filter: &Filter,
-    inputs: impl Iterator<Item = Result<Val, String>>,
-    f: impl Fn(Val),
-) -> Result<(), Error> {
-    let iter = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
-    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
-
-    let null: Inputs<_> = &RcIter::new(null);
-
-    let data = &Data {
-        runner,
-        inputs: &RcIter::new(iter),
-        lut: &filter.lut,
-    };
-    let ctx = Ctx::new(data, Vars::new([]));
-
-    for x in if runner.null_input { null } else { data.inputs } {
-        let x = x.map_err(Error::Hifijson)?;
-        for y in filter.id.run((ctx.clone(), x)) {
-            f(unwrap_valr(y).map_err(Error::Jaq)?);
-        }
-    }
-    Ok(())
 }
 
 fn color(color: Color, text: String) -> String {
