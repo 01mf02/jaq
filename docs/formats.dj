@@ -115,7 +115,7 @@ special floating-point values as `.inf`, `-.inf`, and `.nan`:
 ```
 [infinite, -infinite, nan, ("a" | tobytes), {"a": 1}] | tojson, toyaml -->
 "[Infinity,-Infinity,NaN,b\"a\",{\"a\":1}]"
-"[.inf,-.inf,.nan,!!binary YQ==,{\"a\":1}]"
+"[.inf, -.inf, .nan, !!binary YQ==, {a: 1}]"
 ```
 
 jaq preserves invalid UTF-8 sequences in text strings when writing YAML.
