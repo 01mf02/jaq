@@ -96,12 +96,7 @@ fn must_quote(s: &[u8]) -> bool {
         _ => (),
     }
 
-    while let Some(c) = iter.next() {
-        if c.is_ascii() && !c.is_ascii_alphanumeric() && !good_tail(c) {
-            return true;
-        }
-    }
-    false
+    iter.any(|c| c.is_ascii() && !c.is_ascii_alphanumeric() && !good_tail(c))
 }
 
 /// Format a value as YAML document, without explicit document start/end markers.
