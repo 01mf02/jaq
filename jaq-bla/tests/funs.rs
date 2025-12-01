@@ -31,7 +31,7 @@ yields!(fromyaml_none, r#""" | [fromyaml]"#, json!([]));
 yields!(fromyaml_many, r#""1\n---\n2" | [fromyaml]"#, [1, 2]);
 
 yields!(toyaml_nan, "nan | toyaml", ".nan");
-yields!(toyaml_inf, "[infinite, -infinite] | toyaml", "[.inf, -.inf]");
+yields!(toyaml_inf, "[infinite,-infinite] | toyaml", "[.inf, -.inf]");
 yields!(toyaml_bytes, r#""Hi!" | tobytes | toyaml"#, "!!binary SGkh");
 yields!(toyaml_str, r#""abc" | toyaml"#, r#"abc"#);
 yields!(toyaml_arr, r#"[0.0, "abc"] | toyaml"#, r#"[0.0, abc]"#);
