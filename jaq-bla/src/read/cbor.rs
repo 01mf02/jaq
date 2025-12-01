@@ -9,11 +9,12 @@
 //! The [examples](https://www.rfc-editor.org/rfc/rfc8949.html#section-appendix.a)
 //! from the CBOR specification are quite helpful here.
 //! They can be pasted directly into the command above.
+use crate::{invalid_data, BoxError};
 use alloc::{string::String, vec::Vec};
 use ciborium_io::Read;
 use ciborium_ll::{simple, tag, Decoder, Error, Header};
 use core::fmt::{self, Formatter};
-use jaq_json::{invalid_data, BoxError, Num, Val};
+use jaq_json::{Num, Val};
 use num_bigint::{BigInt, BigUint};
 use std::io;
 

@@ -12,10 +12,10 @@ pub use jaq_json::read as json;
 mod funs;
 pub use funs::funs;
 
-use crate::Format;
+use crate::{invalid_data, BoxError, Format};
 use bytes::Bytes;
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_json::{invalid_data, BoxError, Tag, Val};
+use jaq_json::{Tag, Val};
 use std::io::{self, Read};
 use std::path::Path;
 
