@@ -65,17 +65,15 @@ fn cbor() {
     jc("0.00006103515625", "f90400");
     jc("-4.0", "f9c400");
     jc("-4.1", "fbc010666666666666");
-    /*
     jc("Infinity", "f97c00");
-    jc("NaN", "f97e00");
+    //jc("NaN", "f97e00");
     jc("-Infinity", "f9fc00");
     jc("Infinity", "fa7f800000");
-    jc("NaN", "fa7fc00000");
+    //jc("NaN", "fa7fc00000");
     jc("-Infinity", "faff800000");
     jc("Infinity", "fb7ff0000000000000");
-    jc("NaN", "fb7ff8000000000000");
+    //jc("NaN", "fb7ff8000000000000");
     jc("-Infinity", "fbfff0000000000000");
-    */
     jc("false", "f4");
     jc("true", "f5");
     jc("null", "f6");
