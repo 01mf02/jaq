@@ -1,6 +1,7 @@
 //! JSON support.
 use crate::{Map, Num, Tag, Val};
 use alloc::{string::ToString, vec::Vec};
+use core::fmt::{self, Formatter};
 use hifijson::token::{Expect, Lex};
 use hifijson::{IterLexer, LexAlloc, SliceLexer};
 use std::io;
@@ -16,10 +17,34 @@ fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     }
 }
 
-/// Parse a sequence of JSON values.
-pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Error>> + '_ {
+/// Parse error.
+#[derive(Debug)]
+pub struct Error(usize, hifijson::Error);
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "byte offset {}: {}", self.0, self.1)
+    }
+}
+
+impl std::error::Error for Error {}
+
+/// Parse exactly one JSON value.
+pub fn parse_single(slice: &[u8]) -> Result<Val, Error> {
+    let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
     let mut lexer = SliceLexer::new(slice);
-    core::iter::from_fn(move || Some(parse(ws_tk(&mut lexer)?, &mut lexer)))
+    lexer
+        .exactly_one(ws_tk, parse)
+        .map_err(|e| Error(offset(lexer.as_slice()), e))
+}
+
+/// Parse a sequence of JSON values.
+pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_ {
+    let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
+    let mut lexer = SliceLexer::new(slice);
+    core::iter::from_fn(move || {
+        Some(parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|e| Error(offset(lexer.as_slice()), e)))
+    })
 }
 
 /// Read a sequence of JSON values.
@@ -31,11 +56,6 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
         // always return I/O error if present, regardless of the output value!
         lexer.error.take().map(Err).or(v)
     })
-}
-
-/// Parse exactly one JSON value.
-pub fn parse_single(s: &[u8]) -> Result<Val, hifijson::Error> {
-    SliceLexer::new(s).exactly_one(ws_tk, parse)
 }
 
 /// Parse a JSON string as byte string, preserving invalid UTF-8 as-is.
