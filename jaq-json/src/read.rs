@@ -64,7 +64,7 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
 /// Parse a JSON string as byte string, preserving invalid UTF-8 as-is.
 fn parse_string<L: LexAlloc>(lexer: &mut L, tag: Tag) -> Result<Vec<u8>, hifijson::Error> {
     let on_string = |bytes: &mut L::Bytes, out: &mut Vec<u8>| {
-        out.extend(bytes.iter());
+        out.extend(bytes.as_ref());
         Ok(())
     };
     let s = lexer.str_fold(Vec::new(), on_string, |lexer, out| {
@@ -79,23 +79,21 @@ fn parse_string<L: LexAlloc>(lexer: &mut L, tag: Tag) -> Result<Vec<u8>, hifijso
     s.map_err(hifijson::Error::Str)
 }
 
-fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::Error> {
-    let (num, parts) = lexer.num_string(prefix)?;
-    // if we are dealing with an integer ...
-    Ok(if parts.dot.is_none() && parts.exp.is_none() {
-        Num::from_str_radix(&num, 10).unwrap()
-    } else {
-        Num::Dec(num.to_string().into())
-    })
-}
-
-fn parse_signed<L: LexAlloc>(sign: u8, lexer: &mut L) -> Result<Num, hifijson::Error> {
-    Ok(match (sign, lexer.discarded().peek_next()) {
-        (b'+', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::INFINITY),
-        (b'-', Some(b'I')) if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
-        (b'+', _) => parse_num(lexer, "")?,
-        (b'-', _) => parse_num(lexer, "-")?,
-        _ => Err(Expect::Value)?,
+fn parse_num<L: LexAlloc>(lexer: &mut L) -> Result<Num, hifijson::Error> {
+    let num = hifijson::num::Num::signed_digits();
+    let (num, parts) = lexer.num_string_with(num).unvalidated();
+    let num = num.as_ref();
+    Ok(match num {
+        "+" if lexer.strip_prefix(b"Infinity") => Num::Float(f64::INFINITY),
+        "-" if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
+        _ if num.ends_with(|c: char| c.is_ascii_digit()) => {
+            if parts.is_int() {
+                Num::from_str_radix(num, 10).unwrap()
+            } else {
+                Num::Dec(num.to_string().into())
+            }
+        }
+        _ => Err(hifijson::num::Error::ExpectedDigit)?,
     })
 }
 
@@ -112,8 +110,7 @@ fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
         b'b' if lexer.strip_prefix(b"b\"") => Val::byte_str(parse_string(lexer, Tag::Bytes)?),
         b'N' if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
         b'I' if lexer.strip_prefix(b"Infinity") => Val::Num(Num::Float(f64::INFINITY)),
-        sign @ (b'+' | b'-') => Val::Num(parse_signed(sign, lexer)?),
-        b'0'..=b'9' => Val::Num(parse_num(lexer, "")?),
+        b'0'..=b'9' | b'+' | b'-' => Val::Num(parse_num(lexer)?),
         b'"' => Val::utf8_str(parse_string(lexer.discarded(), Tag::Utf8)?),
         b'[' => Val::Arr({
             let mut arr = Vec::new();
