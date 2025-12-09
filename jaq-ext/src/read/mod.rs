@@ -20,7 +20,7 @@ pub use funs::funs;
 
 use bytes::Bytes;
 use jaq_json::Val;
-use std::{path::Path};
+use std::path::Path;
 
 type Result<T, E = std::io::Error> = core::result::Result<T, E>;
 

@@ -69,10 +69,10 @@ impl Runner {
 }
 
 /// Compile a filter without access to external files.
-#[cfg(feature = "formats")]
 pub fn compile<P: Clone + Default + Eq>(
     code: &str,
     vars: &[String],
+    funs: impl Iterator<Item = crate::Fun>,
 ) -> Result<Filter, Vec<crate::load::FileReports<P>>> {
     use crate::load::{compile_errors, load_errors};
     use jaq_core::compile::Compiler;
@@ -89,7 +89,7 @@ pub fn compile<P: Clone + Default + Eq>(
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
     let compiler = Compiler::default()
-        .with_funs(crate::funs())
+        .with_funs(crate::base_funs().chain(funs))
         .with_global_vars(vars.iter().map(|v| &**v));
     let filter = compiler.compile(modules).map_err(compile_errors)?;
     Ok(filter)

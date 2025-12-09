@@ -39,14 +39,15 @@ impl<S: core::ops::Deref<Target = str>, I: Iterator<Item = S>> Iterator for Test
 }
 
 fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
+    use jaq_ext::data::{compile, run};
     use jaq_json::read::{parse_many, parse_single};
 
     let mut obtain = Vec::new();
     let runner = &Default::default();
-    let filter = jaq_ext::data::compile(&test.filter, &[]).map_err(Error::Report)?;
+    let filter = compile(&test.filter, &[], jaq_ext::rw_funs()).map_err(Error::Report)?;
     let vars = jaq_core::Vars::new([]);
     let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
-    jaq_ext::data::run(runner, &filter, vars, input, Error::Parse, |v| {
+    run(runner, &filter, vars, input, Error::Parse, |v| {
         obtain.push(v.map_err(Error::Jaq)?);
         Ok(())
     })?;

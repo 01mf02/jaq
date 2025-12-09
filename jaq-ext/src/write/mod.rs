@@ -10,13 +10,13 @@ pub mod yaml;
 pub use jaq_json::write as json;
 
 #[cfg(feature = "formats")]
-mod funs;
-#[cfg(feature = "formats")]
 mod formats;
 #[cfg(feature = "formats")]
-pub use funs::funs;
+mod funs;
 #[cfg(feature = "formats")]
-pub use formats::*;
+pub use formats::write;
+#[cfg(feature = "formats")]
+pub use funs::funs;
 
 use std::io::{self, IsTerminal, Write};
 

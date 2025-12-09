@@ -19,10 +19,28 @@ pub mod load;
 pub mod read;
 pub mod write;
 
+use data::DataKind;
+use jaq_core::Native;
+use jaq_std::{input, Filter};
+
+type Fun<D = DataKind> = Filter<Native<D>>;
+
+/// Functions from [`jaq_std`] and [`jaq_json`].
+pub fn base_funs() -> impl Iterator<Item = Fun> {
+    let run = jaq_std::run::<DataKind>;
+    let std = jaq_std::funs::<DataKind>();
+    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    std.chain(jaq_json::funs()).chain(input)
+}
+
 #[cfg(feature = "formats")]
-mod funs;
-#[cfg(feature = "formats")]
-pub use funs::{funs, rw_funs};
+/// (De-)Serialisation filters.
+pub fn rw_funs<D: for<'a> jaq_core::DataT<V<'a> = jaq_json::Val>>() -> impl Iterator<Item = Fun<D>>
+{
+    [read::funs::<D>(), write::funs::<D>()]
+        .into_iter()
+        .flat_map(move |funs| funs.into_vec().into_iter().map(jaq_std::run::<D>))
+}
 
 /// Input/Output format.
 #[derive(Copy, Clone, Debug, Default)]
