@@ -19,16 +19,10 @@ pub mod load;
 pub mod read;
 pub mod write;
 
-use jaq_core::{DataT, Native};
-use jaq_json::Val;
-
-/// (De-)Serialisation filters.
-pub fn rw_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = jaq_std::Filter<Native<D>>>
-{
-    [read::funs::<D>(), write::funs::<D>()]
-        .into_iter()
-        .flat_map(move |funs| funs.into_vec().into_iter().map(jaq_std::run::<D>))
-}
+#[cfg(feature = "formats")]
+mod funs;
+#[cfg(feature = "formats")]
+pub use funs::{funs, rw_funs};
 
 /// Input/Output format.
 #[derive(Copy, Clone, Debug, Default)]
@@ -87,4 +81,8 @@ type BoxError = Box<dyn std::error::Error + Send + Sync>;
 /// Create an invalid data I/O error.
 fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+}
+
+fn map_invalid_data<T>(r: Result<T, impl Into<BoxError>>) -> std::io::Result<T> {
+    r.map_err(invalid_data)
 }

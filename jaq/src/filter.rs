@@ -1,8 +1,8 @@
 //! Filter parsing, compilation, and execution.
 use crate::{funs, read, Error, Runner, Val};
+use jaq_core::{compile, load, ValT, Vars};
 use jaq_ext::data::Filter;
 use jaq_ext::load::{compile_errors, load_errors, FileReports};
-use jaq_core::{compile, load, ValT, Vars};
 use std::{io, path::PathBuf};
 
 pub fn parse_compile(
