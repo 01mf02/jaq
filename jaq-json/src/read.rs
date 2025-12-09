@@ -3,7 +3,8 @@ use crate::{Map, Num, Tag, Val};
 use alloc::{string::ToString, vec::Vec};
 use core::fmt::{self, Formatter};
 use hifijson::token::{Expect, Lex};
-use hifijson::{IterLexer, LexAlloc, SliceLexer};
+use hifijson::{LexAlloc, SliceLexer};
+#[cfg(feature = "std")]
 use std::io;
 
 /// Eat whitespace/comments, then peek at next character.
@@ -27,6 +28,7 @@ impl core::fmt::Display for Error {
     }
 }
 
+#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
 /// Parse exactly one JSON value.
@@ -47,10 +49,11 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_
     })
 }
 
+#[cfg(feature = "std")]
 /// Read a sequence of JSON values.
 pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
     let invalid_data = |e| io::Error::new(io::ErrorKind::InvalidData, e);
-    let mut lexer = IterLexer::new(read.bytes());
+    let mut lexer = hifijson::IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
         let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));
         // always return I/O error if present, regardless of the output value!

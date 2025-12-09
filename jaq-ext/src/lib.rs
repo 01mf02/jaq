@@ -1,7 +1,14 @@
-//! jaq utilities.
+//! Extra/External/Extended jaq.
 //!
 //! This crate contains all kind of functions and data types that
 //! might be useful to integrate jaq into a real-world application.
+//! It also contains support for various additional data formats.
+//!
+//! This crate is more opinionated than its dependencies
+//! [`jaq-core`], [`jaq-std`], and [`jaq-json`] and
+//! is expected to change more frequently.
+//! However, because of its small amount of exposed functions,
+//! it may be easier to stay up-to-date with it than with its dependencies.
 #![warn(missing_docs)]
 
 extern crate alloc;

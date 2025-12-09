@@ -18,7 +18,7 @@ default = ["mimalloc"]
 jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
 jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
 jaq-json = { version = "2.0.0-alpha", path = "../jaq-json" }
-jaq-bla  = { version = "0.1"        , path = "../jaq-bla" }
+jaq-ext  = { version = "0.1"        , path = "../jaq-ext" }
 
 bstr = "1"
 bytes = "1.10.1"

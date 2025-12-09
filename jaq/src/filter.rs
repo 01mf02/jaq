@@ -1,7 +1,7 @@
 //! Filter parsing, compilation, and execution.
 use crate::{funs, read, Error, Runner, Val};
-use jaq_bla::data::Filter;
-use jaq_bla::load::{compile_errors, load_errors, FileReports};
+use jaq_ext::data::Filter;
+use jaq_ext::load::{compile_errors, load_errors, FileReports};
 use jaq_core::{compile, load, ValT, Vars};
 use std::{io, path::PathBuf};
 
@@ -52,7 +52,7 @@ pub(crate) fn run(
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
     let inputs = inputs.map(|r| r.map_err(|e| e.to_string()));
-    jaq_bla::data::run(runner, filter, vars, inputs, Error::Parse, |v| {
+    jaq_ext::data::run(runner, filter, vars, inputs, Error::Parse, |v| {
         let v = v.map_err(Error::Jaq)?;
         last = Some(v.as_bool());
         f(v).map_err(Into::into)

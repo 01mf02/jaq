@@ -1,14 +1,19 @@
 [package]
-name = "jaq-bla"
+name = "jaq-ext"
 version = "0.1.0"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
+license = "MIT"
+readme = "../README.md"
+repository = "https://github.com/01mf02/jaq"
+keywords = ["jq"]
+rust-version = "1.70"
 
 [features]
 default = ["formats"]
-formats = ["cbor", "json", "toml", "xml", "yaml"]
+formats = ["cbor", "toml", "xml", "yaml"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
-json = ["hifijson"]
 toml = ["toml_edit"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser", "base64"]
@@ -30,7 +35,6 @@ num-bigint = { version = "0.4.6", default-features = false }
 base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }
-hifijson = { version = "0.4.0", default-features = false, features = ["alloc", "std"], optional = true }
 saphyr-parser = { version = "0.0.6", optional = true }
 toml_edit = { version = "0.23.2", optional = true }
 xmlparser = { version = "0.13.6", optional = true }

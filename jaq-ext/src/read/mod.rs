@@ -60,6 +60,7 @@ pub fn file_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     })
 }
 
+#[cfg(feature = "formats")]
 /// Read value from stdin or `s`, depending on format.
 pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     let stdin = || io::stdin().lock();
@@ -79,6 +80,7 @@ pub fn from_stdin(fmt: Format, s: &str, slurp: bool) -> Vals<'_> {
     }
 }
 
+#[cfg(feature = "formats")]
 /// Parse value from file or `s`, depending on format.
 pub fn from_file<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals<'a> {
     use bstr::ByteSlice;

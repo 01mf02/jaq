@@ -24,7 +24,7 @@ crate-type = ["cdylib", "rlib"]
 jaq-core = { path = "../jaq-core" }
 jaq-std  = { path = "../jaq-std" }
 jaq-json = { path = "../jaq-json" }
-jaq-bla  = { path = "../jaq-bla" }
+jaq-ext  = { path = "../jaq-ext" }
 
 aho-corasick = "1.1.2"
 codesnake = { version = "0.2" }

@@ -299,8 +299,8 @@ dependencies = [
  "codesnake",
  "dirs",
  "env_logger",
- "jaq-bla",
  "jaq-core",
+ "jaq-ext",
  "jaq-json",
  "jaq-std",
  "log",
@@ -308,29 +308,6 @@ dependencies = [
  "mimalloc",
  "rustyline",
  "tempfile",
-]
-
-[[package]]
-name = "jaq-bla"
-version = "0.1.0"
-dependencies = [
- "base64",
- "bstr",
- "bytes",
- "ciborium-io",
- "ciborium-ll",
- "codesnake",
- "hifijson",
- "jaq-core",
- "jaq-json",
- "jaq-std",
- "memmap2",
- "num-bigint",
- "saphyr-parser",
- "serde_json",
- "toml_edit",
- "unicode-width",
- "xmlparser",
 ]
 
 [[package]]
@@ -344,6 +321,28 @@ dependencies = [
  "once_cell",
  "serde_json",
  "typed-arena",
+]
+
+[[package]]
+name = "jaq-ext"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "bstr",
+ "bytes",
+ "ciborium-io",
+ "ciborium-ll",
+ "codesnake",
+ "jaq-core",
+ "jaq-json",
+ "jaq-std",
+ "memmap2",
+ "num-bigint",
+ "saphyr-parser",
+ "serde_json",
+ "toml_edit",
+ "unicode-width",
+ "xmlparser",
 ]
 
 [[package]]
@@ -372,8 +371,8 @@ dependencies = [
  "codesnake",
  "console_log",
  "getrandom 0.2.16",
- "jaq-bla",
  "jaq-core",
+ "jaq-ext",
  "jaq-json",
  "jaq-std",
  "js-sys",

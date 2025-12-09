@@ -43,10 +43,10 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
 
     let mut obtain = Vec::new();
     let runner = &Default::default();
-    let filter = jaq_bla::data::compile(&test.filter, &[]).map_err(Error::Report)?;
+    let filter = jaq_ext::data::compile(&test.filter, &[]).map_err(Error::Report)?;
     let vars = jaq_core::Vars::new([]);
     let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
-    jaq_bla::data::run(runner, &filter, vars, input, Error::Parse, |v| {
+    jaq_ext::data::run(runner, &filter, vars, input, Error::Parse, |v| {
         obtain.push(v.map_err(Error::Jaq)?);
         Ok(())
     })?;

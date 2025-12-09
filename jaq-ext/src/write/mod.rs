@@ -9,7 +9,9 @@ pub mod xml;
 pub mod yaml;
 pub use jaq_json::write as json;
 
+#[cfg(feature = "formats")]
 mod funs;
+#[cfg(feature = "formats")]
 pub use funs::funs;
 
 use crate::data::Writer;
@@ -23,6 +25,7 @@ fn map_err_to_string<T, E: core::fmt::Display>(r: Result<T, E>) -> Result<T> {
     r.map_err(|e| invalid_data(e.to_string()))
 }
 
+#[cfg(feature = "formats")]
 /// Write value.
 pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
     let Writer { format, pp, join } = writer;
