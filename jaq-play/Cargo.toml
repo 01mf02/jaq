@@ -21,8 +21,6 @@ wasm-opt = ['-O','--all-features']
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-jaq-core = { path = "../jaq-core" }
-jaq-std  = { path = "../jaq-std" }
 jaq-json = { path = "../jaq-json" }
 jaq-ext  = { path = "../jaq-ext" }
 

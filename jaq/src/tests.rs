@@ -44,7 +44,7 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
 
     let mut obtain = Vec::new();
     let runner = &Default::default();
-    let filter = compile(&test.filter, &[], jaq_ext::rw_funs()).map_err(Error::Report)?;
+    let filter = compile(&test.filter).map_err(Error::Report)?;
     let vars = jaq_core::Vars::new([]);
     let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
     run(runner, &filter, vars, input, Error::Parse, |v| {

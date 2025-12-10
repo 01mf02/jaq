@@ -1,10 +1,12 @@
 //! Commonly used data for filter execution.
-use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
+use crate::load::{compile_errors, load_errors, FileReports};
+use jaq_core::load::{import, parse::Def, Arena, File, Loader};
+use jaq_core::{compile::Compiler, data, unwrap_valr, DataT, Lut, Vars};
 use jaq_json::{write::Pp, Val};
 use jaq_std::input::{self, Inputs, RcIter};
 
 /// Filter for given kind of data.
-pub type Filter = jaq_core::Filter<DataKind>;
+pub type Filter<D = DataKind> = jaq_core::Filter<D>;
 
 /// Execution context for given kind of data.
 pub type Ctx<'a> = jaq_core::Ctx<'a, DataKind>;
@@ -68,19 +70,23 @@ impl Runner {
     }
 }
 
-/// Compile a filter without access to external files.
-pub fn compile<P: Clone + Default + Eq>(
-    code: &str,
-    vars: &[String],
-    funs: impl Iterator<Item = crate::Fun>,
-) -> Result<Filter, Vec<crate::load::FileReports<P>>> {
-    use crate::load::{compile_errors, load_errors};
-    use jaq_core::compile::Compiler;
-    use jaq_core::load::{import, Arena, File, Loader};
+#[cfg(feature = "formats")]
+pub fn compile<P: Clone + Default + Eq>(code: &str) -> Result<Filter, Vec<FileReports<P>>> {
+    let defs = jaq_std::defs().chain(jaq_json::defs());
+    let funs = crate::base_funs().chain(crate::rw_funs());
+    compile_with(code, defs, funs, &[])
+}
 
+/// Compile a filter without access to external files.
+pub fn compile_with<P: Clone + Default + Eq, D: DataT>(
+    code: &str,
+    defs: impl Iterator<Item = Def>,
+    funs: impl Iterator<Item = crate::Fun<D>>,
+    vars: &[String],
+) -> Result<Filter<D>, Vec<FileReports<P>>> {
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+    let loader = Loader::new(defs);
     let path = P::default();
     let modules = loader
         .load(&arena, File { path, code })
@@ -88,11 +94,11 @@ pub fn compile<P: Clone + Default + Eq>(
 
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
 
-    let compiler = Compiler::default()
-        .with_funs(crate::base_funs().chain(funs))
-        .with_global_vars(vars.iter().map(|v| &**v));
-    let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok(filter)
+    Compiler::default()
+        .with_funs(funs)
+        .with_global_vars(vars.iter().map(|v| &**v))
+        .compile(modules)
+        .map_err(compile_errors)
 }
 
 /// Run a filter with given input values and run `f` for every value output.

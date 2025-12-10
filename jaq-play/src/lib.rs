@@ -4,9 +4,8 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::Vars;
 use jaq_ext::data::{self, compile, Runner, Writer};
-use jaq_ext::{load::Color, read, rw_funs};
+use jaq_ext::{load::Color, read};
 use jaq_json::write::{Colors, Pp};
 use jaq_json::{bstr, write_bytes, write_utf8, Tag, Val};
 use wasm_bindgen::prelude::*;
@@ -134,7 +133,7 @@ impl Settings {
 
 enum Error {
     Hifijson(String),
-    Jaq(jaq_core::Error<Val>),
+    Jaq(jaq_json::Error),
 }
 
 #[wasm_bindgen]
@@ -156,10 +155,10 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
         post(s.to_string());
         Ok(())
     };
-    let vars = Vars::new([]);
+    let vars = Default::default();
     let inputs = read_str(&settings, input);
 
-    match compile::<()>(filter, &[], rw_funs()) {
+    match compile::<()>(filter) {
         Err(file_reports) => {
             for (file, reports) in file_reports {
                 let idx = codesnake::LineIndex::new(&file.code);
