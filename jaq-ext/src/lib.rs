@@ -19,24 +19,39 @@ pub mod load;
 pub mod read;
 pub mod write;
 
-use data::DataKind;
-use jaq_core::Native;
-use jaq_std::{input, Filter};
+use jaq_core::load::{import, parse::Def, Arena, File, Loader};
+use jaq_core::{compile::Compiler, DataT, Filter};
+use load::{compile_errors, load_errors, FileReports};
 
-type Fun<D = DataKind> = Filter<Native<D>>;
+type Fun<D> = jaq_std::Filter<jaq_core::Native<D>>;
 
-/// Functions from [`jaq_std`] and [`jaq_json`].
-pub fn base_funs() -> impl Iterator<Item = Fun> {
-    let run = jaq_std::run::<DataKind>;
-    let std = jaq_std::funs::<DataKind>();
-    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
-    std.chain(jaq_json::funs()).chain(input)
+/// Compile a filter without access to external files.
+pub fn compile_with<P: Clone + Default + Eq, D: DataT>(
+    code: &str,
+    defs: impl Iterator<Item = Def>,
+    funs: impl Iterator<Item = Fun<D>>,
+    vars: &[String],
+) -> Result<Filter<D>, Vec<FileReports<P>>> {
+    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
+    let arena = Arena::default();
+    let loader = Loader::new(defs);
+    let path = P::default();
+    let modules = loader
+        .load(&arena, File { path, code })
+        .map_err(load_errors)?;
+
+    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
+
+    Compiler::default()
+        .with_funs(funs)
+        .with_global_vars(vars.iter().map(|v| &**v))
+        .compile(modules)
+        .map_err(compile_errors)
 }
 
 #[cfg(feature = "formats")]
 /// (De-)Serialisation filters.
-pub fn rw_funs<D: for<'a> jaq_core::DataT<V<'a> = jaq_json::Val>>() -> impl Iterator<Item = Fun<D>>
-{
+pub fn rw_funs<D: for<'a> DataT<V<'a> = jaq_json::Val>>() -> impl Iterator<Item = Fun<D>> {
     [read::funs::<D>(), write::funs::<D>()]
         .into_iter()
         .flat_map(move |funs| funs.into_vec().into_iter().map(jaq_std::run::<D>))
@@ -63,10 +78,10 @@ pub enum Format {
     Yaml,
 }
 
-/// List of all currently supported formats.
-pub const FMTS: &str = "raw, json, cbor, yaml, toml, xml";
-
 impl Format {
+    /// List of all currently supported formats.
+    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml";
+
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {
         match path.extension()?.to_str()? {

@@ -1,12 +1,10 @@
 //! Commonly used data for filter execution.
-use crate::load::{compile_errors, load_errors, FileReports};
-use jaq_core::load::{import, parse::Def, Arena, File, Loader};
-use jaq_core::{compile::Compiler, data, unwrap_valr, DataT, Lut, Vars};
-use jaq_json::{write::Pp, Val};
+use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
+use jaq_json::{write::Pp, Val, ValR};
 use jaq_std::input::{self, Inputs, RcIter};
 
 /// Filter for given kind of data.
-pub type Filter<D = DataKind> = jaq_core::Filter<D>;
+pub type Filter = jaq_core::Filter<DataKind>;
 
 /// Execution context for given kind of data.
 pub type Ctx<'a> = jaq_core::Ctx<'a, DataKind>;
@@ -70,35 +68,20 @@ impl Runner {
     }
 }
 
-#[cfg(feature = "formats")]
-pub fn compile<P: Clone + Default + Eq>(code: &str) -> Result<Filter, Vec<FileReports<P>>> {
-    let defs = jaq_std::defs().chain(jaq_json::defs());
-    let funs = crate::base_funs().chain(crate::rw_funs());
-    compile_with(code, defs, funs, &[])
+/// Functions from [`jaq_std`] and [`jaq_json`].
+pub fn base_funs() -> impl Iterator<Item = crate::Fun<DataKind>> {
+    let run = jaq_std::run::<DataKind>;
+    let std = jaq_std::funs::<DataKind>();
+    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    std.chain(jaq_json::funs()).chain(input)
 }
 
-/// Compile a filter without access to external files.
-pub fn compile_with<P: Clone + Default + Eq, D: DataT>(
-    code: &str,
-    defs: impl Iterator<Item = Def>,
-    funs: impl Iterator<Item = crate::Fun<D>>,
-    vars: &[String],
-) -> Result<Filter<D>, Vec<FileReports<P>>> {
-    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
-    let arena = Arena::default();
-    let loader = Loader::new(defs);
-    let path = P::default();
-    let modules = loader
-        .load(&arena, File { path, code })
-        .map_err(load_errors)?;
-
-    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
-
-    Compiler::default()
-        .with_funs(funs)
-        .with_global_vars(vars.iter().map(|v| &**v))
-        .compile(modules)
-        .map_err(compile_errors)
+/// Compile a filter without access to external files/variables, including all functions/definitions.
+#[cfg(feature = "formats")]
+pub fn compile<P: Clone + Default + Eq>(code: &str) -> Result<Filter, Vec<crate::FileReports<P>>> {
+    let defs = jaq_std::defs().chain(jaq_json::defs());
+    let funs = base_funs().chain(crate::rw_funs());
+    crate::compile_with(code, defs, funs, &[])
 }
 
 /// Run a filter with given input values and run `f` for every value output.
@@ -111,7 +94,7 @@ pub fn run<E>(
     vars: Vars<Val>,
     inputs: impl Iterator<Item = Result<Val, String>>,
     fi: impl Fn(String) -> E,
-    mut f: impl FnMut(jaq_core::ValR<Val>) -> Result<(), E>,
+    mut f: impl FnMut(ValR) -> Result<(), E>,
 ) -> Result<(), E> {
     let inputs = Box::new(inputs) as Box<dyn Iterator<Item = _>>;
     let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;

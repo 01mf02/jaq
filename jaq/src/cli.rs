@@ -1,6 +1,6 @@
 //! Command-line argument parsing
 use core::fmt;
-pub use jaq_ext::{Format, FMTS};
+pub use jaq_ext::Format;
 use std::env::ArgsOs;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -223,6 +223,7 @@ pub enum Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        const FMTS: &str = Format::ALL;
         match self {
             Self::Flag(s) => write!(f, "unknown flag: {s}"),
             Self::Utf8(s) => write!(f, "invalid UTF-8: {s:?}"),
