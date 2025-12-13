@@ -10,7 +10,7 @@ use core::fmt::{self, Formatter};
 use filter::run;
 use jaq_core::Vars;
 use jaq_ext::data::{Filter, Runner, Writer};
-use jaq_ext::load::{Color, FileReports};
+use jaq_ext::load::{Color, FileReports, PathBlock};
 use jaq_ext::read;
 use jaq_ext::write::{with_stdout, write};
 use jaq_json::write::{Colors, Pp};
@@ -255,12 +255,11 @@ impl fmt::Display for ErrorColor<'_> {
                 writeln!(f, "{e}")
             }
             Error::Report(reports) => reports.iter().try_for_each(|(file, reports)| {
-                let idx = codesnake::LineIndex::new(&file.code);
                 reports.iter().try_for_each(|e| {
                     writeln!(f, "Error: {}", e.message)?;
-                    let block = e.to_block(&idx, *color);
-                    writeln!(f, "{}[{}]", block.prologue(), file.path.display())?;
-                    writeln!(f, "{}{}", block, block.epilogue())
+                    let path = format!("[{}]", file.path.display());
+                    let block = e.to_block(&file.code, *color);
+                    PathBlock::new(path, block).fmt(f)
                 })
             }),
             Error::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),

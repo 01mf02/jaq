@@ -73,6 +73,14 @@ impl<C, P> File<C, P> {
             path: self.path,
         }
     }
+
+    /// Apply a function to the path of a file.
+    pub fn map_path<P2>(self, f: impl Fn(P) -> P2) -> File<C, P2> {
+        File {
+            code: self.code,
+            path: f(self.path),
+        }
+    }
 }
 
 /// Error occurring during loading of a single module.

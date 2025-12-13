@@ -25,7 +25,6 @@ jaq-json = { path = "../jaq-json" }
 jaq-ext  = { path = "../jaq-ext" }
 
 aho-corasick = "1.1.2"
-codesnake = { version = "0.2" }
 log = "0.4.17"
 
 console_log = { version = "1.0", features = ["color"] }

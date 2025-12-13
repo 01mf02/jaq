@@ -26,18 +26,19 @@ use load::{compile_errors, load_errors, FileReports};
 type Fun<D> = jaq_std::Filter<jaq_core::Native<D>>;
 
 /// Compile a filter without access to external files.
-pub fn compile_with<P: Clone + Default + Eq, D: DataT>(
+///
+/// A simplified version of this function is [`data::compile`].
+pub fn compile_with<D: DataT>(
     code: &str,
     defs: impl Iterator<Item = Def>,
     funs: impl Iterator<Item = Fun<D>>,
     vars: &[String],
-) -> Result<Filter<D>, Vec<FileReports<P>>> {
+) -> Result<Filter<D>, Vec<FileReports>> {
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
     let loader = Loader::new(defs);
-    let path = P::default();
     let modules = loader
-        .load(&arena, File { path, code })
+        .load(&arena, File { path: (), code })
         .map_err(load_errors)?;
 
     import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
@@ -50,7 +51,7 @@ pub fn compile_with<P: Clone + Default + Eq, D: DataT>(
 }
 
 #[cfg(feature = "formats")]
-/// (De-)Serialisation filters.
+/// (De-)Serialisation filters, such as `fromyaml`, `toxml`.
 pub fn rw_funs<D: for<'a> DataT<V<'a> = jaq_json::Val>>() -> impl Iterator<Item = Fun<D>> {
     [read::funs::<D>(), write::funs::<D>()]
         .into_iter()

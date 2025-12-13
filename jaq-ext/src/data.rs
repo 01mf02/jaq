@@ -1,4 +1,5 @@
 //! Commonly used data for filter execution.
+use crate::{compile_with, rw_funs, FileReports, Format, Fun};
 use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
 use jaq_json::{write::Pp, Val, ValR};
 use jaq_std::input::{self, Inputs, RcIter};
@@ -54,7 +55,7 @@ pub struct Runner {
 #[derive(Default)]
 pub struct Writer {
     /// output format
-    pub format: crate::Format,
+    pub format: Format,
     /// pretty printer
     pub pp: Pp,
     /// concatenate outputs without newline
@@ -69,7 +70,7 @@ impl Runner {
 }
 
 /// Functions from [`jaq_std`] and [`jaq_json`].
-pub fn base_funs() -> impl Iterator<Item = crate::Fun<DataKind>> {
+pub fn base_funs() -> impl Iterator<Item = Fun<DataKind>> {
     let run = jaq_std::run::<DataKind>;
     let std = jaq_std::funs::<DataKind>();
     let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
@@ -78,10 +79,10 @@ pub fn base_funs() -> impl Iterator<Item = crate::Fun<DataKind>> {
 
 /// Compile a filter without access to external files/variables, including all functions/definitions.
 #[cfg(feature = "formats")]
-pub fn compile<P: Clone + Default + Eq>(code: &str) -> Result<Filter, Vec<crate::FileReports<P>>> {
+pub fn compile(code: &str) -> Result<Filter, Vec<FileReports>> {
     let defs = jaq_std::defs().chain(jaq_json::defs());
-    let funs = base_funs().chain(crate::rw_funs());
-    crate::compile_with(code, defs, funs, &[])
+    let funs = base_funs().chain(rw_funs());
+    compile_with(code, defs, funs, &[])
 }
 
 /// Run a filter with given input values and run `f` for every value output.

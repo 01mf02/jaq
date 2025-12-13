@@ -1,8 +1,9 @@
 //! Pretty-printing compilation errors.
+use core::fmt::{self, Display, Formatter};
 use jaq_core::{compile, load};
 
 /// File and corresponding error reports.
-pub type FileReports<P> = (load::File<String, P>, Vec<Report>);
+pub type FileReports<P = ()> = (load::File<String, P>, Vec<Report>);
 
 /// Report errors that may occur when loading a module.
 pub fn load_errors<P>(errs: load::Errors<&str, P>) -> Vec<FileReports<P>> {
@@ -130,12 +131,12 @@ type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
 
 impl Report {
     /// Convert report to a code block.
-    pub fn to_block(
-        &self,
-        idx: &codesnake::LineIndex,
-        paint: fn(Color, String) -> String,
-    ) -> CodeBlock {
-        use codesnake::{Block, CodeWidth, Label};
+    ///
+    /// This constructs a line index for its `code` input, which
+    /// redoes work if there are multiple error messages for the same file.
+    /// However, normally, this should not be a performance bottleneck.
+    pub fn to_block(&self, code: &str, paint: fn(Color, String) -> String) -> CodeBlock {
+        use codesnake::{Block, CodeWidth, Label, LineIndex};
         let color_maybe = |(text, color): (String, Option<Color>)| match color {
             None => text,
             Some(color) => paint(color, text),
@@ -146,10 +147,29 @@ impl Report {
                 .with_text(text.join(""))
                 .with_style(move |s| paint(color, s))
         });
-        Block::new(idx, labels).unwrap().map_code(|c| {
+        let idx = LineIndex::new(code);
+        Block::new(&idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))
         })
+    }
+}
+
+/// Path and corresponding code block for pretty-printing.
+pub struct PathBlock<P>(P, CodeBlock);
+
+impl<P> PathBlock<P> {
+    /// Construct a new [`PathBlock`].
+    pub fn new(path: P, block: CodeBlock) -> Self {
+        Self(path, block)
+    }
+}
+
+impl<P: Display> Display for PathBlock<P> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let PathBlock(path, block) = self;
+        writeln!(f, "{}{}", block.prologue(), path)?;
+        writeln!(f, "{}{}", block, block.epilogue())
     }
 }

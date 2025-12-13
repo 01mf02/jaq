@@ -5,7 +5,7 @@ use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_ext::data::{self, compile, Runner, Writer};
-use jaq_ext::{load::Color, read};
+use jaq_ext::load::{Color, PathBlock};
 use jaq_json::write::{Colors, Pp};
 use jaq_json::{bstr, write_bytes, write_utf8, Tag, Val};
 use wasm_bindgen::prelude::*;
@@ -158,20 +158,16 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let vars = Default::default();
     let inputs = read_str(&settings, input);
 
-    match compile::<()>(filter) {
-        Err(file_reports) => {
-            for (file, reports) in file_reports {
-                let idx = codesnake::LineIndex::new(&file.code);
-                for e in reports {
-                    let error = format!("⚠️ Error: {}", e.message);
-                    post(error);
+    match compile(filter) {
+        Err(file_reports) => file_reports.iter().for_each(|(file, reports)| {
+            for e in reports {
+                let error = format!("⚠️ Error: {}", e.message);
+                post(error);
 
-                    let block = e.to_block(&idx, color);
-                    let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
-                    post(block);
-                }
+                let block = e.to_block(&file.code, color);
+                post(format!("{}", PathBlock::new("", block)));
             }
-        }
+        }),
         Ok(filter) => match data::run(runner, &filter, vars, inputs, Error::Hifijson, post_value) {
             Ok(()) => (),
             Err(Error::Hifijson(e)) => post(format!("⚠️ Parse error: {e}")),
@@ -192,7 +188,7 @@ fn read_str<'a>(
     } else {
         let vals =
             jaq_json::read::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
-        Box::new(read::collect_if(settings.slurp, vals))
+        Box::new(jaq_ext::read::collect_if(settings.slurp, vals))
     }
 }
 

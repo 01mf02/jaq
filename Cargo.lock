@@ -294,9 +294,6 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 name = "jaq"
 version = "3.0.0-alpha"
 dependencies = [
- "bstr",
- "bytes",
- "codesnake",
  "dirs",
  "env_logger",
  "jaq-core",
@@ -368,7 +365,6 @@ name = "jaq-play"
 version = "0.0.0"
 dependencies = [
  "aho-corasick",
- "codesnake",
  "console_log",
  "getrandom 0.2.16",
  "jaq-ext",
