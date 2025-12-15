@@ -12,10 +12,6 @@ pub fn parse_many(s: &str) -> impl Iterator<Item = Result<Val, Error>> + '_ {
     core::iter::from_fn(move || st.parse_stream_entry())
 }
 
-/// Lex error.
-#[derive(Debug)]
-pub struct LError(ScanError);
-
 /// Error span.
 #[derive(Copy, Clone, Debug)]
 pub struct Span(saphyr_parser::Span);
@@ -31,7 +27,7 @@ impl fmt::Display for Span {
 #[derive(Debug)]
 pub enum Error {
     /// Lex error
-    Lex(LError),
+    Lex(ScanError),
     /// Scalar value has been encountered with an invalid type, e.g. `!!null 1`
     Scalar(Cow<'static, str>, String, Span),
 }
@@ -39,7 +35,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Lex(LError(e)) => e.fmt(f),
+            Self::Lex(e) => e.fmt(f),
             Self::Scalar(tag, s, span) => {
                 let msg = match tag {
                     Cow::Borrowed(_) => "is incompatible with",
@@ -48,12 +44,6 @@ impl fmt::Display for Error {
                 write!(f, "scalar \"{s}\" {msg} tag {tag} ({span})")
             }
         }
-    }
-}
-
-impl From<ScanError> for Error {
-    fn from(e: ScanError) -> Self {
-        Self::Lex(LError(e))
     }
 }
 
@@ -73,7 +63,7 @@ impl<'input, T: Input> State<'input, T> {
     }
 
     fn next(&mut self) -> Result<EventSpan<'input>, Error> {
-        self.parser.next().unwrap().map_err(Error::from)
+        self.parser.next().unwrap().map_err(Error::Lex)
     }
 
     fn push_alias(&mut self, val: Val, anchor_id: usize) {
