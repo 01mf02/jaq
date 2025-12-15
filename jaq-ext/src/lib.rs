@@ -5,7 +5,7 @@
 //! It also contains support for various additional data formats.
 //!
 //! This crate is more opinionated than its dependencies
-//! [`jaq-core`], [`jaq-std`], and [`jaq-json`] and
+//! `jaq-core`, `jaq-std`, and `jaq-json` and
 //! is expected to change more frequently.
 //! However, because of its small amount of exposed functions,
 //! it may be easier to stay up-to-date with it than with its dependencies.
