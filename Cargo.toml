@@ -3,8 +3,9 @@ members = [
     "jaq-core",
     "jaq-std",
     "jaq-json",
+    "jaq-ext",
     "jaq",
-    "jaq-play", "jaq-ext",
+    "jaq-play",
 ]
 
 resolver = "2"
