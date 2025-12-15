@@ -1,31 +1,12 @@
 //! TOML support.
 use alloc::string::{String, ToString};
-use core::fmt::{self, Formatter};
 use jaq_json::{Num, Tag, Val};
-use toml_edit::{Document, Item, Table, Value};
+use toml_edit::{Document, Item, Table, TomlError as Error, Value};
 
 /// Parse a TOML document from a string.
 pub fn parse(s: &str) -> Result<Val, Error> {
     table(s.parse::<Document<String>>()?.into_table())
 }
-
-/// Parse error.
-#[derive(Debug)]
-pub struct Error(toml_edit::TomlError);
-
-impl From<toml_edit::TomlError> for Error {
-    fn from(e: toml_edit::TomlError) -> Self {
-        Self(e)
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl std::error::Error for Error {}
 
 fn value(v: Value) -> Result<Val, Error> {
     Ok(match v {
