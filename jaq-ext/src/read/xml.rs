@@ -213,25 +213,3 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
         } => singleton("doctype", doctype(&name, external_id, None)),
     })
 }
-
-/// Serialisation error.
-#[derive(Debug)]
-pub enum SError {
-    /// Unknown key with value was found in an object, e.g. `{t: "a", x: 1}`
-    InvalidEntry(&'static str, Val, Val),
-    /// Object with zero or more than one keys found, e.g. `{}`, `{a: 1, b: 2}`
-    SingletonObj(Val),
-}
-
-impl fmt::Display for SError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::InvalidEntry(o, k, v) => {
-                write!(f, "invalid entry in {o} object: {{\"{k}\": {v}}}")
-            }
-            Self::SingletonObj(v) => write!(f, "expected singleton object, found: {v}"),
-        }
-    }
-}
-
-impl std::error::Error for SError {}
