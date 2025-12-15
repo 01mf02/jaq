@@ -301,7 +301,6 @@ dependencies = [
  "jaq-json",
  "jaq-std",
  "log",
- "memmap2",
  "mimalloc",
  "rustyline",
  "tempfile",

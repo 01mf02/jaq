@@ -15,15 +15,14 @@ rust-version = "1.70"
 default = ["mimalloc"]
 
 [dependencies]
-jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
-jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
-jaq-json = { version = "2.0.0-alpha", path = "../jaq-json" }
-jaq-ext  = { version = "0.1"        , path = "../jaq-ext" }
+jaq-core = { workspace = true }
+jaq-std  = { workspace = true }
+jaq-json = { workspace = true }
+jaq-ext  = { workspace = true }
 
 dirs = { version = "6.0" }
 env_logger = { version = "0.10.0", default-features = false }
 log = { version = "0.4.17" }
-memmap2 = "0.9"
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
 rustyline = { version = "13.0.0", default-features = false, features = ["with-file-history"] }
 tempfile = "3.3.0"

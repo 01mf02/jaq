@@ -17,8 +17,8 @@ sync = []
 std = ["hifijson/std"]
 
 [dependencies]
-jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
-jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
+jaq-core = { workspace = true }
+jaq-std  = { workspace = true }
 
 bstr = "1"
 bytes = "1"

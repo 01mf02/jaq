@@ -10,6 +10,12 @@ members = [
 
 resolver = "2"
 
+[workspace.dependencies]
+jaq-core = { version = "3.0.0-alpha", path = "jaq-core" }
+jaq-std  = { version = "3.0.0-alpha", path = "jaq-std" }
+jaq-json = { version = "2.0.0-alpha", path = "jaq-json" }
+jaq-ext  = { version = "0.1"        , path = "jaq-ext" }
+
 [profile.release]
 strip = true
 codegen-units = 1
