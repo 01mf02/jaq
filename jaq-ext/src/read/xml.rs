@@ -47,15 +47,11 @@ impl fmt::Display for TagPos {
     }
 }
 
-/// Lex error.
-#[derive(Debug)]
-pub struct LError(xmlparser::Error);
-
 /// Parse error.
 #[derive(Debug)]
 pub enum Error {
     /// Lex error
-    Lex(LError),
+    Lex(xmlparser::Error),
     /// Unmatched closing tag, e.g. `<a></b>`
     Unmatched(TagPos, TagPos),
     /// Unclosed tag, e.g. `<a>`
@@ -65,7 +61,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::Lex(LError(e)) => e.fmt(f),
+            Self::Lex(e) => e.fmt(f),
             Self::Unmatched(open, close) => {
                 write!(f, "expected closing tag for {open}, found {close}")
             }
@@ -78,7 +74,7 @@ impl fmt::Display for Error {
 
 impl From<xmlparser::Error> for Error {
     fn from(e: xmlparser::Error) -> Self {
-        Self::Lex(LError(e))
+        Self::Lex(e)
     }
 }
 
