@@ -285,7 +285,7 @@ pub fn format_with(w: &mut Formatter, pp: &Pp, level: usize, v: &Val, f: FormatF
 /// jq may cause silent information loss, whereas
 /// jaq may yield invalid JSON values.
 /// Choose your poison.
-pub fn write(w: &mut dyn io::Write, pp: &Pp, level: usize, v: &Val) -> io::Result<()> {
+pub fn write(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> io::Result<()> {
     write_with(w, pp, level, v, write)
 }
 

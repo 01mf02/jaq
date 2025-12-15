@@ -8,6 +8,8 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
+// even if this crate is `no_std`, it currently relies on `std`, because
+// `to_json` has to go through the JSON writer to preserve invalid UTF-8
 extern crate std;
 
 mod funs;
