@@ -186,18 +186,17 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     });
     let argjson = cli.argjson.iter().map(|(k, s)| {
         let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
-        Ok((
-            k.to_owned(),
-            jaq_json::read::parse_single(s.as_bytes()).map_err(err)?,
-        ))
+        let s = s.as_bytes();
+        Ok((k.to_owned(), jaq_json::read::parse_single(s).map_err(err)?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
-        let s = read::load_file(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
-        Ok((k.to_owned(), Val::utf8_str(s?)))
+        let err = |e| Error::Io(Some(format!("{path:?}")), e);
+        let s = read::load_file(path).map_err(err)?;
+        Ok((k.to_owned(), Val::utf8_str(s)))
     });
     let slurpfile = cli.slurpfile.iter().map(|(k, path)| {
-        let a = read::json_array(path).map_err(|e| Error::Io(Some(format!("{path:?}")), e));
-        Ok((k.to_owned(), a?))
+        let err = |e| Error::Io(Some(format!("{path:?}")), e);
+        Ok((k.to_owned(), read::json_array(path).map_err(err)?))
     });
 
     let positional = cli.args.iter().cloned().map(|s| Ok(Val::from(s)));
