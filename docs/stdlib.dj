@@ -71,26 +71,6 @@ For example, `{a: 1, b: 2} | to_entries | from_entries --> {"a": 1, "b": 2}`.
 The filter `with_entries(f)` is equivalent to `to_entries | map(f) | from_entries`.
 For example, `{"a": 1, "b": 2} | with_entries(.key |= ascii_upcase) --> {"A": 1, "B": 2}`
 
-### `type`
-
-The filter `type` returns the type of its input value as string. For example:
-
-- `null  | type --> "null"`
-- `false | type --> "boolean"`
-- `0     | type --> "number"`
-- `"foo" | type --> "string"`
-- `[1]   | type --> "array"`
-- `{}    | type --> "object"`
-
-Note that both text strings and byte strings both have the same type `"string"`.
-
-::: Advanced
-The `type` filter can be relatively slow to run;
-if you use it for simple comparisons such as
-`type == "string"`, then you can also use filters like
-[`isstring`](#istype).
-:::
-
 
 ## Stream consumers
 
@@ -308,6 +288,7 @@ For example:
 The filter `recurse` is a short form for `recurse(.[]?)`.
 It returns all values recursively contained in the input, e.g.
 `[1, [2], {a: 3}] | recurse --> [1, [2], {"a": 3}] 1 [2] 2 {"a":3} 3`.
+It yields the same outputs as `..` ([recursion](#recursion)).
 
 ::: Advanced
 We can write a Fibonacci generator as follows:
@@ -350,19 +331,9 @@ Examples:
 - `0 | until(. >= 3; . + 1) --> 3`
 
 
-{#booleans-stdlib}
-## Booleans
+## Selection
 
 The filters in this section classify their inputs or output them selectively.
-
-### `toboolean`
-
-The filter `toboolean` is for booleans what [`tonumber`](#tonumber) is for numbers. 
-For example:
-
-- `  true   | toboolean --> true`
-- ` "true"  | toboolean --> true`
-- `"[true]" | try toboolean catch "fail" --> "fail"`
 
 {#select}
 ### `select(p)`
@@ -457,19 +428,24 @@ Examples:
 - `0        | isnan, isinfinite, isfinite, isnormal --> false false true  false`
 - `1        | isnan, isinfinite, isfinite, isnormal --> false false true  true`
 
-### `not`
+### `type`
 
-The filter `not` converts its input to its [boolean value](#booleans) and returns its negation.
-For example:
+The filter `type` returns the type of its input value as string. For example:
 
-- `true  | not --> false`
-- `false | not --> true`
-- `"foo" | not --> false`
+- `null  | type --> "null"`
+- `false | type --> "boolean"`
+- `0     | type --> "number"`
+- `"foo" | type --> "string"`
+- `[1]   | type --> "array"`
+- `{}    | type --> "object"`
+
+Note that both text strings and byte strings both have the same type `"string"`.
 
 ::: Advanced
-The filter `not` is equivalent to `if . then false else true end`.
-We can obtain the boolean value of a value by `not | not`; i.e.
-`"" | not | not --> true`.
+The `type` filter can be relatively slow to run;
+if you use it for simple comparisons such as
+`type == "string"`, then you can also use filters like
+[`isstring`](#istype).
 :::
 
 
@@ -808,6 +784,41 @@ subset of paths to objects.
 ::: Advanced
 We have the property that `pick(f, g)` is equivalent to `pick(f) * pick(g)`.
 :::
+
+
+{#booleans-stdlib}
+## Booleans
+
+### `true`, `false`
+
+The filters `true` and `false` yield the values `true` and `false`, respectively:
+
+- `true  --> true`
+- `false --> false`
+
+### `not`
+
+The filter `not` converts its input to its [boolean value](#booleans) and returns its negation.
+For example:
+
+- `true  | not --> false`
+- `false | not --> true`
+- `"foo" | not --> false`
+
+::: Advanced
+The filter `not` is equivalent to `if . then false else true end`.
+We can obtain the boolean value of a value by `not | not`; i.e.
+`"" | not | not --> true`.
+:::
+
+### `toboolean`
+
+The filter `toboolean` is for booleans what [`tonumber`](#tonumber) is for numbers. 
+For example:
+
+- `  true   | toboolean --> true`
+- ` "true"  | toboolean --> true`
+- `"[true]" | try toboolean catch "fail" --> "fail"`
 
 
 {#numbers-stdlib}
@@ -2023,6 +2034,23 @@ the key is the name of the variable and the value is its value.
 For example, `{"EDITOR": "vim", "SHELL": "/usr/bin/bash"}`.
 
 The filter `env` is equivalent to `$ENV`.
+
+### `repl`
+
+The filter `repl` starts an interactive REPL (read-eval-print-loop).
+You can nest calls to `repl`; that is, you can run `repl` from inside a `repl`.
+Use CTRL-D to exit a REPL.
+
+This filter yields no output.
+It writes its history to a file `jaq-history` in the user's cache directory.
+
+::: Compatibility
+This filter has been inspired by `fq`'s `repl` filter.
+However, unlike `fq`, jaq does not require to be started with the `--repl` flag,
+and it allows calls to `repl` anywhere in a filter, not only last in the pipeline.
+
+`jq` does not have this filter.
+:::
 
 
 {#unsupported-stdlib}

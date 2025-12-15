@@ -12,6 +12,7 @@ A program written in the jq language is called a jq program or _filter_.
 A filter is a function that
 takes an input value and
 yields a stream of output values.
+By convention, we write `f` and `g` to denote arbitrary filters.
 
 The stream of output values can be infinite; for example, the jq filter
 `repeat("Hi")` yields an infinite sequence of strings `"Hi"`.
@@ -57,7 +58,8 @@ such as indexing a non-existing key in an array or object, e.g.
 
 ### Booleans
 
-The filters `true` and `false` return the boolean values `true` and `false`.
+The filters [`true` and `false`](#true-false)
+return the boolean values `true` and `false`.
 Booleans can also be produced by comparison operations, e.g.
 `0  ==  0 --> true` or
 `[] == {} --> false`.
@@ -301,20 +303,17 @@ For example:
 - `[1, 2, 3] | .[1] --> 2`
 - `{a: 1, b: 2} | .["a"] --> 1`
 
-If there is no element at that index in the input, then this operator returns `null`.
+If there is no element at the index `x` in the input, then this operator returns `null`.
 For example:
 
 - `[1, 2, 3] | .[3] --> null`
 - `{a: 1, b: 2} | .["c"] --> null`
+- `null | .[0] --> null`
 
 This operator treats byte string input like an array of numbers in the range 0..256.
 For example,
 `"@ABC" | tobytes | .[0] --> 64`,
 because the character `'@'` is encoded in UTF-8 as single byte `64` (`0x40`).
-
-This operator yields an error either
-if the input is neither an array or an object, or
-if the input is an array and the index is not an integer.
 
 For identifier-like strings like `name`,
 you can write `.name` as short form for `.["name"]`.
@@ -328,13 +327,34 @@ which will be interpreted as index counting from the end of the array.
 For example,
 `[1, 2, 3] | .[-1] --> 3`.
 
-::: Compatibility
+If the input of this operator is an array or a string and the index is an object,
+then this operator is equivalent to the [slicing](#slicing) operator
+`.[x.start : x.end]`.
+For example:
 
+- `[1, 2, 3] | .[{start: 1         }] --> [2, 3]`
+- `[1, 2, 3] | .[{          end: -1}] --> [1, 2]`
+- `[1, 2, 3] | .[{start: 1, end: -1}] --> [2]`
+- `[1, 2, 3] | .[{                 }] --> [1, 2, 3]`
+
+This operator yields a value if either:
+
+- the input is a      string or an array and the index is an object (slicing),
+- the input is a byte string or an array and the index is an integer, or
+- the input is `null` or an object.
+
+Otherwise, it yields an error.
+
+::: Compatibility
 `jq` accepts floating-point numbers as array indices; e.g.
 `[1, 2] | .[1.5]` yields `2`.
 In jaq, indexing an array with a floating-point number yields an error.
 The same applies to the [slicing](#slicing) operator below.
 
+`jq` fails when the input is a string or an array and the index is
+an object that has neither `start` nor `end` keys, whereas jaq treats such
+an object like `{start: null, end: null}`; that is,
+it creates a slice from the beginning to the end.
 :::
 
 {#slicing}
@@ -360,7 +380,31 @@ interprets negative indices as indices counting from the end.
 
 The short form `.[x:]` creates a slice from the index `x` to the end, and
 the short form `.[:y]` creates a slice from the beginning to (excluding) the index `x`.
-For example, `"Hello World!" | .[:5], .[6:] --> "Hello" "World!"`.
+When `x` is `null`, it is interpreted as `0`, and
+when `y` is `null`, it is interpreted as `length`.
+That means that
+`.[x:]` is equivalent to `.[x:null]` and
+`.[:y]` is equivalent to `.[null:y]`.
+For example:
+
+- `"Hello World!" | .[    :5], .[6:    ] --> "Hello" "World!"`
+- `"Hello World!" | .[null:5], .[6:null] --> "Hello" "World!"`
+- `"Hello World!" | .[null    :    null] --> "Hello World!"`
+
+This operator yields a value if
+its input is a string or an array, and
+its indices `x` and `y` are either `null` or integer.
+Otherwise, it yields an error.
+For example:
+
+- `[] | try .["a":] catch "fail" --> "fail"`
+- `{} | try .[1:-1] catch "fail" --> "fail"`
+
+::: Compatibility
+jaq fails when trying to slice `null`, i.e.
+`null | try .[1:] catch "fail" --> "fail"`, whereas
+this yields `null` in `jq`.
+:::
 
 {#iterating}
 ### Iterating (`.[]`)
@@ -373,11 +417,11 @@ For example,
 `{a: 1, b: 2} | .[] --> 1 2`.
 
 ::: Advanced
+It holds that `.[]` has the same effect as `.[keys_unsorted[]]`.
+For example:
 
-It holds that `.[]` has the same effect as `.[keys[]]`.
-For example,
-`[1, 2, 3] | .[keys[]] --> 1 2 3`.
-
+- `[1, 2, 3]    | .[keys_unsorted[]] --> 1 2 3`
+- `{a: 1, b: 2} | .[keys_unsorted[]] --> 1 2`
 :::
 
 ### Compound paths
@@ -432,6 +476,8 @@ For example:
 ["3"]
 "3"
 ```
+
+It yields the same outputs as [`recurse`](#recurse).
 
 ## Unary
 
