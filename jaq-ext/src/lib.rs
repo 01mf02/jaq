@@ -9,6 +9,25 @@
 //! is expected to change more frequently.
 //! However, because of its small amount of exposed functions,
 //! it may be easier to stay up-to-date with it than with its dependencies.
+//!
+//! Embedding jaq into your own application involves three steps:
+//!
+//! 1. Compile a filter.
+//!    You can do this conveniently with
+//!    [`data::compile`], or with
+//!    [`compile_with`] if you need more flexibility.
+//! 2. Read input data.
+//!    You can do this with the functions in the [`read`] module, such as
+//!    [`read::json::read_many`] or
+//!    [`read::json::parse_many`].
+//! 3. Run the filter.
+//!    You can do this with [`data::run`].
+//!    Inside this function, you may also want to print output values, for which
+//!    you can use functions in the [`mod@write`] module, such as
+//!    [`write::write`].
+//!
+//! The `main` example in this crate shows you how to do all of this.
+//! You can run it with `cargo run --example main`.
 #![warn(missing_docs)]
 
 extern crate alloc;

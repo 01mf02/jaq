@@ -101,7 +101,7 @@ fn parse_signed<L: LexAlloc>(sign: u8, lexer: &mut L) -> Result<Num, hifijson::E
 
 /// Parse a JSON value, given an initial non-whitespace character and a lexer.
 ///
-/// If the underlying lexer reads input fallibly (for example `IterLexer`),
+/// If the underlying lexer reads input fallibly (for example [`hifijson::IterLexer`]),
 /// the error returned by this function might be misleading.
 /// In that case, always check whether the lexer contains an error.
 fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
