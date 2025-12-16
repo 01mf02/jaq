@@ -254,7 +254,7 @@ impl fmt::Display for ErrorColor<'_> {
                 writeln!(f, "{e}")
             }
             Error::Report(reports) => reports.iter().try_for_each(|fr| {
-                FileReportsDisp::new(&fr)
+                FileReportsDisp::new(fr)
                     .with_paint(*color)
                     .with_path(|p| format!("[{}]", p.display()))
                     .fmt(f)
