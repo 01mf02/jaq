@@ -7,7 +7,7 @@ use core::fmt::{self, Debug, Display, Formatter};
 use jaq_ext::data::{self, compile, Runner, Writer};
 use jaq_ext::load::{Color, PathBlock};
 use jaq_json::write::{Colors, Pp};
-use jaq_json::{bstr, write_bytes, write_utf8, Tag, Val};
+use jaq_json::{bstr, read, write, write_bytes, write_utf8, Tag, Val, ValR};
 use wasm_bindgen::prelude::*;
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
@@ -39,7 +39,7 @@ fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
             });
             color!(str, write!(w, "{}", fun))
         }
-        _ => jaq_json::write::format_with(w, pp, level, v, fmt_json),
+        _ => write::format_with(w, pp, level, v, fmt_json),
     }
 }
 
@@ -146,7 +146,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let runner = &settings.runner();
 
     let post = |s: String| scope.post_message(&s.into()).unwrap();
-    let post_value = |y: jaq_json::ValR| {
+    let post_value = |y: ValR| {
         let y = y.map_err(Error::Jaq)?;
         let s = FormatterFn(|f: &mut Formatter| match &y {
             Val::Str(s, _) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
@@ -182,12 +182,11 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 fn read_str<'a>(
     settings: &Settings,
     input: &'a str,
-) -> Box<dyn Iterator<Item = Result<Val, String>> + 'a> {
+) -> Box<dyn Iterator<Item = Result<Val, read::Error>> + 'a> {
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
-        let vals =
-            jaq_json::read::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
+        let vals = read::parse_many(input.as_bytes());
         Box::new(jaq_ext::read::collect_if(settings.slurp, vals))
     }
 }

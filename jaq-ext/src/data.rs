@@ -93,12 +93,12 @@ pub fn run<E>(
     runner: &Runner,
     filter: &Filter,
     vars: Vars<Val>,
-    inputs: impl Iterator<Item = Result<Val, String>>,
+    inputs: impl Iterator<Item = Result<Val, impl ToString>>,
     fi: impl Fn(String) -> E,
     mut f: impl FnMut(ValR) -> Result<(), E>,
 ) -> Result<(), E> {
-    let inputs = Box::new(inputs) as Box<dyn Iterator<Item = _>>;
-    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
+    let inputs = Box::new(inputs.map(|r| r.map_err(|e| e.to_string())));
+    let null = Box::new(core::iter::once(Ok(Val::Null)));
 
     let null = &RcIter::new(null);
 

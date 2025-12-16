@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
         }
         Error::from(ErrorKind::InvalidInput)
     })?;
-    let inputs = read::json::read_many(stdin).map(|r| r.map_err(|e| e.to_string()));
+    let inputs = read::json::read_many(stdin);
 
     let runner = Default::default();
     let vars = Default::default();
