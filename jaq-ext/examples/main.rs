@@ -11,7 +11,8 @@ fn main() -> io::Result<()> {
     let filter = jaq_ext::data::compile(&filter).map_err(|file_reports| {
         for (file, reports) in file_reports {
             for e in reports {
-	        // no color because ANSI must be enabled manually on Windows
+                eprintln!("Error: {}", e.message);
+                // no color because ANSI must be enabled manually on Windows
                 let block = e.to_block(&file.code, |_, text| text);
                 eprint!("{}", load::PathBlock::new("", block));
             }
