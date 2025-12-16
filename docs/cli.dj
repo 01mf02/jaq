@@ -286,6 +286,43 @@ $ echo [1, [2]] | jaq       | jaq -Rs
 Use _N_ spaces for indentation (default: 2).
 
 
+### `JQ_COLORS`
+
+The environment variable `JQ_COLORS` is a colon-separated list, where
+each entry gives a style to be used for printing some type of values.
+The entries of `JQ_COLORS` are mapped in the following order to types of values:
+
+- `null`
+- `false`
+- `true`
+- numbers
+- strings
+- arrays
+- objects
+
+If `JQ_COLORS` is not set, then it is assumed to be `90:39:39:39:32:1;39:1;39`.
+That means that by default:
+
+- `null` has the style `90` (gray foreground color).
+- `false`/`true`/numbers have the style `39` (default foreground color).
+- Strings have the style `32` (green foreground color).
+- Arrays/objects have the style `1;39` (bold and default foreground color).
+
+Each entry of `JQ_COLORS`, such as `90` or `1;39`, is turned into a
+["Select Graphic Rendition"](https://en.wikipedia.org/wiki/ANSI_escape_code#Select_Graphic_Rendition_parameters)
+(SGR) control sequence.
+For example:
+
+- `32`   is turned into `\x1b[32m`.
+- `1;39` is turned into `\x1b[1;39m`.
+
+::: Compatibility
+`jq` also considers a style for object keys, after objects.
+However, in jaq, object keys can be any kind of values, so jaq ignores this.
+On the other hand, jaq does not allow changing the color of byte strings,
+because jq does not provide any facilities to do that.
+:::
+
 ## Compilation
 
 If no _FILTER_ is given, jaq uses `.` (the [identity filter](#identity)) as filter.
