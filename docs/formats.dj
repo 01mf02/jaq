@@ -108,7 +108,7 @@ On the other hand, jaq ignores tags for arrays and objects:
 - `"!!bar {}" | fromyaml --> {}`
 
 jaq produces YAML that is very close to JSON/XJON.
-It differs from XJON only by writing
+jaq's compact YAML output differs from XJON mostly by writing
 byte strings as Base64-encoded `!!binary` string and
 special floating-point values as `.inf`, `-.inf`, and `.nan`:
 
@@ -136,6 +136,17 @@ $ echo 1 2 | jaq --to yaml
 ---
 2
 ...
+```
+
+Use [`-j`](#--join-output) to omit YAML document start/end markers.
+This can come in handy when merging multiple arrays:
+
+```
+$ jaq --to yaml -j <<< '[1, 2] [3, 4]'
+- 1
+- 2
+- 3
+- 4
 ```
 
 Both `--from yaml` and the filter `fromyaml`
