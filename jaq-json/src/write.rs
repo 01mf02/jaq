@@ -140,9 +140,8 @@ impl Colors {
             &mut self.arr,
             &mut self.obj,
         ];
-        for (color, field) in s.split(':').zip(fields) {
-            use alloc::format;
-            *field = color.split(';').map(|s| format!("\x1b[{s}m")).collect();
+        for (style, field) in s.split(':').zip(fields) {
+            *field = alloc::format!("\x1b[{style}m");
         }
         self
     }
