@@ -26,8 +26,7 @@ fn main() -> io::Result<()> {
     let fi = |e| Error::new(ErrorKind::InvalidData, e);
 
     data::run(&runner, &filter, vars, inputs, fi, |v| {
-        let pp = Default::default();
         let v = v.map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
-        write::json::write(stdout, &pp, 0, &v?)
+        write::write(stdout, &runner.writer, &v?)
     })
 }
