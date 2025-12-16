@@ -8,15 +8,9 @@ fn main() -> io::Result<()> {
     let filter = std::env::args()
         .nth(1)
         .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "expected filter as first argument"))?;
-    let filter = jaq_ext::data::compile(&filter).map_err(|file_reports| {
-        for (file, reports) in file_reports {
-            for e in reports {
-                eprintln!("Error: {}", e.message);
-                // no color because ANSI must be enabled manually on Windows
-                let block = e.to_block(&file.code, |_, text| text);
-                eprint!("{}", load::PathBlock::new("", block));
-            }
-        }
+    let filter = data::compile(&filter).map_err(|frs| {
+        frs.iter()
+            .for_each(|fr| eprint!("{}", load::FileReportsDisp::new(fr)));
         Error::from(ErrorKind::InvalidInput)
     })?;
     let inputs = read::json::read_many(stdin);

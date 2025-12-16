@@ -5,7 +5,7 @@ use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_ext::data::{self, compile, Runner, Writer};
-use jaq_ext::load::{Color, PathBlock};
+use jaq_ext::load::{Color, FileReportsDisp};
 use jaq_json::write::{Colors, Pp};
 use jaq_json::{bstr, read, write, write_bytes, write_utf8, Tag, Val, ValR};
 use wasm_bindgen::prelude::*;
@@ -159,19 +159,13 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let inputs = read_str(&settings, input);
 
     match compile(filter) {
-        Err(file_reports) => file_reports.iter().for_each(|(file, reports)| {
-            for e in reports {
-                let error = format!("⚠️ Error: {}", e.message);
-                post(error);
-
-                let block = e.to_block(&file.code, color);
-                post(format!("{}", PathBlock::new("", block)));
-            }
-        }),
+        Err(file_reports) => file_reports
+            .iter()
+            .for_each(|fr| post(format!("{}", FileReportsDisp::new(fr).with_paint(color)))),
         Ok(filter) => match data::run(runner, &filter, vars, inputs, Error::Hifijson, post_value) {
             Ok(()) => (),
-            Err(Error::Hifijson(e)) => post(format!("⚠️ Parse error: {e}")),
-            Err(Error::Jaq(e)) => post(format!("⚠️ Error: {e}")),
+            Err(Error::Hifijson(e)) => post(format!("Parse error: {e}")),
+            Err(Error::Jaq(e)) => post(format!("Error: {e}")),
         },
     }
 

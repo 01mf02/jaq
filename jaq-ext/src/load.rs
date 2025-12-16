@@ -129,14 +129,12 @@ fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Repor
 
 type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
 
+type PaintFn = fn(Color, String) -> String;
+
 impl Report {
     /// Convert report to a code block.
-    ///
-    /// This constructs a line index for its `code` input, which
-    /// redoes work if there are multiple error messages for the same file.
-    /// However, normally, this should not be a performance bottleneck.
-    pub fn to_block(&self, code: &str, paint: fn(Color, String) -> String) -> CodeBlock {
-        use codesnake::{Block, CodeWidth, Label, LineIndex};
+    pub fn to_block(&self, idx: &codesnake::LineIndex, paint: PaintFn) -> CodeBlock {
+        use codesnake::{Block, CodeWidth, Label};
         let color_maybe = |(text, color): (String, Option<Color>)| match color {
             None => text,
             Some(color) => paint(color, text),
@@ -147,8 +145,7 @@ impl Report {
                 .with_text(text.join(""))
                 .with_style(move |s| paint(color, s))
         });
-        let idx = LineIndex::new(code);
-        Block::new(&idx, labels).unwrap().map_code(|c| {
+        Block::new(idx, labels).unwrap().map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))
@@ -156,20 +153,48 @@ impl Report {
     }
 }
 
-/// Path and corresponding code block for pretty-printing.
-pub struct PathBlock<P>(P, CodeBlock);
+/// Pretty-printer for file reports.
+pub struct FileReportsDisp<'a, P> {
+    file_reports: &'a FileReports<P>,
+    paint: PaintFn,
+    path: fn(&P) -> String,
+}
 
-impl<P> PathBlock<P> {
-    /// Construct a new [`PathBlock`].
-    pub fn new(path: P, block: CodeBlock) -> Self {
-        Self(path, block)
+impl<'a, P> FileReportsDisp<'a, P> {
+    /// Construct a new pretty-printer for file reports.
+    ///
+    /// By default, this does not apply any colors and does not print file paths.
+    pub fn new(file_reports: &'a FileReports<P>) -> Self {
+        Self {
+            file_reports,
+            paint: |_, text| text,
+            path: |_| "".into(),
+        }
+    }
+
+    /// Set a function that determines how colors should be applied to text.
+    pub fn with_paint(mut self, paint: PaintFn) -> Self {
+        self.paint = paint;
+        self
+    }
+
+    /// Set a function that determines how the file path should be printed.
+    pub fn with_path(mut self, path: fn(&P) -> String) -> Self {
+        self.path = path;
+        self
     }
 }
 
-impl<P: Display> Display for PathBlock<P> {
+impl<'a, P> Display for FileReportsDisp<'a, P> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let PathBlock(path, block) = self;
-        writeln!(f, "{}{}", block.prologue(), path)?;
-        writeln!(f, "{}{}", block, block.epilogue())
+        let (file, reports) = &self.file_reports;
+        let path = (self.path)(&file.path);
+        let idx = codesnake::LineIndex::new(&file.code);
+        reports.iter().try_for_each(|e| {
+            writeln!(f, "Error: {}", e.message)?;
+            let block = e.to_block(&idx, self.paint);
+            writeln!(f, "{}{}", block.prologue(), path)?;
+            writeln!(f, "{}{}", block, block.epilogue())
+        })
     }
 }
