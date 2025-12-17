@@ -20,7 +20,7 @@ pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
 
 /// Convert bytes to string for certain formats.
 ///
-/// This has to be synchronised with [`from_file`].
+/// This has to be synchronised with [`from_bytes`].
 pub fn bytes_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
