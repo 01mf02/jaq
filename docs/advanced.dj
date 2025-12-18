@@ -486,8 +486,12 @@ The instructions
 make all definitions in the module `mod.jq` accessible in the current module
 with the prefix `name::`.
 
-For example, if `foo.jq` in the current working directory contains `def bar: 1;`, then
-`jaq -L . -n 'import "foo" as myfoo; myfoo::bar'` yields `1`.
+For example:
+
+```
+$ echo 'def bar: 1;' > foo.jq && jaq -L . -n 'import "foo" as myfoo; myfoo::bar' && rm foo.jq
+1
+```
 
 ### Data import
 
@@ -498,8 +502,12 @@ load all JSON values in `data.json` to an array,
 bind it to the variable `$name`, and
 make it accessible in the current module.
 
-For example, if `foo.json` in the current working directory contains `1 2 3`, then
-`jaq -L . -n 'import "foo.json" as $myfoo; $myfoo'` yields `[1, 2, 3]`.
+For example:
+
+```
+$ echo 1 2 3 > foo.json && jaq -L . -nc 'import "foo.json" as $myfoo; $myfoo' && rm foo.json
+[1,2,3]
+```
 
 ### Search paths
 

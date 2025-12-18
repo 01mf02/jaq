@@ -18,8 +18,13 @@ The stream of output values can be infinite; for example, the jq filter
 `repeat("Hi")` yields an infinite sequence of strings `"Hi"`.
 
 The following sections document all filters with built-in syntax in jq.
-Examples are written like `1 + 2, true or false --> 3 true`, which means that
-running `jaq -n '1 + 2, true or false'` yields the outputs `3` and `true`.
+Examples are written like `1 + 2, true or false --> 3 true`, which is equivalent to:
+
+```
+$ jaq -n '1 + 2, true or false'
+3
+true
+```
 
 An *atomic* filter is a filter that is _not_ a binary operator.
 For example, the filters

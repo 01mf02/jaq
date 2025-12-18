@@ -1950,7 +1950,13 @@ These filters may yield different outputs when given equal inputs.
 ### `input`, `inputs`
 
 The filter `inputs` yields all the inputs in the current input file.
-For example, `jaq -n '[inputs]' <<< 1 2 3` yields `[1, 2, 3]`.
+For example:
+
+```
+$ echo 1 2 3 | jaq -nc '[inputs]'
+[1,2,3]
+```
+
 This can be useful to fold over large (potentially infinite) amounts of values;
 for example, to create a cumulative sum over all input integers, you can use
 `jaq -n 'foreach inputs as $x (0; .+$x)'`.
@@ -1975,12 +1981,12 @@ lest you are devoured by the evil dragons of evaluation order.
 
 The filter `debug(f)` prints a debug message for every output of `f`
 to the standard error stream (stderr), then yields its input.
-For example, the filter `0 | debug(1, 2)` yields
-the following output on the command-line:
+For example:
 
 ```
-["DEBUG:",1]
-["DEBUG:",2]
+$ jaq -n '0 | debug(1, 2)'
+["DEBUG:", 1]
+["DEBUG:", 2]
 0
 ```
 
@@ -2010,9 +2016,8 @@ The filter `halt_error($exit_code)` prints its input via [`stderr`](#stderr).
 It then quits the jaq process with the given exit code.
 
 ```
-# jaq -n '"Hi!\n" | halt_error(42)'
+$ jaq -n '"Hi!\n" | halt_error(42)'; echo $?
 Hi!
-# echo $?
 42
 ```
 
