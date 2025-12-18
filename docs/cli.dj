@@ -82,7 +82,7 @@ Read lines of the input as sequence of strings.
 For example:
 
 ```
-$ echo -e "Hello\nWorld" | jaq -R
+$ printf "Hello\nWorld" | jaq -R
 "Hello"
 "World"
 ```
@@ -92,8 +92,8 @@ this yields the whole input as a single string.
 For example:
 
 ```
-$ echo -e "Hello\nWorld" | jaq -Rs
-"Hello\nWorld\n"
+$ printf "Hello\nWorld" | jaq -Rs
+"Hello\nWorld"
 ```
 
 See [`--rawfile`](#--rawfile).
@@ -177,10 +177,10 @@ Write (text and byte) strings without escaping them and without surrounding them
 For example:
 
 ```
-$ echo '"Hello\nWorld"' | jaq -r
+$ printf '"Hello\\nWorld"' | jaq -r
 Hello
 World
-$ echo '"Hello\nWorld"' | jaq
+$ printf '"Hello\\nWorld"' | jaq
 "Hello\nWorld"
 ```
 
@@ -188,7 +188,7 @@ This does not impact strings contained inside other values, i.e. arrays and obje
 For example:
 
 ```
-$ echo '["Hello\nWorld"]' | jaq -rc
+$ printf '["Hello\\nWorld"]' | jaq -rc
 ["Hello\nWorld"]
 ```
 
@@ -208,7 +208,7 @@ truefalse (no new line at end)
 This is particularly useful in combination with `--raw-output` (`-r`); for example:
 
 ```
-$ echo '"Hello" " " "World" "\n"' | jaq -jr
+$ printf '"Hello" " " "World" "\\n"' | jaq -jr
 Hello World
 ```
 
