@@ -363,7 +363,7 @@ $ jaq -n false >/dev/null; echo $?
 0
 $ jaq -en false >/dev/null; echo $?
 1
-$ jaq . does_not_exit.json 2>/dev/null; echo $?
+$ jaq . does_not_exist.json 2>/dev/null; echo $?
 2
 $ jaq --foo 2>/dev/null; echo $?
 2

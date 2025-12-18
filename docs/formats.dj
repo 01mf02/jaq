@@ -206,17 +206,19 @@ We can see its internal representation in jaq by:
 
 ```
 $ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>' | jaq --from xml .
-```
-
-This yields the following JSON:
-
-``` json
 {
   "t": "a",
-  "a": { "href": "https://www.w3.org" },
+  "a": {
+    "href": "https://www.w3.org"
+  },
   "c": [
     "World Wide Web Consortium (",
-    { "t": "em", "c": [ "W3C" ] },
+    {
+      "t": "em",
+      "c": [
+        "W3C"
+      ]
+    },
     ")"
   ]
 }
