@@ -17,8 +17,8 @@ fn main() -> io::Result<()> {
         let mut out_rec = String::new();
         reader.read_to_string(&mut out_rec)?;
         // wait on the child to avoid zombies
-        child.wait()?;
-        if out_rec.lines().eq(out_exp.iter().map(|s| *s)) {
+        let exit = child.wait()?;
+        if exit.success() && out_rec.lines().eq(out_exp.iter().map(|s| *s)) {
             passed += 1;
         } else {
             eprintln!("Fail: expected {out_exp:?}, received {out_rec}");
