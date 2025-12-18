@@ -125,7 +125,7 @@ This is done to indicate the start/end of YAML documents.
 For example:
 
 ```
-$ jaq --to yaml <<< '1 2'
+$ echo 1 2 | jaq --to yaml
 ---
 1
 ...
