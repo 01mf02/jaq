@@ -2016,9 +2016,8 @@ The filter `halt_error($exit_code)` prints its input via [`stderr`](#stderr).
 It then quits the jaq process with the given exit code.
 
 ```
-$ jaq -n '"Hi!\n" | halt_error(42)'; echo $?
-Hi!
-42
+$ jaq -n '"Hi!" | halt_error(42)'; echo $?
+Hi!42
 ```
 
 The filter `halt_error` is equivalent to `halt_error(5)`.

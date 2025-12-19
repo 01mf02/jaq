@@ -254,7 +254,7 @@ For example:
 
 ```
 $ echo {} | jaq -C | jaq --from raw tobytes
-b"\x1b[1m{\x1b[0m\x1b[1m}\x1b[0m"
+b"\x1b[1;39m{\x1b[0m\x1b[1;39m}\x1b[0m"
 $ echo {} | jaq    | jaq --from raw tobytes
 b"{}"
 ```

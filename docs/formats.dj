@@ -80,7 +80,7 @@ That means that jaq accepts the following, even if it is not valid JSON:
 $ echo 'NaN b"Bytes" {1: 2} # Over and out' | jaq --from json -c
 NaN
 b"Bytes"
-{1: 2}
+{1:2}
 ```
 
 ## YAML
