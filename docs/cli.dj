@@ -424,7 +424,7 @@ $ touch tmp.json && jaq '$ARGS.positional' tmp.json --args foo -nc bar -- baz -j
 ["foo","bar","baz","-j","qux"]
 ```
 
-Note that here, `input.json` and `-nc` are *not* collected into the array ---
+Note that here, `tmp.json` and `-nc` are *not* collected into the array ---
 the former because it comes *before* `--args`, and
 the latter because it would not have been interpreted as input file.
 However, `-j` is collected into the array because it comes after `--`,
