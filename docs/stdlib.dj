@@ -2028,12 +2028,14 @@ $ jaq -n '1, halt(42), 2'; echo $?
 The filter `halt_error($exit_code)` prints its input via [`stderr`](#stderr).
 It then quits the jaq process with the given exit code.
 
+The filter `halt_error` is equivalent to `halt_error(5)`.
+
 ```
 $ jaq -n '"Hi!" | halt_error(42)'; echo $?
 Hi!42
+$ jaq -n '"Hi!" | halt_error    '; echo $?
+Hi!5
 ```
-
-The filter `halt_error` is equivalent to `halt_error(5)`.
 
 ::: Compatibility
 `jq` prints a newline after the input if it is not a string.
