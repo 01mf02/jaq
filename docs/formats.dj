@@ -129,6 +129,14 @@ This is done to indicate the start/end of YAML documents.
 For example:
 
 ```
+$ jaq -n '[1, {a: 2, b: [3]}]' --to yaml
+---
+- 1
+-
+  a: 2
+  b:
+    - 3
+...
 $ echo 1 2 | jaq --to yaml
 ---
 1
@@ -142,7 +150,7 @@ Use [`-j`](#--join-output) to omit YAML document start/end markers.
 This can come in handy when merging multiple arrays:
 
 ```
-$ jaq --to yaml -j <<< '[1, 2] [3, 4]'
+$ echo '[1, 2] [3, 4]' | jaq --to yaml -j
 - 1
 - 2
 - 3
