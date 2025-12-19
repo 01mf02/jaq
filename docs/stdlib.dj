@@ -1998,12 +1998,25 @@ The filter `stderr` prints its input to the standard error stream
 in [raw](#--raw-output) and [compact](#--compact-output) mode [without newline](#--join-output).
 It then yields its input.
 
+```
+$ jaq -n '"Hi" | stderr'
+Hi"Hi"
+```
+
 {#halt}
 ### `halt`, `halt($exit_code)`
 
 The filter `halt($exit_code)` terminates jaq with the given exit code.
 
 The filter `halt` terminates jaq with exit code 0.
+
+```
+$ jaq -n '1, halt    , 2'
+1
+$ jaq -n '1, halt(42), 2'; echo $?
+1
+42
+```
 
 ::: Compatibility
 `jq` does not implement `halt($exit_code)`, only `halt`.
@@ -2030,12 +2043,22 @@ The filter `halt_error` is equivalent to `halt_error(5)`.
 
 This filter yields the [Unix epoch](#date-time) as floating-point number.
 
+```
+$ date +%s | jaq 'now - . as $dt | 0 <= $dt and $dt <= 2'
+true
+```
+
 {#env}
 ### `$ENV`, `env`
 
 The variable `$ENV` holds an object that contains an entry for every environment variable, where
 the key is the name of the variable and the value is its value.
 For example, `{"EDITOR": "vim", "SHELL": "/usr/bin/bash"}`.
+
+```
+$ MYFLAG=42 jaq -n '$ENV.MYFLAG'
+"42"
+```
 
 The filter `env` is equivalent to `$ENV`.
 
