@@ -57,25 +57,45 @@ That means that
 ### `-n`, `--null-input`
 
 Feed `null` as input to the main program, ignoring any input files.
-For example,
-`yes | jaq -n` yields `null`,
-which shows that this does indeed not read any input.
+For example:
 
-The inputs can still be obtained via the [`inputs`](#inputs) filter; for example,
-`yes true | jaq -n 'first(inputs)'` yields `true`.
+```
+$ yes | jaq -n
+null
+```
+
+This shows that this does indeed not read any input.
+
+The inputs can still be obtained via the [`inputs`](#inputs) filter. For example:
+
+```
+$ yes true | jaq -n 'first(inputs)'
+true
+```
+
 This can be useful to fold over all inputs with [`reduce` / `foreach`](#reduce-foreach).
 
 {#--raw-input}
 ### `-R`, `--raw-input`
 
 Read lines of the input as sequence of strings.
-For example,
-`echo -e "Hello\nWorld" | jaq -R` yields two outputs; `"Hello"` and `"World"`.
+For example:
+
+```
+$ printf "Hello\nWorld" | jaq -R
+"Hello"
+"World"
+```
 
 When combined with [`--slurp`](#--slurp),
 this yields the whole input as a single string.
-For example,
-`echo -e "Hello\nWorld" | jaq -Rs` yields `"Hello\nWorld\n"`.
+For example:
+
+```
+$ printf "Hello\nWorld" | jaq -Rs
+"Hello\nWorld"
+```
+
 See [`--rawfile`](#--rawfile).
 
 This is equivalent to `--from raw`.
@@ -84,14 +104,26 @@ This is equivalent to `--from raw`.
 ### `-s`, `--slurp`
 
 Read (slurp) all input values into one array.
-For example,
-`jaq -s <<< "1 2 3"` yields a single output, namely the array `[1, 2, 3]`, whereas
-`jaq <<< "1 2 3"` yields three outputs, namely `1`, `2`, and `3`.
+For example:
+
+```
+$ echo 1 2 3 | jaq
+1
+2
+3
+$ echo 1 2 3 | jaq -cs
+[1,2,3]
+```
 
 When combined with [`--raw-input`](#--raw-input),
 jaq reads the full input as a single string.
-For example,
-`jaq -Rs <<< "1 2 3"` yields the single output `"1 2 3\n"`.
+For example:
+
+```
+$ echo 1 2 3 | jaq -Rs
+"1 2 3\n"
+```
+
 See [`--rawfile`](#--rawfile).
 
 ::: Compatibility
@@ -117,32 +149,48 @@ Any _FORMAT_ accepted by [`--from`](#--from) can be used here.
 
 Note that not every value can be printed in every format.
 For example, TOML requires that the root value is an object, so
-`jaq --to toml <<< []`
-yields an error.
+trying to print a non-object root value as TOML yields an error:
+
+```
+$ echo [] | jaq --to toml 2>/dev/null; echo $?
+2
+```
 
 ::: Compatibility
-
 `jq` does not have this option.
-
 :::
 
 {#--compact-output}
 ### `-c`, `--compact-output`
 
-Print JSON compactly, omitting whitespace.
-For example, `jaq -c <<< '[1, 2, 3]'` yields the output `[1,2,3]`.
+Print JSON compactly, omitting whitespace. For example:
+
+```
+$ echo [1, 2, 3] | jaq -c
+[1,2,3]
+```
 
 {#--raw-output}
 ### `-r`, `--raw-output`
 
 Write (text and byte) strings without escaping them and without surrounding them with quotes.
-For example,
-`jaq -r <<< '"Hello\nWorld"'` outputs two lines; `Hello` and `World`, whereas 
-`jaq <<< '"Hello\nWorld"'` outputs a single line; `"Hello\nWorld"`.
+For example:
+
+```
+$ printf '"Hello\\nWorld"' | jaq -r
+Hello
+World
+$ printf '"Hello\\nWorld"' | jaq
+"Hello\nWorld"
+```
 
 This does not impact strings contained inside other values, i.e. arrays and objects.
-For example,
-`jaq -r <<< '["Hello\nWorld"]'` outputs `["Hello\nWorld"]`.
+For example:
+
+```
+$ printf '["Hello\\nWorld"]' | jaq -rc
+["Hello\nWorld"]
+```
 
 This is equivalent to `--to raw`.
 
@@ -150,20 +198,33 @@ This is equivalent to `--to raw`.
 ### `-j`, `--join-output`
 
 Do not print a newline after each value.
-For example,
-`jaq -j <<< 'true false'` yields the output `truefalse`, without trailing newline.
+For example:
 
-This is particularly useful in combination with `--raw-output` (`-r`); for example,
-`jaq -jr <<< '"Hello" " " "World" "\n"'` yields the output `Hello World`
-(with trailing newline).
+```
+$ echo true false | jaq -j && echo " (no new line at end)"
+truefalse (no new line at end)
+```
+
+This is particularly useful in combination with `--raw-output` (`-r`); for example:
+
+```
+$ printf '"Hello" " " "World" "\\n"' | jaq -jr
+Hello World
+```
 
 {#--in-place}
 ### `-i`, `--in-place`
 
 Overwrite input file with its output.
-For example,
-`jaq -i . myfile.json` reads the file `myfile.json` and
-overwrites it with a formatted version of it.
+For example:
+
+```
+$ echo 1 > tmp.json && jaq -i '.+1' tmp.json && cat tmp.json && rm tmp.json
+2
+```
+
+This reads the file `tmp.json` and
+overwrites it with the output of the filter `.+1`.
 Note that the input file is overwritten only
 once there is no more output and
 if there has not been any error.
@@ -176,22 +237,30 @@ if there has not been any error.
 ### `-S`, `--sort-keys`
 
 Print objects sorted by their keys.
-For example,
-`jaq -Sc <<< '{"b": {"d": 3, "c": 2}, "a": 1}'` yields
-`{"a":1,"b":{"c":2,"d":3}}`, whereas
-`jaq  -c <<< '{"b": {"d": 3, "c": 2}, "a": 1}'` yields
-`{"b":{"d":3,"c":2},"a":1}`.
+For example:
+
+```
+$ echo '{"b": {"d": 3, "c": 2}, "a": 1}' | jaq -cS
+{"a":1,"b":{"c":2,"d":3}}
+$ echo '{"b": {"d": 3, "c": 2}, "a": 1}' | jaq -c
+{"b":{"d":3,"c":2},"a":1}
+```
 
 {#--color-output}
 ### `-C`, `--color-output`
 
 Always color output, even if jaq does not print to a terminal.
-For example,
-`jaq -C <<< '{}' | jaq --from raw tobytes` yields the byte string
-`b"\x1b[1m{\x1b[0m\x1b[1m}\x1b[0m"`, containing ANSI color sequences, whereas
-`jaq    <<< '{}' | jaq --from raw tobytes` yields
-`b"{}"`.
-(Here, `jaq --from raw tobytes` prints a byte representation of its input.)
+For example:
+
+```
+$ echo {} | jaq -C | jaq --from raw tobytes
+b"\x1b[1m{\x1b[0m\x1b[1m}\x1b[0m"
+$ echo {} | jaq    | jaq --from raw tobytes
+b"{}"
+```
+
+(Here, `jaq --from raw tobytes` prints a byte representation of its input,
+which contains ANSI color sequences in case of `-C`.)
 
 {#--monochrome-output}
 ### `-M`, `--monochrome-output`
@@ -202,11 +271,14 @@ Do not color output.
 
 Use tabs for indentation rather than spaces.
 
-For example,
-`jaq --tab <<< '[1, [2]]' | jaq -Rs` yields
-`"[\n\t1,\n\t[\n\t\t2\n\t]\n]\n"`, whereas
-`jaq      <<< '[1, [2]]' | jaq -Rs` yields
-`"[\n  1,\n  [\n    2\n  ]\n]\n"`.
+For example:
+
+```
+$ echo [1, [2]] | jaq --tab | jaq -Rs
+"[\n\t1,\n\t[\n\t\t2\n\t]\n]\n"
+$ echo [1, [2]] | jaq       | jaq -Rs
+"[\n  1,\n  [\n    2\n  ]\n]\n"
+```
 
 {#--indent}
 ### `--indent` _N_
@@ -224,15 +296,24 @@ How to do this depends from platform to platform, but on Unixoid systems,
 surrounding the filter with single quotes (`'`) and
 replacing occurrences of `'` in filters by `'\''` suffices.
 For example, to run the filter `"'"` that
-produces a string containing a single quote, you can use
-`jaq -n '"'\''"'`.
+produces a string containing a single quote, you can use:
+
+```
+$ jaq -n '"'\''"'
+"'"
+```
 
 Running filters that start with the [negation operator](#negation),
 such as `jaq '-1'`, fails because `-` is interpreted as
 start of a command-line switch rather than negation.
-You can remedy this by using
-`jaq -- '-1'` instead, or by surrounding the filter in parentheses, i.e.
-`jaq '(-1)'`.
+You can remedy this by using `--` or by surrounding the filter in parentheses:
+
+```
+$ jaq -n -- '-1'
+-1
+$ jaq -n '(-1)'
+-1
+```
 
 {#--from-file}
 ### `-f`, `--from-file`
@@ -242,9 +323,12 @@ Read filter from a file given by filter argument.
 With this option, jaq interprets the _FILTER_ argument as
 name of a file containing the filter.
 Note that the file name may not directly succeed this option.
-For example,
-`jaq --from-file -n script.jq`
-uses the contents of the file `script.jq` as filter.
+For example:
+
+```
+$ echo '2 * 21' > tmp.jq && jaq --from-file -n tmp.jq && rm tmp.jq
+42
+```
 
 {#--library-path}
 ### `-L`, `--library-path` _DIR_
@@ -274,18 +358,24 @@ See the [modules](#modules) section for more details.
 
 Set variable `$A` to string _V_.
 
-For example,
-`jaq --arg name "John Doe" -n '"Welcome, " + $name'` yields `"Welcome, John Doe"`.
+For example:
+
+```
+$ jaq --arg name "John Doe" -n '"Welcome, " + $name'
+"Welcome, John Doe"
+```
 
 {#--argjson}
 ### `--argjson` _A_ _V_
 
 Set variable `$A` to JSON value _V_.
 
-For example,
-`jaq --argjson song '{"name": "One of Us", "artist": "ABBA", "year": 1981}' -n '"Currently playing: \($song.name) (\($song.year))"'`
-yields
-`"Currently playing: One of Us (1981)"`.
+For example:
+
+```
+$ jaq --argjson song '{"name": "One of Us", "artist": "ABBA", "year": 1981}' -n '"Currently playing: \($song.name) (\($song.year))"'
+"Currently playing: One of Us (1981)"
+```
 
 If _V_ contains more than a single value, e.g. `1 2`, then jaq yields an error.
 
@@ -294,8 +384,12 @@ If _V_ contains more than a single value, e.g. `1 2`, then jaq yields an error.
 
 Set variable `$A` to array containing the JSON values in file _F_.
 
-For example, if `values.json` contains `1 2 3`, then
-`jaq --slurpfile xs values.json -n '$xs'` yields `[1, 2, 3]`.
+For example:
+
+```
+$ echo 1 2 3 > tmp.json && jaq --slurpfile xs tmp.json -cn '$xs' && rm tmp.json
+[1,2,3]
+```
 
 {#--rawfile}
 ### `--rawfile` _A_ _F_
@@ -323,13 +417,17 @@ If this option is given, then all further arguments that
 would have been interpreted as input files are
 instead collected into an array at `$ARGS.positional`.
 
-For example, if the file `input.json` exists, then
-`jaq '$ARGS.positional' input.json --args foo -n bar -- baz -c qux` yields
-`["foo", "bar", "baz", "-c", "qux"]`.
-Note that here, `input.json` and `-n` are *not* collected into the array ---
+For example:
+
+```
+$ touch tmp.json && jaq '$ARGS.positional' tmp.json --args foo -nc bar -- baz -j qux && rm tmp.json
+["foo","bar","baz","-j","qux"]
+```
+
+Note that here, `tmp.json` and `-nc` are *not* collected into the array ---
 the former because it comes *before* `--args`, and
 the latter because it would not have been interpreted as input file.
-However, `-c` is collected into the array because it comes after `--`,
+However, `-j` is collected into the array because it comes after `--`,
 which leads every argument after it to be interpreted as input file.
 
 
@@ -363,7 +461,7 @@ $ jaq -n false >/dev/null; echo $?
 0
 $ jaq -en false >/dev/null; echo $?
 1
-$ jaq . does_not_exit.json 2>/dev/null; echo $?
+$ jaq . does_not_exist.json 2>/dev/null; echo $?
 2
 $ jaq --foo 2>/dev/null; echo $?
 2

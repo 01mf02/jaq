@@ -74,10 +74,14 @@ That means that `tojson | fromjson` is equivalent to `.` in jaq, whereas
 it is _not_ equivalent in `jq`, in particular because of `NaN` and `Infinity`.
 
 Currently, wherever jaq accepts JSON, it also accepts XJON.
-That means that
-`jaq --from json <<< 'NaN b"Bytes" {1: 2} # Over and out'` yields
-`'NaN b"Bytes" {1: 2}`, although the input is XJON, not valid JSON.
+That means that jaq accepts the following, even if it is not valid JSON:
 
+```
+$ echo 'NaN b"Bytes" {1: 2} # Over and out' | jaq --from json -c
+NaN
+b"Bytes"
+{1: 2}
+```
 
 ## YAML
 
@@ -125,7 +129,7 @@ This is done to indicate the start/end of YAML documents.
 For example:
 
 ```
-$ jaq --to yaml <<< '1 2'
+$ echo 1 2 | jaq --to yaml
 ---
 1
 ...
@@ -206,17 +210,19 @@ We can see its internal representation in jaq by:
 
 ```
 $ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>' | jaq --from xml .
-```
-
-This yields the following JSON:
-
-``` json
 {
   "t": "a",
-  "a": { "href": "https://www.w3.org" },
+  "a": {
+    "href": "https://www.w3.org"
+  },
   "c": [
     "World Wide Web Consortium (",
-    { "t": "em", "c": [ "W3C" ] },
+    {
+      "t": "em",
+      "c": [
+        "W3C"
+      ]
+    },
     ")"
   ]
 }
@@ -282,9 +288,10 @@ def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
   `<?xml-stylesheet href="common.css"?>`{.xml} is converted to
   `{"pi": {"target": "xml-stylesheet", "content": "href=\"common.css\""}}`{.json}.
 
-To put all of this together, consider the following XML file (`examples/test.xhtml`):
+To put all of this together, consider the following XML file:
 
-``` xml
+``` shell
+$ cat examples/test.xhtml
 <?xml version='1.0'?>
 <?xml-stylesheet href="common.css"?>
 <!DOCTYPE html>
@@ -296,9 +303,10 @@ To put all of this together, consider the following XML file (`examples/test.xht
 </html>
 ```
 
-Running `jaq . examples/test.xhtml` yields the following output:
+This yields the following in jaq:
 
-``` json
+```
+$ jaq . examples/test.xhtml
 {
   "xmldecl": {
     "version": "1.0"
