@@ -9,13 +9,13 @@ pub mod xml;
 pub mod yaml;
 pub use jaq_json::read as json;
 
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 mod formats;
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 mod funs;
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 pub use formats::*;
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 pub use funs::funs;
 
 use bytes::Bytes;

@@ -9,16 +9,27 @@ pub mod xml;
 pub mod yaml;
 pub use jaq_json::write as json;
 
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 mod formats;
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 mod funs;
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 pub use formats::write;
-#[cfg(feature = "formats")]
+#[cfg(feature = "all")]
 pub use funs::funs;
 
 use std::io::{self, IsTerminal, Write};
+
+/// Write options.
+#[derive(Default)]
+pub struct Writer {
+    /// output format
+    pub format: crate::Format,
+    /// pretty printer
+    pub pp: json::Pp,
+    /// concatenate outputs without newline
+    pub join: bool,
+}
 
 /// Buffer writes if stdout is terminal, else just lock stdout.
 pub fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {

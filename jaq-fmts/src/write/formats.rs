@@ -1,6 +1,4 @@
 use super::*;
-
-use crate::data::Writer;
 use crate::{invalid_data, Format};
 use jaq_json::Val;
 use std::io::{self, Write};

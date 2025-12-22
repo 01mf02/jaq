@@ -1,5 +1,5 @@
 use core::{fmt::Debug, num::ParseIntError};
-use jaq_ext::{read, write};
+use jaq_fmts::{read, write};
 
 fn unwrap_collect<T, E: Debug>(iter: impl Iterator<Item = Result<T, E>>) -> Vec<T> {
     iter.collect::<Result<Vec<_>, _>>().unwrap()

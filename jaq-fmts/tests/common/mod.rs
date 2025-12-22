@@ -10,7 +10,7 @@ fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     let modules = loader.load(&arena, File { path: (), code }).unwrap();
     let funs = jaq_std::funs()
         .chain(jaq_json::funs())
-        .chain(jaq_ext::rw_funs());
+        .chain(jaq_fmts::rw_funs());
     let filter = jaq_core::Compiler::default()
         .with_funs(funs)
         .compile(modules)

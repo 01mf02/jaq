@@ -321,14 +321,26 @@ dependencies = [
 
 [[package]]
 name = "jaq-ext"
-version = "0.1.0"
+version = "0.1.0-alpha"
+dependencies = [
+ "codesnake",
+ "jaq-core",
+ "jaq-fmts",
+ "jaq-json",
+ "jaq-std",
+ "serde_json",
+ "unicode-width",
+]
+
+[[package]]
+name = "jaq-fmts"
+version = "0.1.0-alpha"
 dependencies = [
  "base64",
  "bstr",
  "bytes",
  "ciborium-io",
  "ciborium-ll",
- "codesnake",
  "jaq-core",
  "jaq-json",
  "jaq-std",
@@ -337,7 +349,6 @@ dependencies = [
  "saphyr-parser",
  "serde_json",
  "toml_edit",
- "unicode-width",
  "xmlparser",
 ]
 

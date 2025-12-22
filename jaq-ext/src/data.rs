@@ -1,7 +1,8 @@
 //! Commonly used data for filter execution.
-use crate::{compile_with, rw_funs, FileReports, Format, Fun};
+use crate::{compile_with, FileReports, Fun};
 use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
-use jaq_json::{write::Pp, Val, ValR};
+use jaq_fmts::write::Writer;
+use jaq_json::{Val, ValR};
 use jaq_std::input::{self, Inputs, RcIter};
 
 /// Filter for given kind of data.
@@ -51,17 +52,6 @@ pub struct Runner {
     pub writer: Writer,
 }
 
-/// Write options.
-#[derive(Default)]
-pub struct Writer {
-    /// output format
-    pub format: Format,
-    /// pretty printer
-    pub pp: Pp,
-    /// concatenate outputs without newline
-    pub join: bool,
-}
-
 impl Runner {
     /// Use colors on standard output?
     pub fn color_stdout(&self) -> bool {
@@ -77,12 +67,16 @@ pub fn base_funs() -> impl Iterator<Item = Fun<DataKind>> {
     std.chain(jaq_json::funs()).chain(input)
 }
 
+/// Base functions plus functions from [`jaq_fmts`].
+#[cfg(feature = "formats")]
+pub fn funs() -> impl Iterator<Item = Fun<DataKind>> {
+    base_funs().chain(jaq_fmts::funs())
+}
+
 /// Compile a filter without access to external files/variables, including all functions/definitions.
 #[cfg(feature = "formats")]
 pub fn compile(code: &str) -> Result<Filter, Vec<FileReports>> {
-    let defs = jaq_std::defs().chain(jaq_json::defs());
-    let funs = base_funs().chain(rw_funs());
-    compile_with(code, defs, funs, &[])
+    compile_with(code, jaq_std::defs().chain(jaq_json::defs()), funs(), &[])
 }
 
 /// Run a filter with given input values and run `f` for every value output.

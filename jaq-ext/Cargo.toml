@@ -1,43 +1,27 @@
 [package]
 name = "jaq-ext"
-version = "0.1.0"
+version = "0.1.0-alpha"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
 readme = "../README.md"
+description = "Helpers to embed jaq into an application"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["jq"]
 rust-version = "1.70"
 
 [features]
 default = ["formats"]
-formats = ["cbor", "toml", "xml", "yaml"]
-
-cbor = ["ciborium-ll", "ciborium-io"]
-toml = ["toml_edit"]
-xml = ["xmlparser"]
-yaml = ["saphyr-parser", "base64"]
+formats = ["jaq-fmts/all"]
 
 [dependencies]
-jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
-jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
-jaq-json = { version = "2.0.0-alpha", path = "../jaq-json" }
+jaq-core = { workspace = true }
+jaq-std  = { workspace = true }
+jaq-json = { workspace = true }
+jaq-fmts = { workspace = true }
 
-bstr = "1"
-bytes = "1.10.1"
 codesnake = { version = "0.2" }
-memmap2 = "0.9"
 unicode-width = "0.1.13"
-
-num-bigint = { version = "0.4.6", default-features = false }
-
-# parsers
-base64 = { version = "0.22", optional = true }
-ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
-ciborium-ll = { version = "0.2.2", optional = true }
-saphyr-parser = { version = "0.0.6", optional = true }
-toml_edit = { version = "0.23.2", optional = true }
-xmlparser = { version = "0.13.6", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"

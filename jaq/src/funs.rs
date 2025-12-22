@@ -7,9 +7,7 @@ use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub fn funs() -> impl Iterator<Item = Filter<Native<DataKind>>> {
-    jaq_ext::data::base_funs()
-        .chain(jaq_ext::rw_funs())
-        .chain([jaq_std::run::<DataKind>(repl())])
+    jaq_ext::data::funs().chain([jaq_std::run::<DataKind>(repl())])
 }
 
 /// counter that increases for each nested invocation of `repl`
