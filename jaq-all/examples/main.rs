@@ -1,4 +1,4 @@
-use jaq_all::{data, load, read, write};
+use jaq_all::{data, load, fmts};
 use std::io::{self, Error, ErrorKind};
 
 fn main() -> io::Result<()> {
@@ -10,7 +10,7 @@ fn main() -> io::Result<()> {
             .for_each(|fr| eprint!("{}", load::FileReportsDisp::new(fr)));
         Error::from(ErrorKind::InvalidInput)
     })?;
-    let inputs = read::json::read_many(io::stdin().lock());
+    let inputs = fmts::read::json::read_many(io::stdin().lock());
     let stdout = &mut io::stdout().lock();
 
     let runner = Default::default();
@@ -19,6 +19,6 @@ fn main() -> io::Result<()> {
 
     data::run(&runner, &filter, vars, inputs, fi, |v| {
         let v = v.map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
-        write::write(stdout, &runner.writer, &v?)
+        fmts::write::write(stdout, &runner.writer, &v?)
     })
 }
