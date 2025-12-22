@@ -1,6 +1,6 @@
 //! Command-line argument parsing
 use core::fmt;
-pub use jaq_ext::Format;
+pub use jaq_all::fmts::Format;
 use std::env::ArgsOs;
 use std::ffi::OsString;
 use std::path::PathBuf;

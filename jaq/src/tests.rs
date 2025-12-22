@@ -2,7 +2,7 @@
 
 use crate::Error;
 use alloc::vec::Vec;
-use jaq_json::Val;
+use jaq_all::json::Val;
 use std::{io::BufRead, process::ExitCode};
 
 /// A single jq unit test.
@@ -39,12 +39,12 @@ impl<S: core::ops::Deref<Target = str>, I: Iterator<Item = S>> Iterator for Test
 }
 
 fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
-    use jaq_ext::data::{compile, run};
-    use jaq_json::read::{parse_many, parse_single};
+    use jaq_all::data::{compile, run};
+    use jaq_all::json::read::{parse_many, parse_single};
 
     let mut obtain = Vec::new();
     let runner = &Default::default();
-    let path = |(f, b): jaq_ext::load::FileReports| (f.map_path(|()| Default::default()), b);
+    let path = |(f, b): jaq_all::load::FileReports| (f.map_path(|()| Default::default()), b);
     let filter =
         compile(&test.filter).map_err(|e| Error::Report(e.into_iter().map(path).collect()))?;
     let vars = Default::default();

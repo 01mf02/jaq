@@ -8,13 +8,12 @@ mod windows;
 use cli::{Cli, Format};
 use core::fmt::{self, Formatter};
 use filter::run;
-use jaq_core::Vars;
-use jaq_ext::data::{Filter, Runner};
-use jaq_ext::load::{Color, FileReports, FileReportsDisp};
-use jaq_ext::read;
-use jaq_ext::write::{with_stdout, write, Writer};
-use jaq_json::write::{Colors, Pp};
-use jaq_json::Val;
+use jaq_all::data::{Filter, Runner};
+use jaq_all::fmts::read;
+use jaq_all::fmts::write::{with_stdout, write, Writer};
+use jaq_all::json::write::{Colors, Pp};
+use jaq_all::json::Val;
+use jaq_all::load::{Color, FileReports, FileReportsDisp};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -120,7 +119,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         }
     };
     vars.extend(var_vals);
-    let vars = Vars::new(vars);
+    let vars = jaq_all::jaq_core::Vars::new(vars);
     //println!("Filter: {:?}", filter);
 
     let runner = &cli.runner();
@@ -187,7 +186,7 @@ fn binds(cli: &Cli) -> Result<Vec<(String, Val)>, Error> {
     let argjson = cli.argjson.iter().map(|(k, s)| {
         let err = |e| Error::Parse(format!("{e} (for value passed to `--argjson {k}`)"));
         let s = s.as_bytes();
-        Ok((k.to_owned(), jaq_json::read::parse_single(s).map_err(err)?))
+        Ok((k.to_owned(), read::json::parse_single(s).map_err(err)?))
     });
     let rawfile = cli.rawfile.iter().map(|(k, path)| {
         let err = |e| Error::Io(Some(format!("{path:?}")), e);
@@ -228,7 +227,7 @@ enum Error {
     Io(Option<String>, io::Error),
     Report(Vec<FileReports<PathBuf>>),
     Parse(String),
-    Jaq(jaq_core::Error<Val>),
+    Jaq(jaq_all::json::Error),
     FalseOrNull,
     NoOutput,
 }

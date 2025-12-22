@@ -1,8 +1,8 @@
 //! Filter parsing, compilation, and execution.
 use crate::{funs, read, Error, Runner, Val};
-use jaq_core::{compile, load, ValT, Vars};
-use jaq_ext::data::Filter;
-use jaq_ext::load::{compile_errors, load_errors, FileReports};
+use jaq_all::data::Filter;
+use jaq_all::jaq_core::{compile, load, ValT, Vars};
+use jaq_all::load::{compile_errors, load_errors, FileReports};
 use std::{io, path::PathBuf};
 
 pub fn parse_compile(
@@ -19,8 +19,7 @@ pub fn parse_compile(
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let defs = jaq_std::defs().chain(jaq_json::defs());
-    let loader = Loader::new(defs).with_std_read(paths);
+    let loader = Loader::new(jaq_all::defs()).with_std_read(paths);
     //let loader = Loader::new([]).with_std_read(paths);
     let path = path.into();
     let modules = loader
@@ -51,7 +50,7 @@ pub(crate) fn run(
     mut f: impl FnMut(Val) -> io::Result<()>,
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
-    jaq_ext::data::run(runner, filter, vars, inputs, Error::Parse, |v| {
+    jaq_all::data::run(runner, filter, vars, inputs, Error::Parse, |v| {
         let v = v.map_err(Error::Jaq)?;
         last = Some(v.as_bool());
         f(v).map_err(Into::into)

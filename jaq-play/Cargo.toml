@@ -21,8 +21,7 @@ wasm-opt = ['-O','--all-features']
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-jaq-json = { workspace = true }
-jaq-ext  = { workspace = true }
+jaq-all  = { workspace = true }
 
 aho-corasick = "1.1.2"
 log = "0.4.17"

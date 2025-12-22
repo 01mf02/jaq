@@ -1,11 +1,11 @@
 [package]
-name = "jaq-ext"
+name = "jaq-all"
 version = "0.1.0-alpha"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
 edition = "2021"
 license = "MIT"
 readme = "../README.md"
-description = "Helpers to embed jaq into an application"
+description = "Run & compile jq filters and read & write data"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["jq"]
 rust-version = "1.70"

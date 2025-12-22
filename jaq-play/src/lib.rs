@@ -4,11 +4,11 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_ext::data::{self, compile, Runner};
-use jaq_ext::load::{Color, FileReportsDisp};
-use jaq_ext::write::Writer;
-use jaq_json::write::{Colors, Pp};
-use jaq_json::{bstr, read, write, write_bytes, write_utf8, Tag, Val, ValR};
+use jaq_all::data::{self, compile, Runner};
+use jaq_all::fmts::{read, write};
+use jaq_all::json::write::{Colors, Pp};
+use jaq_all::json::{self, bstr, write_bytes, write_utf8, Tag, Val, ValR};
+use jaq_all::load::{Color, FileReportsDisp};
 use wasm_bindgen::prelude::*;
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
@@ -40,7 +40,7 @@ fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
             });
             color!(str, write!(w, "{}", fun))
         }
-        _ => write::format_with(w, pp, level, v, fmt_json),
+        _ => json::write::format_with(w, pp, level, v, fmt_json),
     }
 }
 
@@ -124,7 +124,7 @@ impl Settings {
         Runner {
             color_err: true,
             null_input: self.null_input,
-            writer: Writer {
+            writer: write::Writer {
                 pp: self.pp(),
                 ..Default::default()
             },
@@ -134,7 +134,7 @@ impl Settings {
 
 enum Error {
     Hifijson(String),
-    Jaq(jaq_json::Error),
+    Jaq(json::Error),
 }
 
 #[wasm_bindgen]
@@ -177,12 +177,12 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 fn read_str<'a>(
     settings: &Settings,
     input: &'a str,
-) -> Box<dyn Iterator<Item = Result<Val, read::Error>> + 'a> {
+) -> Box<dyn Iterator<Item = Result<Val, json::read::Error>> + 'a> {
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
-        let vals = read::parse_many(input.as_bytes());
-        Box::new(jaq_ext::read::collect_if(settings.slurp, vals))
+        let vals = json::read::parse_many(input.as_bytes());
+        Box::new(read::collect_if(settings.slurp, vals))
     }
 }
 

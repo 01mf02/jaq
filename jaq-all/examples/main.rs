@@ -1,4 +1,4 @@
-use jaq_ext::{data, load, read, write};
+use jaq_all::{data, load, read, write};
 use std::io::{self, Error, ErrorKind};
 
 fn main() -> io::Result<()> {

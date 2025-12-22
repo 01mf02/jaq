@@ -296,14 +296,24 @@ version = "3.0.0-alpha"
 dependencies = [
  "dirs",
  "env_logger",
- "jaq-core",
- "jaq-ext",
- "jaq-json",
- "jaq-std",
+ "jaq-all",
  "log",
  "mimalloc",
  "rustyline",
  "tempfile",
+]
+
+[[package]]
+name = "jaq-all"
+version = "0.1.0-alpha"
+dependencies = [
+ "codesnake",
+ "jaq-core",
+ "jaq-fmts",
+ "jaq-json",
+ "jaq-std",
+ "serde_json",
+ "unicode-width",
 ]
 
 [[package]]
@@ -317,19 +327,6 @@ dependencies = [
  "once_cell",
  "serde_json",
  "typed-arena",
-]
-
-[[package]]
-name = "jaq-ext"
-version = "0.1.0-alpha"
-dependencies = [
- "codesnake",
- "jaq-core",
- "jaq-fmts",
- "jaq-json",
- "jaq-std",
- "serde_json",
- "unicode-width",
 ]
 
 [[package]]
@@ -377,8 +374,7 @@ dependencies = [
  "aho-corasick",
  "console_log",
  "getrandom 0.2.16",
- "jaq-ext",
- "jaq-json",
+ "jaq-all",
  "js-sys",
  "log",
  "wasm-bindgen",

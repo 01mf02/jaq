@@ -1,4 +1,4 @@
-//! Commonly used data for filter execution.
+//! Commonly used data for filter compilation & execution.
 use crate::{compile_with, FileReports, Fun};
 use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
 use jaq_fmts::write::Writer;
@@ -67,7 +67,7 @@ pub fn base_funs() -> impl Iterator<Item = Fun<DataKind>> {
     std.chain(jaq_json::funs()).chain(input)
 }
 
-/// Base functions plus functions from [`jaq_fmts`].
+/// Base functions ([`base_funs`]) plus functions from [`jaq_fmts`].
 #[cfg(feature = "formats")]
 pub fn funs() -> impl Iterator<Item = Fun<DataKind>> {
     base_funs().chain(jaq_fmts::funs())
