@@ -103,7 +103,7 @@ This is equivalent to `--from raw`.
 {#--slurp}
 ### `-s`, `--slurp`
 
-Read (slurp) all input values into one array.
+Read all input values into one array (per file).
 For example:
 
 ```
