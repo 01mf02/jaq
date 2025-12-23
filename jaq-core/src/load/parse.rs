@@ -821,7 +821,7 @@ pub(crate) struct Module<S, B> {
 /// def map(f): [.[] | f];
 /// def recurse(f; cond): recurse(f | select(cond));
 /// ~~~
-pub struct Def<S, F = Term<S>> {
+pub struct Def<S = &'static str, F = Term<S>> {
     /// name, e.g. `"double"` or `"map"`
     pub name: S,
     /// arguments, e.g. `["$x"]`, `["f"]`, or `["f", "cond"]`

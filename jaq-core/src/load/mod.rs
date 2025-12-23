@@ -5,7 +5,6 @@ mod arbitrary;
 pub mod lex;
 pub mod parse;
 mod prec_climb;
-pub mod test;
 
 use crate::{ops, path};
 #[cfg(feature = "std")]
@@ -72,6 +71,14 @@ impl<C, P> File<C, P> {
         File {
             code: f(self.code),
             path: self.path,
+        }
+    }
+
+    /// Apply a function to the path of a file.
+    pub fn map_path<P2>(self, f: impl Fn(P) -> P2) -> File<C, P2> {
+        File {
+            code: self.code,
+            path: f(self.path),
         }
     }
 }

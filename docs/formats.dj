@@ -80,7 +80,7 @@ That means that jaq accepts the following, even if it is not valid JSON:
 $ echo 'NaN b"Bytes" {1: 2} # Over and out' | jaq --from json -c
 NaN
 b"Bytes"
-{1: 2}
+{1:2}
 ```
 
 ## YAML
@@ -108,14 +108,14 @@ On the other hand, jaq ignores tags for arrays and objects:
 - `"!!bar {}" | fromyaml --> {}`
 
 jaq produces YAML that is very close to JSON/XJON.
-It differs from XJON only by writing
+jaq's compact YAML output differs from XJON mostly by writing
 byte strings as Base64-encoded `!!binary` string and
 special floating-point values as `.inf`, `-.inf`, and `.nan`:
 
 ```
 [infinite, -infinite, nan, ("a" | tobytes), {"a": 1}] | tojson, toyaml -->
 "[Infinity,-Infinity,NaN,b\"a\",{\"a\":1}]"
-"[.inf,-.inf,.nan,!!binary YQ==,{\"a\":1}]"
+"[.inf, -.inf, .nan, !!binary YQ==, {a: 1}]"
 ```
 
 jaq preserves invalid UTF-8 sequences in text strings when writing YAML.
@@ -129,6 +129,14 @@ This is done to indicate the start/end of YAML documents.
 For example:
 
 ```
+$ jaq -n '[1, {a: 2, b: [3]}]' --to yaml
+---
+- 1
+-
+  a: 2
+  b:
+    - 3
+...
 $ echo 1 2 | jaq --to yaml
 ---
 1
@@ -136,6 +144,17 @@ $ echo 1 2 | jaq --to yaml
 ---
 2
 ...
+```
+
+Use [`-j`](#--join-output) to omit YAML document start/end markers.
+This can come in handy when merging multiple arrays:
+
+```
+$ echo '[1, 2] [3, 4]' | jaq --to yaml -j
+- 1
+- 2
+- 3
+- 4
 ```
 
 Both `--from yaml` and the filter `fromyaml`

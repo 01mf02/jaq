@@ -4,36 +4,13 @@ extern crate alloc;
 use alloc::{borrow::ToOwned, format, string::ToString};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
-use jaq_core::{compile, data, load, unwrap_valr, Ctx, DataT, Lut, Native, Vars};
-use jaq_json::{bstr, json, write_byte, write_bytes, write_utf8, Tag, Val};
-use jaq_std::input::{self, HasInputs, Inputs, RcIter};
+use jaq_all::data::{self, compile, Runner};
+use jaq_all::fmts::{read, write};
+use jaq_all::json::write::{Colors, Pp};
+use jaq_all::json::{self, bstr, write_bytes, write_utf8, Tag, Val, ValR};
+use jaq_all::load::{Color, FileReportsDisp};
 use wasm_bindgen::prelude::*;
-
-struct DataKind;
-
-impl DataT for DataKind {
-    type V<'a> = Val;
-    type Data<'a> = Data<'a>;
-}
-
-#[derive(Clone)]
-struct Data<'a> {
-    lut: &'a Lut<DataKind>,
-    inputs: Inputs<'a, Val>,
-}
-
-impl<'a> data::HasLut<'a, DataKind> for Data<'a> {
-    fn lut(&self) -> &'a Lut<DataKind> {
-        self.lut
-    }
-}
-impl<'a> HasInputs<'a, Val> for Data<'a> {
-    fn inputs(&self) -> Inputs<'a, Val> {
-        self.inputs
-    }
-}
-
-type Filter = jaq_core::Filter<DataKind>;
+use web_sys::DedicatedWorkerGlobalScope as Scope;
 
 struct FormatterFn<F>(F);
 
@@ -43,85 +20,45 @@ impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
     }
 }
 
-struct PpOpts {
-    compact: bool,
-    indent: String,
-}
-
-impl PpOpts {
-    fn indent(&self, f: &mut Formatter, level: usize) -> fmt::Result {
-        if !self.compact {
-            write!(f, "{}", self.indent.repeat(level))?;
-        }
-        Ok(())
+fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
+    macro_rules! color {
+        ($style:ident, $g:expr) => {{
+            write!(w, "{}", pp.colors.$style)?;
+            $g?;
+            write!(w, "{}", pp.colors.reset)
+        }};
     }
 
-    fn newline(&self, f: &mut Formatter) -> fmt::Result {
-        if !self.compact {
-            writeln!(f)?;
-        }
-        Ok(())
-    }
-}
-
-fn fmt_seq<T, I, F>(fmt: &mut Formatter, opts: &PpOpts, level: usize, xs: I, f: F) -> fmt::Result
-where
-    I: IntoIterator<Item = T>,
-    F: Fn(&mut Formatter, T) -> fmt::Result,
-{
-    opts.newline(fmt)?;
-    let mut iter = xs.into_iter().peekable();
-    while let Some(x) = iter.next() {
-        opts.indent(fmt, level + 1)?;
-        f(fmt, x)?;
-        if iter.peek().is_some() {
-            write!(fmt, ",")?;
-        }
-        opts.newline(fmt)?;
-    }
-    opts.indent(fmt, level)
-}
-
-fn fmt_val(f: &mut Formatter, opts: &PpOpts, level: usize, v: &Val) -> fmt::Result {
     match v {
-        Val::Null => span(f, "null", "null"),
-        Val::Bool(b) => span(f, "boolean", b),
-        Val::Num(n) => span(f, "number", n),
         Val::Str(b, Tag::Bytes) => {
             let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
-            span(f, "bytes", escape_str(&fun.to_string()))
+            color!(bstr, write!(w, "{}", escape_str(&fun.to_string())))
         }
         Val::Str(s, Tag::Utf8) => {
             let fun = FormatterFn(move |f: &mut Formatter| {
                 write_utf8!(f, s, |part| bstr(&escape_bytes(part)).fmt(f))
             });
-            span(f, "string", fun)
+            color!(str, write!(w, "{}", fun))
         }
-        Val::Arr(a) if a.is_empty() => write!(f, "[]"),
-        Val::Arr(a) => {
-            write!(f, "[")?;
-            fmt_seq(f, opts, level, &**a, |f, x| fmt_val(f, opts, level + 1, x))?;
-            write!(f, "]")
-        }
-        Val::Obj(o) if o.is_empty() => write!(f, "{{}}"),
-        Val::Obj(o) => {
-            write!(f, "{{")?;
-            fmt_seq(f, opts, level, &**o, |f, (k, v)| {
-                use jaq_std::ValT;
-                fmt_val(f, opts, level + 1, k)?;
-                write!(f, ":")?;
-                if !opts.compact || !k.is_utf8_str() {
-                    write!(f, " ")?;
-                }
-                fmt_val(f, opts, level + 1, v)
-            })?;
-            write!(f, "}}")
-        }
+        _ => json::write::format_with(w, pp, level, v, fmt_json),
     }
 }
 
-fn span(f: &mut Formatter, cls: &str, el: impl Display) -> fmt::Result {
-    write!(f, "<span class=\"{cls}\">{el}</span>")
+fn html_colors() -> Colors {
+    let span = |cls| format!(r#"<span class="{cls}">"#);
+    Colors {
+        null: span("null"),
+        r#true: span("boolean"),
+        r#false: span("boolean"),
+        num: span("number"),
+        str: span("string"),
+        arr: span("array"),
+        obj: span("object"),
+
+        bstr: span("bytes"),
+
+        reset: "</span>".into(),
+    }
 }
 
 const AC_PATTERNS: &[&str] = &["&", "<", ">"];
@@ -165,16 +102,39 @@ impl Settings {
             tab: get_bool("tab")?,
         })
     }
+
+    fn indent(&self) -> String {
+        if self.tab {
+            "\t".to_string()
+        } else {
+            " ".repeat(self.indent)
+        }
+    }
+
+    fn pp(&self) -> Pp {
+        Pp {
+            indent: (!self.compact).then(|| self.indent()),
+            sep_space: !self.compact,
+            colors: html_colors(),
+            sort_keys: false,
+        }
+    }
+
+    fn runner(&self) -> Runner {
+        Runner {
+            color_err: true,
+            null_input: self.null_input,
+            writer: write::Writer {
+                pp: self.pp(),
+                ..Default::default()
+            },
+        }
+    }
 }
 
-use web_sys::DedicatedWorkerGlobalScope as Scope;
-
-type FileReports = (load::File<String, ()>, Vec<Report>);
-
 enum Error {
-    Report(Vec<FileReports>),
     Hifijson(String),
-    Jaq(jaq_core::Error<Val>),
+    Jaq(json::Error),
 }
 
 #[wasm_bindgen]
@@ -184,50 +144,30 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 
     let settings = Settings::try_from(settings).unwrap();
     log::trace!("{settings:?}");
+    let runner = &settings.runner();
 
-    let indent = if settings.tab {
-        "\t".to_string()
-    } else {
-        " ".repeat(settings.indent)
-    };
-
-    let pp_opts = PpOpts {
-        compact: settings.compact,
-        indent,
-    };
-
-    let post_value = |y| {
+    let post = |s: String| scope.post_message(&s.into()).unwrap();
+    let post_value = |y: ValR| {
+        let y = y.map_err(Error::Jaq)?;
         let s = FormatterFn(|f: &mut Formatter| match &y {
-            Val::Str(s, _) if settings.raw_output => span(f, "string", bstr(&escape_bytes(s))),
-            y => fmt_val(f, &pp_opts, 0, y),
+            Val::Str(s, _) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
+            y => fmt_json(f, &runner.writer.pp, 0, y),
         });
-        scope.post_message(&s.to_string().into()).unwrap();
+        post(s.to_string());
+        Ok(())
     };
-    match process(filter, input, &settings, post_value) {
-        Ok(()) => (),
-        Err(Error::Report(file_reports)) => {
-            for (file, reports) in file_reports {
-                let idx = codesnake::LineIndex::new(&file.code);
-                for e in reports {
-                    let error = format!("⚠️ Error: {}", e.message);
-                    scope.post_message(&error.into()).unwrap();
+    let vars = Default::default();
+    let inputs = read_str(&settings, input);
 
-                    let block = e.into_block(&idx);
-                    let block = format!("{}\n{}{}", block.prologue(), block, block.epilogue());
-                    scope.post_message(&block.into()).unwrap();
-                }
-            }
-        }
-        Err(Error::Hifijson(e)) => {
-            scope
-                .post_message(&format!("⚠️ Parse error: {e}").into())
-                .unwrap();
-        }
-        Err(Error::Jaq(e)) => {
-            scope
-                .post_message(&format!("⚠️ Error: {e}").into())
-                .unwrap();
-        }
+    match compile(filter) {
+        Err(file_reports) => file_reports
+            .iter()
+            .for_each(|fr| post(format!("{}", FileReportsDisp::new(fr).with_paint(color)))),
+        Ok(filter) => match data::run(runner, &filter, vars, inputs, Error::Hifijson, post_value) {
+            Ok(()) => (),
+            Err(Error::Hifijson(e)) => post(format!("Parse error: {e}")),
+            Err(Error::Jaq(e)) => post(format!("Error: {e}")),
+        },
     }
 
     // signal that we are done
@@ -237,12 +177,12 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 fn read_str<'a>(
     settings: &Settings,
     input: &'a str,
-) -> Box<dyn Iterator<Item = Result<Val, String>> + 'a> {
+) -> Box<dyn Iterator<Item = Result<Val, json::read::Error>> + 'a> {
     if settings.raw_input {
         Box::new(raw_input(settings.slurp, input).map(|s| Ok(Val::from(s.to_owned()))))
     } else {
-        let vals = json::parse_many(input.as_bytes()).map(|r| r.map_err(|e| e.to_string()));
-        Box::new(collect_if(settings.slurp, vals))
+        let vals = json::read::parse_many(input.as_bytes());
+        Box::new(read::collect_if(settings.slurp, vals))
     }
 }
 
@@ -254,207 +194,8 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     }
 }
 
-fn collect_if<'a, T: 'a + FromIterator<T>, E: 'a>(
-    slurp: bool,
-    iter: impl Iterator<Item = Result<T, E>> + 'a,
-) -> Box<dyn Iterator<Item = Result<T, E>> + 'a> {
-    if slurp {
-        Box::new(core::iter::once(iter.collect()))
-    } else {
-        Box::new(iter)
-    }
-}
-
-fn process(filter: &str, input: &str, settings: &Settings, f: impl Fn(Val)) -> Result<(), Error> {
-    let (vals, filter) = parse(filter, &[]).map_err(Error::Report)?;
-
-    let inputs = read_str(settings, input);
-
-    let iter = Box::new(inputs) as Box<dyn Iterator<Item = Result<_, _>>>;
-    let null = Box::new(core::iter::once(Ok(Val::Null))) as Box<dyn Iterator<Item = _>>;
-
-    let iter: Inputs<_> = &RcIter::new(iter);
-    let null: Inputs<_> = &RcIter::new(null);
-
-    let data = Data {
-        inputs: iter,
-        lut: &filter.lut,
-    };
-    let vars = Vars::new(vals);
-    let ctx = Ctx::<DataKind>::new(data, vars);
-
-    for x in if settings.null_input { null } else { iter } {
-        let x = x.map_err(Error::Hifijson)?;
-        for y in filter.id.run((ctx.clone(), x)) {
-            f(unwrap_valr(y).map_err(Error::Jaq)?);
-        }
-    }
-    Ok(())
-}
-
-fn funs() -> impl Iterator<Item = jaq_std::Filter<Native<DataKind>>> {
-    let run = jaq_std::run::<DataKind>;
-    let std = jaq_std::funs::<DataKind>();
-    let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
-    std.chain(jaq_json::funs()).chain(input)
-}
-
-fn parse(code: &str, vars: &[String]) -> Result<(Vec<Val>, Filter), Vec<FileReports>> {
-    use compile::Compiler;
-    use jaq_core::load::{import, Arena, File, Loader};
-
-    let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
-    let arena = Arena::default();
-    let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
-    let modules = loader
-        .load(&arena, File { path: (), code })
-        .map_err(load_errors)?;
-
-    let vals = Vec::new();
-    import(&modules, |_path| Err("file loading not supported".into())).map_err(load_errors)?;
-
-    let compiler = Compiler::default()
-        .with_funs(funs())
-        .with_global_vars(vars.iter().map(|v| &**v));
-    let filter = compiler.compile(modules).map_err(compile_errors)?;
-    Ok((vals, filter))
-}
-
-fn load_errors(errs: load::Errors<&str, ()>) -> Vec<FileReports> {
-    use load::Error;
-
-    let errs = errs.into_iter().map(|(file, err)| {
-        let code = file.code;
-        let err = match err {
-            Error::Io(errs) => errs.into_iter().map(|e| report_io(code, e)).collect(),
-            Error::Lex(errs) => errs.into_iter().map(|e| report_lex(code, e)).collect(),
-            Error::Parse(errs) => errs.into_iter().map(|e| report_parse(code, e)).collect(),
-        };
-        (file.map_code(|s| s.into()), err)
-    });
-    errs.collect()
-}
-
-fn compile_errors(errs: compile::Errors<&str, ()>) -> Vec<FileReports> {
-    let errs = errs.into_iter().map(|(file, errs)| {
-        let code = file.code;
-        let errs = errs.into_iter().map(|e| report_compile(code, e)).collect();
-        (file.map_code(|s| s.into()), errs)
-    });
-    errs.collect()
-}
-
-type StringColors = Vec<(String, Option<Color>)>;
-
-#[derive(Debug)]
-struct Report {
-    message: String,
-    labels: Vec<(core::ops::Range<usize>, StringColors, Color)>,
-}
-
-#[derive(Clone, Debug)]
-enum Color {
-    Yellow,
-    Red,
-}
-
-impl Color {
-    fn apply(&self, d: impl Display) -> String {
-        let mut color = format!("{self:?}");
-        color.make_ascii_lowercase();
-        format!("<span class={color}>{d}</span>",)
-    }
-}
-
-fn report_io(code: &str, (path, error): (&str, String)) -> Report {
-    let path_range = load::span(code, path);
-    Report {
-        message: format!("could not load file {path}: {error}"),
-        labels: [(path_range, [(error, None)].into(), Color::Red)].into(),
-    }
-}
-
-fn report_lex(code: &str, (expected, found): load::lex::Error<&str>) -> Report {
-    use load::span;
-    // truncate found string to its first character
-    let found = &found[..found.char_indices().nth(1).map_or(found.len(), |(i, _)| i)];
-
-    let found_range = span(code, found);
-    let found = match found {
-        "" => [("unexpected end of input".to_string(), None)].into(),
-        c => [("unexpected character ", None), (c, Some(Color::Red))]
-            .map(|(s, c)| (s.into(), c))
-            .into(),
-    };
-    let label = (found_range, found, Color::Red);
-
-    let labels = match expected {
-        load::lex::Expect::Delim(open) => {
-            let text = [("unclosed delimiter ", None), (open, Some(Color::Yellow))]
-                .map(|(s, c)| (s.into(), c));
-            Vec::from([(span(code, open), text.into(), Color::Yellow), label])
-        }
-        _ => Vec::from([label]),
-    };
-
-    Report {
-        message: format!("expected {}", expected.as_str()),
-        labels,
-    }
-}
-
-fn report_parse(code: &str, (expected, found): load::parse::Error<&str>) -> Report {
-    let found_range = load::span(code, found);
-
-    let found = if found.is_empty() {
-        "unexpected end of input"
-    } else {
-        "unexpected token"
-    };
-    let found = [(found.to_string(), None)].into();
-
-    Report {
-        message: format!("expected {}", expected.as_str()),
-        labels: Vec::from([(found_range, found, Color::Red)]),
-    }
-}
-
-fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Report {
-    use compile::Undefined::Filter;
-    let found_range = load::span(code, found);
-    let wnoa = |exp, got| format!("wrong number of arguments (expected {exp}, found {got})");
-    let message = match (found, undefined) {
-        ("reduce", Filter(arity)) => wnoa("2", arity),
-        ("foreach", Filter(arity)) => wnoa("2 or 3", arity),
-        (_, undefined) => format!("undefined {}", undefined.as_str()),
-    };
-    let found = [(message.clone(), None)].into();
-
-    Report {
-        message,
-        labels: Vec::from([(found_range, found, Color::Red)]),
-    }
-}
-
-type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
-
-impl Report {
-    fn into_block(self, idx: &codesnake::LineIndex) -> CodeBlock {
-        use codesnake::{Block, CodeWidth, Label};
-        let color_maybe = |(text, color): (_, Option<Color>)| match color {
-            None => text,
-            Some(color) => color.apply(text).to_string(),
-        };
-        let labels = self.labels.into_iter().map(|(range, text, color)| {
-            let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
-            Label::new(range)
-                .with_text(text.join(""))
-                .with_style(move |s| color.apply(s).to_string())
-        });
-        Block::new(idx, labels).unwrap().map_code(|c| {
-            let c = c.replace('\t', "    ");
-            let w = unicode_width::UnicodeWidthStr::width(&*c);
-            CodeWidth::new(c, core::cmp::max(w, 1))
-        })
-    }
+fn color(color: Color, text: String) -> String {
+    let mut color = format!("{color:?}");
+    color.make_ascii_lowercase();
+    format!("<span class={color}>{text}</span>",)
 }

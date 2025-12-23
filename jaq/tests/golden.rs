@@ -165,7 +165,41 @@ test!(
     non_str_key,
     &["-c"],
     r#"{1: 2, 3.1415: 4, ["foo"]: "bar", {true: false}: true}"#,
-    r#"{1: 2,3.1415: 4,["foo"]: "bar",{true: false}: true}"#
+    r#"{1:2,3.1415:4,["foo"]:"bar",{true:false}:true}"#
+);
+
+test!(
+    yaml,
+    &["--to", "yaml"],
+    r#"[1, {"a": 2, "b": [3]}]"#,
+    r#"
+---
+- 1
+-
+  a: 2
+  b:
+    - 3
+...
+"#
+);
+
+test!(
+    yaml_join,
+    &["--to", "yaml", "-j"],
+    r#"[1, 2] [3, 4]"#,
+    r#"
+- 1
+- 2
+- 3
+- 4
+"#
+);
+
+test!(
+    yaml_compact,
+    &["--to", "yaml", "-c"],
+    r#"{1: 2, 3.1415: 4, ["foo"]: "bar", {true: false}: true}"#,
+    "---\n{1: 2, 3.1415: 4, [foo]: bar, {true: false}: true}\n..."
 );
 
 test!(surrogate_pair, &[], r#""\uD801\uDC37""#, r#""𐐷""#);

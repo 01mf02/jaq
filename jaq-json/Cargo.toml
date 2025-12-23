@@ -12,24 +12,18 @@ categories = ["data-structures"]
 rust-version = "1.70"
 
 [features]
-default = ["formats"]
-formats = ["cbor", "json", "toml", "xml", "yaml"]
-
-cbor = ["ciborium-ll", "ciborium-io"]
-json = ["hifijson"]
-toml = ["toml_edit"]
-xml = ["xmlparser"]
-yaml = ["saphyr-parser", "base64"]
-
+default = ["std"]
 sync = []
+std = ["hifijson/std"]
 
 [dependencies]
-jaq-core = { version = "3.0.0-alpha", path = "../jaq-core" }
-jaq-std  = { version = "3.0.0-alpha", path = "../jaq-std" }
+jaq-core = { workspace = true }
+jaq-std  = { workspace = true }
 
 bstr = "1"
 bytes = "1"
 foldhash = { version = "0.1", default-features = false }
+hifijson = { version = "0.4.0", default-features = false, features = ["alloc"] }
 indexmap = { version = "2.0", default-features = false }
 num-bigint = { version = "0.4.6", default-features = false }
 num-traits = { version = "0.2.19", default-features = false }
@@ -37,15 +31,6 @@ ryu = "1.0.20"
 self_cell = "1.2.0"
 serde = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
 serde_json = { version = "1.0.81", default-features = false, features = ["alloc"], optional = true }
-
-# parsers
-base64 = { version = "0.22", optional = true }
-ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
-ciborium-ll = { version = "0.2.2", optional = true }
-hifijson = { version = "0.4.0", default-features = false, features = ["alloc", "std"], optional = true }
-saphyr-parser = { version = "0.0.6", optional = true }
-toml_edit = { version = "0.23.2", optional = true }
-xmlparser = { version = "0.13.6", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"

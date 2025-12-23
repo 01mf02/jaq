@@ -1,10 +1,11 @@
-use crate::{Error, Num, Tag, Val, ValR, ValX};
+use crate::{read, Error, Num, Tag, Val, ValR, ValX};
 use alloc::{boxed::Box, vec::Vec};
 use bstr::ByteSlice;
 use bytes::{BufMut, Bytes, BytesMut};
-use jaq_core::box_iter::{box_once, BoxIter};
+use core::fmt;
+use jaq_core::box_iter::{then, BoxIter};
 use jaq_core::{DataT, Exn, Native, RunPtr};
-use jaq_std::{run, unary, v, Filter};
+use jaq_std::{bome, run, unary, v, Filter, ValT as _};
 
 impl Val {
     /// Return 0 for null, the absolute value for numbers, and
@@ -105,26 +106,77 @@ impl Val {
             _ => Err(self.clone()),
         }
     }
+
+    fn as_bytes_owned(&self) -> Option<Bytes> {
+        if let Self::Str(b, _) = self {
+            Some(b.clone())
+        } else {
+            None
+        }
+    }
+
+    fn as_utf8_bytes_owned(&self) -> Option<Bytes> {
+        self.is_utf8_str().then(|| self.as_bytes_owned()).flatten()
+    }
+
+    /// Return bytes if the value is a (byte or text) string.
+    pub fn try_as_bytes_owned(&self) -> Result<Bytes, Error> {
+        self.as_bytes_owned()
+            .ok_or_else(|| Error::typ(self.clone(), "string"))
+    }
+
+    /// Return bytes if the value is a text string.
+    pub fn try_as_utf8_bytes_owned(&self) -> Result<Bytes, Error> {
+        self.as_utf8_bytes_owned()
+            .ok_or_else(|| Error::typ(self.clone(), "string"))
+    }
 }
 
-/// Box Once, Map Error.
-pub(crate) fn bome<'a>(r: ValR) -> BoxIter<'a, ValX> {
-    box_once(r.map_err(Exn::from))
+/// Box Map, Map Error.
+fn bmme<'a>(iter: BoxIter<'a, ValR>) -> BoxIter<'a, ValX> {
+    Box::new(iter.map(|r| r.map_err(Exn::from)))
+}
+
+fn parse_fail(i: &impl fmt::Display, fmt: &str, e: impl fmt::Display) -> Error {
+    Error::str(format_args!("cannot parse {i} as {fmt}: {e}"))
+}
+
+self_cell::self_cell!(
+    struct BytesValRs {
+        owner: Bytes,
+
+        #[not_covariant]
+        dependent: ValRs,
+    }
+);
+
+impl Iterator for BytesValRs {
+    type Item = ValR;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.with_dependent_mut(|_owner, iter| iter.next())
+    }
+}
+
+type ValRs<'a> = BoxIter<'a, ValR>;
+
+/// Apply a function to bytes and yield the resulting value results.
+pub fn bytes_valrs(b: Bytes, f: impl FnOnce(&[u8]) -> ValRs) -> ValRs<'static> {
+    Box::new(BytesValRs::new(b, |b| f(b)))
 }
 
 /// Functions of the standard library.
-#[cfg(feature = "formats")]
 pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
-    base_funs().chain(crate::formats::funs().into_vec().into_iter().map(run))
-}
-
-/// Minimal set of filters.
-pub fn base_funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
     base().into_vec().into_iter().map(run)
 }
 
 fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
     Box::new([
+        ("fromjson", v(0), |cv| {
+            bmme(then(cv.1.try_as_utf8_bytes_owned(), |s| {
+                let fail = move |r: Result<_, _>| r.map_err(|e| parse_fail(&cv.1, "JSON", e));
+                bytes_valrs(s, |s| Box::new(read::parse_many(s).map(fail)))
+            }))
+        }),
         ("tojson", v(0), |cv| bome(Ok(Val::utf8_str(cv.1.to_json())))),
         ("tobytes", v(0), |cv| {
             let pass = |b| Val::Str(b, Tag::Bytes);

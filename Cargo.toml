@@ -3,11 +3,20 @@ members = [
     "jaq-core",
     "jaq-std",
     "jaq-json",
+    "jaq-fmts",
+    "jaq-all",
     "jaq",
     "jaq-play",
 ]
 
 resolver = "2"
+
+[workspace.dependencies]
+jaq-core = { version = "3.0.0-alpha", path = "jaq-core" }
+jaq-std  = { version = "3.0.0-alpha", path = "jaq-std"  }
+jaq-json = { version = "2.0.0-alpha", path = "jaq-json" }
+jaq-fmts = { version = "0.1.0-alpha", path = "jaq-fmts" }
+jaq-all  = { version = "0.1.0-alpha", path = "jaq-all"  }
 
 [profile.release]
 strip = true
