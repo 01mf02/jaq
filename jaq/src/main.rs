@@ -24,7 +24,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate alloc;
 
-fn main() -> ExitCode {
+fn main() -> io::Result<ExitCode> {
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "jaq=debug"))
         .format(|buf, record| match record.level() {
@@ -35,28 +35,36 @@ fn main() -> ExitCode {
         })
         .init();
 
+    let mut out = io::stdout();
+    let mut err = io::stderr();
+
     let cli = match Cli::parse() {
         Ok(cli) => cli,
         Err(e) => {
-            eprintln!("Error: {e}");
-            return ExitCode::from(2);
+            writeln!(err, "Error: {e}")?;
+            return Ok(ExitCode::from(2));
         }
     };
 
     if cli.version {
-        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
-        return ExitCode::SUCCESS;
+        let name = env!("CARGO_PKG_NAME");
+        let version = env!("CARGO_PKG_VERSION");
+        writeln!(out, "{name} {version}")?;
+        Ok(ExitCode::SUCCESS)
     } else if cli.help {
-        println!("{}", include_str!("help.txt"));
-        return ExitCode::SUCCESS;
-    }
-
-    match real_main(&cli) {
-        Ok(exit) => exit,
-        Err(e) => {
-            eprint!("{}", ErrorColor::new(&e, cli.color_stdio(io::stderr())));
-            e.report()
+        writeln!(out, "{}", include_str!("help.txt"))?;
+        Ok(ExitCode::SUCCESS)
+    } else if let Some(test_files) = &cli.run_tests {
+        match test_files.last() {
+            Some(file) => tests::run(io::BufReader::new(std::fs::File::open(file)?)),
+            None => tests::run(io::stdin().lock()),
         }
+    } else {
+        real_main(&cli).or_else(|e| {
+            let color = cli.color_stdio(&err);
+            write!(err, "{}", ErrorColor::new(&e, color))?;
+            Ok(e.report())
+        })
     }
 }
 
@@ -64,7 +72,7 @@ impl Cli {
     fn runner(&self) -> Runner {
         Runner {
             null_input: self.null_input,
-            color_err: self.color_stdio(io::stderr()),
+            color_err: self.color_stdio(&io::stderr()),
             writer: self.writer(),
         }
     }
@@ -87,7 +95,7 @@ impl Cli {
     }
 
     fn colors(&self) -> Colors {
-        self.color_stdio(io::stdout())
+        self.color_stdio(&io::stdout())
             .then(Colors::ansi)
             .map(|c| match std::env::var("JQ_COLORS") {
                 Err(_) => c,
@@ -98,13 +106,6 @@ impl Cli {
 }
 
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
-    if let Some(test_files) = &cli.run_tests {
-        return Ok(match test_files.last() {
-            Some(file) => tests::run(io::BufReader::new(std::fs::File::open(file)?)),
-            None => tests::run(io::stdin().lock()),
-        });
-    }
-
     let (var_names, mut vars): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
 
     let (var_vals, filter) = match &cli.filter {

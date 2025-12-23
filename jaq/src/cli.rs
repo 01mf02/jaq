@@ -192,7 +192,7 @@ impl Cli {
         }
     }
 
-    pub fn color_stdio(&self, io: impl std::io::IsTerminal) -> bool {
+    pub fn color_stdio(&self, io: &impl std::io::IsTerminal) -> bool {
         #[cfg(not(target_os = "windows"))]
         let enabled = || true;
         #[cfg(target_os = "windows")]
