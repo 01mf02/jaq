@@ -29,11 +29,13 @@ The native data format of jaq is a superset of JSON called *XJON*
 XJON extends JSON with following constructs:
 
 - Line comments: `# ... \n` is interpreted as comment
-- Special floating-point numbers: `NaN`, `Infinity`, `-Infinity`
-- Numbers starting with `+`:
-  Every number that may be prefixed with `-` (minus)
-  may also be prefixed with `+` (plus), e.g.
-  `+7`, `+Infinity`.
+- Special floating-point numbers: `NaN`, `Infinity`, `+Infinity`, `-Infinity`
+- Numbers starting with `+` or multiple zeros:
+  The beginning of a number corresponds to the regex
+  `[+-]?\d+` in XJON and
+  `-?(0|[1-9]\d*)` in JSON.
+  That means that in XJON,
+  `+7.1`, `007`, `-042` are all valid numbers, whereas they are invalid in JSON.
 - UTF-8 strings with invalid code units:
   The JSON standard is slightly ambiguous whether
   strings may contain invalid UTF-8 code units.
