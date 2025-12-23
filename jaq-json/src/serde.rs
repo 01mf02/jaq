@@ -1,121 +1,85 @@
-use super::Rc;
-use alloc::fmt;
-use alloc::string::String;
-use alloc::vec::Vec;
-use serde::de::{MapAccess, SeqAccess, Visitor};
-use serde::Deserialize;
+use crate::{Num, Val};
+use alloc::{fmt, string::String};
+use serde::de::{Error, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 
-use crate::Num;
-use crate::{Map, Val as Value};
+struct ValueVisitor;
 
-impl<'de> serde::Deserialize<'de> for Value {
+impl<'de> Visitor<'de> for ValueVisitor {
+    type Value = Val;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("any valid JSON value")
+    }
+
     #[inline]
-    fn deserialize<D>(deserializer: D) -> Result<Value, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct ValueVisitor;
+    fn visit_bool<E>(self, value: bool) -> Result<Val, E> {
+        Ok(Val::Bool(value))
+    }
 
-        impl<'de> Visitor<'de> for ValueVisitor {
-            type Value = Value;
+    #[inline]
+    fn visit_i64<E>(self, value: i64) -> Result<Val, E> {
+        Ok(Val::Num(Num::from_integral(value)))
+    }
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("any valid JSON value")
-            }
+    #[inline]
+    fn visit_u64<E>(self, value: u64) -> Result<Val, E> {
+        Ok(Val::Num(Num::from_integral(value)))
+    }
 
-            #[inline]
-            fn visit_bool<E>(self, value: bool) -> Result<Value, E> {
-                Ok(Value::Bool(value))
-            }
+    fn visit_i128<E: Error>(self, value: i128) -> Result<Val, E> {
+        Ok(Val::Num(Num::from_integral(value)))
+    }
 
-            #[inline]
-            fn visit_i64<E>(self, value: i64) -> Result<Value, E> {
-                Ok(Value::Num(Num::from_integral(value)))
-            }
+    fn visit_u128<E: Error>(self, value: u128) -> Result<Val, E> {
+        Ok(Val::Num(Num::from_integral(value)))
+    }
 
-            fn visit_i128<E>(self, value: i128) -> Result<Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(Value::Num(Num::from_integral(value)))
-            }
+    #[inline]
+    fn visit_f64<E>(self, value: f64) -> Result<Val, E> {
+        Ok(Val::Num(Num::Float(value)))
+    }
 
-            #[inline]
-            fn visit_u64<E>(self, value: u64) -> Result<Value, E> {
-                Ok(Value::Num(Num::from_integral(value)))
-            }
+    #[inline]
+    fn visit_str<E: Error>(self, value: &str) -> Result<Val, E> {
+        self.visit_string(String::from(value))
+    }
 
-            fn visit_u128<E>(self, value: u128) -> Result<Value, E>
-            where
-                E: serde::de::Error,
-            {
-                Ok(Value::Num(Num::from_integral(value)))
-            }
+    #[inline]
+    fn visit_string<E>(self, value: String) -> Result<Val, E> {
+        Ok(Val::utf8_str(value.into_bytes()))
+    }
 
-            #[inline]
-            fn visit_f64<E>(self, value: f64) -> Result<Value, E> {
-                Ok(Value::Num(Num::Float(value)))
-            }
+    #[inline]
+    fn visit_none<E>(self) -> Result<Val, E> {
+        Ok(Val::Null)
+    }
 
-            #[inline]
-            fn visit_str<E>(self, value: &str) -> Result<Value, E>
-            where
-                E: serde::de::Error,
-            {
-                self.visit_string(String::from(value))
-            }
+    #[inline]
+    fn visit_some<D: Deserializer<'de>>(self, deserializer: D) -> Result<Val, D::Error> {
+        Deserialize::deserialize(deserializer)
+    }
 
-            #[inline]
-            fn visit_string<E>(self, value: String) -> Result<Value, E> {
-                Ok(Value::utf8_str(value.into_bytes()))
-            }
+    #[inline]
+    fn visit_unit<E>(self) -> Result<Val, E> {
+        Ok(Val::Null)
+    }
 
-            #[inline]
-            fn visit_none<E>(self) -> Result<Value, E> {
-                Ok(Value::Null)
-            }
+    #[inline]
+    fn visit_seq<V: SeqAccess<'de>>(self, mut visitor: V) -> Result<Val, V::Error> {
+        core::iter::from_fn(|| visitor.next_element().transpose()).collect()
+    }
 
-            #[inline]
-            fn visit_some<D>(self, deserializer: D) -> Result<Value, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                Deserialize::deserialize(deserializer)
-            }
+    fn visit_map<V: MapAccess<'de>>(self, mut visitor: V) -> Result<Val, V::Error> {
+        core::iter::from_fn(|| visitor.next_entry().transpose())
+            .collect::<Result<_, _>>()
+            .map(Val::obj)
+    }
+}
 
-            #[inline]
-            fn visit_unit<E>(self) -> Result<Value, E> {
-                Ok(Value::Null)
-            }
-
-            #[inline]
-            fn visit_seq<V>(self, mut visitor: V) -> Result<Value, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let mut vec = Vec::new();
-
-                while let Some(elem) = visitor.next_element()? {
-                    vec.push(elem);
-                }
-
-                Ok(Value::Arr(Rc::new(vec)))
-            }
-
-            fn visit_map<V>(self, mut visitor: V) -> Result<Value, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut values = Map::default();
-
-                while let Some((key, value)) = visitor.next_entry::<Value, Value>()? {
-                    values.insert(key, value);
-                }
-
-                Ok(Value::Obj(Rc::new(values)))
-            }
-        }
-
+impl<'de> Deserialize<'de> for Val {
+    #[inline]
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Val, D::Error> {
         deserializer.deserialize_any(ValueVisitor)
     }
 }
