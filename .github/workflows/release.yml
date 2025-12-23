@@ -49,8 +49,8 @@ jobs:
         - { target: i686-pc-windows-msvc         , os: windows-2022 }
         - { target: i686-unknown-linux-gnu       , os: ubuntu-22.04 }
         - { target: i686-unknown-linux-musl      , os: ubuntu-22.04 }
-        - { target: x86_64-apple-darwin          , os: macos-13     }
-        - { target: aarch64-apple-darwin         , os: macos-13     }
+        - { target: x86_64-apple-darwin          , os: macos-14     }
+        - { target: aarch64-apple-darwin         , os: macos-14     }
 # fails in mimalloc, possibly mingw related, see:
 # https://github.com/purpleprotocol/mimalloc_rust/issues/125
 #       - { target: x86_64-pc-windows-gnu        , os: windows-2022 }
