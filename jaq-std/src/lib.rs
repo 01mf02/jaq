@@ -406,7 +406,7 @@ fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Resul
 }
 
 /// Box Once and Map Errors to exceptions.
-fn bome<'a, V: 'a>(r: ValR<V>) -> ValXs<'a, V> {
+pub fn bome<'a, V: 'a>(r: ValR<V>) -> ValXs<'a, V> {
     box_once(r.map_err(Exn::from))
 }
 

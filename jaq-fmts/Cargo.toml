@@ -1,0 +1,41 @@
+[package]
+name = "jaq-fmts"
+version = "0.1.0-alpha"
+authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
+edition = "2021"
+license = "MIT"
+readme = "../README.md"
+description = "Multi-format support for jaq"
+repository = "https://github.com/01mf02/jaq"
+keywords = ["jq"]
+rust-version = "1.70"
+
+[features]
+default = ["all"]
+all = ["cbor", "toml", "xml", "yaml"]
+
+cbor = ["ciborium-ll", "ciborium-io"]
+toml = ["toml_edit"]
+xml = ["xmlparser"]
+yaml = ["saphyr-parser", "base64"]
+
+[dependencies]
+jaq-core = { workspace = true }
+jaq-std  = { workspace = true }
+jaq-json = { workspace = true }
+
+bstr = "1"
+bytes = "1.10.1"
+memmap2 = "0.9"
+num-bigint = { version = "0.4.6", default-features = false }
+
+# parsers
+base64 = { version = "0.22", optional = true }
+ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
+ciborium-ll = { version = "0.2.2", optional = true }
+saphyr-parser = { version = "0.0.6", optional = true }
+toml_edit = { version = "0.23.2", optional = true }
+xmlparser = { version = "0.13.6", optional = true }
+
+[dev-dependencies]
+serde_json = "1.0"

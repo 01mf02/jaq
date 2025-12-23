@@ -1,11 +1,11 @@
 //! JSON support.
 use crate::{Map, Num, Tag, Val};
 use alloc::{string::ToString, vec::Vec};
+use core::fmt::{self, Formatter};
 use hifijson::token::{Expect, Lex};
-use hifijson::{IterLexer, LexAlloc, SliceLexer};
+use hifijson::{LexAlloc, SliceLexer};
+#[cfg(feature = "std")]
 use std::io;
-
-pub use crate::write::write;
 
 /// Eat whitespace/comments, then peek at next character.
 fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
@@ -18,26 +18,47 @@ fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     }
 }
 
-/// Parse a sequence of JSON values.
-pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, hifijson::Error>> + '_ {
-    let mut lexer = SliceLexer::new(slice);
-    core::iter::from_fn(move || Some(parse(ws_tk(&mut lexer)?, &mut lexer)))
+/// Parse error.
+#[derive(Debug)]
+pub struct Error(usize, hifijson::Error);
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "byte offset {}: {}", self.0, self.1)
+    }
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
+
+/// Parse exactly one JSON value.
+pub fn parse_single(slice: &[u8]) -> Result<Val, Error> {
+    let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
+    let mut lexer = SliceLexer::new(slice);
+    lexer
+        .exactly_one(ws_tk, parse)
+        .map_err(|e| Error(offset(lexer.as_slice()), e))
+}
+
+/// Parse a sequence of JSON values.
+pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_ {
+    let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
+    let mut lexer = SliceLexer::new(slice);
+    core::iter::from_fn(move || {
+        Some(parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|e| Error(offset(lexer.as_slice()), e)))
+    })
+}
+
+#[cfg(feature = "std")]
 /// Read a sequence of JSON values.
 pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    use crate::invalid_data;
-    let mut lexer = IterLexer::new(read.bytes());
+    let invalid_data = |e| io::Error::new(io::ErrorKind::InvalidData, e);
+    let mut lexer = hifijson::IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
         let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));
         // always return I/O error if present, regardless of the output value!
         lexer.error.take().map(Err).or(v)
     })
-}
-
-/// Parse exactly one JSON value.
-pub fn parse_single(s: &[u8]) -> Result<Val, hifijson::Error> {
-    SliceLexer::new(s).exactly_one(ws_tk, parse)
 }
 
 /// Parse a JSON string as byte string, preserving invalid UTF-8 as-is.
@@ -62,7 +83,7 @@ fn parse_num<L: LexAlloc>(lexer: &mut L, prefix: &str) -> Result<Num, hifijson::
     let (num, parts) = lexer.num_string(prefix)?;
     // if we are dealing with an integer ...
     Ok(if parts.dot.is_none() && parts.exp.is_none() {
-        Num::try_from_int_str(&num, 10).unwrap()
+        Num::from_str_radix(&num, 10).unwrap()
     } else {
         Num::Dec(num.to_string().into())
     })
@@ -80,7 +101,7 @@ fn parse_signed<L: LexAlloc>(sign: u8, lexer: &mut L) -> Result<Num, hifijson::E
 
 /// Parse a JSON value, given an initial non-whitespace character and a lexer.
 ///
-/// If the underlying lexer reads input fallibly (for example `IterLexer`),
+/// If the underlying lexer reads input fallibly (for example [`hifijson::IterLexer`]),
 /// the error returned by this function might be misleading.
 /// In that case, always check whether the lexer contains an error.
 fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {

@@ -8,7 +8,7 @@ def error:                error_empty  as $x | .    ;
 def error(msgs):  (msgs | error_empty) as $x | .    ;
 
 def halt: halt(0);
-def halt_error($exit_code): stderr, halt($exit_code);
+def halt_error($exit_code): stderr_empty, halt($exit_code);
 def halt_error: halt_error(5);
 
 # Booleans

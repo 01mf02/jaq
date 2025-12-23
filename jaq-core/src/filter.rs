@@ -42,6 +42,12 @@ impl<V> Vars<V> {
     }
 }
 
+impl<V> Default for Vars<V> {
+    fn default() -> Self {
+        Self(RcList::default())
+    }
+}
+
 /// Filter execution context.
 pub struct Ctx<'a, D: DataT + ?Sized> {
     data: D::Data<'a>,

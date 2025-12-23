@@ -8,25 +8,15 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
+// even if this crate is `no_std`, it currently relies on `std`, because
+// `to_json` has to go through the JSON writer to preserve invalid UTF-8
 extern crate std;
 
-#[cfg(feature = "formats")]
-mod formats;
 mod funs;
 mod num;
 #[macro_use]
-mod write;
-
-#[cfg(feature = "cbor")]
-pub mod cbor;
-#[cfg(feature = "json")]
-pub mod json;
-#[cfg(feature = "toml")]
-pub mod toml;
-#[cfg(feature = "xml")]
-pub mod xml;
-#[cfg(feature = "yaml")]
-pub mod yaml;
+pub mod write;
+pub mod read;
 
 #[cfg(feature = "serde_json")]
 mod serde_json;
@@ -42,9 +32,7 @@ use jaq_core::{load, ops, path, val, Exn};
 use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
 
-pub use funs::base_funs;
-#[cfg(feature = "formats")]
-pub use funs::funs;
+pub use funs::{bytes_valrs, funs};
 pub use num::Num;
 
 #[cfg(not(feature = "sync"))]
@@ -491,7 +479,7 @@ impl Val {
 
     fn to_json(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        write::write(&mut buf, self).unwrap();
+        write::write(&mut buf, &write::Pp::default(), 0, self).unwrap();
         buf
     }
 }
@@ -774,14 +762,6 @@ pub fn bstr(s: &(impl core::convert::AsRef<[u8]> + ?Sized)) -> impl fmt::Display
 
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write_val!(f, self, |v: &Val| v.fmt(f))
+        write::format(f, &write::Pp::default(), 0, self)
     }
-}
-
-/// Dynamic & thread-safe [`std::error::Error`].
-pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
-
-/// Create an invalid data I/O error.
-pub fn invalid_data(e: impl Into<BoxError>) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
 }
