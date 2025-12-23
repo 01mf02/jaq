@@ -3,7 +3,8 @@
 use crate::Error;
 use alloc::vec::Vec;
 use jaq_all::json::Val;
-use std::{io::BufRead, process::ExitCode};
+use std::io::{self, BufRead, Write};
+use std::process::ExitCode;
 
 /// A single jq unit test.
 pub struct Test<S> {
@@ -59,28 +60,31 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
     Ok((expect?, obtain.into_iter().collect()))
 }
 
-pub fn run(read: impl BufRead) -> ExitCode {
+pub fn run(read: impl BufRead) -> io::Result<ExitCode> {
     let lines = read.lines().map(Result::unwrap);
     let tests = Tests::new(lines);
 
+    let mut out = io::stdout();
+    let mut err = io::stderr();
+
     let (mut passed, mut total) = (0, 0);
     for test in tests {
-        println!("Testing {}", test.filter);
+        writeln!(out, "Testing {}", test.filter)?;
         match run_test(test) {
-            Err(e) => eprintln!("{e:?}"),
+            Err(e) => writeln!(err, "{e:?}")?,
             Ok((expect, obtain)) if expect != obtain => {
-                eprintln!("expected {expect}, obtained {obtain}");
+                writeln!(err, "expected {expect}, obtained {obtain}")?
             }
             Ok(_) => passed += 1,
         }
         total += 1;
     }
 
-    println!("{passed} out of {total} tests passed");
+    writeln!(out, "{passed} out of {total} tests passed")?;
 
-    if total > passed {
+    Ok(if total > passed {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
-    }
+    })
 }
