@@ -32,9 +32,7 @@ use jaq_core::{load, ops, path, val, Exn};
 use num_bigint::BigInt;
 use num_traits::{cast::ToPrimitive, Signed};
 
-// TODO!!!
-pub use funs::bytes_valrs;
-pub use funs::funs;
+pub use funs::{bytes_valrs, funs};
 pub use num::Num;
 
 #[cfg(not(feature = "sync"))]

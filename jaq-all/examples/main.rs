@@ -1,4 +1,4 @@
-use jaq_all::{data, load, fmts};
+use jaq_all::{data, fmts, load};
 use std::io::{self, Error, ErrorKind};
 
 fn main() -> io::Result<()> {
