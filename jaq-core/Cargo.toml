@@ -23,5 +23,5 @@ typed-arena = "2.0.2"
 
 [dev-dependencies]
 jaq-std  = { path = "../jaq-std" }
-jaq-json = { path = "../jaq-json", features = ["serde_json"] }
+jaq-json = { path = "../jaq-json", features = ["serde"] }
 serde_json = "1.0"
