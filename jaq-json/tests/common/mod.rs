@@ -1,5 +1,5 @@
 use jaq_json::{Error, Val, ValR};
-use serde_json::Value;
+use serde_json::{from_value, Value};
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     use jaq_core::load::{Arena, File, Loader};
@@ -16,15 +16,16 @@ fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
 }
 
 pub fn fail(x: Value, f: &str, err: Error) {
-    yields(x.into(), f, core::iter::once(Err(err)))
+    yields(from_value(x).unwrap(), f, core::iter::once(Err(err)))
 }
 
 pub fn give(x: Value, f: &str, y: Value) {
-    yields(x.into(), f, core::iter::once(Ok(y.into())))
+    gives(x, f, [y])
 }
 
 pub fn gives<const N: usize>(x: Value, f: &str, ys: [Value; N]) {
-    yields(x.into(), f, ys.into_iter().map(|y| Ok(y.into())))
+    let conv = |v| from_value(v).unwrap();
+    yields(conv(x), f, ys.into_iter().map(|y| Ok(conv(y))))
 }
 
 #[macro_export]
@@ -32,7 +33,7 @@ macro_rules! yields {
     ($func_name:ident, $filter:expr, $output: expr) => {
         #[test]
         fn $func_name() {
-            give(json!(null), $filter, json!($output))
+            $crate::common::give(json!(null), $filter, json!($output))
         }
     };
 }
