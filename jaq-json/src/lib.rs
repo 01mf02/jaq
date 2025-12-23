@@ -18,9 +18,6 @@ mod num;
 pub mod write;
 pub mod read;
 
-#[cfg(feature = "serde_json")]
-mod serde_json;
-
 use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use bytes::{BufMut, Bytes, BytesMut};
