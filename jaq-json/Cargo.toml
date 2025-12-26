@@ -22,7 +22,6 @@ jaq-std  = { workspace = true }
 
 bstr = "1"
 bytes = "1"
-embedded-io = { version = "0.6.1", features = ["alloc"] }
 foldhash = { version = "0.1", default-features = false }
 hifijson = { version = "0.5.0", default-features = false, features = ["alloc"] }
 indexmap = { version = "2.0", default-features = false }

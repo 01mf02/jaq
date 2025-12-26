@@ -474,9 +474,9 @@ impl Val {
     }
 
     fn to_json(&self) -> Vec<u8> {
-        let mut buf = Vec::new();
-        write::write_embedded(&mut buf, &write::Pp::default(), 0, self).unwrap();
-        buf
+        let mut buf = write::Buf(Vec::new());
+        write::write_buf(&mut buf, &write::Pp::default(), 0, self).unwrap();
+        buf.0
     }
 }
 

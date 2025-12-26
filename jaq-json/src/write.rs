@@ -282,13 +282,24 @@ pub fn write(w: &mut dyn io::Write, pp: &Pp, level: usize, v: &Val) -> io::Resul
     write_val!(w, pp, level, v, |level, x| write(w, pp, level, x))
 }
 
-pub(crate) fn write_embedded<E: embedded_io::Error>(
-    w: &mut dyn embedded_io::Write<Error = E>,
-    pp: &Pp,
-    level: usize,
-    v: &Val,
-) -> Result<(), embedded_io::WriteFmtError<E>> {
-    write_val!(w, pp, level, v, |level, x| write_embedded(w, pp, level, x))
+pub(crate) struct Buf(pub(crate) alloc::vec::Vec<u8>);
+
+impl Buf {
+    fn write_all(&mut self, bytes: &[u8]) -> fmt::Result {
+        self.0.extend_from_slice(bytes);
+        Ok(())
+    }
+}
+
+impl fmt::Write for Buf {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.write_all(s.as_bytes())
+    }
+}
+
+pub(crate) fn write_buf(w: &mut Buf, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
+    use core::fmt::Write;
+    write_val!(w, pp, level, v, |level, x| write_buf(w, pp, level, x))
 }
 
 pub(crate) fn format(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
