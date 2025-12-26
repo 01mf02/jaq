@@ -1,17 +1,14 @@
 //! YAML support.
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use core::fmt::{self, Formatter};
-use jaq_json::{write, Num, Val};
+use jaq_json::{write, write_utf8, Num, Tag, Val};
 use std::io;
 
-macro_rules! write_yaml {
-    ($w:ident, $pp:ident, $level:ident, $v:ident, $f:expr, $g:expr) => {{
-        macro_rules! color {
-            ($style:ident, $h:expr) => {{
-                write!($w, "{}", $pp.colors.$style)?;
-                $h?;
-                write!($w, "{}", $pp.colors.reset)
-            }};
+macro_rules! format_yaml {
+    ($w:ident, $pp:ident, $level:ident, $v:ident, $f:expr) => {{
+        macro_rules! style {
+            ($style:ident, $h:expr) => {
+                jaq_json::style!($w, $pp, $style, $h)
+            };
         }
         let indent = $pp.indent.as_ref();
         macro_rules! nested {
@@ -36,16 +33,16 @@ macro_rules! write_yaml {
             }};
         }
         match $v {
-            Val::Str(b, jaq_json::Tag::Utf8) if !must_quote(b) => {
-                color!(str, write!($w, "{}", jaq_json::bstr(b)))
+            Val::Str(b, Tag::Utf8) if !must_quote(b) => {
+                style!(str, write!($w, "{}", jaq_json::bstr(b)))
             }
-            Val::Str(b, jaq_json::Tag::Bytes) => {
-                color!(bstr, write!($w, "!!binary {}", BASE64.encode(b)))
+            Val::Str(b, Tag::Bytes) => {
+                style!(bstr, write!($w, "!!binary {}", BASE64.encode(b)))
             }
             Val::Arr(a) if !a.is_empty() && indent.is_some() => {
                 let mut iter = a.iter().peekable();
                 while let Some(v) = iter.next() {
-                    nested!(v, iter, color!(arr, write!($w, "-")))?
+                    nested!(v, iter, style!(arr, write!($w, "-")))?
                 }
                 Ok(())
             }
@@ -56,15 +53,30 @@ macro_rules! write_yaml {
                 while let Some((k, v)) = iter.next() {
                     nested!(v, iter, {
                         $f($w, &unindented, $level, k)?;
-                        color!(obj, write!($w, ":"))
+                        style!(obj, write!($w, ":"))
                     })?
                 }
                 Ok(())
             }
-            Val::Num(Num::Float(f64::INFINITY)) => color!(num, write!($w, ".inf")),
-            Val::Num(Num::Float(f64::NEG_INFINITY)) => color!(num, write!($w, "-.inf")),
-            Val::Num(Num::Float(fl)) if fl.is_nan() => color!(num, write!($w, ".nan")),
-            _ => $g,
+            Val::Num(Num::Float(f64::INFINITY)) => style!(num, write!($w, ".inf")),
+            Val::Num(Num::Float(f64::NEG_INFINITY)) => style!(num, write!($w, "-.inf")),
+            Val::Num(Num::Float(fl)) if fl.is_nan() => style!(num, write!($w, ".nan")),
+            _ => jaq_json::format_val!($w, $pp, $level, $v, |level, x| $f($w, $pp, level, x)),
+        }
+    }};
+}
+
+macro_rules! write_yaml {
+    ($w:ident, $pp:ident, $level:ident, $v:ident, $f:expr) => {{
+        macro_rules! style {
+            ($style:ident, $g:expr) => {{
+                jaq_json::style!($w, $pp, $style, $g)
+            }};
+        }
+        match $v {
+            Val::Str(b, Tag::Utf8) if !must_quote(b) => style!(str, $w.write_all(b)),
+            Val::Str(s, Tag::Utf8) => style!(str, write_utf8!($w, s, |part| $w.write_all(part))),
+            _ => format_yaml!($w, $pp, $level, $v, $f),
         }
     }};
 }
@@ -99,17 +111,7 @@ fn must_quote(s: &[u8]) -> bool {
     iter.any(|c| c.is_ascii() && !c.is_ascii_alphanumeric() && !good_tail(c))
 }
 
-/// Format a value as YAML document, without explicit document start/end markers.
-pub fn format(w: &mut Formatter, pp: &write::Pp, lvl: usize, v: &Val) -> fmt::Result {
-    use write::format_with;
-    write_yaml!(w, pp, lvl, v, format, format_with(w, pp, lvl, v, format))
-}
-
 /// Write a value as YAML document, without explicit document start/end markers.
 pub fn write(w: &mut dyn io::Write, pp: &write::Pp, level: usize, v: &Val) -> io::Result<()> {
-    use write::write_with;
-    match v {
-        Val::Str(s, jaq_json::Tag::Utf8) if !must_quote(s) => pp.write_str(w, |w| w.write_all(s)),
-        _ => write_yaml!(w, pp, level, v, write, write_with(w, pp, level, v, write)),
-    }
+    write_yaml!(w, pp, level, v, write)
 }

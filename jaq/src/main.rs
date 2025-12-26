@@ -11,7 +11,7 @@ use filter::run;
 use jaq_all::data::{Filter, Runner};
 use jaq_all::fmts::read;
 use jaq_all::fmts::write::{with_stdout, write, Writer};
-use jaq_all::json::write::{Colors, Pp};
+use jaq_all::json::write::{Pp, Styles};
 use jaq_all::json::Val;
 use jaq_all::load::{Color, FileReports, FileReportsDisp};
 use std::io::{self, Write};
@@ -89,14 +89,14 @@ impl Cli {
         Pp {
             indent: (!self.compact_output).then(|| self.indent()),
             sort_keys: self.sort_keys,
-            colors: self.colors(),
+            styles: self.styles(),
             sep_space: !self.compact_output || matches!(self.to, Some(Format::Yaml)),
         }
     }
 
-    fn colors(&self) -> Colors {
+    fn styles(&self) -> Styles {
         self.color_stdio(&io::stdout())
-            .then(Colors::ansi)
+            .then(Styles::ansi)
             .map(|c| match std::env::var("JQ_COLORS") {
                 Err(_) => c,
                 Ok(s) => c.parse(&s),

@@ -4,10 +4,11 @@
 //! formatters ([core::fmt::Formatter]) and
 //! writers ([std::io::Write]) from the same code.
 
-use crate::{Tag, Val};
+use crate::Val;
 use alloc::string::String;
 use core::fmt::{self, Formatter};
-use std::io::{self, Write};
+#[cfg(feature = "std")]
+use std::io;
 
 /// Write a byte.
 ///
@@ -65,6 +66,8 @@ macro_rules! write_bytes {
     }};
 }
 
+/// Write a comma-separated sequence of values `$xs` with `$f`.
+#[macro_export]
 macro_rules! write_seq {
     ($w:ident, $pp:expr, $level:expr, $xs:expr, $f:expr) => {{
         let indent = &$pp.indent;
@@ -95,9 +98,9 @@ macro_rules! write_seq {
     }};
 }
 
-/// Colors used to pretty-print values.
+/// Styles used to pretty-print values.
 #[derive(Clone, Default)]
-pub struct Colors<S = String> {
+pub struct Styles<S = String> {
     /// null
     pub null: S,
     /// false
@@ -120,16 +123,16 @@ pub struct Colors<S = String> {
     pub reset: S,
 }
 
-impl Colors {
-    /// Default ANSI colors
+impl Styles {
+    /// Default ANSI styles
     pub fn ansi() -> Self {
-        let mut cols = Colors::default().parse("90:39:39:39:32:1;39:1;39");
+        let mut cols = Styles::default().parse("90:39:39:39:32:1;39:1;39");
         cols.bstr = "\x1b[31m".into();
         cols.reset = "\x1b[0m".into();
         cols
     }
 
-    /// Overwrite colors with those present in `JQ_COLORS` environment variable.
+    /// Overwrite styles with those present in `JQ_COLORS` environment variable.
     pub fn parse(mut self, s: &str) -> Self {
         let fields = [
             &mut self.null,
@@ -154,8 +157,8 @@ pub struct Pp<S = String> {
     pub indent: Option<S>,
     /// sort objects by keys
     pub sort_keys: bool,
-    /// colors for different types of values
-    pub colors: Colors<S>,
+    /// styles for different types of values
+    pub styles: Styles<S>,
     /// put a space after ':'
     ///
     /// This is necessary for YAML, which interprets
@@ -164,17 +167,14 @@ pub struct Pp<S = String> {
     pub sep_space: bool,
 }
 
-impl Pp {
-    /// Write a string with color.
-    pub fn write_str(
-        &self,
-        w: &mut dyn Write,
-        f: impl FnOnce(&mut dyn Write) -> io::Result<()>,
-    ) -> io::Result<()> {
-        write!(w, "{}", self.colors.str)?;
-        f(w)?;
-        write!(w, "{}", self.colors.reset)
-    }
+/// Apply a style `$style` to the output of `$f`.
+#[macro_export]
+macro_rules! style {
+    ($w:ident, $pp:ident, $style:ident, $f:expr) => {{
+        write!($w, "{}", $pp.styles.$style)?;
+        $f?;
+        write!($w, "{}", $pp.styles.reset)
+    }};
 }
 
 /// Write a value as JSON superset, using a function `$f` to write sub-values.
@@ -185,13 +185,12 @@ impl Pp {
 /// formatters, which require all output to be valid UTF-8.
 /// However, the JSON/YAML writers usually override this behaviour,
 /// yielding invalid UTF-8 characters as-is.
-macro_rules! write_val {
+#[macro_export]
+macro_rules! format_val {
     ($w:ident, $pp:ident, $level:expr, $v:ident, $f:expr) => {{
         macro_rules! color {
             ($style:ident, $g:expr) => {{
-                write!($w, "{}", $pp.colors.$style)?;
-                $g?;
-                write!($w, "{}", $pp.colors.reset)
+                $crate::style!($w, $pp, $style, $g)
             }};
         }
         match $v {
@@ -202,12 +201,12 @@ macro_rules! write_val {
             Val::Str(b, $crate::Tag::Bytes) => color!(bstr, $crate::write_bytes!($w, b)),
             Val::Str(s, $crate::Tag::Utf8) => color!(
                 str,
-                write_utf8!($w, s, |part| write!($w, "{}", $crate::bstr(part)))
+                $crate::write_utf8!($w, s, |part| write!($w, "{}", $crate::bstr(part)))
             ),
             Val::Arr(a) => {
                 color!(arr, write!($w, "["))?;
                 if !a.is_empty() {
-                    write_seq!($w, $pp, $level, &**a, |x| $f($level + 1, x))?;
+                    $crate::write_seq!($w, $pp, $level, &**a, |x| $f($level + 1, x))?;
                 }
                 color!(arr, write!($w, "]"))
             }
@@ -228,9 +227,9 @@ macro_rules! write_val {
                     if $pp.sort_keys {
                         let mut o: alloc::vec::Vec<_> = o.iter().collect();
                         o.sort_by_key(|(k, _v)| *k);
-                        write_seq!($w, $pp, $level, o, |x| kv!(x))
+                        $crate::write_seq!($w, $pp, $level, o, |x| kv!(x))
                     } else {
-                        write_seq!($w, $pp, $level, &**o, |x| kv!(x))
+                        $crate::write_seq!($w, $pp, $level, &**o, |x| kv!(x))
                     }?
                 }
                 color!(obj, write!($w, "}}"))
@@ -239,22 +238,16 @@ macro_rules! write_val {
     }};
 }
 
-type WriteFn = fn(&mut dyn Write, &Pp, usize, &Val) -> io::Result<()>;
-type FormatFn = fn(&mut Formatter, &Pp, usize, &Val) -> fmt::Result;
-
 /// Write a value as JSON, using a custom function for child values.
-pub fn write_with(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val, f: WriteFn) -> io::Result<()> {
-    match v {
-        Val::Str(s, Tag::Utf8) => pp.write_str(w, |w| write_utf8!(w, s, |part| w.write_all(part))),
-        _ => write_val!(w, pp, level, v, |level, x| f(w, pp, level, x)),
-    }
-}
-
-/// Format a value as JSON, using a custom function for child values.
-///
-/// This is useful to override how certain values are printed, e.g. for YAML.
-pub fn format_with(w: &mut Formatter, pp: &Pp, level: usize, v: &Val, f: FormatFn) -> fmt::Result {
-    write_val!(w, pp, level, v, |level, x| f(w, pp, level, x))
+#[macro_export]
+macro_rules! write_val {
+    ($w:ident, $pp:ident, $level:expr, $v:ident, $f:expr) => {{
+        use $crate::{Tag::Utf8, Val::Str};
+        match $v {
+            Str(s, Utf8) => style!($w, $pp, str, write_utf8!($w, s, |part| $w.write_all(part))),
+            _ => format_val!($w, $pp, $level, $v, $f),
+        }
+    }};
 }
 
 /// Write a value as JSON.
@@ -284,10 +277,31 @@ pub fn format_with(w: &mut Formatter, pp: &Pp, level: usize, v: &Val, f: FormatF
 /// jq may cause silent information loss, whereas
 /// jaq may yield invalid JSON values.
 /// Choose your poison.
-pub fn write(w: &mut dyn Write, pp: &Pp, level: usize, v: &Val) -> io::Result<()> {
-    write_with(w, pp, level, v, write)
+#[cfg(feature = "std")]
+pub fn write(w: &mut dyn io::Write, pp: &Pp, level: usize, v: &Val) -> io::Result<()> {
+    write_val!(w, pp, level, v, |level, x| write(w, pp, level, x))
+}
+
+pub(crate) struct Buf(pub(crate) alloc::vec::Vec<u8>);
+
+impl Buf {
+    fn write_all(&mut self, bytes: &[u8]) -> fmt::Result {
+        self.0.extend_from_slice(bytes);
+        Ok(())
+    }
+}
+
+impl fmt::Write for Buf {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        self.write_all(s.as_bytes())
+    }
+}
+
+pub(crate) fn write_buf(w: &mut Buf, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
+    use core::fmt::Write;
+    write_val!(w, pp, level, v, |level, x| write_buf(w, pp, level, x))
 }
 
 pub(crate) fn format(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
-    format_with(w, pp, level, v, format)
+    format_val!(w, pp, level, v, |level, x| format(w, pp, level, x))
 }

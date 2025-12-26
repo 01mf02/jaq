@@ -6,8 +6,8 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_all::data::{self, compile, Runner};
 use jaq_all::fmts::{read, write};
-use jaq_all::json::write::{Colors, Pp};
-use jaq_all::json::{self, bstr, write_bytes, write_utf8, Tag, Val, ValR};
+use jaq_all::json::write::{Pp, Styles};
+use jaq_all::json::{self, bstr, style, write_bytes, write_utf8, Tag, Val, ValR};
 use jaq_all::load::{Color, FileReportsDisp};
 use wasm_bindgen::prelude::*;
 use web_sys::DedicatedWorkerGlobalScope as Scope;
@@ -23,9 +23,7 @@ impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FormatterFn<F> {
 fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
     macro_rules! color {
         ($style:ident, $g:expr) => {{
-            write!(w, "{}", pp.colors.$style)?;
-            $g?;
-            write!(w, "{}", pp.colors.reset)
+            style!(w, pp, $style, $g)
         }};
     }
 
@@ -40,13 +38,13 @@ fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
             });
             color!(str, write!(w, "{}", fun))
         }
-        _ => json::write::format_with(w, pp, level, v, fmt_json),
+        _ => json::format_val!(w, pp, level, v, |level, x| fmt_json(w, pp, level, x)),
     }
 }
 
-fn html_colors() -> Colors {
+fn html_styles() -> Styles {
     let span = |cls| format!(r#"<span class="{cls}">"#);
-    Colors {
+    Styles {
         null: span("null"),
         r#true: span("boolean"),
         r#false: span("boolean"),
@@ -115,7 +113,7 @@ impl Settings {
         Pp {
             indent: (!self.compact).then(|| self.indent()),
             sep_space: !self.compact,
-            colors: html_colors(),
+            styles: html_styles(),
             sort_keys: false,
         }
     }
