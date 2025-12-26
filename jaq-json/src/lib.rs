@@ -8,8 +8,7 @@
 #![warn(missing_docs)]
 
 extern crate alloc;
-// even if this crate is `no_std`, it currently relies on `std`, because
-// `to_json` has to go through the JSON writer to preserve invalid UTF-8
+#[cfg(feature = "std")]
 extern crate std;
 
 mod funs;
@@ -476,7 +475,7 @@ impl Val {
 
     fn to_json(&self) -> Vec<u8> {
         let mut buf = Vec::new();
-        write::write(&mut buf, &write::Pp::default(), 0, self).unwrap();
+        write::write_embedded(&mut buf, &write::Pp::default(), 0, self).unwrap();
         buf
     }
 }

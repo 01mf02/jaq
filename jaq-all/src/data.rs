@@ -55,7 +55,7 @@ pub struct Runner {
 impl Runner {
     /// Use colors on standard output?
     pub fn color_stdout(&self) -> bool {
-        !self.writer.pp.colors.reset.is_empty()
+        !self.writer.pp.styles.reset.is_empty()
     }
 }
 
