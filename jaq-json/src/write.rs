@@ -242,7 +242,7 @@ macro_rules! format_val {
 #[macro_export]
 macro_rules! write_val {
     ($w:ident, $pp:ident, $level:expr, $v:ident, $f:expr) => {{
-        use $crate::{format_val, style, write_utf8, Tag::Utf8, Val::Str};
+        use $crate::{Tag::Utf8, Val::Str};
         match $v {
             Str(s, Utf8) => style!($w, $pp, str, write_utf8!($w, s, |part| $w.write_all(part))),
             _ => format_val!($w, $pp, $level, $v, $f),
