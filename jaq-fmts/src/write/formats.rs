@@ -2,6 +2,7 @@ use super::*;
 use crate::{invalid_data, Format};
 use jaq_json::Val;
 use std::io::{self, Write};
+use bstr::B;
 
 type Result<T = (), E = io::Error> = core::result::Result<T, E>;
 
@@ -20,30 +21,32 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
     }
 
     match (val, format) {
-        (Val::Str(b, _), Format::Raw) => w.write_all(b)?,
+        (Val::Str(b, _), Format::Raw0) if b.contains(&b'\0') => return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "cannot dump a string containing NUL with `--to raw0` or `--raw-output0`",
+        )),
+        (Val::Str(b, _), Format::Raw | Format::Raw0) => w.write_all(b)?,
         (_, Format::Cbor) => cbor::write(w, val)?,
-        (_, Format::Json | Format::Raw) => jaq_json::write::write(w, pp, 0, val)?,
+        (_, Format::Json | Format::Raw | Format::Raw0) => jaq_json::write::write(w, pp, 0, val)?,
         (_, Format::Yaml) => yaml::write(w, pp, 0, val)?,
         (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Toml::try_from(val))?)?,
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
     };
 
-    if match format {
-        Format::Cbor => false,
-        Format::Yaml => true,
-        _ => !join,
+    if let Some(terminator) = match format {
+        Format::Cbor => None,
+        Format::Raw0 => Some(B("\0")),
+        Format::Yaml if *join => Some(B("\n")),
+        Format::Yaml => Some(B("\n...\n")),
+        _ if !join => Some(B("\n")),
+        _ => None,
     } {
-        // this flushes output, because stdout is line-buffered in Rust
-        writeln!(w)?
+        w.write_all(terminator)?;
     };
 
     // when running `jaq -jn '"prompt> " | (., input)'`,
     // this flush is necessary to make "prompt> " appear first
     w.flush()?;
 
-    if yaml_doc {
-        // end of YAML document
-        writeln!(w, "...")?
-    }
     Ok(())
 }

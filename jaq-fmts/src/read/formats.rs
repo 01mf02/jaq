@@ -13,7 +13,7 @@ type Vals<'a> = BoxIter<'a, io::Result<Val>>;
 pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
     use Format::*;
     match fmt {
-        Raw | Json | Cbor => Ok(String::new()),
+        Raw | Raw0 | Json | Cbor => Ok(String::new()),
         Toml | Xml | Yaml => io::read_to_string(read),
     }
 }
@@ -24,7 +24,7 @@ pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
 pub fn bytes_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
-        Raw | Json | Cbor => "",
+        Raw | Raw0 | Json | Cbor => "",
         Toml | Xml | Yaml => core::str::from_utf8(bytes).map_err(invalid_data)?,
     })
 }
@@ -40,6 +40,7 @@ pub fn from_bufread<'a>(fmt: Format, read: impl BufRead + 'a, s: &'a str, slurp:
             box_once(result.map(|_| Val::utf8_str(buf)))
         }
         Format::Raw => Box::new(read.byte_lines().map(|r| r.map(Val::utf8_str))),
+        Format::Raw0 => collect_if(slurp, read.byte_records(0).map(|r| r.map(Val::utf8_str))),
         Format::Cbor => collect_if(slurp, cbor::read_many(read)),
         Format::Json => collect_if(slurp, json::read_many(read)),
         Format::Toml => box_once(toml::parse(s).map_err(invalid_data)),
@@ -50,11 +51,14 @@ pub fn from_bufread<'a>(fmt: Format, read: impl BufRead + 'a, s: &'a str, slurp:
 
 /// Parse value from file or `s`, depending on format.
 pub fn from_bytes<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals<'a> {
-    use bstr::ByteSlice;
+    let slice_to_str = |slice| Ok(Val::Str(bytes.slice_ref(slice), Tag::Utf8));
     match fmt {
         Format::Raw if slurp => box_once(Ok(Val::Str(bytes.clone(), Tag::Utf8))),
-        Format::Raw => Box::new(
-            ByteSlice::lines(&**bytes).map(|line| Ok(Val::Str(bytes.slice_ref(line), Tag::Utf8))),
+        Format::Raw => Box::new(bstr::ByteSlice::lines(&**bytes).map(slice_to_str)),
+        Format::Raw0 => collect_if(
+            slurp,
+            bstr::ByteSlice::split_str(bytes.strip_suffix(b"\0").unwrap_or(bytes), "\0")
+                .map(slice_to_str),
         ),
         Format::Json => collect_if(slurp, json::parse_many(bytes).map(map_invalid_data)),
         Format::Cbor => collect_if(slurp, cbor::parse_many(bytes).map(map_invalid_data)),
