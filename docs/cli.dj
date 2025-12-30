@@ -299,6 +299,10 @@ $ echo [1, [2]] | jaq       | jaq -Rs
 
 Use _N_ spaces for indentation (default: 2).
 
+### `NO_COLOR`
+
+If the environment variable `NO_COLOR` is set to a non-empty value, then
+jaq prints no colors, unless the [`-C`](#--color-output) flag is used.
 
 ### `JQ_COLORS`
 
