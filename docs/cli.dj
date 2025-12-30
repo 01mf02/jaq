@@ -233,6 +233,20 @@ if there has not been any error.
 `jq` does not have this option.
 :::
 
+::: Advanced
+By default, this option disables colored output.
+However, when forcing colors with [`-C`](#--color-output), jaq respects this wish:
+
+```
+$ echo [] > tmp.json
+$ jaq -i    . tmp.json && jaq -R tobytes tmp.json
+b"[]"
+$ jaq -i -C . tmp.json && jaq -R tobytes tmp.json
+b"\x1b[1;39m[\x1b[0m\x1b[1;39m]\x1b[0m"
+$ rm tmp.json
+```
+:::
+
 {#--sort-keys}
 ### `-S`, `--sort-keys`
 
