@@ -2,6 +2,7 @@
 use core::fmt;
 pub use jaq_all::fmts::Format;
 use std::env::ArgsOs;
+use std::io::{self, IsTerminal};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
@@ -183,23 +184,21 @@ impl Cli {
     }
 
     fn color_if(&self, f: impl Fn() -> bool) -> bool {
-        if self.monochrome_output {
-            false
-        } else if self.color_output {
-            true
-        } else {
-            f()
-        }
-    }
-
-    pub fn color_stdio(&self, io: &impl std::io::IsTerminal) -> bool {
         #[cfg(not(target_os = "windows"))]
         let enabled = || true;
         #[cfg(target_os = "windows")]
         let enabled = || crate::windows::enable_ansi_support();
 
         let no_color = || std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty());
-        self.color_if(|| io.is_terminal() && !no_color()) && enabled()
+        !self.monochrome_output && (self.color_output || (!no_color() && f())) && enabled()
+    }
+
+    pub fn color_output(&self) -> bool {
+        self.color_if(|| io::stdout().is_terminal() && !self.in_place)
+    }
+
+    pub fn color_errors(&self) -> bool {
+        self.color_if(|| io::stderr().is_terminal())
     }
 
     pub fn indent(&self) -> String {

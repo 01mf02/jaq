@@ -61,7 +61,7 @@ fn main() -> io::Result<ExitCode> {
         }
     } else {
         real_main(&cli).or_else(|e| {
-            let color = cli.color_stdio(&err);
+            let color = cli.color_errors();
             write!(err, "{}", ErrorColor::new(&e, color))?;
             Ok(e.report())
         })
@@ -72,7 +72,7 @@ impl Cli {
     fn runner(&self) -> Runner {
         Runner {
             null_input: self.null_input,
-            color_err: self.color_stdio(&io::stderr()),
+            color_err: self.color_errors(),
             writer: self.writer(),
         }
     }
@@ -95,7 +95,7 @@ impl Cli {
     }
 
     fn styles(&self) -> Styles {
-        self.color_stdio(&io::stdout())
+        self.color_output()
             .then(Styles::ansi)
             .map(|c| match std::env::var("JQ_COLORS") {
                 Err(_) => c,
