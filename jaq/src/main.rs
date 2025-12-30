@@ -61,8 +61,7 @@ fn main() -> io::Result<ExitCode> {
         }
     } else {
         real_main(&cli).or_else(|e| {
-            let color = cli.color_errors();
-            write!(err, "{}", ErrorColor::new(&e, color))?;
+            write!(err, "{}", ErrorColor::new(&e, cli.color_errors()))?;
             Ok(e.report())
         })
     }

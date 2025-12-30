@@ -2,8 +2,8 @@
 use core::fmt;
 pub use jaq_all::fmts::Format;
 use std::env::ArgsOs;
-use std::io::{self, IsTerminal};
 use std::ffi::OsString;
+use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 
 #[derive(Debug, Default)]
