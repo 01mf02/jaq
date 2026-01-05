@@ -40,7 +40,7 @@ For example,
 `jaq --from yaml . myfile.yml`
 parses `myfile.yml` as YAML.
 Possible values of _FORMAT_ include:
-`raw`, `json`, `yaml`, `cbor`, `toml`, `xml`.
+`raw`, `raw0`, `json`, `yaml`, `cbor`, `toml`, `xml`.
 
 jaq automatically chooses the corresponding input format for
 files with the extensions
@@ -193,6 +193,34 @@ $ printf '["Hello\\nWorld"]' | jaq -rc
 ```
 
 This is equivalent to `--to raw`.
+
+{#--raw-output0}
+### `--raw-output0`
+
+Output values like `--raw-output`, terminating them with NUL (`\0`) instead of LF (`\n`).
+
+```
+$ echo '"some string\nwith a newline" true' | jaq --raw-output0 | jaq -s --raw-input tobytes
+b"some string\nwith a newline\x00true\x00"
+```
+
+This is equivalent to `--to raw0`.
+
+Any output value that is a string containing NUL produces an error.
+Note that this does not apply to strings contained in an array or an object.
+
+```
+$ echo '"string with NUL \u0000"' | jaq --raw-output0 2>/dev/null; echo $?
+2
+```
+
+The option `--from raw0` can be used to round-trip:
+
+```
+$ echo '"some string\nwith a newline" "another string"' | jaq --to raw0 | jaq --from raw0
+"some string\nwith a newline"
+"another string"
+```
 
 {#--join-output}
 ### `-j`, `--join-output`
