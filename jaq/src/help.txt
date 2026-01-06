@@ -15,6 +15,7 @@ Input options:
 Output options:
   -c, --compact-output      Print JSON compactly, omitting whitespace
   -r, --raw-output          Write strings without escaping them with quotes
+      --raw-output0         Write output like `-r` and print NUL after each output
   -j, --join-output         Do not print a newline after each value
   -i, --in-place            Overwrite input file with its output
   -S, --sort-keys           Print objects sorted by their keys

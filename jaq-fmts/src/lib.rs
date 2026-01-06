@@ -27,6 +27,8 @@ pub enum Format {
     /// When the option `--slurp` is used additionally,
     /// then the whole input is read into a single string.
     Raw,
+    /// Zero-terminated text strings
+    Raw0,
     /// JavaScript Object Notation
     #[default]
     Json,
@@ -61,6 +63,7 @@ impl Format {
         match s {
             "cbor" => Some(Format::Cbor),
             "raw" => Some(Format::Raw),
+            "raw0" => Some(Format::Raw0),
             "json" => Some(Format::Json),
             "toml" => Some(Format::Toml),
             "xml" => Some(Format::Xml),

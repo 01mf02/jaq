@@ -95,6 +95,7 @@ impl Cli {
             "to" => self.to = Some(parse_format("--to", args)?),
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
+            "raw-output0" => self.to = Some(Format::Raw0),
             "join-output" => self.short('j', args)?,
             "in-place" => self.short('i', args)?,
             "sort-keys" => self.short('S', args)?,
