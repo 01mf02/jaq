@@ -200,7 +200,7 @@ This is equivalent to `--to raw`.
 Output values like `--raw-output`, terminating them with NUL (`\0`) instead of LF (`\n`).
 
 ```
-$ echo '"some string\nwith a newline" true' | jaq --raw-output0 | jaq -s --raw-input tobytes
+$ printf '"some string\\nwith a newline" true' | jaq --raw-output0 | jaq -s --raw-input tobytes
 b"some string\nwith a newline\x00true\x00"
 ```
 
@@ -210,14 +210,14 @@ Any output value that is a string containing NUL produces an error.
 Note that this does not apply to strings contained in an array or an object.
 
 ```
-$ echo '"string with NUL \u0000"' | jaq --raw-output0 2>/dev/null; echo $?
+$ printf '"string with NUL \\u0000"' | jaq --raw-output0 2>/dev/null; echo $?
 2
 ```
 
 The option `--from raw0` can be used to round-trip:
 
 ```
-$ echo '"some string\nwith a newline" "another string"' | jaq --to raw0 | jaq --from raw0
+$ printf '"some string\\nwith a newline" "another string"' | jaq --to raw0 | jaq --from raw0
 "some string\nwith a newline"
 "another string"
 ```
