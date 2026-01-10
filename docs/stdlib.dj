@@ -539,14 +539,6 @@ The filter `in($x)` is a flipped version of `has`, just like
 For example,
 `"a" | in({a: 1, b: 2}) --> true`.
 
-::: Advanced
-The filter `has($k)` is a more performant version of `any(keys[]; . == $k)`.
-For example:
-
-- `[1, 2, 3]    | any(keys[]; . ==  0 ) --> true`
-- `{a: 1, b: 2} | any(keys[]; . == "a") --> true`
-:::
-
 
 ## Updates
 
