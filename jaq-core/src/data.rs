@@ -45,7 +45,7 @@ pub trait HasLut<'a, D: DataT + ?Sized> {
 ///
 /// This restricts `V` to have a `'static` lifetime.
 /// If you want to process `V` with arbitrary lifetimes instead,
-/// you need to define your own data kind and implement `[DataT]` for it.
+/// you need to define your own data kind and implement [`DataT`] for it.
 ///
 /// This type is mostly used for testing.
 pub struct JustLut<V>(core::marker::PhantomData<V>);
