@@ -176,8 +176,7 @@ impl jaq_core::ValT for Val {
                 v.range(o.get(&Val::utf8_str("start"))..o.get(&Val::utf8_str("end")))
             }
             (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
-            (s @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
-            (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
+            (s, _) => Err(Error::index(s, index.clone())),
         }
     }
 

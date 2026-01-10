@@ -59,6 +59,7 @@ impl Val {
     /// Fail on values that are neither binaries, arrays nor objects.
     fn has(&self, key: &Self) -> Result<bool, Error> {
         match (self, key) {
+            (Self::Null, _) => Ok(false),
             (Self::Str(a, Tag::Bytes), Self::Num(Num::Int(i))) if *i >= 0 => {
                 Ok((*i as usize) < a.len())
             }
