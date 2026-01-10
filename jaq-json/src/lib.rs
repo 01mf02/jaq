@@ -464,7 +464,6 @@ impl Val {
     }
 
     fn index_opt(self, index: &Self) -> Result<Option<Val>, Error> {
-        use jaq_core::ValT;
         Ok(match (self, index) {
             (Val::Null, _) => None,
             (Val::Str(a, Tag::Bytes), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => i
@@ -477,6 +476,7 @@ impl Val {
                 .map(|i| a[i].clone()),
             (Val::Obj(o), i) => o.get(i).cloned(),
             (v @ (Val::Str(..) | Val::Arr(_)), Val::Obj(o)) => {
+                use jaq_core::ValT;
                 let start = o.get(&Val::utf8_str("start"));
                 let end = o.get(&Val::utf8_str("end"));
                 return v.range(start..end).map(Some);
