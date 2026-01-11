@@ -528,7 +528,7 @@ For example:
 ### `has($k)`, `in($x)`
 
 The filter `has($k)` yields `true` if
-`$k` is among the keys of the input, else `false`.
+`.[$k]` points to data in the input, else `false`.
 For example:
 
 - `[1, 2, 3]    | has( 0 ,  3 ) --> true false`
@@ -538,6 +538,37 @@ The filter `in($x)` is a flipped version of `has`, just like
 `inside` is a flipped version of `contains`.
 For example,
 `"a" | in({a: 1, b: 2}) --> true`.
+
+::: Compatibility
+Whenever `has($k)` in `jq` returns `true`, jaq also returns `true`.
+However, when `has($k)` yields `true` in jaq,
+it may also yield `false` or an error in `jq`:
+
+- `[1, 2, 3] | has(-1, -2, -3) --> true true true` (`false false false` in `jq`)
+- `[1, 2, 3] | has({start: 1}) --> true` (error in `jq`)
+
+This difference arises because in `jq`,
+`has($k)` has a much weaker relationship with `.[$k]` than in jaq.
+The following properties hold in both `jq` and jaq:
+
+- `[1, 2, 3] | .[-1, -2, -3] --> 3 2 1`
+- `[1, 2, 3] | .[{start: 1}] --> [2, 3]`
+:::
+
+::: Advanced
+For `null`, `has($k)` always yields `false`; e.g., `null | has(1) --> false`.
+
+For booleans, numbers, and text strings, `has($k)` always yields an error; e.g.
+`true | try has(1) catch -1 --> -1`.
+
+For byte strings, arrays, and objects,
+`has($k)` yields `true` for the following values of `$k`:
+
+- `"" | tobytes | all(has(range(-length; length)); .) --> true`
+- `[1, 2, 3]    | all(has(range(-length; length)); .) --> true`
+- `{a: 1, b: 2} | all(has(keys[]                ); .) --> true`
+:::
+
 
 
 ## Updates
