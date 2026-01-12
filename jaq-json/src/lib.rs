@@ -162,23 +162,7 @@ impl jaq_core::ValT for Val {
     }
 
     fn index(self, index: &Self) -> ValR {
-        match (self, index) {
-            (Val::Null, _) => Ok(Val::Null),
-            (Val::Str(a, Tag::Bytes), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => Ok(i
-                .as_pos_usize()
-                .and_then(|i| abs_index(i, a.len()))
-                .map_or(Val::Null, |i| Val::from(a[i] as usize))),
-            (Val::Arr(a), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => Ok(i
-                .as_pos_usize()
-                .and_then(|i| abs_index(i, a.len()))
-                .map_or(Val::Null, |i| a[i].clone())),
-            (v @ (Val::Str(..) | Val::Arr(_)), Val::Obj(o)) => {
-                v.range(o.get(&Val::utf8_str("start"))..o.get(&Val::utf8_str("end")))
-            }
-            (Val::Obj(o), i) => Ok(o.get(i).cloned().unwrap_or(Val::Null)),
-            (s @ (Val::Str(_, Tag::Bytes) | Val::Arr(_)), _) => Err(Error::index(s, index.clone())),
-            (s, _) => Err(Error::typ(s, Type::Iter.as_str())),
-        }
+        self.index_opt(index).map(|o| o.unwrap_or(Val::Null))
     }
 
     fn range(self, range: val::Range<&Self>) -> ValR {
@@ -477,6 +461,28 @@ impl Val {
         let mut buf = write::Buf(Vec::new());
         write::write_buf(&mut buf, &write::Pp::default(), 0, self).unwrap();
         buf.0
+    }
+
+    fn index_opt(self, index: &Self) -> Result<Option<Val>, Error> {
+        Ok(match (self, index) {
+            (Val::Null, _) => None,
+            (Val::Str(a, Tag::Bytes), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => i
+                .as_pos_usize()
+                .and_then(|i| abs_index(i, a.len()))
+                .map(|i| usize::from(a[i]).into()),
+            (Val::Arr(a), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => i
+                .as_pos_usize()
+                .and_then(|i| abs_index(i, a.len()))
+                .map(|i| a[i].clone()),
+            (Val::Obj(o), i) => o.get(i).cloned(),
+            (v @ (Val::Str(..) | Val::Arr(_)), Val::Obj(o)) => {
+                use jaq_core::ValT;
+                let start = o.get(&Val::utf8_str("start"));
+                let end = o.get(&Val::utf8_str("end"));
+                return v.range(start..end).map(Some);
+            }
+            (s, _) => return Err(Error::index(s, index.clone())),
+        })
     }
 }
 
