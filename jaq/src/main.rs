@@ -129,7 +129,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     let last = if cli.files.is_empty() {
         let format = unwrap_or_json(cli.from);
         let s = read::read_string(format, io::stdin().lock())?;
-        let inputs = read::from_bufread(format, io::stdin().lock(), &s, cli.slurp);
+        let inputs = read::read(format, io::stdin().lock(), &s, cli.slurp);
         with_stdout(|out| run(runner, &filter, vars, inputs, |v| write(out, writer, &v)))?
     } else {
         let mut last = None;
@@ -139,7 +139,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 .map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
             let format = unwrap_or_json(cli.from.or_else(|| Format::determine(path)));
             let s = read::bytes_str(format, &bytes)?;
-            let inputs = read::from_bytes(format, &bytes, s, cli.slurp);
+            let inputs = read::parse(format, &bytes, s, cli.slurp);
 
             if cli.in_place {
                 // create a temporary file where output is written to
