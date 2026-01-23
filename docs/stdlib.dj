@@ -2124,7 +2124,6 @@ and it allows calls to `repl` anywhere in a filter, not only last in the pipelin
 
 This section lists filters present in `jq`, but not in jaq.
 
-- [`combinations`](https://jqlang.org/manual/#combinations)
 - [`$__loc__`](https://jqlang.org/manual/#$__loc__)
 - [`modulemeta`](#module-metadata)
 - [`have_literal_numbers`](https://jqlang.org/manual/#have_literal_numbers)
