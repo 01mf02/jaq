@@ -1190,11 +1190,8 @@ Given the same input data as above, `combinations` yields the same as:
 ```
 [1, 2][] as $x1 |
 [3, 4][] as $x2 |
-[$x1, $x2] -->
-[1, 3]
-[1, 4]
-[2, 3]
-[2, 4]
+[$x1, $x2]
+--> [1, 3] [1, 4] [2, 3] [2, 4]
 ```
 
 If we squint our eyes a little bit, then
@@ -1207,11 +1204,7 @@ we can create the sums little by little:
 []
 | [1, 2][] as $x1 | . + [$x1]
 | [3, 4][] as $x2 | . + [$x2]
--->
-[1, 3]
-[1, 4]
-[2, 3]
-[2, 4]
+--> [1, 3] [1, 4] [2, 3] [2, 4]
 ```
 
 Next, we iterate over the arrays, instead of over the array elements:
@@ -1220,21 +1213,14 @@ Next, we iterate over the arrays, instead of over the array elements:
 []
 | [1, 2] as $a1 | . + ($a1[] | [.])
 | [3, 4] as $a2 | . + ($a2[] | [.])
--->
-[1, 3]
-[1, 4]
-[2, 3]
-[2, 4]
+--> [1, 3] [1, 4] [2, 3] [2, 4]
 ```
 
 Now we are ready to write this via `reduce`:
 
 ```
-reduce ([1, 2], [3, 4]) as $a ([]; . + ($a[] | [.])) -->
-[1, 3]
-[1, 4]
-[2, 3]
-[2, 4]
+reduce ([1, 2], [3, 4]) as $a ([]; . + ($a[] | [.]))
+--> [1, 3] [1, 4] [2, 3] [2, 4]
 ```
 
 This crucially hinges on jaq's ability to use
@@ -1244,11 +1230,8 @@ In `jq`, this does not work, because `jq` considers at most one output of `g`.
 We can now pull out the data:
 
 ```
-[[1, 2], [3, 4]] | reduce .[] as $a ([]; . + ($a[] | [.])) -->
-[1, 3]
-[1, 4]
-[2, 3]
-[2, 4]
+[[1, 2], [3, 4]] | reduce .[] as $a ([]; . + ($a[] | [.]))
+--> [1, 3] [1, 4] [2, 3] [2, 4]
 ```
 
 There is an opportunity to improve performance here:
@@ -1258,11 +1241,8 @@ At the same time, we can wrap this up in a definition:
 
 ```
 def combinations: .[][] |= [.] | reduce .[] as $a ([]; . + $a[]);
-[[1, 2], [3, 4]] | combinations -->
-[1, 3]
-[1, 4]
-[2, 3]
-[2, 4]
+[[1, 2], [3, 4]] | combinations
+--> [1, 3] [1, 4] [2, 3] [2, 4]
 ```
 
 And that, ladies and gentleman, is how `combinations` is implemented in jaq.
@@ -1270,7 +1250,7 @@ And that, ladies and gentleman, is how `combinations` is implemented in jaq.
 When we measure performance, via something like
 `time $JQ -n '[limit(6; repeat([range(10)]))] | combinations | empty'`,
 I get that
-jaq takes 0.8 seconds and
+jaq  takes 0.8 seconds and
 `jq` takes 3.6 seconds, meaning that jaq is more than four times faster here.
 :::
 
