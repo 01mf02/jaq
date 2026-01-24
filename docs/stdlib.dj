@@ -1204,9 +1204,9 @@ First, instead of creating the sum at the very end,
 we can create the sums little by little:
 
 ```
-[] |
-[1, 2][] as $x1 | . + [$x1] |
-[3, 4][] as $x2 | . + [$x2]
+[]
+| [1, 2][] as $x1 | . + [$x1]
+| [3, 4][] as $x2 | . + [$x2]
 -->
 [1, 3]
 [1, 4]
@@ -1217,9 +1217,9 @@ we can create the sums little by little:
 Next, we iterate over the arrays, instead of over the array elements:
 
 ```
-[] |
-[1, 2] as $a1 | . + ($a1[] | [.]) |
-[3, 4] as $a2 | . + ($a2[] | [.])
+[]
+| [1, 2] as $a1 | . + ($a1[] | [.])
+| [3, 4] as $a2 | . + ($a2[] | [.])
 -->
 [1, 3]
 [1, 4]
