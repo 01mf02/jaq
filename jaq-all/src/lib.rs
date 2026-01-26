@@ -67,7 +67,7 @@ use jaq_core::load::{import, parse::Def, Arena, File, Loader};
 use jaq_core::{compile::Compiler, DataT, Filter};
 use load::{compile_errors, load_errors, FileReports};
 
-type Fun<D> = jaq_std::Filter<jaq_core::Native<D>>;
+type Fun<D> = jaq_core::native::Filter<jaq_core::Native<D>>;
 
 /// Compile a filter without access to external files.
 ///

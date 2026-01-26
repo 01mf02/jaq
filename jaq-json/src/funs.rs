@@ -4,8 +4,9 @@ use bstr::ByteSlice;
 use bytes::{BufMut, Bytes, BytesMut};
 use core::fmt;
 use jaq_core::box_iter::{then, BoxIter};
+use jaq_core::native::{bome, run, unary, v, Filter};
 use jaq_core::{DataT, Exn, Native, RunPtr};
-use jaq_std::{bome, run, unary, v, Filter, ValT as _};
+use jaq_std::ValT as _;
 
 impl Val {
     /// Return 0 for null, the absolute value for numbers, and

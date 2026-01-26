@@ -61,7 +61,7 @@ impl Runner {
 
 /// Functions from [`jaq_std`] and [`jaq_json`].
 pub fn base_funs() -> impl Iterator<Item = Fun<DataKind>> {
-    let run = jaq_std::run::<DataKind>;
+    let run = jaq_core::native::run::<DataKind>;
     let core = jaq_core::funs::<DataKind>();
     let std = jaq_std::funs::<DataKind>();
     let input = input::funs::<DataKind>().into_vec().into_iter().map(run);

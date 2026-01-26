@@ -1,7 +1,7 @@
 //! Tools to help with native filter construction.
 
 use crate::box_iter::box_once;
-use crate::{Bind, DataT, Exn, Native, PathsPtr, RunPtr, ValR, ValXs};
+use crate::{Bind, Cv, DataT, Exn, Native, PathsPtr, RunPtr, ValR, ValXs};
 use alloc::boxed::Box;
 
 /// Name, arguments, and implementation of a filter.
@@ -21,12 +21,21 @@ pub(crate) fn paths<D: DataT>(
     (name, arity, Native::new(run).with_paths(paths))
 }
 
+/// Creates `n` variable arguments.
+pub fn v(n: usize) -> Box<[Bind]> {
+    core::iter::repeat(Bind::Var(())).take(n).collect()
+}
+
 /// Box Once and Map Errors to exceptions.
 pub fn bome<'a, V: 'a>(r: ValR<V>) -> ValXs<'a, V> {
     box_once(r.map_err(Exn::from))
 }
 
-/// Creates `n` variable arguments.
-pub fn v(n: usize) -> Box<[Bind]> {
-    core::iter::repeat(Bind::Var(())).take(n).collect()
+/// Create a filter that takes a single variable argument and whose output is given by
+/// the function `f` that takes the input value and the value of the variable.
+pub fn unary<'a, D: DataT>(
+    mut cv: Cv<'a, D>,
+    f: impl Fn(D::V<'a>, D::V<'a>) -> ValR<D::V<'a>> + 'a,
+) -> ValXs<'a, D::V<'a>> {
+    bome(f(cv.1, cv.0.pop_var()))
 }
