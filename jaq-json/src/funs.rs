@@ -1,4 +1,4 @@
-use crate::{read, Error, Num, Tag, Val, ValR, ValX};
+use crate::{read, Error, Tag, Val, ValR, ValX};
 use alloc::{boxed::Box, vec::Vec};
 use bstr::ByteSlice;
 use bytes::{BufMut, Bytes, BytesMut};
@@ -51,23 +51,6 @@ impl Val {
                 Ok(Box::new(ix.filter_map(move |(i, x)| (x == y).then_some(i))))
             }
             (x, y) => Err(Error::index(x.clone(), y.clone())),
-        }
-    }
-
-    /// Return true if `value | .[key]` is defined.
-    ///
-    /// Fail on values that are neither binaries, arrays nor objects.
-    fn has(&self, key: &Self) -> Result<bool, Error> {
-        match (self, key) {
-            (Self::Str(a, Tag::Bytes), Self::Num(Num::Int(i))) if *i >= 0 => {
-                Ok((*i as usize) < a.len())
-            }
-            (Self::Arr(a), Self::Num(Num::Int(i))) if *i >= 0 => Ok((*i as usize) < a.len()),
-            (a @ (Self::Str(_, Tag::Bytes) | Self::Arr(_)), Self::Num(Num::BigInt(i))) => {
-                a.has(&Self::from(crate::bigint_to_int_saturated(i)))
-            }
-            (Self::Obj(o), k) => Ok(o.contains_key(k)),
-            _ => Err(Error::index(self.clone(), key.clone())),
         }
     }
 
@@ -187,7 +170,9 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         ("contains", v(1), |cv| {
             unary(cv, |x, y| Ok(Val::from(x.contains(&y))))
         }),
-        ("has", v(1), |cv| unary(cv, |v, k| v.has(&k).map(Val::from))),
+        ("has", v(1), |cv| {
+            unary(cv, |v, k| v.index_opt(&k).map(|o| o.is_some().into()))
+        }),
         ("indices", v(1), |cv| {
             let to_int = |i: usize| Val::from(i as isize);
             unary(cv, move |x, v| {
