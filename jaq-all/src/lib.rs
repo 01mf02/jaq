@@ -94,7 +94,9 @@ pub fn compile_with<D: DataT>(
         .map_err(compile_errors)
 }
 
-/// Definitions from `jaq_std` and `jaq_json`.
+/// Definitions from `jaq_core`, `jaq_std` and `jaq_json`.
 pub fn defs() -> impl Iterator<Item = Def> {
-    jaq_std::defs().chain(jaq_json::defs())
+    jaq_core::defs()
+        .chain(jaq_std::defs())
+        .chain(jaq_json::defs())
 }

@@ -1,20 +1,12 @@
-def empty: {}[] as $x | .;
 def null:  [][0];
 
 def stderr:      (       stderr_empty  as $x | .), .;
 def debug:       (        debug_empty  as $x | .), .;
 def debug(msgs): ((msgs | debug_empty) as $x | .), .;
-def error:                error_empty  as $x | .    ;
-def error(msgs):  (msgs | error_empty) as $x | .    ;
 
 def halt: halt(0);
 def halt_error($exit_code): stderr_empty, halt($exit_code);
 def halt_error: halt_error(5);
-
-# Booleans
-def true:  0 == 0;
-def false: 0 != 0;
-def not: if . then false else true end;
 
 # Not defined in jq!
 def isboolean: . == true or . == false;
@@ -58,7 +50,6 @@ def type:
   else             "object" end;
 
 # Selection
-def select(f): if f then . else empty end;
 def values:    select(. != null);
 def nulls:     select(. == null);
 def booleans:  select(isboolean);
@@ -71,25 +62,11 @@ def objects:   select(isobject);
 def iterables: select(. >= []);
 def scalars:   select(. <  []);
 
-# Conversion
-def tostring: "\(.)";
-
-# Generators
-def range(from; to): range(from; to; 1);
-def range(to): range(0; to);
-def repeat(f): def rec: f, rec; rec;
-def recurse(f): def rec: ., (f | rec); rec;
-def recurse: recurse(.[]?);
-def recurse(f; cond): recurse(f | select(cond));
-def while(cond; update): def rec: if cond then ., (update | rec) else empty end; rec;
-def until(cond; update): def rec: if cond then . else update | rec end; rec;
-
 # Iterators
-def map(f): [.[] | f];
-def map_values(f): .[] |= f;
 def add(f): reduce f as $x (null; . + $x);
 def add: add(.[]);
-def join($x): .[] |= tostring | .[:-1][] += $x | add + "";
+
+# Arrays
 def min_by(f): reduce min_by_or_empty(f) as $x (null; $x);
 def max_by(f): reduce max_by_or_empty(f) as $x (null; $x);
 def min: min_by(.);
@@ -98,43 +75,12 @@ def unique_by(f): [group_by(f)[] | .[0]];
 def unique: unique_by(.);
 
 # Paths
-def paths:    skip(1; path      (..));
-def paths(p): skip(1; path_value(..)) | if .[1] | p then .[0] else empty end;
-def getpath($path): reduce $path[] as $p (.; .[$p]);
-def setpath($path; $x): getpath($path) = $x;
-def delpaths($paths): reduce $paths[] as $path (.; getpath($path) |= empty);
 def pick(f):
   reduce path_value(f) as [$path, $value] ({}; . *
     reduce ($path | reverse[]) as $p ($value; {($p): .})
   );
-def del(f): f |= empty;
 
-# Arrays
-def first:  .[ 0];
-def last:   .[-1];
-def nth(n): .[ n];
-def combinations: .[][] |= [.] | reduce .[] as $a ([]; . + $a[]);
-def combinations($n): [limit($n; repeat(.))] | combinations;
-
-def nth(n; g): first(skip(n; g));
-
-# Objects <-> Arrays
 def keys: keys_unsorted | sort;
-def   to_entries: [keys_unsorted[] as $k | { key: $k, value: .[$k] }];
-def from_entries: map({ (.key): .value }) | add + {};
-def with_entries(f): to_entries | map(f) | from_entries;
-
-# Predicates
-def isempty(g): first((g | false), true);
-def all(g; cond): isempty(g | cond and empty);
-def any(g; cond): isempty(g | cond  or empty) | not;
-def all(cond): all(.[]; cond);
-def any(cond): any(.[]; cond);
-def all: all(.[]; .);
-def any: any(.[]; .);
-
-# Walking
-def walk(f): .. |= f;
 
 def flatten: [recurse(arrays[]) | select(isarray | not)];
 def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) | add end;
