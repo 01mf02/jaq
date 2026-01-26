@@ -4,8 +4,8 @@ use bstr::ByteSlice;
 use bytes::{BufMut, Bytes, BytesMut};
 use core::fmt;
 use jaq_core::box_iter::{then, BoxIter};
-use jaq_core::native::{bome, run, unary, v, Filter};
-use jaq_core::{DataT, Exn, Native, RunPtr};
+use jaq_core::native::{bome, run, unary, v, Filter, Fun};
+use jaq_core::{DataT, Exn, RunPtr};
 use jaq_std::ValT as _;
 
 impl Val {
@@ -149,7 +149,7 @@ pub fn bytes_valrs(b: Bytes, f: impl FnOnce(&[u8]) -> ValRs) -> ValRs<'static> {
 }
 
 /// Functions of the standard library.
-pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Filter<Native<D>>> {
+pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> impl Iterator<Item = Fun<D>> {
     base().into_vec().into_iter().map(run)
 }
 

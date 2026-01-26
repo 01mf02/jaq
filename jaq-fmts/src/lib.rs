@@ -10,12 +10,11 @@ extern crate std;
 pub mod read;
 pub mod write;
 
-use jaq_core::native::{run, Filter};
+use jaq_core::native::{run, Fun};
 
 #[cfg(feature = "all")]
 /// (De-)Serialisation filters, such as `fromyaml`, `toxml`.
-pub fn funs<D: for<'a> jaq_core::DataT<V<'a> = jaq_json::Val>>(
-) -> impl Iterator<Item = Filter<jaq_core::Native<D>>> {
+pub fn funs<D: for<'a> jaq_core::DataT<V<'a> = jaq_json::Val>>() -> impl Iterator<Item = Fun<D>> {
     [read::funs::<D>(), write::funs::<D>()]
         .into_iter()
         .flat_map(move |funs| funs.into_vec().into_iter().map(run::<D>))

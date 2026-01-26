@@ -1,4 +1,4 @@
-//! Tools to help with native filter construction.
+//! Native filter construction tools.
 
 use crate::box_iter::box_once;
 use crate::{Bind, Cv, DataT, Exn, Native, PathsPtr, RunPtr, ValR, ValXs};
@@ -7,17 +7,18 @@ use alloc::boxed::Box;
 /// Name, arguments, and implementation of a filter.
 pub type Filter<F> = (&'static str, Box<[Bind]>, F);
 
+/// Native filter over a [`crate::DataT`].
+pub type Fun<D> = Filter<Native<D>>;
+
 /// Convert a filter with a run pointer to a native filter.
-pub fn run<D: DataT>((name, arity, run): Filter<RunPtr<D>>) -> Filter<Native<D>> {
+pub fn run<D: DataT>((name, arity, run): Filter<RunPtr<D>>) -> Fun<D> {
     (name, arity, Native::new(run))
 }
 
 pub(crate) type RunPathsPtr<D> = (RunPtr<D>, PathsPtr<D>);
 
 /// Convert a filter with a run and a paths pointer to a native filter.
-pub(crate) fn paths<D: DataT>(
-    (name, arity, (run, paths)): Filter<RunPathsPtr<D>>,
-) -> Filter<Native<D>> {
+pub(crate) fn paths<D: DataT>((name, arity, (run, paths)): Filter<RunPathsPtr<D>>) -> Fun<D> {
     (name, arity, Native::new(run).with_paths(paths))
 }
 

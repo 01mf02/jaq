@@ -151,7 +151,7 @@ pub fn funs<D: DataT>() -> impl Iterator<Item = native::Filter<Native<D>>>
 where
     for<'a> D::V<'a>: ValT,
 {
-    let base_run = funs::run().into_vec().into_iter().map(native::run);
-    let base_paths = funs::paths().into_vec().into_iter().map(native::paths);
-    base_run.chain(base_paths)
+    let run = funs::run().into_vec().into_iter().map(native::run);
+    let paths = funs::paths().into_vec().into_iter().map(native::paths);
+    run.chain(paths)
 }

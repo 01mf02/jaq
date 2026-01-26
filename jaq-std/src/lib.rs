@@ -29,8 +29,8 @@ use alloc::string::{String, ToString};
 use alloc::{boxed::Box, vec::Vec};
 use bstr::{BStr, ByteSlice};
 use jaq_core::box_iter::{box_once, BoxIter};
-use jaq_core::native::{bome, run, unary, v, Filter};
-use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValT as _, ValX, ValXs};
+use jaq_core::native::{bome, run, unary, v, Filter, Fun};
+use jaq_core::{load, Bind, Cv, DataT, Error, Exn, RunPtr, ValR, ValT as _, ValX, ValXs};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -53,7 +53,7 @@ pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
     feature = "regex",
     feature = "time",
 ))]
-pub fn funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+pub fn funs<D: DataT>() -> impl Iterator<Item = Fun<D>>
 where
     for<'a> D::V<'a>: ValT,
 {
@@ -66,7 +66,7 @@ where
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn base_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+pub fn base_funs<D: DataT>() -> impl Iterator<Item = Fun<D>>
 where
     for<'a> D::V<'a>: ValT,
 {
@@ -82,7 +82,7 @@ where
     feature = "regex",
     feature = "time",
 ))]
-pub fn extra_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+pub fn extra_funs<D: DataT>() -> impl Iterator<Item = Fun<D>>
 where
     for<'a> D::V<'a>: ValT,
 {
