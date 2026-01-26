@@ -8,7 +8,10 @@ fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     let arena = Arena::default();
     let loader = Loader::new(jaq_core::defs());
     let modules = loader.load(&arena, File { path: (), code }).unwrap();
-    let filter = jaq_core::Compiler::default().with_funs(jaq_core::funs()).compile(modules).unwrap();
+    let filter = jaq_core::Compiler::default()
+        .with_funs(jaq_core::funs())
+        .compile(modules)
+        .unwrap();
     filter.yields(x, ys)
 }
 

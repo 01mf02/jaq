@@ -77,7 +77,10 @@ pub fn funs() -> impl Iterator<Item = Fun<DataKind>> {
 /// Compile a filter without access to external files/variables, including all functions/definitions.
 #[cfg(feature = "formats")]
 pub fn compile(code: &str) -> Result<Filter, Vec<FileReports>> {
-    compile_with(code, jaq_core::defs().chain(jaq_std::defs()).chain(jaq_json::defs()), funs(), &[])
+    let defs = jaq_core::defs()
+        .chain(jaq_std::defs())
+        .chain(jaq_json::defs());
+    compile_with(code, defs, funs(), &[])
 }
 
 /// Run a filter with given input values and run `f` for every value output.
