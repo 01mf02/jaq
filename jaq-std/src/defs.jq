@@ -113,6 +113,8 @@ def del(f): f |= empty;
 def first:  .[ 0];
 def last:   .[-1];
 def nth(n): .[ n];
+def combinations: .[][] |= [.] | reduce .[] as $a ([]; . + $a[]);
+def combinations($n): [limit($n; repeat(.))] | combinations;
 
 def nth(n; g): first(skip(n; g));
 
