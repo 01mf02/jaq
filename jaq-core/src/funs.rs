@@ -135,10 +135,10 @@ macro_rules! skip {
     ( $run:ident ) => {
         |mut cv| {
             let ((f, fc), n) = (cv.0.pop_fun(), cv.0.pop_var());
-            if n <= 0.into() {
-                return f.$run((fc, cv.1));
-            }
             let mut iter = f.$run((fc, cv.1));
+            if n <= 0.into() {
+                return iter;
+            }
             while_gtz!(
                 n,
                 if let Some(e) = iter.next()?.err() {
