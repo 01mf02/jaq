@@ -91,6 +91,22 @@ macro_rules! last {
     };
 }
 
+macro_rules! while_gtz {
+    ( $n:expr, $gtz:expr, $lez:expr ) => {{
+        let mut n = Some($n);
+        Box::new(core::iter::from_fn(move || {
+            while let Some(i) = n.take().filter(|i| *i > 0.into()) {
+                match i - 1.into() {
+                    Ok(i) => n = Some(i),
+                    Err(e) => return Some(Err(e.into())),
+                }
+                $gtz
+            }
+            $lez
+        }))
+    }};
+}
+
 /// In principle, we could implement the following filters as follows:
 ///
 /// ~~~ text
@@ -106,48 +122,30 @@ macro_rules! last {
 macro_rules! limit {
     ( $run:ident ) => {
         |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let n = cv.0.pop_var();
+            let ((f, fc), n) = (cv.0.pop_fun(), cv.0.pop_var());
             if n <= 0.into() {
                 return Box::new(core::iter::empty());
             }
-            let mut n = Some(n);
             let mut iter = f.$run((fc, cv.1));
-            Box::new(core::iter::from_fn(move || {
-                if let Some(i) = n.take().filter(|i| *i > 0.into()) {
-                    match i - 1.into() {
-                        Ok(i) => n = Some(i),
-                        Err(e) => return Some(Err(e.into())),
-                    };
-                    return iter.next();
-                }
-                None
-            }))
+            while_gtz!(n, return iter.next(), None)
         }
     };
 }
 macro_rules! skip {
     ( $run:ident ) => {
         |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let n = cv.0.pop_var();
+            let ((f, fc), n) = (cv.0.pop_fun(), cv.0.pop_var());
             if n <= 0.into() {
                 return f.$run((fc, cv.1));
             }
-            let mut n = Some(n);
             let mut iter = f.$run((fc, cv.1));
-            Box::new(core::iter::from_fn(move || {
-                while let Some(i) = n.take().filter(|i| *i > 0.into()) {
-                    match i - 1.into() {
-                        Ok(i) => n = Some(i),
-                        Err(e) => return Some(Err(e.into())),
-                    }
-                    if let Some(e) = iter.next()?.err() {
-                        return Some(Err(e));
-                    }
-                }
+            while_gtz!(
+                n,
+                if let Some(e) = iter.next()?.err() {
+                    return Some(Err(e));
+                },
                 iter.next()
-            }))
+            )
         }
     };
 }
