@@ -90,6 +90,7 @@ impl Cli {
             "from" => self.from = Some(parse_format("--from", args)?),
             "null-input" => self.short('n', args)?,
             "raw-input" => self.short('R', args)?,
+            "raw-input0" => self.from = Some(Format::Raw0),
             "slurp" => self.short('s', args)?,
 
             "to" => self.to = Some(parse_format("--to", args)?),

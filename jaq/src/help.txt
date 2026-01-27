@@ -9,6 +9,7 @@ Arguments:
 Input options:
   -n, --null-input          Use null as single input value
   -R, --raw-input           Read lines of the input as sequence of strings
+      --raw-input0          Read input like `-R`, splitting by NUL instead of newlines
   -s, --slurp               Read all input values into one array (per file)
       --from <FORMAT>       Read input in given format, e.g. yaml
 
