@@ -216,7 +216,7 @@ The filter `add(f)` is equivalent to
 The filter `empty` yields no output.
 
 ::: Advanced
-This filter is defined as `([][] as $x | .)`.
+This filter is defined as `({}[] as $x | .)`.
 While a simpler filter like `[][]` also yields no outputs,
 this rather contrived-looking definition guarantees that
 `empty` can be used on the left-hand side of [assignments](#assignments).
