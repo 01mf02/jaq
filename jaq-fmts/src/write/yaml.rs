@@ -47,12 +47,17 @@ macro_rules! format_yaml {
                 Ok(())
             }
             Val::Obj(o) if !o.is_empty() && indent.is_some() => {
-                let mut unindented = $pp.clone();
-                unindented.indent = None;
+                let mut unindented = write::Pp {
+                    indent: None,
+                    ..$pp.clone()
+                };
+                if !$pp.styles.key.is_empty() {
+                    unindented.styles = Default::default();
+                }
                 let mut iter = o.iter().peekable();
                 while let Some((k, v)) = iter.next() {
                     nested!(v, iter, {
-                        $f($w, &unindented, $level, k)?;
+                        style!(key, $f($w, &unindented, $level, k))?;
                         style!(obj, write!($w, ":"))
                     })?
                 }
@@ -61,7 +66,7 @@ macro_rules! format_yaml {
             Val::Num(Num::Float(f64::INFINITY)) => style!(num, write!($w, ".inf")),
             Val::Num(Num::Float(f64::NEG_INFINITY)) => style!(num, write!($w, "-.inf")),
             Val::Num(Num::Float(fl)) if fl.is_nan() => style!(num, write!($w, ".nan")),
-            _ => jaq_json::format_val!($w, $pp, $level, $v, |level, x| $f($w, $pp, level, x)),
+            _ => jaq_json::format_val!($w, $pp, $level, $v, $f),
         }
     }};
 }

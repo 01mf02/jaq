@@ -115,6 +115,8 @@ pub struct Styles<S = String> {
     pub arr: S,
     /// objects
     pub obj: S,
+    /// object keys
+    pub key: S,
 
     /// byte strings
     pub bstr: S,
@@ -126,7 +128,7 @@ pub struct Styles<S = String> {
 impl Styles {
     /// Default ANSI styles
     pub fn ansi() -> Self {
-        let mut cols = Styles::default().parse("90:39:39:39:32:1;39:1;39");
+        let mut cols = Styles::default().parse("90:39:39:39:32:1;39:1;39:1;34");
         cols.bstr = "\x1b[31m".into();
         cols.reset = "\x1b[0m".into();
         cols
@@ -142,9 +144,14 @@ impl Styles {
             &mut self.str,
             &mut self.arr,
             &mut self.obj,
+            &mut self.key,
         ];
         for (style, field) in s.split(':').zip(fields) {
-            *field = alloc::format!("\x1b[{style}m");
+            *field = if style.is_empty() {
+                "".into()
+            } else {
+                alloc::format!("\x1b[{style}m")
+            }
         }
         self
     }
@@ -171,9 +178,15 @@ pub struct Pp<S = String> {
 #[macro_export]
 macro_rules! style {
     ($w:ident, $pp:ident, $style:ident, $f:expr) => {{
-        write!($w, "{}", $pp.styles.$style)?;
+        let style = &$pp.styles.$style;
+        let reset = if style.is_empty() {
+            ""
+        } else {
+            &*$pp.styles.reset
+        };
+        write!($w, "{style}")?;
         $f?;
-        write!($w, "{}", $pp.styles.reset)
+        write!($w, "{reset}")
     }};
 }
 
@@ -206,7 +219,7 @@ macro_rules! format_val {
             Val::Arr(a) => {
                 color!(arr, write!($w, "["))?;
                 if !a.is_empty() {
-                    $crate::write_seq!($w, $pp, $level, &**a, |x| $f($level + 1, x))?;
+                    $crate::write_seq!($w, $pp, $level, &**a, |x| $f($w, $pp, $level + 1, x))?;
                 }
                 color!(arr, write!($w, "]"))
             }
@@ -215,12 +228,20 @@ macro_rules! format_val {
                 macro_rules! kv {
                     ($kv:expr) => {{
                         let (k, v) = $kv;
-                        $f($level + 1, k)?;
+                        if $pp.styles.key.is_empty() {
+                            $f($w, $pp, $level + 1, k)?
+                        } else {
+                            let unstyled = $crate::write::Pp {
+                                styles: Default::default(),
+                                ..$pp.clone()
+                            };
+                            color!(key, $f($w, &unstyled, $level + 1, k))?;
+                        }
                         color!(obj, write!($w, ":"))?;
                         if $pp.sep_space {
                             write!($w, " ")?;
                         }
-                        $f($level + 1, v)
+                        $f($w, $pp, $level + 1, v)
                     }};
                 }
                 if !o.is_empty() {
@@ -279,7 +300,7 @@ macro_rules! write_val {
 /// Choose your poison.
 #[cfg(feature = "std")]
 pub fn write(w: &mut dyn io::Write, pp: &Pp, level: usize, v: &Val) -> io::Result<()> {
-    write_val!(w, pp, level, v, |level, x| write(w, pp, level, x))
+    write_val!(w, pp, level, v, write)
 }
 
 pub(crate) struct Buf(pub(crate) alloc::vec::Vec<u8>);
@@ -299,9 +320,9 @@ impl fmt::Write for Buf {
 
 pub(crate) fn write_buf(w: &mut Buf, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
     use core::fmt::Write;
-    write_val!(w, pp, level, v, |level, x| write_buf(w, pp, level, x))
+    write_val!(w, pp, level, v, write_buf)
 }
 
 pub(crate) fn format(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
-    format_val!(w, pp, level, v, |level, x| format(w, pp, level, x))
+    format_val!(w, pp, level, v, format)
 }

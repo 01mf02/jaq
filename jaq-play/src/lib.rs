@@ -38,7 +38,7 @@ fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
             });
             color!(str, write!(w, "{}", fun))
         }
-        _ => json::format_val!(w, pp, level, v, |level, x| fmt_json(w, pp, level, x)),
+        _ => json::format_val!(w, pp, level, v, fmt_json),
     }
 }
 
@@ -52,6 +52,7 @@ fn html_styles() -> Styles {
         str: span("string"),
         arr: span("array"),
         obj: span("object"),
+        key: "".into(),
 
         bstr: span("bytes"),
 
