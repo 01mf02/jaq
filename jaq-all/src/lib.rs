@@ -64,10 +64,8 @@ pub use jaq_json as json;
 pub use jaq_std;
 
 use jaq_core::load::{import, parse::Def, Arena, File, Loader};
-use jaq_core::{compile::Compiler, DataT, Filter};
+use jaq_core::{compile::Compiler, native::Fun, DataT, Filter};
 use load::{compile_errors, load_errors, FileReports};
-
-type Fun<D> = jaq_std::Filter<jaq_core::Native<D>>;
 
 /// Compile a filter without access to external files.
 ///
@@ -94,7 +92,9 @@ pub fn compile_with<D: DataT>(
         .map_err(compile_errors)
 }
 
-/// Definitions from `jaq_std` and `jaq_json`.
+/// Definitions from `jaq_core`, `jaq_std` and `jaq_json`.
 pub fn defs() -> impl Iterator<Item = Def> {
-    jaq_std::defs().chain(jaq_json::defs())
+    jaq_core::defs()
+        .chain(jaq_std::defs())
+        .chain(jaq_json::defs())
 }

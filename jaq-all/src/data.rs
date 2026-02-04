@@ -61,10 +61,11 @@ impl Runner {
 
 /// Functions from [`jaq_std`] and [`jaq_json`].
 pub fn base_funs() -> impl Iterator<Item = Fun<DataKind>> {
-    let run = jaq_std::run::<DataKind>;
+    let run = jaq_core::native::run::<DataKind>;
+    let core = jaq_core::funs::<DataKind>();
     let std = jaq_std::funs::<DataKind>();
     let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
-    std.chain(jaq_json::funs()).chain(input)
+    core.chain(std).chain(jaq_json::funs()).chain(input)
 }
 
 /// Base functions ([`base_funs`]) plus functions from [`jaq_fmts`].
@@ -76,7 +77,10 @@ pub fn funs() -> impl Iterator<Item = Fun<DataKind>> {
 /// Compile a filter without access to external files/variables, including all functions/definitions.
 #[cfg(feature = "formats")]
 pub fn compile(code: &str) -> Result<Filter, Vec<FileReports>> {
-    compile_with(code, jaq_std::defs().chain(jaq_json::defs()), funs(), &[])
+    let defs = jaq_core::defs()
+        .chain(jaq_std::defs())
+        .chain(jaq_json::defs());
+    compile_with(code, defs, funs(), &[])
 }
 
 /// Run a filter with given input values and run `f` for every value output.

@@ -15,7 +15,11 @@
 //! let input = read::parse_single(&input.as_bytes()).unwrap();
 //! let program = File { code: ".[]", path: () };
 //!
-//! let loader = Loader::new(jaq_std::defs().chain(jaq_json::defs()));
+//! // named filters, such as `keys`, `map`, ...
+//! let defs = jaq_core::defs().chain(jaq_std::defs()).chain(jaq_json::defs());
+//! let funs = jaq_core::funs().chain(jaq_std::funs()).chain(jaq_json::funs());
+//!
+//! let loader = Loader::new(defs);
 //! let arena = Arena::default();
 //!
 //! // parse the filter
@@ -23,7 +27,7 @@
 //!
 //! // compile the filter
 //! let filter = jaq_core::Compiler::default()
-//!     .with_funs(jaq_std::funs().chain(jaq_json::funs()))
+//!     .with_funs(funs)
 //!     .compile(modules)
 //!     .unwrap();
 //!
@@ -50,8 +54,10 @@ pub mod data;
 mod exn;
 mod filter;
 mod fold;
+mod funs;
 mod into_iter;
 pub mod load;
+pub mod native;
 pub mod ops;
 pub mod path;
 mod rc_lazy_list;
@@ -124,4 +130,28 @@ impl<V: ValT + 'static> Filter<data::JustLut<V>> {
         let out = self.id.run((ctx, x)).map(unwrap_valr);
         assert!(out.eq(ys));
     }
+}
+
+/// Minimal set of definitions.
+///
+/// This depends on [`funs`] being loaded.
+pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
+    load::parse(include_str!("defs.jq"), |p| p.defs())
+        .unwrap()
+        .into_iter()
+}
+
+/// Minimal set of filters that are generic over the value type.
+///
+/// Return the minimal set of named filters available in jaq
+/// which are implemented as native filters, such as `error`, `path`, ...
+///
+/// Does not return filters from the standard library, such as `map`.
+pub fn funs<D: DataT>() -> impl Iterator<Item = native::Filter<Native<D>>>
+where
+    for<'a> D::V<'a>: ValT,
+{
+    let run = funs::run().into_vec().into_iter().map(native::run);
+    let paths = funs::paths().into_vec().into_iter().map(native::paths);
+    run.chain(paths)
 }

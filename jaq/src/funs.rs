@@ -1,13 +1,13 @@
 use crate::{filter, run, with_stdout, write, Error, ErrorColor, Runner, Val};
 use jaq_all::data::DataKind;
-use jaq_all::jaq_core::{Native, RunPtr, Vars};
-use jaq_all::jaq_std::{v, Filter};
+use jaq_all::jaq_core::native::{self, v, Filter, Fun};
+use jaq_all::jaq_core::{RunPtr, Vars};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub fn funs() -> impl Iterator<Item = Filter<Native<DataKind>>> {
-    jaq_all::data::funs().chain([jaq_all::jaq_std::run::<DataKind>(repl())])
+pub fn funs() -> impl Iterator<Item = Fun<DataKind>> {
+    jaq_all::data::funs().chain([native::run::<DataKind>(repl())])
 }
 
 /// counter that increases for each nested invocation of `repl`

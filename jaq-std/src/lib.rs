@@ -28,8 +28,9 @@ mod time;
 use alloc::string::{String, ToString};
 use alloc::{boxed::Box, vec::Vec};
 use bstr::{BStr, ByteSlice};
-use jaq_core::box_iter::{box_once, then, BoxIter};
-use jaq_core::{load, Bind, Cv, DataT, Error, Exn, Native, RunPtr, ValR, ValT as _, ValX, ValXs};
+use jaq_core::box_iter::{box_once, BoxIter};
+use jaq_core::native::{bome, run, unary, v, Filter, Fun};
+use jaq_core::{load, Bind, Cv, DataT, Error, Exn, RunPtr, ValR, ValT as _, ValX, ValXs};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -37,9 +38,6 @@ pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
         .unwrap()
         .into_iter()
 }
-
-/// Name, arguments, and implementation of a filter.
-pub type Filter<F> = (&'static str, Box<[Bind]>, F);
 
 /// Named filters available by default in jaq
 /// which are implemented as native filters, such as `length`, `keys`, ...,
@@ -55,7 +53,7 @@ pub type Filter<F> = (&'static str, Box<[Bind]>, F);
     feature = "regex",
     feature = "time",
 ))]
-pub fn funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+pub fn funs<D: DataT>() -> impl Iterator<Item = Fun<D>>
 where
     for<'a> D::V<'a>: ValT,
 {
@@ -68,13 +66,11 @@ where
 /// but not `now`, `debug`, `fromdateiso8601`, ...
 ///
 /// Does not return filters from the standard library, such as `map`.
-pub fn base_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+pub fn base_funs<D: DataT>() -> impl Iterator<Item = Fun<D>>
 where
     for<'a> D::V<'a>: ValT,
 {
-    let base_run = base_run().into_vec().into_iter().map(run);
-    let base_paths = base_paths().into_vec().into_iter().map(paths);
-    base_run.chain(base_paths)
+    base_run().into_vec().into_iter().map(run)
 }
 
 /// Supplementary set of filters that are generic over the value type.
@@ -86,7 +82,7 @@ where
     feature = "regex",
     feature = "time",
 ))]
-pub fn extra_funs<D: DataT>() -> impl Iterator<Item = Filter<Native<D>>>
+pub fn extra_funs<D: DataT>() -> impl Iterator<Item = Fun<D>>
 where
     for<'a> D::V<'a>: ValT,
 {
@@ -240,18 +236,6 @@ trait ValTx: ValT + Sized {
 }
 impl<T: ValT> ValTx for T {}
 
-/// Convert a filter with a run pointer to a native filter.
-pub fn run<D: DataT>((name, arity, run): Filter<RunPtr<D>>) -> Filter<Native<D>> {
-    (name, arity, Native::new(run))
-}
-
-type RunPathsPtr<D> = (RunPtr<D>, jaq_core::PathsPtr<D>);
-
-/// Convert a filter with a run and an update pointer to a native filter.
-fn paths<D: DataT>((name, arity, (run, paths)): Filter<RunPathsPtr<D>>) -> Filter<Native<D>> {
-    (name, arity, Native::new(run).with_paths(paths))
-}
-
 /// Sort array by the given function.
 fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<V>> {
     // Some(e) iff an error has previously occurred
@@ -375,53 +359,8 @@ fn implode<V: ValT>(xs: &[V]) -> Result<Vec<u8>, Error<V>> {
     Ok(v)
 }
 
-/// This implements a ~10x faster version of:
-/// ~~~ text
-/// def range($from; $to; $by): $from |
-///    if $by > 0 then while(.  < $to; . + $by)
-///  elif $by < 0 then while(.  > $to; . + $by)
-///    else            while(. != $to; . + $by)
-///    end;
-/// ~~~
-fn range<V: ValT>(mut from: ValX<V>, to: V, by: V) -> impl Iterator<Item = ValX<V>> {
-    use core::cmp::Ordering::{Equal, Greater, Less};
-    let cmp = by.partial_cmp(&V::from(0usize)).unwrap_or(Equal);
-    core::iter::from_fn(move || match from.clone() {
-        Ok(x) => match cmp {
-            Greater => x < to,
-            Less => x > to,
-            Equal => x != to,
-        }
-        .then(|| core::mem::replace(&mut from, (x + by.clone()).map_err(Exn::from))),
-        e @ Err(_) => {
-            // return None after the error
-            from = Ok(to.clone());
-            Some(e)
-        }
-    })
-}
-
 fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Result<T, E>> {
     Box::new(r.transpose().into_iter())
-}
-
-/// Box Once and Map Errors to exceptions.
-pub fn bome<'a, V: 'a>(r: ValR<V>) -> ValXs<'a, V> {
-    box_once(r.map_err(Exn::from))
-}
-
-/// Create a filter that takes a single variable argument and whose output is given by
-/// the function `f` that takes the input value and the value of the variable.
-pub fn unary<'a, D: DataT>(
-    mut cv: Cv<'a, D>,
-    f: impl Fn(D::V<'a>, D::V<'a>) -> ValR<D::V<'a>> + 'a,
-) -> ValXs<'a, D::V<'a>> {
-    bome(f(cv.1, cv.0.pop_var()))
-}
-
-/// Creates `n` variable arguments.
-pub fn v(n: usize) -> Box<[Bind]> {
-    core::iter::repeat(Bind::Var(())).take(n).collect()
 }
 
 #[allow(clippy::unit_arg)]
@@ -431,24 +370,6 @@ where
 {
     let f = || [Bind::Fun(())].into();
     Box::new([
-        ("error_empty", v(0), (|cv| bome(Err(Error::new(cv.1))))),
-        ("path", f(), |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let cvp = (fc, (cv.1, Default::default()));
-            Box::new(f.paths(cvp).map(|vp| {
-                let path: Vec<_> = vp?.1.iter().cloned().collect();
-                Ok(path.into_iter().rev().collect())
-            }))
-        }),
-        ("path_value", f(), |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let cvp = (fc, (cv.1, Default::default()));
-            Box::new(f.paths(cvp).map(|vp| {
-                let (v, path) = vp?;
-                let path: Vec<_> = path.iter().cloned().collect();
-                Ok([path.into_iter().rev().collect(), v].into_iter().collect())
-            }))
-        }),
         ("floor", v(0), |cv| bome(cv.1.round(f64::floor))),
         ("round", v(0), |cv| bome(cv.1.round(f64::round))),
         ("ceil", v(0), |cv| bome(cv.1.round(f64::ceil))),
@@ -469,9 +390,6 @@ where
             bome(cv.1.map_utf8_str(ByteSlice::to_ascii_uppercase))
         }),
         ("reverse", v(0), |cv| bome(cv.1.mutate_arr(|a| a.reverse()))),
-        ("keys_unsorted", v(0), |cv| {
-            bome(cv.1.key_values().map(|kv| kv.map(|(k, _v)| k)).collect())
-        }),
         ("sort", v(0), |cv| bome(cv.1.mutate_arr(|a| a.sort()))),
         ("sort_by", f(), |mut cv| {
             let (f, fc) = cv.0.pop_fun();
@@ -492,12 +410,6 @@ where
             let (f, fc) = cv.0.pop_fun();
             let f = move |a| cmp_by(a, |v| f.run((fc.clone(), v)), |my, y| y >= my);
             once_or_empty(cv.1.into_vec().map_err(Exn::from).and_then(f))
-        }),
-        ("range", v(3), |mut cv| {
-            let by = cv.0.pop_var();
-            let to = cv.0.pop_var();
-            let from = cv.0.pop_var();
-            Box::new(range(Ok(from), to, by))
         }),
         ("startswith", v(1), |cv| {
             unary(cv, |v, s| {
@@ -536,63 +448,6 @@ where
                     .map(|s| ValT::from_utf8_bytes(s.replace(b"'", b"'\\''"))),
             )
         }),
-    ])
-}
-
-macro_rules! first {
-    ( $run:ident ) => {
-        |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            Box::new(f.$run((fc, cv.1)).next().into_iter())
-        }
-    };
-}
-macro_rules! last {
-    ( $run:ident ) => {
-        |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            once_or_empty(f.$run((fc, cv.1)).try_fold(None, |_, x| x.map(Some)))
-        }
-    };
-}
-macro_rules! limit {
-    ( $run:ident ) => {
-        |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let n = cv.0.pop_var();
-            let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            then(n.try_as_isize().map_err(Exn::from), |n| match pos(n) {
-                0 => Box::new(core::iter::empty()),
-                n => Box::new(f.$run((fc, cv.1)).take(n)),
-            })
-        }
-    };
-}
-macro_rules! skip {
-    ( $run:ident ) => {
-        |mut cv| {
-            let (f, fc) = cv.0.pop_fun();
-            let n = cv.0.pop_var();
-            let pos = |n: isize| n.try_into().unwrap_or(0usize);
-            then(n.try_as_isize().map_err(Exn::from).map(pos), |n| {
-                let fm = move |(i, y): (usize, Result<_, _>)| (i >= n || y.is_err()).then_some(y);
-                Box::new(f.$run((fc, cv.1)).enumerate().filter_map(fm))
-            })
-        }
-    };
-}
-
-fn base_paths<D: DataT>() -> Box<[Filter<RunPathsPtr<D>>]>
-where
-    for<'a> D::V<'a>: ValT,
-{
-    let f = || [Bind::Fun(())].into();
-    let vf = || [Bind::Var(()), Bind::Fun(())].into();
-    Box::new([
-        ("first", f(), (first!(run), first!(paths))),
-        ("last", f(), (last!(run), last!(paths))),
-        ("limit", vf(), (limit!(run), limit!(paths))),
-        ("skip", vf(), (skip!(run), skip!(paths))),
     ])
 }
 
