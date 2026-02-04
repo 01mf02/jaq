@@ -40,7 +40,7 @@ For example,
 `jaq --from yaml . myfile.yml`
 parses `myfile.yml` as YAML.
 Possible values of _FORMAT_ include:
-`raw`, `json`, `yaml`, `cbor`, `toml`, `xml`.
+`raw`, `raw0`, `json`, `yaml`, `cbor`, `toml`, `xml`.
 
 jaq automatically chooses the corresponding input format for
 files with the extensions
@@ -99,6 +99,41 @@ $ printf "Hello\nWorld" | jaq -Rs
 See [`--rawfile`](#--rawfile).
 
 This is equivalent to `--from raw`.
+
+{#--raw-input0}
+### `--raw-input0`
+
+Read values like [`--raw-input`](#--raw-input), splitting by NUL (`\0`) instead of newlines.
+For example:
+
+```
+$ printf "Hello\nWorld\0foo" | jaq --raw-input0
+"Hello\nWorld"
+"foo"
+```
+
+When combined with [`--slurp`](#--slurp),
+this collects all inputs into an array.
+For example:
+
+```
+$ printf "Hello\nWorld\0foo" | jaq -sc --raw-input0
+["Hello\nWorld","foo"]
+```
+
+This option can be used to round-trip output from [`--raw-output0`](#--raw-output0):
+
+```
+$ printf '"some string\\nwith a newline" "another string"' | jaq --raw-output0 | jaq --raw-input0
+"some string\nwith a newline"
+"another string"
+```
+
+This is equivalent to `--from raw0`.
+
+::: Compatibility
+`jq` does not have this option.
+:::
 
 {#--slurp}
 ### `-s`, `--slurp`
@@ -193,6 +228,26 @@ $ printf '["Hello\\nWorld"]' | jaq -rc
 ```
 
 This is equivalent to `--to raw`.
+
+{#--raw-output0}
+### `--raw-output0`
+
+Output values like [`--raw-output`](#--raw-output), terminating them with NUL (`\0`) instead of LF (`\n`).
+
+```
+$ printf '"some string\\nwith a newline" true' | jaq --raw-output0 | jaq -s --raw-input tobytes
+b"some string\nwith a newline\x00true\x00"
+```
+
+Any output value that is a string containing NUL produces an error.
+Note that this does not apply to strings contained in an array or an object.
+
+```
+$ printf '"string with NUL \\u0000"' | jaq --raw-output0 2>/dev/null; echo $?
+2
+```
+
+This is equivalent to `--to raw0`.
 
 {#--join-output}
 ### `-j`, `--join-output`
