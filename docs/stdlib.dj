@@ -49,8 +49,12 @@ For example:
 
 ::: Advanced
 The filter `keys_unsorted` is equivalent to
-`to_entries | .[] |= .key`; for example,
-`{a: 1, b: 2} | to_entries | .[] |= .key --> ["a", "b"]`.
+`to_entries | map(.key)` and
+`[path(.[])[]]`. For example:
+
+- `{a: 1, b: 2} | keys_unsorted          --> ["a", "b"]`
+- `{a: 1, b: 2} | to_entries | map(.key) --> ["a", "b"]`
+- `{a: 1, b: 2} | [path(.[])[]]          --> ["a", "b"]`
 :::
 
 {#entries}
