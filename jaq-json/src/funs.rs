@@ -9,18 +9,25 @@ use jaq_core::{DataT, Exn, RunPtr};
 use jaq_std::ValT as _;
 
 impl Val {
-    /// Return 0 for null, the absolute value for numbers, and
-    /// the length for strings, arrays, and objects.
+    /// Return 0 for null, the absolute value for numbers,
+    /// the number of characters for text strings, and
+    /// the length for byte strings, arrays, and objects.
     ///
     /// Fail on booleans.
     fn length(&self) -> ValR {
         match self {
             Val::Null => Ok(Val::from(0usize)),
             Val::Num(n) => Ok(Val::Num(n.length())),
-            Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
-            Val::Str(b, Tag::Bytes) => Ok(Val::from(b.len() as isize)),
-            Val::Arr(a) => Ok(Val::from(a.len() as isize)),
-            Val::Obj(o) => Ok(Val::from(o.len() as isize)),
+            // if the input is a valid UTF-8 string,
+            // `bstr`'s `chars()` is about 6 times slower than
+            // converting the string to UTF-8 and then
+            // getting its `chars()` without `bstr`
+            Val::Str(s, Tag::Utf8) => Ok(Val::from(
+                core::str::from_utf8(s).map_or_else(|_| s.chars().count(), |s| s.chars().count()),
+            )),
+            Val::Str(b, Tag::Bytes) => Ok(Val::from(b.len())),
+            Val::Arr(a) => Ok(Val::from(a.len())),
+            Val::Obj(o) => Ok(Val::from(o.len())),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
         }
     }
