@@ -93,10 +93,14 @@ It is also a JSON and XJON superset.
 That means that every jaq value can be encoded as YAML value.
 
 jaq supports reading YAML with anchors (`&foo`) and aliases (`*foo`).
-These allow the creation of shared data structures. For example:
+These allow the creation of shared data structures.
+However, jaq does not support self-referential data, i.e.
+data that contains an alias pointing to itself.
+For example:
 
 - `"[&a 1, &b 2, *a, *b]" | fromyaml --> [1, 2, 1, 2]`
 - `"[&b [&a [], *a], *b]" | fromyaml --> [[[], []], [[], []]]`
+- `"&a[*a]" | try fromyaml catch -1 --> -1`
 
 jaq validates tags for scalar YAML values, such as
 `null`, booleans, numbers, and strings:
