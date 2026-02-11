@@ -18,6 +18,9 @@ use jaq_json::{Num, Val};
 use num_bigint::{BigInt, BigUint};
 use std::io;
 
+const BUF_SIZE: usize = 4096;
+const MAX_CAP: usize = 65535;
+
 /// Error that may indicate end of file.
 trait IsEof {
     /// Is the error caused by EOF?
@@ -114,36 +117,54 @@ fn with_size<R: Read, T>(
     decoder: &mut Decoder<R>,
     f: impl Fn(Header, &mut Decoder<R>) -> Result<T, PError<R::Error>>,
 ) -> Result<Vec<T>, PError<R::Error>> {
+    let mut a;
     if let Some(size) = size {
-        let mut a = Vec::with_capacity(size);
+        a = Vec::with_capacity(size.min(MAX_CAP));
         for _ in 0..size {
             a.push(f(decoder.pull()?, decoder)?);
         }
-        Ok(a)
     } else {
-        let mut a = Vec::new();
+        a = Vec::new();
         loop {
             match decoder.pull()? {
                 Header::Break => break,
                 header => a.push(f(header, decoder)?),
             }
         }
-        Ok(a)
     }
+    a.shrink_to_fit();
+    Ok(a)
+}
+
+fn parse_str<R: Read>(
+    len: Option<usize>,
+    decoder: &mut Decoder<R>,
+) -> Result<String, Error<R::Error>> {
+    let mut s = len.map_or_else(String::new, |c| String::with_capacity(c.min(MAX_CAP)));
+    let mut segments = decoder.text(len);
+    while let Some(mut segment) = segments.pull()? {
+        let mut buffer = [0; BUF_SIZE];
+        while let Some(chunk) = segment.pull(&mut buffer[..])? {
+            s.push_str(chunk);
+        }
+    }
+    s.shrink_to_fit();
+    Ok(s)
 }
 
 fn parse_bytes<R: Read>(
     len: Option<usize>,
     decoder: &mut Decoder<R>,
 ) -> Result<Vec<u8>, Error<R::Error>> {
-    let mut b = len.map_or_else(Vec::new, Vec::with_capacity);
+    let mut b = len.map_or_else(Vec::new, |c| Vec::with_capacity(c.min(MAX_CAP)));
     let mut segments = decoder.bytes(len);
     while let Some(mut segment) = segments.pull()? {
-        let mut buffer = [0; 4096];
+        let mut buffer = [0; BUF_SIZE];
         while let Some(chunk) = segment.pull(&mut buffer)? {
             b.extend(chunk);
         }
     }
+    b.shrink_to_fit();
     Ok(b)
 }
 
@@ -156,17 +177,7 @@ fn biguint<R: Read>(decoder: &mut Decoder<R>) -> Result<BigUint, Error<R::Error>
 
 fn parse<R: Read>(header: Header, decoder: &mut Decoder<R>) -> Result<Val, PError<R::Error>> {
     match header {
-        Header::Text(len) => {
-            let mut s = len.map_or_else(String::new, String::with_capacity);
-            let mut segments = decoder.text(len);
-            while let Some(mut segment) = segments.pull()? {
-                let mut buffer = [0; 4096];
-                while let Some(chunk) = segment.pull(&mut buffer[..])? {
-                    s.push_str(chunk);
-                }
-            }
-            Ok(Val::from(s))
-        }
+        Header::Text(len) => Ok(Val::from(parse_str(len, decoder)?)),
         Header::Bytes(len) => Ok(Val::byte_str(parse_bytes(len, decoder)?)),
         Header::Simple(simple::NULL) => Ok(Val::Null),
         Header::Simple(simple::FALSE) => Ok(Val::Bool(false)),
