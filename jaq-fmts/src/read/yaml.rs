@@ -129,12 +129,8 @@ impl<'input, T: Input> State<'input, T> {
                 (Val::obj(iter.collect::<Result<_, _>>()?), anchor_id)
             }
             (Event::Alias(anchor_id), span) => {
-                let err = || {
-                    Error::Lex(ScanError::new_str(
-                        span.start,
-                        "while parsing node, found unknown anchor",
-                    ))
-                };
+                let err = "while parsing node, found unknown anchor";
+                let err = || Error::Lex(ScanError::new_str(span.start, err));
                 (self.get_alias(anchor_id).ok_or_else(err)?.clone(), 0)
             }
             // SAFETY: these should never be returned by saphyr at this point
