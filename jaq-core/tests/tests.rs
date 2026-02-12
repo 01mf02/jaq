@@ -68,6 +68,15 @@ yields!(div_str_empty, r#""" / """#, json!([]));
 yields!(div_str_empty_str, r#""" / "ab""#, json!([]));
 yields!(div_str_empty_sep, r#""aöß" / """#, ["a", "ö", "ß"]);
 
+// Check whether `isize::MIN % -1` yields 0, instead of a panic.
+// We cannot directly write -9223372036854775808 (= isize::MIN) here,
+// because that first produces the big integer 9223372036854775808,
+// then negates it, which remains a big integer.
+// On the other hand, -9223372036854775807 -1
+// creates a machine-sized integer 9223372036854775807, and
+// negating it and subtracting 1 from it keeps it a machine-sized integer.
+yields!(rem_isize_min, "(-9223372036854775807 - 1) % -1", 0);
+
 #[test]
 fn logic() {
     let tf = json!([true, false]);
