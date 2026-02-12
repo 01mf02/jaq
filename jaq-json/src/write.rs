@@ -211,8 +211,8 @@ macro_rules! format_val {
             Val::Bool(true) => color!(r#true, write!($w, "true")),
             Val::Bool(false) => color!(r#false, write!($w, "false")),
             Val::Num(n) => color!(num, write!($w, "{n}")),
-            Val::Str(b, $crate::Tag::Bytes) => color!(bstr, $crate::write_bytes!($w, b)),
-            Val::Str(s, $crate::Tag::Utf8) => color!(
+            Val::BStr(b) => color!(bstr, $crate::write_bytes!($w, b)),
+            Val::TStr(s) => color!(
                 str,
                 $crate::write_utf8!($w, s, |part| write!($w, "{}", $crate::bstr(part)))
             ),
@@ -263,9 +263,9 @@ macro_rules! format_val {
 #[macro_export]
 macro_rules! write_val {
     ($w:ident, $pp:ident, $level:expr, $v:ident, $f:expr) => {{
-        use $crate::{Tag::Utf8, Val::Str};
+        use $crate::Val::TStr;
         match $v {
-            Str(s, Utf8) => style!($w, $pp, str, write_utf8!($w, s, |part| $w.write_all(part))),
+            TStr(s) => style!($w, $pp, str, write_utf8!($w, s, |part| $w.write_all(part))),
             _ => format_val!($w, $pp, $level, $v, $f),
         }
     }};

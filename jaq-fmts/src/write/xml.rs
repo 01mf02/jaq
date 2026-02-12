@@ -64,7 +64,7 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
     fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
         use jaq_std::ValT;
         let from_kv = |(k, v): (&'a _, &'a _)| match (k, v) {
-            (Val::Str(k, _), Val::Str(v, _)) => Ok((&**k, &**v)),
+            (Val::TStr(k), Val::TStr(v)) => Ok((&***k, &***v)),
             _ => Err(Error::InvalidEntry("attribute", k.clone(), v.clone())),
         };
         let from_kvs = |a: &'a Map| a.iter().map(from_kv).collect::<Result<_, _>>();
@@ -77,7 +77,7 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
                 let fail = || Error::InvalidEntry("tac", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
-                    (b"t", Val::Str(s, _)) => t = s,
+                    (b"t", Val::TStr(s)) => t = s,
                     (b"a", Val::Obj(attrs)) => a = from_kvs(attrs)?,
                     (b"c", v) => c = Some(Box::new(v.try_into()?)),
                     _ => Err(fail())?,
@@ -93,9 +93,9 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
                 let fail = || Error::InvalidEntry("doctype", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
-                    (b"name", Val::Str(s, _)) => name = s,
-                    (b"external", Val::Str(s, _)) => external = Some(&**s),
-                    (b"internal", Val::Str(s, _)) => internal = Some(&**s),
+                    (b"name", Val::TStr(s)) => name = s,
+                    (b"external", Val::TStr(s)) => external = Some(&***s),
+                    (b"internal", Val::TStr(s)) => internal = Some(&***s),
                     _ => Err(fail())?,
                 }
             }
@@ -112,8 +112,8 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
                 let fail = || Error::InvalidEntry("pi", k.clone(), v.clone());
                 let k = k.as_utf8_bytes().ok_or_else(fail)?;
                 match (k, v) {
-                    (b"target", Val::Str(s, _)) => target = s,
-                    (b"content", Val::Str(s, _)) => content = Some(&**s),
+                    (b"target", Val::TStr(s)) => target = s,
+                    (b"content", Val::TStr(s)) => content = Some(&***s),
                     _ => Err(fail())?,
                 }
             }
@@ -138,13 +138,15 @@ impl<'a> TryFrom<&'a Val> for Xml<&'a [u8]> {
                 match (k, v) {
                     (b"xmldecl", Val::Obj(kvs)) => from_kvs(kvs).map(Self::XmlDecl),
                     (b"doctype", Val::Obj(o)) if contains_key(o, "name") => from_dt(o),
-                    (b"cdata", Val::Str(s, _)) => Ok(Self::Cdata(s)),
-                    (b"comment", Val::Str(s, _)) => Ok(Self::Comment(s)),
+                    (b"cdata", Val::TStr(s)) => Ok(Self::Cdata(s)),
+                    (b"comment", Val::TStr(s)) => Ok(Self::Comment(s)),
                     (b"pi", Val::Obj(o)) if contains_key(o, "target") => from_pi(o),
                     _ => Err(fail())?,
                 }
             }
-            Val::Null | Val::Bool(_) | Val::Num(_) | Val::Str(..) => Ok(Self::Scalar(v.clone())),
+            Val::Null | Val::Bool(_) | Val::Num(_) | Val::BStr(_) | Val::TStr(_) => {
+                Ok(Self::Scalar(v.clone()))
+            }
         }
     }
 }
@@ -164,7 +166,7 @@ macro_rules! write_kvs {
 macro_rules! write_val {
     ($w:ident, $v:ident, $fs:expr, $fv:expr) => {{
         match $v {
-            Xml::Scalar(Val::Str(s, _)) => $fs(s),
+            Xml::Scalar(Val::TStr(s)) => $fs(&**s),
             Xml::Scalar(v) => write!($w, "{v}"),
             Xml::Seq(a) => a.iter().try_for_each($fv),
             Xml::Tac(t, a, c) => {

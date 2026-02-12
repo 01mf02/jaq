@@ -7,7 +7,7 @@ use core::fmt::{self, Debug, Display, Formatter};
 use jaq_all::data::{self, compile, Runner};
 use jaq_all::fmts::{read, write};
 use jaq_all::json::write::{Pp, Styles};
-use jaq_all::json::{self, bstr, style, write_bytes, write_utf8, Tag, Val, ValR};
+use jaq_all::json::{self, bstr, style, write_bytes, write_utf8, Val, ValR};
 use jaq_all::load::{Color, FileReportsDisp};
 use wasm_bindgen::prelude::*;
 use web_sys::DedicatedWorkerGlobalScope as Scope;
@@ -28,11 +28,11 @@ fn fmt_json(w: &mut Formatter, pp: &Pp, level: usize, v: &Val) -> fmt::Result {
     }
 
     match v {
-        Val::Str(b, Tag::Bytes) => {
+        Val::BStr(b) => {
             let fun = FormatterFn(move |f: &mut Formatter| write_bytes!(f, b));
             color!(bstr, write!(w, "{}", escape_str(&fun.to_string())))
         }
-        Val::Str(s, Tag::Utf8) => {
+        Val::TStr(s) => {
             let fun = FormatterFn(move |f: &mut Formatter| {
                 write_utf8!(f, s, |part| bstr(&escape_bytes(part)).fmt(f))
             });
@@ -149,7 +149,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let post_value = |y: ValR| {
         let y = y.map_err(Error::Jaq)?;
         let s = FormatterFn(|f: &mut Formatter| match &y {
-            Val::Str(s, _) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
+            Val::TStr(s) | Val::BStr(s) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
             y => fmt_json(f, &runner.writer.pp, 0, y),
         });
         post(s.to_string());

@@ -1,7 +1,7 @@
 //! TOML support.
 use alloc::{string::String, vec::Vec};
 use core::fmt::{self, Display, Formatter};
-use jaq_json::{Map, Num, Tag, Val};
+use jaq_json::{Map, Num, Val};
 use toml_edit::{DocumentMut, Formatted, Item, Table, Value};
 
 /// Serialisation error.
@@ -75,11 +75,9 @@ fn val_item(v: &Val) -> Result<Item, Error> {
 fn val_value(v: &Val) -> Result<Value, Error> {
     let fail = || Error::Val(v.clone());
     Ok(match v {
-        Val::Null | Val::Str(_, Tag::Bytes) => Err(fail())?,
+        Val::Null | Val::BStr(_) => Err(fail())?,
         Val::Bool(b) => Value::Boolean(Formatted::new(*b)),
-        Val::Str(s, Tag::Utf8) => {
-            Value::String(Formatted::new(String::from_utf8_lossy(s).into_owned()))
-        }
+        Val::TStr(s) => Value::String(Formatted::new(String::from_utf8_lossy(s).into_owned())),
         Val::Num(Num::Float(f)) => Value::Float(Formatted::new(*f)),
         Val::Num(Num::Dec(n)) => val_value(&Val::Num(Num::from_dec_str(n)))?,
         Val::Num(n @ (Num::Int(_) | Num::BigInt(_))) => {

@@ -1,4 +1,4 @@
-use crate::{read, Error, Tag, Val, ValR, ValX};
+use crate::{read, Error, Val, ValR, ValX};
 use alloc::{boxed::Box, vec::Vec};
 use bstr::ByteSlice;
 use bytes::{BufMut, Bytes, BytesMut};
@@ -17,8 +17,8 @@ impl Val {
         match self {
             Val::Null => Ok(Val::from(0usize)),
             Val::Num(n) => Ok(Val::Num(n.length())),
-            Val::Str(s, Tag::Utf8) => Ok(Val::from(s.chars().count() as isize)),
-            Val::Str(b, Tag::Bytes) => Ok(Val::from(b.len() as isize)),
+            Val::TStr(s) => Ok(Val::from(s.chars().count() as isize)),
+            Val::BStr(b) => Ok(Val::from(b.len() as isize)),
             Val::Arr(a) => Ok(Val::from(a.len() as isize)),
             Val::Obj(o) => Ok(Val::from(o.len() as isize)),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
@@ -28,20 +28,18 @@ impl Val {
     /// Return the indices of `y` in `self`.
     fn indices<'a>(&'a self, y: &'a Val) -> Result<Box<dyn Iterator<Item = usize> + 'a>, Error> {
         match (self, y) {
-            (Val::Str(_, tag @ (Tag::Bytes | Tag::Utf8)), Val::Str(y, tag_))
-                if tag == tag_ && y.is_empty() =>
-            {
+            (Val::BStr(_), Val::BStr(y)) | (Val::TStr(_), Val::TStr(y)) if y.is_empty() => {
                 Ok(Box::new(core::iter::empty()))
             }
             (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
-            (Val::Str(x, Tag::Utf8), Val::Str(y, Tag::Utf8)) => {
+            (Val::TStr(x), Val::TStr(y)) => {
                 let index = |(i, _, _)| x.get(i..i + y.len());
                 let iw = x.char_indices().map_while(index).enumerate();
-                Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
+                Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
             }
-            (Val::Str(x, tag @ Tag::Bytes), Val::Str(y, tag_)) if tag == tag_ => {
+            (Val::BStr(x), Val::BStr(y)) => {
                 let iw = x.windows(y.len()).enumerate();
-                Ok(Box::new(iw.filter_map(|(i, w)| (w == *y).then_some(i))))
+                Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
             }
             (Val::Arr(x), Val::Arr(y)) => {
                 let iw = x.windows(y.len()).enumerate();
@@ -63,7 +61,7 @@ impl Val {
     /// * `a` equals `b`.
     fn contains(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Str(l, tag), Self::Str(r, tag_)) if tag == tag_ => l.contains_str(r),
+            (Self::BStr(l), Self::BStr(r)) | (Self::TStr(l), Self::TStr(r)) => l.contains_str(&**r),
             (Self::Arr(l), Self::Arr(r)) => r.iter().all(|r| l.iter().any(|l| l.contains(r))),
             (Self::Obj(l), Self::Obj(r)) => r
                 .iter()
@@ -79,7 +77,7 @@ impl Val {
                 .and_then(|i| u8::try_from(i).ok())
                 .map(|u| Bytes::from(Vec::from([u])))
                 .ok_or_else(|| self.clone()),
-            Val::Str(b, _) => Ok(b.clone()),
+            Val::BStr(b) | Val::TStr(b) => Ok(*b.clone()),
             Val::Arr(a) => {
                 let mut buf = BytesMut::new();
                 for x in a.iter() {
@@ -92,10 +90,9 @@ impl Val {
     }
 
     fn as_bytes_owned(&self) -> Option<Bytes> {
-        if let Self::Str(b, _) = self {
-            Some(b.clone())
-        } else {
-            None
+        match self {
+            Self::BStr(b) | Self::TStr(b) => Some(*b.clone()),
+            _ => None,
         }
     }
 
@@ -163,9 +160,8 @@ fn base<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         }),
         ("tojson", v(0), |cv| bome(Ok(Val::utf8_str(cv.1.to_json())))),
         ("tobytes", v(0), |cv| {
-            let pass = |b| Val::Str(b, Tag::Bytes);
             let fail = |v| Error::str(format_args!("cannot convert {v} to bytes"));
-            bome(cv.1.to_bytes().map(pass).map_err(fail))
+            bome(cv.1.to_bytes().map(Val::byte_str).map_err(fail))
         }),
         ("length", v(0), |cv| bome(cv.1.length())),
         ("contains", v(1), |cv| {

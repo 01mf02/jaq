@@ -1,6 +1,6 @@
 //! TOML support.
 use alloc::string::{String, ToString};
-use jaq_json::{Num, Tag, Val};
+use jaq_json::{Num, Val};
 use toml_edit::{Document, Item, Table, TomlError as Error, Value};
 
 /// Parse a TOML document from a string.
@@ -10,13 +10,13 @@ pub fn parse(s: &str) -> Result<Val, Error> {
 
 fn value(v: Value) -> Result<Val, Error> {
     Ok(match v {
-        Value::String(s) => Val::Str(s.into_value().into(), Tag::Utf8),
+        Value::String(s) => Val::utf8_str(s.into_value()),
         Value::Integer(i) => Val::Num(Num::from_integral(i.into_value())),
         Value::Float(f) => Val::Num(Num::Float(f.into_value())),
         Value::Boolean(b) => Val::Bool(b.into_value()),
         Value::Array(a) => return a.into_iter().map(value).collect(),
         Value::InlineTable(t) => return table(t.into_table()),
-        Value::Datetime(d) => Val::Str(d.into_value().to_string().into(), Tag::Utf8),
+        Value::Datetime(d) => Val::utf8_str(d.into_value().to_string()),
     })
 }
 

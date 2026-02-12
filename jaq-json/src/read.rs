@@ -1,5 +1,5 @@
 //! JSON support.
-use crate::{Map, Num, Tag, Val};
+use crate::{Map, Num, Val};
 use alloc::{string::ToString, vec::Vec};
 use core::fmt::{self, Formatter};
 use hifijson::token::{Expect, Lex};
@@ -61,18 +61,18 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
     })
 }
 
-/// Parse a JSON string as byte string, preserving invalid UTF-8 as-is.
-fn parse_string<L: LexAlloc>(lexer: &mut L, tag: Tag) -> Result<Vec<u8>, hifijson::Error> {
+/// Parse a JSON string as byte or text string, preserving invalid UTF-8 as-is.
+fn parse_string<L: LexAlloc>(lexer: &mut L, bytes: bool) -> Result<Vec<u8>, hifijson::Error> {
     let on_string = |bytes: &mut L::Bytes, out: &mut Vec<u8>| {
         out.extend(bytes.as_ref());
         Ok(())
     };
     let s = lexer.str_fold(Vec::new(), on_string, |lexer, out| {
         use hifijson::escape::Error;
-        match (tag, lexer.take_next().ok_or(Error::Eof)?) {
-            (Tag::Bytes, b'u') => Err(Error::InvalidKind(b'u'))?,
-            (Tag::Bytes, b'x') => out.push(lexer.hex()?),
-            (_, c) => out.extend(lexer.escape(c)?.encode_utf8(&mut [0; 4]).as_bytes()),
+        match lexer.take_next().ok_or(Error::Eof)? {
+            b'u' if bytes => Err(Error::InvalidKind(b'u'))?,
+            b'x' if bytes => out.push(lexer.hex()?),
+            c => out.extend(lexer.escape(c)?.encode_utf8(&mut [0; 4]).as_bytes()),
         }
         Ok(())
     });
@@ -107,11 +107,11 @@ fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
         b'n' if lexer.strip_prefix(b"null") => Val::Null,
         b't' if lexer.strip_prefix(b"true") => Val::Bool(true),
         b'f' if lexer.strip_prefix(b"false") => Val::Bool(false),
-        b'b' if lexer.strip_prefix(b"b\"") => Val::byte_str(parse_string(lexer, Tag::Bytes)?),
+        b'b' if lexer.strip_prefix(b"b\"") => Val::byte_str(parse_string(lexer, true)?),
         b'N' if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
         b'I' if lexer.strip_prefix(b"Infinity") => Val::Num(Num::Float(f64::INFINITY)),
         b'0'..=b'9' | b'+' | b'-' => Val::Num(parse_num(lexer)?),
-        b'"' => Val::utf8_str(parse_string(lexer.discarded(), Tag::Utf8)?),
+        b'"' => Val::utf8_str(parse_string(lexer.discarded(), false)?),
         b'[' => Val::Arr({
             let mut arr = Vec::new();
             lexer.discarded().seq(b']', ws_tk, |next, lexer| {
