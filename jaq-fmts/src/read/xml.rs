@@ -54,7 +54,7 @@ pub enum Error {
     Lex(xmlparser::Error),
     /// Unmatched closing tag, e.g. `<a></b>`
     Unmatched(TagPos, TagPos),
-    /// Unclosed tag, e.g. `<a>`
+    /// Unclosed tag, e.g. `<a>` or `<a`
     Unclosed(TagPos),
 }
 
@@ -83,10 +83,8 @@ impl std::error::Error for Error {}
 fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> {
     let mut children = Vec::new();
     loop {
-        let Some(tk) = tokens.next() else {
-            return Err(Error::Unclosed(tag.tag_pos(tokens)));
-        };
-        match tk? {
+        let next = tokens.next();
+        match next.ok_or_else(|| Error::Unclosed(tag.tag_pos(tokens)))?? {
             Token::ElementEnd {
                 end: ElementEnd::Close(prefix, local),
                 ..
@@ -106,9 +104,8 @@ fn parse_children(tag: &Tag, tokens: &mut Tokenizer) -> Result<Vec<Val>, Error> 
 fn tac(tag: &Tag, tokens: &mut Tokenizer) -> Result<Val, Error> {
     let mut attrs = Vec::new();
     let children = loop {
-        // SAFETY: xmlparser returns an error instead of None
-        let tk = tokens.next().unwrap();
-        match tk? {
+        let next = tokens.next();
+        match next.ok_or_else(|| Error::Unclosed(tag.tag_pos(tokens)))?? {
             Token::Attribute {
                 prefix,
                 local,

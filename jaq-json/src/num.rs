@@ -216,7 +216,11 @@ impl core::ops::Rem for Num {
         use num_bigint::BigInt;
         use Num::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Int(x % y),
+            // `x.checked_rem(y)` is `None` only for:
+            //
+            // - `isize::MIN % -1`: The remainder is always 0.
+            // - `x % 0`: This is guarded by `Val`.
+            (Int(x), Int(y)) => Int(x.checked_rem(y).unwrap_or(0)),
             (BigInt(x), BigInt(y)) => Num::big_int(&*x % &*y),
             (Int(i), BigInt(b)) => Num::big_int(&BigInt::from(i) % &*b),
             (BigInt(b), Int(i)) => Num::big_int(&*b % &BigInt::from(i)),

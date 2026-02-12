@@ -53,7 +53,7 @@ type EventSpan<'input> = (Event<'input>, saphyr_parser::Span);
 
 struct State<'input, T: Input> {
     parser: Parser<'input, T>,
-    aliases: Vec<Val>,
+    aliases: Vec<Option<Val>>,
 }
 
 impl<'input, T: Input> State<'input, T> {
@@ -68,13 +68,13 @@ impl<'input, T: Input> State<'input, T> {
 
     fn push_alias(&mut self, val: Val, anchor_id: usize) {
         if self.aliases.len() < anchor_id {
-            self.aliases.resize_with(anchor_id, Val::default)
+            self.aliases.resize(anchor_id, None)
         }
-        self.aliases[anchor_id - 1] = val;
+        self.aliases[anchor_id - 1] = Some(val);
     }
 
-    fn get_alias(&self, anchor_id: usize) -> Val {
-        self.aliases[anchor_id - 1].clone()
+    fn get_alias(&self, anchor_id: usize) -> Option<&Val> {
+        self.aliases.get(anchor_id - 1).and_then(Option::as_ref)
     }
 
     fn parse_doc(&mut self, ev: EventSpan) -> Result<Val, Error> {
@@ -128,7 +128,11 @@ impl<'input, T: Input> State<'input, T> {
                 let iter = core::iter::from_fn(|| self.parse_map_entry());
                 (Val::obj(iter.collect::<Result<_, _>>()?), anchor_id)
             }
-            (Event::Alias(anchor_id), _) => (self.get_alias(anchor_id), 0),
+            (Event::Alias(anchor_id), span) => {
+                let err = "while parsing node, found unknown anchor";
+                let err = || Error::Lex(ScanError::new_str(span.start, err));
+                (self.get_alias(anchor_id).ok_or_else(err)?.clone(), 0)
+            }
             // SAFETY: these should never be returned by saphyr at this point
             (Event::Nothing | Event::SequenceEnd | Event::MappingEnd, _) => panic!(),
             (Event::DocumentStart(..) | Event::DocumentEnd, _) => panic!(),
