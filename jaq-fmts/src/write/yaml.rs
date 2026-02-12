@@ -1,6 +1,6 @@
 //! YAML support.
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use jaq_json::{write, write_utf8, Num, Tag, Val};
+use jaq_json::{write, write_utf8, Num, Val};
 use std::io;
 
 macro_rules! format_yaml {
@@ -33,11 +33,11 @@ macro_rules! format_yaml {
             }};
         }
         match $v {
-            Val::Str(b, Tag::Utf8) if !must_quote(b) => {
-                style!(str, write!($w, "{}", jaq_json::bstr(b)))
+            Val::TStr(b) if !must_quote(b) => {
+                style!(str, write!($w, "{}", jaq_json::bstr(&**b)))
             }
-            Val::Str(b, Tag::Bytes) => {
-                style!(bstr, write!($w, "!!binary {}", BASE64.encode(b)))
+            Val::BStr(b) => {
+                style!(bstr, write!($w, "!!binary {}", BASE64.encode(&**b)))
             }
             Val::Arr(a) if !a.is_empty() && indent.is_some() => {
                 let mut iter = a.iter().peekable();
@@ -79,8 +79,8 @@ macro_rules! write_yaml {
             }};
         }
         match $v {
-            Val::Str(b, Tag::Utf8) if !must_quote(b) => style!(str, $w.write_all(b)),
-            Val::Str(s, Tag::Utf8) => style!(str, write_utf8!($w, s, |part| $w.write_all(part))),
+            Val::TStr(b) if !must_quote(b) => style!(str, $w.write_all(b)),
+            Val::TStr(s) => style!(str, write_utf8!($w, s, |part| $w.write_all(part))),
             _ => format_yaml!($w, $pp, $level, $v, $f),
         }
     }};
