@@ -7,7 +7,7 @@
 
 jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of
 the JSON data processing tool [`jq`](https://jqlang.github.io/jq/).
-It has a few features not present in `jq`, such as
+It has a few features not present in `jq`, such ashttps://github.com/cli/cli.githttps://github.com/cli/cli.git
 support for the data formats YAML, CBOR, TOML, and XML.
 jaq has an own [manual](https://gedenkt.at/jaq/manual/).
 You can try jaq on the [playground](https://gedenkt.at/jaq/).
