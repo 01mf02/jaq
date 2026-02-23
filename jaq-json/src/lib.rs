@@ -51,8 +51,15 @@ pub enum Val {
     Bool(bool),
     /// Number
     Num(Num),
-    /// String
-    Str(Bytes, Tag),
+    /// Byte string
+    BStr(Box<Bytes>),
+    /// Text string (interpreted as UTF-8)
+    ///
+    /// Note that this does not require the actual bytes to be all valid UTF-8;
+    /// this just means that the bytes are interpreted as UTF-8.
+    /// An effort is made to preserve invalid UTF-8 as is, else
+    /// replace invalid UTF-8 by the Unicode replacement character.
+    TStr(Box<Bytes>),
     /// Array
     Arr(Rc<Vec<Val>>),
     /// Object
@@ -66,22 +73,10 @@ fn val_send_sync() {
     send_sync(Val::default())
 }
 
-/// Interpretation of a string.
-///
-/// This influences the outcome of a few operations (e.g. slicing)
-/// as well as how a string is printed.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum Tag {
-    /// Sequence of bytes, to be escaped
-    Bytes,
-    /// Sequence of UTF-8 code points
-    ///
-    /// Note that this does not require the actual bytes to be all valid UTF-8;
-    /// this just means that the bytes are interpreted as UTF-8.
-    /// An effort is made to preserve invalid UTF-8 as is, else
-    /// replace invalid UTF-8 by the Unicode replacement character.
-    Utf8,
-}
+#[cfg(target_arch = "x86_64")]
+const _: () = {
+    assert!(core::mem::size_of::<Val>() == 16);
+};
 
 /// Types and sets of types.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -166,10 +161,14 @@ impl jaq_core::ValT for Val {
     }
 
     fn range(self, range: val::Range<&Self>) -> ValR {
+        let fs = |b: Bytes, range, skip_take: SkipTakeFn| {
+            Self::range_int(range)
+                .map(|range_char| skip_take(range_char, &b))
+                .map(|(skip, take)| b.slice(skip..skip + take))
+        };
         match self {
-            Val::Str(s, t) => Self::range_int(range)
-                .map(|range_char| skip_take_str(t, range_char, &s))
-                .map(|(skip, take)| Val::Str(s.slice(skip..skip + take), t)),
+            Val::BStr(b) => fs(*b, range, skip_take_bytes).map(Val::byte_str),
+            Val::TStr(b) => fs(*b, range, skip_take_chars).map(Val::utf8_str),
             Val::Arr(a) => Self::range_int(range)
                 .map(|range| skip_take(range, a.len()))
                 .map(|(skip, take)| a.iter().skip(skip).take(take).cloned().collect()),
@@ -198,7 +197,7 @@ impl jaq_core::ValT for Val {
         opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX {
-        if let (Val::Str(..) | Val::Arr(_), Val::Obj(o)) = (&self, index) {
+        if let (Val::BStr(_) | Val::TStr(_) | Val::Arr(_), Val::Obj(o)) = (&self, index) {
             let range = o.get(&Val::utf8_str("start"))..o.get(&Val::utf8_str("end"));
             return self.map_range(range, opt, f);
         };
@@ -250,6 +249,20 @@ impl jaq_core::ValT for Val {
         opt: path::Opt,
         f: impl Fn(Self) -> I,
     ) -> ValX {
+        let fs = |b: Bytes, range, skip_take: SkipTakeFn, from: ValBytesFn, into: BytesValFn| {
+            let (skip, take) = match Self::range_int(range) {
+                Ok(range) => skip_take(range, &b),
+                Err(e) => return opt.fail(into(b), |_| Exn::from(e)),
+            };
+            let str = into(b.slice(skip..skip + take));
+            let y = f(str).map(|y| from(y?).map_err(Exn::from)).next();
+            let y = y.transpose()?.unwrap_or_default();
+            let mut b = BytesMut::from(b);
+            bytes_splice(&mut b, skip, take, &y);
+            Ok(into(b.freeze()))
+        };
+        let stb = skip_take_bytes;
+        let stc = skip_take_chars;
         match self {
             Val::Arr(ref mut a) => {
                 let (skip, take) = match Self::range_int(range) {
@@ -262,18 +275,8 @@ impl jaq_core::ValT for Val {
                 Rc::make_mut(a).splice(skip..skip + take, (*y).clone());
                 Ok(self)
             }
-            Val::Str(b, t) => {
-                let (skip, take) = match Self::range_int(range) {
-                    Ok(range) => skip_take_str(t, range, &b),
-                    Err(e) => return opt.fail(Val::Str(b, t), |_| Exn::from(e)),
-                };
-                let str = Val::Str(b.slice(skip..skip + take), t);
-                let y = f(str).map(|y| y?.into_str(t).map_err(Exn::from)).next();
-                let y = y.transpose()?.unwrap_or_default();
-                let mut b = BytesMut::from(b);
-                bytes_splice(&mut b, skip, take, &y);
-                Ok(Val::Str(b.freeze(), t))
-            }
+            Val::BStr(b) => fs(*b, range, stb, Val::into_byte_str, Val::byte_str),
+            Val::TStr(b) => fs(*b, range, stc, Val::into_utf8_str, Val::utf8_str),
             _ => opt.fail(self, |v| Exn::from(Error::typ(v, Type::Arr.as_str()))),
         }
     }
@@ -284,10 +287,9 @@ impl jaq_core::ValT for Val {
     }
 
     fn into_string(self) -> Self {
-        if let Self::Str(b, _tag) = self {
-            Self::utf8_str(b)
-        } else {
-            Self::utf8_str(self.to_json())
+        match self {
+            Self::BStr(b) | Self::TStr(b) => Self::TStr(b),
+            _ => Self::utf8_str(self.to_json()),
         }
     }
 }
@@ -316,26 +318,26 @@ impl jaq_std::ValT for Val {
     }
 
     fn is_utf8_str(&self) -> bool {
-        matches!(self, Self::Str(_, Tag::Utf8))
+        matches!(self, Self::TStr(_))
     }
 
     fn as_bytes(&self) -> Option<&[u8]> {
-        if let Self::Str(b, _) = self {
-            Some(b)
-        } else {
-            None
+        match self {
+            Self::BStr(b) | Self::TStr(b) => Some(b),
+            _ => None,
         }
     }
 
     fn as_sub_str(&self, sub: &[u8]) -> Self {
         match self {
-            Self::Str(b, tag) => Self::Str(b.slice_ref(sub), *tag),
+            Self::BStr(b) => Self::byte_str(b.slice_ref(sub)),
+            Self::TStr(b) => Self::utf8_str(b.slice_ref(sub)),
             _ => panic!(),
         }
     }
 
     fn from_utf8_bytes(b: impl AsRef<[u8]> + Send + 'static) -> Self {
-        Self::Str(Bytes::from_owner(b), Tag::Utf8)
+        Self::utf8_str(Bytes::from_owner(b))
     }
 }
 
@@ -346,13 +348,21 @@ pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
         .into_iter()
 }
 
+type ValBytesFn = fn(Val) -> Result<Bytes, Error>;
+type BytesValFn = fn(Bytes) -> Val;
+type SkipTakeFn = fn(val::Range<num::PosUsize>, &[u8]) -> (usize, usize);
+
 fn skip_take(range: val::Range<num::PosUsize>, len: usize) -> (usize, usize) {
     let from = abs_bound(range.start, len, 0);
     let upto = abs_bound(range.end, len, len);
     (from, upto.saturating_sub(from))
 }
 
-fn skip_take_str(tag: Tag, range: val::Range<num::PosUsize>, b: &[u8]) -> (usize, usize) {
+fn skip_take_bytes(range: val::Range<num::PosUsize>, b: &[u8]) -> (usize, usize) {
+    skip_take(range, b.len())
+}
+
+fn skip_take_chars(range: val::Range<num::PosUsize>, b: &[u8]) -> (usize, usize) {
     let byte_index = |num::PosUsize(pos, c)| {
         let mut chars = b.char_indices().map(|(start, ..)| start);
         if pos {
@@ -361,14 +371,9 @@ fn skip_take_str(tag: Tag, range: val::Range<num::PosUsize>, b: &[u8]) -> (usize
             chars.nth_back(c - 1).unwrap_or(0)
         }
     };
-    match tag {
-        Tag::Bytes => skip_take(range, b.len()),
-        Tag::Utf8 => {
-            let from_byte = range.start.map_or(0, byte_index);
-            let upto_byte = range.end.map_or(b.len(), byte_index);
-            (from_byte, upto_byte.saturating_sub(from_byte))
-        }
-    }
+    let from_byte = range.start.map_or(0, byte_index);
+    let upto_byte = range.end.map_or(b.len(), byte_index);
+    (from_byte, upto_byte.saturating_sub(from_byte))
 }
 
 fn bytes_splice(b: &mut BytesMut, skip: usize, take: usize, replace: &[u8]) {
@@ -404,12 +409,12 @@ impl Val {
 
     /// Construct a string that is interpreted as UTF-8.
     pub fn utf8_str(s: impl Into<Bytes>) -> Self {
-        Self::Str(s.into(), Tag::Utf8)
+        Self::TStr(s.into().into())
     }
 
     /// Construct a string that is interpreted as bytes.
     pub fn byte_str(s: impl Into<Bytes>) -> Self {
-        Self::Str(s.into(), Tag::Bytes)
+        Self::BStr(s.into().into())
     }
 
     fn as_num(&self) -> Option<&Num> {
@@ -425,9 +430,16 @@ impl Val {
         self.as_num().and_then(Num::as_pos_usize).ok_or_else(fail)
     }
 
-    fn into_str(self, t: Tag) -> Result<Bytes, Error> {
+    fn into_byte_str(self) -> Result<Bytes, Error> {
         match self {
-            Self::Str(b, t_) if t == t_ => Ok(b),
+            Self::BStr(b) => Ok(*b),
+            _ => Err(Error::typ(self, Type::Str.as_str())),
+        }
+    }
+
+    fn into_utf8_str(self) -> Result<Bytes, Error> {
+        match self {
+            Self::TStr(b) => Ok(*b),
             _ => Err(Error::typ(self, Type::Str.as_str())),
         }
     }
@@ -466,7 +478,7 @@ impl Val {
     fn index_opt(self, index: &Self) -> Result<Option<Val>, Error> {
         Ok(match (self, index) {
             (Val::Null, _) => None,
-            (Val::Str(a, Tag::Bytes), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => i
+            (Val::BStr(a), Val::Num(i @ (Num::Int(_) | Num::BigInt(_)))) => i
                 .as_pos_usize()
                 .and_then(|i| abs_index(i, a.len()))
                 .map(|i| usize::from(a[i]).into()),
@@ -475,7 +487,7 @@ impl Val {
                 .and_then(|i| abs_index(i, a.len()))
                 .map(|i| a[i].clone()),
             (Val::Obj(o), i) => o.get(i).cloned(),
-            (v @ (Val::Str(..) | Val::Arr(_)), Val::Obj(o)) => {
+            (v @ (Val::BStr(_) | Val::TStr(_) | Val::Arr(_)), Val::Obj(o)) => {
                 use jaq_core::ValT;
                 let start = o.get(&Val::utf8_str("start"));
                 let end = o.get(&Val::utf8_str("end"));
@@ -512,7 +524,7 @@ impl From<f64> for Val {
 
 impl From<String> for Val {
     fn from(s: String) -> Self {
-        Self::Str(Bytes::from_owner(s), Tag::Utf8)
+        Self::utf8_str(Bytes::from_owner(s))
     }
 }
 
@@ -539,16 +551,18 @@ fn bigint_to_int_saturated(i: &BigInt) -> isize {
 impl core::ops::Add for Val {
     type Output = ValR;
     fn add(self, rhs: Self) -> Self::Output {
+        let concat_bytes = |l, r| {
+            let mut buf = BytesMut::from(l);
+            buf.put(r);
+            buf
+        };
         use Val::*;
         match (self, rhs) {
             // `null` is a neutral element for addition
             (Null, x) | (x, Null) => Ok(x),
             (Num(x), Num(y)) => Ok(Num(x + y)),
-            (Str(l, tag), Str(r, tag_)) if tag == tag_ => {
-                let mut buf = BytesMut::from(l);
-                buf.put(r);
-                Ok(Str(buf.into(), tag))
-            }
+            (BStr(l), BStr(r)) => Ok(Val::byte_str(concat_bytes(*l, r))),
+            (TStr(l), TStr(r)) => Ok(Val::utf8_str(concat_bytes(*l, r))),
             (Arr(mut l), Arr(r)) => {
                 //std::dbg!(Rc::strong_count(&l));
                 Rc::make_mut(&mut l).extend(r.iter().cloned());
@@ -597,15 +611,19 @@ impl core::ops::Mul for Val {
         use Val::*;
         match (self, rhs) {
             (Num(x), Num(y)) => Ok(Num(x * y)),
-            (s @ Str(..), Num(BigInt(i))) | (Num(BigInt(i)), s @ Str(..)) => {
+            (s @ (BStr(_) | TStr(_)), Num(BigInt(i)))
+            | (Num(BigInt(i)), s @ (BStr(_) | TStr(_))) => {
                 s * Num(Int(bigint_to_int_saturated(&i)))
             }
-            (Str(s, tag), Num(Int(i))) | (Num(Int(i)), Str(s, tag)) if i > 0 => {
-                Ok(Self::Str(s.repeat(i as usize).into(), tag))
+            (BStr(s), Num(Int(i))) | (Num(Int(i)), BStr(s)) if i > 0 => {
+                Ok(Self::byte_str(s.repeat(i as usize)))
+            }
+            (TStr(s), Num(Int(i))) | (Num(Int(i)), TStr(s)) if i > 0 => {
+                Ok(Self::utf8_str(s.repeat(i as usize)))
             }
             // string multiplication with negatives or 0 results in null
             // <https://jqlang.github.io/jq/manual/#Builtinoperatorsandfunctions>
-            (Str(..), Num(Int(_))) | (Num(Int(_)), Str(..)) => Ok(Null),
+            (BStr(_) | TStr(_), Num(Int(_))) | (Num(Int(_)), BStr(_) | TStr(_)) => Ok(Null),
             (Obj(mut l), Obj(r)) => {
                 obj_merge(&mut l, r);
                 Ok(Obj(l))
@@ -632,11 +650,13 @@ fn split<'a>(s: &'a [u8], sep: &'a [u8]) -> Box<dyn Iterator<Item = &'a [u8]> + 
 impl core::ops::Div for Val {
     type Output = ValR;
     fn div(self, rhs: Self) -> Self::Output {
+        let fs = |x: Bytes, y: Bytes, into: BytesValFn| {
+            split(&x, &y).map(|s| into(x.slice_ref(s))).collect()
+        };
         match (self, rhs) {
             (Self::Num(x), Self::Num(y)) => Ok(Self::Num(x / y)),
-            (Self::Str(x, tag), Self::Str(y, tag_)) if tag == tag_ => Ok(split(&x, &y)
-                .map(|s| Val::Str(x.slice_ref(s), tag))
-                .collect()),
+            (Self::TStr(x), Self::TStr(y)) => Ok(fs(*x, *y, Val::utf8_str)),
+            (Self::BStr(x), Self::BStr(y)) => Ok(fs(*x, *y, Val::byte_str)),
             (l, r) => Err(Error::math(l, ops::Math::Div, r)),
         }
     }
@@ -677,7 +697,7 @@ impl Ord for Val {
             (Self::Null, Self::Null) => Equal,
             (Self::Bool(x), Self::Bool(y)) => x.cmp(y),
             (Self::Num(x), Self::Num(y)) => x.cmp(y),
-            (Self::Str(x, _), Self::Str(y, _)) => x.cmp(y),
+            (Self::BStr(x) | Self::TStr(x), Self::BStr(y) | Self::TStr(y)) => x.cmp(y),
             (Self::Arr(x), Self::Arr(y)) => x.cmp(y),
             (Self::Obj(x), Self::Obj(y)) => match (x.len(), y.len()) {
                 (0, 0) => Equal,
@@ -707,8 +727,8 @@ impl Ord for Val {
             (Self::Num(_), _) => Less,
             (_, Self::Num(_)) => Greater,
             // etc.
-            (Self::Str(..), _) => Less,
-            (_, Self::Str(..)) => Greater,
+            (Self::BStr(_) | Self::TStr(_), _) => Less,
+            (_, Self::BStr(_) | Self::TStr(_)) => Greater,
             (Self::Arr(_), _) => Less,
             (_, Self::Arr(_)) => Greater,
         }
@@ -721,7 +741,7 @@ impl PartialEq for Val {
             (Self::Null, Self::Null) => true,
             (Self::Bool(x), Self::Bool(y)) => x == y,
             (Self::Num(x), Self::Num(y)) => x == y,
-            (Self::Str(x, _tag), Self::Str(y, _)) => x == y,
+            (Self::BStr(x) | Self::TStr(x), Self::BStr(y) | Self::TStr(y)) => x == y,
             (Self::Arr(x), Self::Arr(y)) => x == y,
             (Self::Obj(x), Self::Obj(y)) => x == y,
             _ => false,
@@ -742,7 +762,7 @@ impl Hash for Val {
             // Num::hash() starts its hash with a 0 or 1, so we start with 2 here
             Self::Null => state.write_u8(2),
             Self::Bool(b) => state.write_u8(if *b { 3 } else { 4 }),
-            Self::Str(b, _) => hash_with(5, b, state),
+            Self::BStr(b) | Self::TStr(b) => hash_with(5, b, state),
             Self::Arr(a) => hash_with(6, a, state),
             Self::Obj(o) => {
                 state.write_u8(7);
