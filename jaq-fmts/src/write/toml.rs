@@ -1,8 +1,8 @@
 //! TOML support.
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
+use bytes::Bytes;
 use core::fmt::{self, Display, Formatter};
-use jaq_json::{Map, Num, Val};
-use toml_edit::{DocumentMut, Formatted, Item, Table, Value};
+use jaq_json::{bstr, write_utf8, Map, Num, Val};
 
 /// Serialisation error.
 #[derive(Debug)]
@@ -11,11 +11,11 @@ pub enum Error {
     Key(Val),
     /// non-table value as root
     Root(Val),
-    /// null or too large integer as value
+    /// null or byte string
     Val(Val),
 }
 
-impl fmt::Display for Error {
+impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Key(v) => write!(f, "TOML keys must be strings, found: {v}"),
@@ -27,30 +27,153 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// TOML root value.
-pub struct Toml(DocumentMut);
-
-impl Display for Toml {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(f)
-    }
+enum Tables<'a> {
+    Table(Table<'a>),
+    Array(Vec<Table<'a>>),
 }
 
-impl TryFrom<&Val> for Toml {
+/// Whole TOML document.
+pub type Root<'a> = Table<'a>;
+
+/// Table key.
+///
+/// See https://toml.io/en/v1.1.0#keys.
+struct Key<'a>(&'a Bytes);
+
+/// Sequence of table keys.
+struct Path<'a>(Vec<Key<'a>>);
+
+/// Object.
+#[derive(Default)]
+pub struct Table<'a> {
+    inlines: Vec<(Key<'a>, Inline<'a>)>,
+    tables: Vec<(Key<'a>, Tables<'a>)>,
+}
+
+impl<'a> TryFrom<&'a Val> for Table<'a> {
     type Error = Error;
-    fn try_from(v: &Val) -> Result<Self, Self::Error> {
-        let obj = val_obj(v).ok_or_else(|| Error::Root(v.clone()));
-        obj.and_then(obj_table).map(DocumentMut::from).map(Self)
+    fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
+        obj_table(val_obj(v).ok_or_else(|| Error::Root(v.clone()))?)
     }
 }
 
-fn obj_table(o: &Map) -> Result<Table, Error> {
-    use jaq_std::ValT;
-    let kvs = o.iter().map(|(k, v)| {
-        let k = k.as_utf8_bytes().ok_or_else(|| Error::Key(k.clone()))?;
-        Ok((String::from_utf8_lossy(k).into_owned(), val_item(v)?))
-    });
-    kvs.collect::<Result<_, _>>()
+enum Inline<'a> {
+    Boolean(bool),
+    Number(&'a Num),
+    String(&'a Bytes),
+    Array(Vec<Self>),
+    Table(Vec<(Key<'a>, Self)>),
+}
+
+impl Display for Root<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write_table(&mut Path(Vec::new()), self, f)
+    }
+}
+
+impl Display for Key<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let is_bare = |c: &u8| c.is_ascii_alphanumeric() || b"_-".contains(c);
+        if self.0.iter().all(is_bare) {
+            bstr(self.0).fmt(f)
+        } else {
+            Inline::String(self.0).fmt(f)
+        }
+    }
+}
+
+impl Display for Path<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let mut iter = self.0.iter();
+        if let Some(x) = iter.next() {
+            x.fmt(f)?;
+        }
+        iter.try_for_each(|k| write!(f, ".{k}"))
+    }
+}
+
+impl Display for Inline<'_> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::Boolean(b) => b.fmt(f),
+            Self::Number(n) => n.fmt(f),
+            Self::String(s) => write_utf8!(f, s, |part| write!(f, "{}", bstr(part))),
+            Self::Array(a) => {
+                "[".fmt(f)?;
+                let mut iter = a.iter();
+                if let Some(x) = iter.next() {
+                    x.fmt(f)?;
+                }
+                iter.try_for_each(|x| write!(f, ", {x}"))?;
+                "]".fmt(f)
+            }
+            Self::Table(t) => {
+                "{".fmt(f)?;
+                let mut iter = t.iter();
+                if let Some((k, v)) = iter.next() {
+                    write!(f, "{k} = {v}")?
+                }
+                iter.try_for_each(|(k, v)| write!(f, ", {k} = {v}"))?;
+                "}".fmt(f)
+            }
+        }
+    }
+}
+
+fn write_table<'a>(path: &mut Path<'a>, t: &Table<'a>, f: &mut Formatter) -> fmt::Result {
+    t.inlines
+        .iter()
+        .try_for_each(|(k, v)| writeln!(f, "{k} = {v}"))?;
+    let path_len = path.0.len();
+
+    let mut newline = !t.inlines.is_empty() || !path.0.is_empty();
+    let mut newline = || core::mem::replace(&mut newline, true);
+
+    for (k, v) in &t.tables {
+        path.0.push(Key(k.0));
+        match v {
+            Tables::Table(t) => {
+                if newline() {
+                    writeln!(f)?
+                }
+                writeln!(f, "[{path}]")?;
+                write_table(path, t, f)?;
+            }
+            Tables::Array(a) => {
+                for t in a {
+                    if newline() {
+                        writeln!(f)?
+                    }
+                    writeln!(f, "[[{path}]]")?;
+                    write_table(path, t, f)?;
+                }
+            }
+        }
+        path.0.pop();
+    }
+    assert_eq!(path.0.len(), path_len);
+    Ok(())
+}
+
+fn obj_table<'a>(o: &'a Map) -> Result<Table<'a>, Error> {
+    let mut table = Table::default();
+    for (k, v) in o.iter() {
+        let k = val_key(k)?;
+        match v {
+            Val::Obj(o) => table.tables.push((k, Tables::Table(obj_table(o)?))),
+            Val::Arr(a) => match a.iter().map(val_obj).collect::<Option<Vec<_>>>() {
+                // all values in the array are objects
+                Some(objs) if !objs.is_empty() => {
+                    let tables = objs.iter().map(|t| obj_table(t));
+                    let tables: Result<_, _> = tables.collect();
+                    table.tables.push((k, Tables::Array(tables?)))
+                }
+                _ => table.inlines.push((k, val_inline(v)?)),
+            },
+            _ => table.inlines.push((k, val_inline(v)?)),
+        }
+    }
+    Ok(table)
 }
 
 fn val_obj(v: &Val) -> Option<&Map> {
@@ -60,35 +183,21 @@ fn val_obj(v: &Val) -> Option<&Map> {
     }
 }
 
-fn val_item(v: &Val) -> Result<Item, Error> {
-    if let Val::Obj(o) = v {
-        return obj_table(o).map(Item::Table);
-    } else if let Val::Arr(a) = v {
-        if let Some(objs) = a.iter().map(val_obj).collect::<Option<Vec<_>>>() {
-            let tables = objs.into_iter().map(obj_table);
-            return tables.collect::<Result<_, _>>().map(Item::ArrayOfTables);
-        }
+fn val_key(v: &Val) -> Result<Key<'_>, Error> {
+    match v {
+        Val::TStr(b) => Ok(Key(b)),
+        _ => Err(Error::Key(v.clone()))?,
     }
-    val_value(v).map(Item::Value)
 }
 
-fn val_value(v: &Val) -> Result<Value, Error> {
-    let fail = || Error::Val(v.clone());
+fn val_inline<'a>(v: &'a Val) -> Result<Inline<'a>, Error> {
+    let kvs = |(k, v)| Ok((val_key(k)?, val_inline(v)?));
     Ok(match v {
-        Val::Null | Val::BStr(_) => Err(fail())?,
-        Val::Bool(b) => Value::Boolean(Formatted::new(*b)),
-        Val::TStr(s) => Value::String(Formatted::new(String::from_utf8_lossy(s).into_owned())),
-        Val::Num(Num::Float(f)) => Value::Float(Formatted::new(*f)),
-        Val::Num(Num::Dec(n)) => val_value(&Val::Num(Num::from_dec_str(n)))?,
-        Val::Num(n @ (Num::Int(_) | Num::BigInt(_))) => {
-            let from_int = |n: &Num| n.as_isize()?.try_into().ok();
-            Value::Integer(Formatted::new(from_int(n).ok_or_else(fail)?))
-        }
-        Val::Arr(a) => a
-            .iter()
-            .map(val_value)
-            .collect::<Result<_, _>>()
-            .map(Value::Array)?,
-        Val::Obj(o) => obj_table(o).map(|t| Value::InlineTable(Table::into_inline_table(t)))?,
+        Val::Null | Val::BStr(_) => Err(Error::Val(v.clone()))?,
+        Val::Bool(b) => Inline::Boolean(*b),
+        Val::TStr(b) => Inline::String(b),
+        Val::Num(n) => Inline::Number(n),
+        Val::Arr(a) => Inline::Array(a.iter().map(val_inline).collect::<Result<_, _>>()?),
+        Val::Obj(o) => Inline::Table(o.iter().map(kvs).collect::<Result<_, _>>()?),
     })
 }
