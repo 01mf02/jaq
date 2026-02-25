@@ -96,6 +96,9 @@ impl Display for Inline<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Boolean(b) => b.fmt(f),
+            Self::Number(Num::Float(f64::INFINITY)) => "inf".fmt(f),
+            Self::Number(Num::Float(f64::NEG_INFINITY)) => "-inf".fmt(f),
+            Self::Number(Num::Float(n)) if n.is_nan() => "nan".fmt(f),
             Self::Number(n) => n.fmt(f),
             Self::String(s) => write_utf8!(f, s, |part| write!(f, "{}", bstr(part))),
             Self::Array(a) => {
