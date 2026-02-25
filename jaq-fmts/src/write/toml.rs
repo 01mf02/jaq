@@ -2,7 +2,7 @@
 use alloc::vec::Vec;
 use bytes::Bytes;
 use core::fmt::{self, Display, Formatter};
-use jaq_json::{bstr, write_utf8, Map, Num, Val};
+use jaq_json::{bstr, write_utf8, Num, Val};
 
 /// Serialisation error.
 #[derive(Debug)]
@@ -27,13 +27,8 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-enum Tables<'a> {
-    Table(Table<'a>),
-    Array(Vec<Table<'a>>),
-}
-
 /// Whole TOML document.
-pub type Root<'a> = Table<'a>;
+pub struct Root<'a>(Table<'a>);
 
 /// Table key.
 ///
@@ -44,30 +39,29 @@ struct Key<'a>(&'a Bytes);
 struct Path<'a>(Vec<Key<'a>>);
 
 /// Object.
-#[derive(Default)]
-pub struct Table<'a> {
-    inlines: Vec<(Key<'a>, Inline<'a>)>,
-    tables: Vec<(Key<'a>, Tables<'a>)>,
-}
+type Table<'a> = Vec<(Key<'a>, Value<'a>)>;
 
-impl<'a> TryFrom<&'a Val> for Table<'a> {
+impl<'a> TryFrom<&'a Val> for Root<'a> {
     type Error = Error;
     fn try_from(v: &'a Val) -> Result<Self, Self::Error> {
-        obj_table(val_obj(v).ok_or_else(|| Error::Root(v.clone()))?)
+        match val_value(v)? {
+            Value::Table(t) => Ok(Root(t)),
+            _ => Err(Error::Root(v.clone())),
+        }
     }
 }
 
-enum Inline<'a> {
+enum Value<'a> {
     Boolean(bool),
     Number(&'a Num),
     String(&'a Bytes),
     Array(Vec<Self>),
-    Table(Vec<(Key<'a>, Self)>),
+    Table(Table<'a>),
 }
 
 impl Display for Root<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write_table(&mut Path(Vec::new()), self, f)
+        write_table(&mut Path(Vec::new()), &self.0, f)
     }
 }
 
@@ -77,7 +71,7 @@ impl Display for Key<'_> {
         if self.0.iter().all(is_bare) {
             bstr(self.0).fmt(f)
         } else {
-            Inline::String(self.0).fmt(f)
+            Value::String(self.0).fmt(f)
         }
     }
 }
@@ -92,7 +86,7 @@ impl Display for Path<'_> {
     }
 }
 
-impl Display for Inline<'_> {
+impl Display for Value<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::Boolean(b) => b.fmt(f),
@@ -123,66 +117,56 @@ impl Display for Inline<'_> {
     }
 }
 
-fn write_table<'a>(path: &mut Path<'a>, t: &Table<'a>, f: &mut Formatter) -> fmt::Result {
-    t.inlines
-        .iter()
-        .try_for_each(|(k, v)| writeln!(f, "{k} = {v}"))?;
-    let path_len = path.0.len();
+fn write_table<'a>(path: &mut Path<'a>, t: &'a Table, f: &mut Formatter) -> fmt::Result {
+    enum Container {
+        Table,
+        Array,
+    }
+    let mut tables: Vec<(Container, &Key, &Table)> = Vec::new();
 
-    let mut newline = !t.inlines.is_empty() || !path.0.is_empty();
-    let mut newline = || core::mem::replace(&mut newline, true);
+    let mut newline = !path.0.is_empty();
+    let mut write_inline = |k, v| {
+        newline = true;
+        writeln!(f, "{k} = {v}")
+    };
 
-    for (k, v) in &t.tables {
-        path.0.push(Key(k.0));
+    for (k, v) in t.iter() {
         match v {
-            Tables::Table(t) => {
-                if newline() {
-                    writeln!(f)?
+            Value::Table(o) => tables.push((Container::Table, k, o)),
+            Value::Array(a) => match a.iter().map(Value::get_table).collect::<Option<Vec<_>>>() {
+                // all values in the array are tables
+                Some(objs) if !objs.is_empty() => {
+                    tables.extend(objs.iter().map(|o| (Container::Array, k, *o)))
                 }
-                writeln!(f, "[{path}]")?;
-                write_table(path, t, f)?;
-            }
-            Tables::Array(a) => {
-                for t in a {
-                    if newline() {
-                        writeln!(f)?
-                    }
-                    writeln!(f, "[[{path}]]")?;
-                    write_table(path, t, f)?;
-                }
-            }
+                _ => write_inline(k, v)?,
+            },
+            _ => write_inline(k, v)?,
         }
+    }
+
+    let path_len = path.0.len();
+    for (container, k, t) in tables {
+        path.0.push(Key(k.0));
+        if core::mem::replace(&mut newline, true) {
+            writeln!(f)?
+        }
+        match container {
+            Container::Table => writeln!(f, "[{path}]")?,
+            Container::Array => writeln!(f, "[[{path}]]")?,
+        }
+        write_table(path, t, f)?;
         path.0.pop();
     }
     assert_eq!(path.0.len(), path_len);
     Ok(())
 }
 
-fn obj_table<'a>(o: &'a Map) -> Result<Table<'a>, Error> {
-    let mut table = Table::default();
-    for (k, v) in o.iter() {
-        let k = val_key(k)?;
-        match v {
-            Val::Obj(o) => table.tables.push((k, Tables::Table(obj_table(o)?))),
-            Val::Arr(a) => match a.iter().map(val_obj).collect::<Option<Vec<_>>>() {
-                // all values in the array are objects
-                Some(objs) if !objs.is_empty() => {
-                    let tables = objs.iter().map(|t| obj_table(t));
-                    let tables: Result<_, _> = tables.collect();
-                    table.tables.push((k, Tables::Array(tables?)))
-                }
-                _ => table.inlines.push((k, val_inline(v)?)),
-            },
-            _ => table.inlines.push((k, val_inline(v)?)),
+impl Value<'_> {
+    fn get_table(&self) -> Option<&Table<'_>> {
+        match self {
+            Value::Table(t) => Some(t),
+            _ => None,
         }
-    }
-    Ok(table)
-}
-
-fn val_obj(v: &Val) -> Option<&Map> {
-    match v {
-        Val::Obj(o) => Some(o),
-        _ => None,
     }
 }
 
@@ -193,14 +177,14 @@ fn val_key(v: &Val) -> Result<Key<'_>, Error> {
     }
 }
 
-fn val_inline<'a>(v: &'a Val) -> Result<Inline<'a>, Error> {
-    let kvs = |(k, v)| Ok((val_key(k)?, val_inline(v)?));
+fn val_value<'a>(v: &'a Val) -> Result<Value<'a>, Error> {
+    let kvs = |(k, v)| Ok((val_key(k)?, val_value(v)?));
     Ok(match v {
         Val::Null | Val::BStr(_) => Err(Error::Val(v.clone()))?,
-        Val::Bool(b) => Inline::Boolean(*b),
-        Val::TStr(b) => Inline::String(b),
-        Val::Num(n) => Inline::Number(n),
-        Val::Arr(a) => Inline::Array(a.iter().map(val_inline).collect::<Result<_, _>>()?),
-        Val::Obj(o) => Inline::Table(o.iter().map(kvs).collect::<Result<_, _>>()?),
+        Val::Bool(b) => Value::Boolean(*b),
+        Val::TStr(b) => Value::String(b),
+        Val::Num(n) => Value::Number(n),
+        Val::Arr(a) => Value::Array(a.iter().map(val_value).collect::<Result<_, _>>()?),
+        Val::Obj(o) => Value::Table(o.iter().map(kvs).collect::<Result<_, _>>()?),
     })
 }
