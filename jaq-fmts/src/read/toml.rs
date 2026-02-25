@@ -1,38 +1,27 @@
 //! TOML support.
-use alloc::string::{String, ToString};
 use jaq_json::{Num, Val};
-use toml_edit::{Document, Item, Table, TomlError as Error, Value};
+use toml_span::{Error, Value};
 
 /// Parse a TOML document from a string.
 pub fn parse(s: &str) -> Result<Val, Error> {
-    table(s.parse::<Document<String>>()?.into_table())
+    toml_span::parse(s).map(from)
 }
 
-fn value(v: Value) -> Result<Val, Error> {
-    Ok(match v {
-        Value::String(s) => Val::utf8_str(s.into_value()),
-        Value::Integer(i) => Val::Num(Num::from_integral(i.into_value())),
-        Value::Float(f) => Val::Num(Num::Float(f.into_value())),
-        Value::Boolean(b) => Val::Bool(b.into_value()),
-        Value::Array(a) => return a.into_iter().map(value).collect(),
-        Value::InlineTable(t) => return table(t.into_table()),
-        Value::Datetime(d) => Val::utf8_str(d.into_value().to_string()),
-    })
-}
-
-fn item(item: Item) -> Result<Val, Error> {
-    match item {
-        // TODO: what is this? can this be triggered?
-        Item::None => panic!(),
-        Item::Value(v) => value(v),
-        Item::Table(t) => table(t),
-        Item::ArrayOfTables(a) => a.into_array().into_iter().map(value).collect(),
+fn from(mut v: Value) -> Val {
+    use toml_span::value::ValueInner::*;
+    match v.take() {
+        String(s) => Val::from(s.into_owned()),
+        Integer(i) => Val::Num(Num::from_integral(i)),
+        Float(f) => Val::from(f),
+        Boolean(b) => Val::from(b),
+        Array(a) => a.into_iter().map(from).collect(),
+        Table(t) => {
+            let mut kvs: Vec<_> = t.into_iter().collect();
+            kvs.sort_by_key(|(k, _v)| k.span.start);
+            let kvs = kvs
+                .into_iter()
+                .map(|(k, v)| (Val::from(k.name.into_owned()), from(v)));
+            Val::obj(kvs.collect())
+        }
     }
-}
-
-fn table(t: Table) -> Result<Val, Error> {
-    t.into_iter()
-        .map(|(k, v)| Ok((k.into(), item(v)?)))
-        .collect::<Result<_, _>>()
-        .map(Val::obj)
 }

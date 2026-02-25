@@ -28,12 +28,12 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
         (_, Format::Cbor) => cbor::write(w, val)?,
         (_, Format::Json | Format::Raw | Format::Raw0) => jaq_json::write::write(w, pp, 0, val)?,
         (_, Format::Yaml) => yaml::write(w, pp, 0, val)?,
-        (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Toml::try_from(val))?)?,
+        (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Root::try_from(val))?)?,
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
     };
 
     w.write_all(match format {
-        Format::Cbor => b"",
+        Format::Cbor | Format::Toml => b"",
         Format::Raw0 => b"\0",
         Format::Yaml => b"\n",
         _ if *join => b"",

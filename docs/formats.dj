@@ -190,14 +190,59 @@ jaq can also read sequences of concatenated CBOR values.
 ## TOML
 
 [TOML](https://toml.io) is a configuration file format.
+We can read and query TOML files like JSON files:
+
+```
+$ jaq '.profile.release["codegen-units"]' Cargo.toml
+1
+```
+
+Furthermore, we can also write TOML files:
+
+```
+$ echo 'a = {b = 1, c = {d = nan, e = [], f = [{g = inf}, {h = -inf}]}}' | jaq --from toml --to toml
+[a]
+b = 1
+
+[a.c]
+d = nan
+e = []
+
+[[a.c.f]]
+g = inf
+
+[[a.c.f]]
+h = -inf
+```
+
 Compared to jaq values,
 TOML has date-time values, but
 TOML has neither
 `null`,
 byte strings, nor
 non-string object keys.
+Furthermore, the root of a TOML value must be an object.
+That means that TOML writing may fail in various ways:
+
+- `0                | try totoml catch -1 --> -1` (non-object root)
+- `{a: null       } | try totoml catch -1 --> -1` (null)
+- `{a: 0 | tobytes} | try totoml catch -1 --> -1` (byte string)
+- `{(1): 2        } | try totoml catch -1 --> -1` (non-string object key)
+
+jaq can read [TOML 1.1.0](https://toml.io/en/v1.1.0) values,
+except for date-time values.
+jaq should generally be able to read TOML values it has written,
+with the exception of big integers.
+The next example creates an object `{a: 2^1024}` containing a big integer,
+successfully writes it as TOML, then fails when trying to read it back:
+
+`{a: nth(1024; 1 | recurse(.*2))} | totoml | try fromtoml catch -1 --> -1`
 
 When writing TOML, jaq converts invalid UTF-8 sequences as for [CBOR](#cbor).
+That means that even if reading a written TOML value succeeds,
+its output may not be the same as its input:
+
+`{a: [-255] | implode} | (totoml | fromtoml) == . --> false`
 
 
 ## XML
