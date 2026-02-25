@@ -157,6 +157,23 @@ gojq is much faster on `tree-flatten` because it implements the filter `flatten`
 
 # Security
 
+jaq tries to guarantee that:
+
+- It does not panic (except in cases of resource exhaustion, see below).
+- It does not corrupt memory, i.e. it is memory-safe.
+- It does not allow input data and jq filters to initiate I/O operations
+  (except for reading files by jq filters before filter execution).
+
+Any case where such a guarantee is broken is a bug and should be reported.
+
+On the other hand,
+jaq does not take countermeasures against any kind of resource exhaustion.
+That means that jaq may take unlimited time, memory, or stack space.
+For example, this may lead to stack overflows when:
+
+- Reading input data: `jaq -nr 'repeat("[")' | jaq`
+- Running jq filters: `jaq -n 'def f: 1+f; f'`
+
 jaq's core has been audited by
 [Radically Open Security](https://www.radicallyopensecurity.com/)
 as part of an [NLnet](https://nlnet.nl/) grant ---
