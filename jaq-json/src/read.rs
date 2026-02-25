@@ -8,11 +8,41 @@ use hifijson::{LexAlloc, SliceLexer};
 use std::io;
 
 /// Eat whitespace/comments, then peek at next character.
+///
+/// Supports `#` (hash), `//` (single-line), and `/* */` (block) comments.
 fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     loop {
         lexer.eat_whitespace();
         match lexer.peek_next() {
             Some(b'#') => lexer.skip_until(|c| c == b'\n'),
+            Some(b'/') => {
+                // Peek consumed nothing; consume the '/'
+                lexer.take_next();
+                match lexer.peek_next() {
+                    Some(b'/') => {
+                        // Single-line comment: skip to end of line
+                        lexer.skip_until(|c| c == b'\n');
+                    }
+                    Some(b'*') => {
+                        // Block comment: consume '*' then skip until '*/'
+                        lexer.take_next();
+                        let mut prev = 0u8;
+                        lexer.skip_until(|c| {
+                            let found = prev == b'*' && c == b'/';
+                            prev = c;
+                            found
+                        });
+                        // skip_until leaves '/' unconsumed when it finds '*/'; consume it.
+                        // If the comment is unterminated, take_next returns None,
+                        // and the next loop iteration's peek_next also returns None.
+                        lexer.take_next();
+                    }
+                    // Not a comment -- just a bare '/' which we already consumed.
+                    // We cannot "put it back", but '/' is not a valid JSON start token,
+                    // so the caller will get an error anyway. Return the next peeked byte.
+                    next => return next,
+                }
+            }
             next => return next,
         }
     }
