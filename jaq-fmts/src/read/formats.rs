@@ -13,7 +13,7 @@ type Vals<'a> = BoxIter<'a, io::Result<Val>>;
 pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
     use Format::*;
     match fmt {
-        Raw | Raw0 | Json | Cbor => Ok(String::new()),
+        Raw | Raw0 | Json | Jsonc | Cbor => Ok(String::new()),
         Toml | Xml | Yaml => io::read_to_string(read),
     }
 }
@@ -24,7 +24,7 @@ pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
 pub fn bytes_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
-        Raw | Raw0 | Json | Cbor => "",
+        Raw | Raw0 | Json | Jsonc | Cbor => "",
         Toml | Xml | Yaml => core::str::from_utf8(bytes).map_err(invalid_data)?,
     })
 }
@@ -42,7 +42,7 @@ pub fn read<'a>(fmt: Format, read: impl io::BufRead + 'a, s: &'a str, slurp: boo
         Format::Raw => Box::new(read.byte_lines().map(|r| r.map(Val::utf8_str))),
         Format::Raw0 => collect_if(slurp, read.byte_records(0).map(|r| r.map(Val::utf8_str))),
         Format::Cbor => collect_if(slurp, cbor::read_many(read)),
-        Format::Json => collect_if(slurp, json::read_many(read)),
+        Format::Json | Format::Jsonc => collect_if(slurp, json::read_many(read)),
         Format::Toml => box_once(toml::parse(s).map_err(invalid_data)),
         Format::Xml => collect_if(slurp, xml::parse_many(s).map(map_invalid_data)),
         Format::Yaml => collect_if(slurp, yaml::parse_many(s).map(map_invalid_data)),
@@ -58,7 +58,7 @@ pub fn parse<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals
         Format::Raw if slurp => box_once(Ok(Val::utf8_str(bytes.clone()))),
         Format::Raw => Box::new(bytes.lines().map(slice_to_str)),
         Format::Raw0 => collect_if(slurp, nul_sep(bytes).map(slice_to_str)),
-        Format::Json => collect_if(slurp, json::parse_many(bytes).map(map_invalid_data)),
+        Format::Json | Format::Jsonc => collect_if(slurp, json::parse_many(bytes).map(map_invalid_data)),
         Format::Cbor => collect_if(slurp, cbor::parse_many(bytes).map(map_invalid_data)),
         Format::Toml | Format::Xml | Format::Yaml => read(fmt, &[][..], s, slurp),
     }
