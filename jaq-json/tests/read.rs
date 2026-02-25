@@ -3,7 +3,7 @@
 //! These tests verify that `//` single-line comments, `/* */` block comments,
 //! and the existing `#` comments are all handled correctly.
 
-use jaq_json::read::parse_single;
+use jaq_json::read::{parse_many, parse_single};
 use jaq_json::Val;
 
 /// Helper: parse a single value from a byte slice, expecting success.
@@ -124,6 +124,31 @@ fn mixed_comments() {
     let input = b"# hash comment\n// slash comment\n/* block */ 42";
     let val = single_ok(input);
     assert_eq!(val, Val::from(42isize));
+}
+
+// --------------------------------------------------------------------------
+// parse_many with comments between values
+// --------------------------------------------------------------------------
+
+#[test]
+fn parse_many_with_comments() {
+    let input = b"1 // first\n2 /* second */ 3";
+    let vals: Vec<Val> = parse_many(input).collect::<Result<_, _>>().unwrap();
+    assert_eq!(vals.len(), 3);
+    assert_eq!(vals[0], Val::from(1isize));
+    assert_eq!(vals[1], Val::from(2isize));
+    assert_eq!(vals[2], Val::from(3isize));
+}
+
+// --------------------------------------------------------------------------
+// Nested block comments (not supported — ends at first */)
+// --------------------------------------------------------------------------
+
+#[test]
+fn nested_block_comment_not_supported() {
+    // The comment ends at the first */, leaving " */" as trailing junk
+    let input = b"/* outer /* inner */ */ 42";
+    single_err(input);
 }
 
 // --------------------------------------------------------------------------
