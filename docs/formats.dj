@@ -200,19 +200,19 @@ $ jaq '.profile.release["codegen-units"]' Cargo.toml
 Furthermore, we can also write TOML files:
 
 ```
-$ echo 'a = {b = 1, c = {d = 2, e = [], f = [{g = 3}, {h = 4}]}}' | jaq --from toml --to toml
+$ echo 'a = {b = 1, c = {d = nan, e = [], f = [{g = inf}, {h = -inf}]}}' | jaq --from toml --to toml
 [a]
 b = 1
 
 [a.c]
-d = 2
+d = nan
 e = []
 
 [[a.c.f]]
-g = 3
+g = inf
 
 [[a.c.f]]
-h = 4
+h = -inf
 ```
 
 Compared to jaq values,
