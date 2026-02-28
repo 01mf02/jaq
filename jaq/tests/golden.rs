@@ -183,3 +183,10 @@ test!(
     "0",
     r#"["bcddd",[1,2],3]"#
 );
+
+test!(
+    json5_input,
+    &["-c", "--from", "json5", "."],
+    "{ name: 'jaq', version: 0xff, items: [1, 2, 3,], }",
+    r#"{"name":"jaq","version":255,"items":[1,2,3]}"#
+);

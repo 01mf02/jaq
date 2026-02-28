@@ -1,9 +1,10 @@
-//! Tests for comment support in the JSON reader.
+//! Tests for comment support and JSON5 in the JSON reader.
 //!
 //! Plain JSON tests use `parse_single` / `parse_many` (only `#` comments).
 //! JSONC tests use `parse_single_jsonc` / `parse_many_jsonc` (`#`, `//`, `/* */`).
+//! JSON5 tests use `parse_single_json5` / `parse_many_json5` (all JSON5 features).
 
-use jaq_json::read::{parse_many_jsonc, parse_single, parse_single_jsonc};
+use jaq_json::read::{parse_many_jsonc, parse_single, parse_single_jsonc, parse_single_json5};
 use jaq_json::Val;
 
 /// Helper: parse a single JSONC value, expecting success.
@@ -14,6 +15,16 @@ fn single_ok(input: &[u8]) -> Val {
 /// Helper: parse a single JSONC value, expecting an error.
 fn single_err(input: &[u8]) {
     parse_single_jsonc(input).expect_err("expected parse error");
+}
+
+/// Helper: parse a single JSON5 value, expecting success.
+fn json5_ok(input: &[u8]) -> Val {
+    parse_single_json5(input).expect("expected successful JSON5 parse")
+}
+
+/// Helper: parse a single JSON5 value, expecting an error.
+fn json5_err(input: &[u8]) {
+    parse_single_json5(input).expect_err("expected JSON5 parse error");
 }
 
 // --------------------------------------------------------------------------
@@ -548,4 +559,360 @@ fn block_comment_star_at_eof_is_error() {
 #[test]
 fn block_comment_with_many_stars_no_close() {
     single_err(b"/* **** ");
+}
+
+// ==========================================================================
+// JSON5: Trailing commas
+// ==========================================================================
+
+#[test]
+fn json5_trailing_comma_array() {
+    let val = json5_ok(b"[1, 2, 3,]");
+    match &val {
+        Val::Arr(arr) => {
+            assert_eq!(arr.len(), 3);
+            assert_eq!(arr[0], Val::from(1isize));
+            assert_eq!(arr[1], Val::from(2isize));
+            assert_eq!(arr[2], Val::from(3isize));
+        }
+        other => panic!("expected Arr, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_trailing_comma_object() {
+    let val = json5_ok(b"{\"a\": 1, \"b\": 2,}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("a".to_string())), Some(&Val::from(1isize)));
+            assert_eq!(obj.get(&Val::from("b".to_string())), Some(&Val::from(2isize)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_trailing_comma_nested() {
+    let val = json5_ok(b"{\"a\": [1, 2,], \"b\": {\"c\": 3,},}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.len(), 2);
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_trailing_comma_single_element() {
+    let val = json5_ok(b"[42,]");
+    match &val {
+        Val::Arr(arr) => {
+            assert_eq!(arr.len(), 1);
+            assert_eq!(arr[0], Val::from(42isize));
+        }
+        other => panic!("expected Arr, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_empty_array_no_comma() {
+    let val = json5_ok(b"[]");
+    match &val {
+        Val::Arr(arr) => assert_eq!(arr.len(), 0),
+        other => panic!("expected empty Arr, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_empty_object_no_comma() {
+    let val = json5_ok(b"{}");
+    match &val {
+        Val::Obj(obj) => assert!(obj.is_empty()),
+        other => panic!("expected empty Obj, got {:?}", other),
+    }
+}
+
+// ==========================================================================
+// JSON5: Single-quoted strings
+// ==========================================================================
+
+#[test]
+fn json5_single_quoted_string() {
+    assert_eq!(json5_ok(b"'hello'"), Val::from("hello".to_string()));
+}
+
+#[test]
+fn json5_single_quoted_with_escapes() {
+    assert_eq!(json5_ok(b"'hello\\nworld'"), Val::from("hello\nworld".to_string()));
+}
+
+#[test]
+fn json5_single_quoted_with_escaped_quote() {
+    assert_eq!(json5_ok(b"'it\\'s'"), Val::from("it's".to_string()));
+}
+
+#[test]
+fn json5_single_quoted_with_double_quote() {
+    assert_eq!(json5_ok(b"'say \"hi\"'"), Val::from("say \"hi\"".to_string()));
+}
+
+#[test]
+fn json5_single_quoted_empty() {
+    assert_eq!(json5_ok(b"''"), Val::from("".to_string()));
+}
+
+#[test]
+fn json5_single_quoted_tab_escape() {
+    assert_eq!(json5_ok(b"'a\\tb'"), Val::from("a\tb".to_string()));
+}
+
+#[test]
+fn json5_single_quoted_unicode_escape() {
+    // \u0041 = 'A'
+    assert_eq!(json5_ok(b"'\\u0041'"), Val::from("A".to_string()));
+}
+
+#[test]
+fn json5_unterminated_single_quoted_string() {
+    json5_err(b"'unterminated");
+}
+
+#[test]
+fn json5_single_quoted_as_object_key() {
+    let val = json5_ok(b"{'key': 42}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("key".to_string())), Some(&Val::from(42isize)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+// ==========================================================================
+// JSON5: Unquoted keys
+// ==========================================================================
+
+#[test]
+fn json5_unquoted_key_simple() {
+    let val = json5_ok(b"{name: \"jaq\"}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("name".to_string())), Some(&Val::from("jaq".to_string())));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_unquoted_key_with_underscore() {
+    let val = json5_ok(b"{_private: 1}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("_private".to_string())), Some(&Val::from(1isize)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_unquoted_key_with_dollar() {
+    let val = json5_ok(b"{$ref: 1}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("$ref".to_string())), Some(&Val::from(1isize)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_unquoted_key_with_digits() {
+    let val = json5_ok(b"{abc123: true}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("abc123".to_string())), Some(&Val::Bool(true)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_unquoted_key_keyword() {
+    // "null", "true", "false" as unquoted keys — these should be treated as identifiers, not values
+    let val = json5_ok(b"{null: 1, true: 2, false: 3}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.len(), 3);
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_invalid_unquoted_key_starts_with_digit() {
+    json5_err(b"{123abc: 1}");
+}
+
+// ==========================================================================
+// JSON5: Hex numbers
+// ==========================================================================
+
+#[test]
+fn json5_hex_lowercase() {
+    assert_eq!(json5_ok(b"0xff"), Val::from(255isize));
+}
+
+#[test]
+fn json5_hex_uppercase() {
+    assert_eq!(json5_ok(b"0XFF"), Val::from(255isize));
+}
+
+#[test]
+fn json5_hex_mixed_case() {
+    assert_eq!(json5_ok(b"0x1A2b3C"), Val::from(0x1A2B3Cisize));
+}
+
+#[test]
+fn json5_hex_negative() {
+    assert_eq!(json5_ok(b"-0xff"), Val::from(-255isize));
+}
+
+#[test]
+fn json5_hex_zero() {
+    assert_eq!(json5_ok(b"0x0"), Val::from(0isize));
+}
+
+#[test]
+fn json5_hex_no_digits_error() {
+    json5_err(b"0x");
+}
+
+#[test]
+fn json5_hex_in_object() {
+    let val = json5_ok(b"{\"version\": 0xFF}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(
+                obj.get(&Val::from("version".to_string())),
+                Some(&Val::from(255isize))
+            );
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+// ==========================================================================
+// JSON5: Leading decimal
+// ==========================================================================
+
+#[test]
+fn json5_leading_decimal() {
+    let val = json5_ok(b".5");
+    // Leading decimal is stored as Dec("0.5")
+    assert_eq!(format!("{val}"), "0.5");
+}
+
+#[test]
+fn json5_leading_decimal_with_exponent() {
+    let val = json5_ok(b".5e2");
+    assert_eq!(format!("{val}"), "0.5e2");
+}
+
+#[test]
+fn json5_bare_dot_no_digit_error() {
+    json5_err(b".abc");
+}
+
+// ==========================================================================
+// JSON5: Trailing decimal
+// ==========================================================================
+
+#[test]
+fn json5_trailing_decimal() {
+    let val = json5_ok(b"5.");
+    // Trailing decimal stored as Dec("5.")
+    assert_eq!(format!("{val}"), "5.");
+}
+
+// ==========================================================================
+// JSON5: Combined features
+// ==========================================================================
+
+#[test]
+fn json5_combined_all_features() {
+    let input = b"{
+        name: 'jaq',
+        version: 0xff,
+        items: [1, 2, 3,],
+        ratio: .5,
+        // a comment
+        count: 5.,
+    }";
+    let val = json5_ok(input);
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("name".to_string())), Some(&Val::from("jaq".to_string())));
+            assert_eq!(obj.get(&Val::from("version".to_string())), Some(&Val::from(255isize)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+#[test]
+fn json5_comments_inherited_from_jsonc() {
+    let val = json5_ok(b"// header\n/* block */ {key: 42}");
+    match &val {
+        Val::Obj(obj) => {
+            assert_eq!(obj.get(&Val::from("key".to_string())), Some(&Val::from(42isize)));
+        }
+        other => panic!("expected Obj, got {:?}", other),
+    }
+}
+
+// ==========================================================================
+// Plain JSON rejects JSON5 features
+// ==========================================================================
+
+#[test]
+fn plain_json_rejects_trailing_comma() {
+    parse_single(b"[1, 2,]").expect_err("plain JSON should reject trailing commas");
+}
+
+#[test]
+fn plain_json_rejects_single_quoted_string() {
+    parse_single(b"'hello'").expect_err("plain JSON should reject single-quoted strings");
+}
+
+#[test]
+fn plain_json_rejects_unquoted_key() {
+    parse_single(b"{key: 1}").expect_err("plain JSON should reject unquoted keys");
+}
+
+#[test]
+fn plain_json_rejects_hex_number() {
+    parse_single(b"0xff").expect_err("plain JSON should reject hex numbers");
+}
+
+#[test]
+fn plain_json_rejects_leading_decimal() {
+    parse_single(b".5").expect_err("plain JSON should reject leading decimal");
+}
+
+// ==========================================================================
+// JSONC also rejects JSON5 features (only comments are added)
+// ==========================================================================
+
+#[test]
+fn jsonc_rejects_trailing_comma() {
+    single_err(b"[1, 2,]");
+}
+
+#[test]
+fn jsonc_rejects_single_quoted_string() {
+    single_err(b"'hello'");
+}
+
+#[test]
+fn jsonc_rejects_unquoted_key() {
+    single_err(b"{key: 1}");
 }

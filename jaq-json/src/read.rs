@@ -145,6 +145,45 @@ where
     }
 }
 
+/// Like [`seq_ws`], but allows a trailing comma before the closing delimiter.
+fn seq_ws_trailing<L: Lex, E: From<Expect>, PF, F>(
+    lexer: &mut L,
+    end: u8,
+    mut pf: PF,
+    mut f: F,
+) -> Result<(), E>
+where
+    PF: FnMut(&mut L) -> Result<Option<u8>, E>,
+    F: FnMut(u8, &mut L) -> Result<(), E>,
+{
+    let mut next = pf(lexer)?.ok_or(Expect::ValueOrEnd)?;
+    if next == end {
+        lexer.take_next();
+        return Ok(());
+    }
+
+    loop {
+        f(next, lexer)?;
+        next = pf(lexer)?.ok_or(Expect::CommaOrEnd)?;
+        if next == end {
+            lexer.take_next();
+            return Ok(());
+        } else if next == b',' {
+            lexer.take_next();
+            next = match pf(lexer)? {
+                Some(n) if n == end => {
+                    lexer.take_next();
+                    return Ok(());
+                }
+                Some(n) => n,
+                None => return Err(Expect::Value.into()),
+            };
+        } else {
+            return Err(Expect::CommaOrEnd)?;
+        }
+    }
+}
+
 /// Like [`Lex::expect`], but accepts a peek function returning `Result`.
 fn expect_ws<L: Lex, E>(
     lexer: &mut L,
@@ -193,6 +232,224 @@ fn parse_jsonc<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, Cause> {
 }
 
 // ---------------------------------------------------------------------------
+// JSON5: supports all JSONC features plus trailing commas, single-quoted
+// strings, unquoted keys, hex numbers, and leading/trailing decimal points
+// ---------------------------------------------------------------------------
+
+/// Parse a single-quoted string (JSON5 extension).
+///
+/// Handles the same escape sequences as double-quoted strings.
+/// Terminates on unescaped `'`. Allows unescaped `"` inside.
+fn parse_string_sq<L: LexAlloc>(lexer: &mut L) -> Result<Vec<u8>, Cause> {
+    use hifijson::escape;
+    let mut out = Vec::new();
+    loop {
+        match lexer.take_next() {
+            None => return Err(Cause::UnterminatedString),
+            Some(b'\'') => return Ok(out),
+            Some(b'\\') => {
+                let c = lexer.take_next().ok_or(Cause::UnterminatedString)?;
+                match c {
+                    b'\'' => out.push(b'\''),
+                    b'"' => out.push(b'"'),
+                    _ => {
+                        let ch = escape::Lex::escape(lexer, c)
+                            .map_err(|e| hifijson::Error::Str(hifijson::str::Error::Escape(e)))?;
+                        out.extend(ch.encode_utf8(&mut [0; 4]).as_bytes());
+                    }
+                }
+            }
+            Some(c) => out.push(c),
+        }
+    }
+}
+
+/// Parse an unquoted identifier (JSON5 object keys).
+///
+/// Accepts ASCII identifiers: `[a-zA-Z_$][a-zA-Z0-9_$]*`.
+fn parse_identifier<L: hifijson::Lex>(first: u8, lexer: &mut L) -> Result<Vec<u8>, Cause> {
+    if !matches!(first, b'a'..=b'z' | b'A'..=b'Z' | b'_' | b'$') {
+        return Err(Cause::InvalidIdentifier);
+    }
+    lexer.take_next(); // consume the peeked first byte
+    let mut ident = Vec::new();
+    ident.push(first);
+    while let Some(c) = lexer.peek_next() {
+        if matches!(c, b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'_' | b'$') {
+            lexer.take_next();
+            ident.push(c);
+        } else {
+            break;
+        }
+    }
+    Ok(ident)
+}
+
+/// Parse a hex number literal after the `0x` / `0X` prefix has been consumed.
+fn parse_hex<L: hifijson::Lex>(lexer: &mut L) -> Result<Num, Cause> {
+    let mut digits = Vec::new();
+    while let Some(c) = lexer.peek_next() {
+        if c.is_ascii_hexdigit() {
+            lexer.take_next();
+            digits.push(c);
+        } else {
+            break;
+        }
+    }
+    if digits.is_empty() {
+        return Err(Cause::InvalidHexNumber);
+    }
+    let s = core::str::from_utf8(&digits).unwrap();
+    Num::from_str_radix(s, 16).ok_or(Cause::InvalidHexNumber)
+}
+
+/// Parse a leading-decimal number (e.g. `.5`, `.5e2`).
+///
+/// The leading `.` has already been consumed by the caller.
+fn parse_leading_decimal<L: LexAlloc>(lexer: &mut L) -> Result<Num, Cause> {
+    let mut s = alloc::string::String::from("0.");
+    let mut has_digit = false;
+    while let Some(c) = lexer.peek_next() {
+        if c.is_ascii_digit() {
+            lexer.take_next();
+            s.push(c as char);
+            has_digit = true;
+        } else {
+            break;
+        }
+    }
+    if !has_digit {
+        return Err(Cause::Hifi(hifijson::Error::Num(
+            hifijson::num::Error::ExpectedDigit,
+        )));
+    }
+    // Handle optional exponent: e/E followed by optional +/- and digits
+    if let Some(c) = lexer.peek_next() {
+        if c == b'e' || c == b'E' {
+            lexer.take_next();
+            s.push(c as char);
+            if let Some(sign) = lexer.peek_next() {
+                if sign == b'+' || sign == b'-' {
+                    lexer.take_next();
+                    s.push(sign as char);
+                }
+            }
+            let mut exp_digits = false;
+            while let Some(d) = lexer.peek_next() {
+                if d.is_ascii_digit() {
+                    lexer.take_next();
+                    s.push(d as char);
+                    exp_digits = true;
+                } else {
+                    break;
+                }
+            }
+            if !exp_digits {
+                return Err(Cause::Hifi(hifijson::Error::Num(
+                    hifijson::num::Error::ExpectedDigit,
+                )));
+            }
+        }
+    }
+    Ok(Num::Dec(s.into()))
+}
+
+/// Parse a number in JSON5 mode.
+///
+/// Extends the standard parser with hex literal support (`0x` / `0X`).
+fn parse_num_json5<L: LexAlloc>(lexer: &mut L) -> Result<Num, Cause> {
+    // Use hifijson's num_string_with to get the raw number string
+    let num = hifijson::num::Num::signed_digits();
+    let (num, parts) = lexer.num_string_with(num).unvalidated();
+    let num = num.as_ref();
+    Ok(match num {
+        "+" if lexer.strip_prefix(b"Infinity") => Num::Float(f64::INFINITY),
+        "-" if lexer.strip_prefix(b"Infinity") => Num::Float(f64::NEG_INFINITY),
+        // Detect hex prefix: hifijson will have consumed "0" then stopped at "x"
+        "0" | "+0" | "-0" if lexer.strip_prefix(b"x") || lexer.strip_prefix(b"X") => {
+            let hex = parse_hex(lexer)?;
+            if num == "-0" {
+                // Negate the parsed hex value
+                match hex {
+                    Num::Int(n) => Num::Int(-n),
+                    other => other,
+                }
+            } else {
+                hex
+            }
+        }
+        // Trailing decimal: hifijson returns e.g. "5." — accept it
+        _ if num.ends_with('.') && num.len() > 1 => {
+            let trimmed = &num[..num.len() - 1];
+            if trimmed.bytes().all(|c| c.is_ascii_digit() || c == b'+' || c == b'-') {
+                Num::Dec(num.to_string().into())
+            } else {
+                Err(Cause::Hifi(hifijson::Error::Num(hifijson::num::Error::ExpectedDigit)))?
+            }
+        }
+        _ if num.ends_with(|c: char| c.is_ascii_digit()) => {
+            if parts.is_int() {
+                Num::from_str_radix(num, 10).unwrap()
+            } else {
+                Num::Dec(num.to_string().into())
+            }
+        }
+        _ => Err(Cause::Hifi(hifijson::Error::Num(hifijson::num::Error::ExpectedDigit)))?,
+    })
+}
+
+/// Parse a JSON5 value.
+fn parse_json5<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, Cause> {
+    Ok(match next {
+        b'n' if lexer.strip_prefix(b"null") => Val::Null,
+        b't' if lexer.strip_prefix(b"true") => Val::Bool(true),
+        b'f' if lexer.strip_prefix(b"false") => Val::Bool(false),
+        b'b' if lexer.strip_prefix(b"b\"") => Val::byte_str(parse_string(lexer, true)?),
+        b'N' if lexer.strip_prefix(b"NaN") => Val::Num(Num::Float(f64::NAN)),
+        b'I' if lexer.strip_prefix(b"Infinity") => Val::Num(Num::Float(f64::INFINITY)),
+        b'0'..=b'9' | b'+' | b'-' => Val::Num(parse_num_json5(lexer)?),
+        b'.' => {
+            // Leading decimal: .5, .5e2
+            lexer.take_next(); // consume the peeked '.'
+            Val::Num(parse_leading_decimal(lexer)?)
+        }
+        b'"' => Val::utf8_str(parse_string(lexer.discarded(), false)?),
+        b'\'' => {
+            lexer.take_next(); // consume the peeked '\''
+            Val::utf8_str(parse_string_sq(lexer)?)
+        }
+        b'[' => Val::Arr({
+            let mut arr = Vec::new();
+            seq_ws_trailing(lexer.discarded(), b']', ws_tk_jsonc, |next, lexer| {
+                arr.push(parse_json5(next, lexer)?);
+                Ok::<_, Cause>(())
+            })?;
+            arr.into()
+        }),
+        b'{' => Val::obj({
+            let mut obj = Map::default();
+            seq_ws_trailing(lexer.discarded(), b'}', ws_tk_jsonc, |next, lexer| {
+                // Key: double-quoted string, single-quoted string, or unquoted identifier
+                let key = match next {
+                    b'"' => Val::utf8_str(parse_string(lexer.discarded(), false)?),
+                    b'\'' => {
+                        lexer.take_next(); // consume the peeked '\''
+                        Val::utf8_str(parse_string_sq(lexer)?)
+                    }
+                    c => Val::utf8_str(parse_identifier(c, lexer)?),
+                };
+                expect_ws(lexer, ws_tk_jsonc, b':')?.ok_or(Expect::Colon)?;
+                let value = parse_json5(ws_tk_jsonc(lexer)?.ok_or(Expect::Value)?, lexer)?;
+                obj.insert(key, value);
+                Ok::<_, Cause>(())
+            })?;
+            obj
+        }),
+        _ => Err(Expect::Value)?,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
@@ -205,6 +462,12 @@ enum Cause {
     BareSlash,
     /// An unterminated `/* */` block comment.
     UnterminatedBlockComment,
+    /// An unterminated single-quoted string.
+    UnterminatedString,
+    /// A malformed unquoted identifier key.
+    InvalidIdentifier,
+    /// A malformed hex number literal (e.g. `0x` with no digits).
+    InvalidHexNumber,
 }
 
 impl From<hifijson::Error> for Cause {
@@ -225,6 +488,9 @@ impl core::fmt::Display for Cause {
             Self::Hifi(e) => e.fmt(f),
             Self::BareSlash => f.write_str("bare `/` is not a valid comment"),
             Self::UnterminatedBlockComment => f.write_str("unterminated block comment"),
+            Self::UnterminatedString => f.write_str("unterminated single-quoted string"),
+            Self::InvalidIdentifier => f.write_str("invalid unquoted identifier"),
+            Self::InvalidHexNumber => f.write_str("invalid hex number literal"),
         }
     }
 }
@@ -354,6 +620,50 @@ pub fn read_many_jsonc<'a>(
     core::iter::from_fn(move || {
         let v = match ws_tk_jsonc(&mut lexer) {
             Ok(Some(next)) => Some(parse_jsonc(next, &mut lexer).map_err(invalid_data)),
+            Ok(None) => None,
+            Err(e) => Some(Err(invalid_data(e))),
+        };
+        // always return I/O error if present, regardless of the output value!
+        lexer.error.take().map(Err).or(v)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Public API: JSON5
+// ---------------------------------------------------------------------------
+
+/// Parse exactly one JSON5 value.
+pub fn parse_single_json5(slice: &[u8]) -> Result<Val, Error> {
+    let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
+    let mut lexer = SliceLexer::new(slice);
+    exactly_one_ws(&mut lexer, ws_tk_jsonc, parse_json5)
+        .map_err(|e| Error(offset(lexer.as_slice()), e))
+}
+
+/// Parse a sequence of JSON5 values.
+pub fn parse_many_json5(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_ {
+    let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
+    let mut lexer = SliceLexer::new(slice);
+    core::iter::from_fn(move || {
+        let next = match ws_tk_jsonc(&mut lexer) {
+            Ok(Some(next)) => next,
+            Ok(None) => return None,
+            Err(e) => return Some(Err(Error(offset(lexer.as_slice()), e))),
+        };
+        Some(parse_json5(next, &mut lexer).map_err(|e| Error(offset(lexer.as_slice()), e)))
+    })
+}
+
+#[cfg(feature = "std")]
+/// Read a sequence of JSON5 values.
+pub fn read_many_json5<'a>(
+    read: impl io::BufRead + 'a,
+) -> impl Iterator<Item = io::Result<Val>> + 'a {
+    let invalid_data = |e: Cause| io::Error::new(io::ErrorKind::InvalidData, e);
+    let mut lexer = hifijson::IterLexer::new(read.bytes());
+    core::iter::from_fn(move || {
+        let v = match ws_tk_jsonc(&mut lexer) {
+            Ok(Some(next)) => Some(parse_json5(next, &mut lexer).map_err(invalid_data)),
             Ok(None) => None,
             Err(e) => Some(Err(invalid_data(e))),
         };
