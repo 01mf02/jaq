@@ -10,21 +10,19 @@ use std::io;
 /// Eat whitespace/comments, then peek at next character.
 ///
 /// Supports `#` (hash), `//` (single-line), and `/* */` (block) comments.
-fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
+/// Returns `Err` for incomplete comments (bare `/` or unterminated `/* ...`).
+fn ws_tk<L: Lex>(lexer: &mut L) -> Result<Option<u8>, hifijson::Error> {
     loop {
         lexer.eat_whitespace();
         match lexer.peek_next() {
             Some(b'#') => lexer.skip_until(|c| c == b'\n'),
             Some(b'/') => {
-                // Peek consumed nothing; consume the '/'
                 lexer.take_next();
                 match lexer.peek_next() {
                     Some(b'/') => {
-                        // Single-line comment: skip to end of line
                         lexer.skip_until(|c| c == b'\n');
                     }
                     Some(b'*') => {
-                        // Block comment: consume '*' then skip until '*/'
                         lexer.take_next();
                         let mut prev = 0u8;
                         lexer.skip_until(|c| {
@@ -32,19 +30,78 @@ fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
                             prev = c;
                             found
                         });
-                        // skip_until leaves '/' unconsumed when it finds '*/'; consume it.
-                        // If the comment is unterminated, take_next returns None,
-                        // and the next loop iteration's peek_next also returns None.
-                        lexer.take_next();
+                        if lexer.take_next().is_none() {
+                            return Err(Expect::Value.into());
+                        }
                     }
-                    // Not a comment -- just a bare '/' which we already consumed.
-                    // We cannot "put it back", but '/' is not a valid JSON start token,
-                    // so the caller will get an error anyway. Return the next peeked byte.
-                    next => return next,
+                    _ => return Err(Expect::Value.into()),
                 }
             }
-            next => return next,
+            next => return Ok(next),
         }
+    }
+}
+
+/// Like [`Lex::exactly_one`], but accepts a peek function returning `Result`.
+fn exactly_one_ws<L: Lex, T, E: From<Expect>, PF, F>(
+    lexer: &mut L,
+    mut pf: PF,
+    f: F,
+) -> Result<T, E>
+where
+    PF: FnMut(&mut L) -> Result<Option<u8>, E>,
+    F: FnOnce(u8, &mut L) -> Result<T, E>,
+{
+    let next = pf(lexer)?.ok_or(Expect::Value)?;
+    let v = f(next, lexer)?;
+    match pf(lexer)? {
+        None => Ok(v),
+        Some(_) => Err(Expect::Eof)?,
+    }
+}
+
+/// Like [`Lex::seq`], but accepts a peek function returning `Result`.
+fn seq_ws<L: Lex, E: From<Expect>, PF, F>(
+    lexer: &mut L,
+    end: u8,
+    mut pf: PF,
+    mut f: F,
+) -> Result<(), E>
+where
+    PF: FnMut(&mut L) -> Result<Option<u8>, E>,
+    F: FnMut(u8, &mut L) -> Result<(), E>,
+{
+    let mut next = pf(lexer)?.ok_or(Expect::ValueOrEnd)?;
+    if next == end {
+        lexer.take_next();
+        return Ok(());
+    }
+
+    loop {
+        f(next, lexer)?;
+        next = pf(lexer)?.ok_or(Expect::CommaOrEnd)?;
+        if next == end {
+            lexer.take_next();
+            return Ok(());
+        } else if next == b',' {
+            lexer.take_next();
+            next = pf(lexer)?.ok_or(Expect::Value)?;
+        } else {
+            return Err(Expect::CommaOrEnd)?;
+        }
+    }
+}
+
+/// Like [`Lex::expect`], but accepts a peek function returning `Result`.
+fn expect_ws<L: Lex, E>(
+    lexer: &mut L,
+    pf: impl FnOnce(&mut L) -> Result<Option<u8>, E>,
+    expect: u8,
+) -> Result<Option<()>, E> {
+    if pf(lexer)? == Some(expect) {
+        Ok(lexer.take_next().map(|_| ()))
+    } else {
+        Ok(None)
     }
 }
 
@@ -65,8 +122,7 @@ impl std::error::Error for Error {}
 pub fn parse_single(slice: &[u8]) -> Result<Val, Error> {
     let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
     let mut lexer = SliceLexer::new(slice);
-    lexer
-        .exactly_one(ws_tk, parse)
+    exactly_one_ws(&mut lexer, ws_tk, parse)
         .map_err(|e| Error(offset(lexer.as_slice()), e))
 }
 
@@ -75,7 +131,12 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_
     let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
     let mut lexer = SliceLexer::new(slice);
     core::iter::from_fn(move || {
-        Some(parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|e| Error(offset(lexer.as_slice()), e)))
+        let next = match ws_tk(&mut lexer) {
+            Ok(Some(next)) => next,
+            Ok(None) => return None,
+            Err(e) => return Some(Err(Error(offset(lexer.as_slice()), e))),
+        };
+        Some(parse(next, &mut lexer).map_err(|e| Error(offset(lexer.as_slice()), e)))
     })
 }
 
@@ -85,7 +146,11 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
     let invalid_data = |e| io::Error::new(io::ErrorKind::InvalidData, e);
     let mut lexer = hifijson::IterLexer::new(read.bytes());
     core::iter::from_fn(move || {
-        let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));
+        let v = match ws_tk(&mut lexer) {
+            Ok(Some(next)) => Some(parse(next, &mut lexer).map_err(invalid_data)),
+            Ok(None) => None,
+            Err(e) => Some(Err(invalid_data(e))),
+        };
         // always return I/O error if present, regardless of the output value!
         lexer.error.take().map(Err).or(v)
     })
@@ -144,7 +209,7 @@ fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
         b'"' => Val::utf8_str(parse_string(lexer.discarded(), false)?),
         b'[' => Val::Arr({
             let mut arr = Vec::new();
-            lexer.discarded().seq(b']', ws_tk, |next, lexer| {
+            seq_ws(lexer.discarded(), b']', ws_tk, |next, lexer| {
                 arr.push(parse(next, lexer)?);
                 Ok::<_, hifijson::Error>(())
             })?;
@@ -152,10 +217,10 @@ fn parse<L: LexAlloc>(next: u8, lexer: &mut L) -> Result<Val, hifijson::Error> {
         }),
         b'{' => Val::obj({
             let mut obj = Map::default();
-            lexer.discarded().seq(b'}', ws_tk, |next, lexer| {
+            seq_ws(lexer.discarded(), b'}', ws_tk, |next, lexer| {
                 let key = parse(next, lexer)?;
-                lexer.expect(ws_tk, b':').ok_or(Expect::Colon)?;
-                let value = parse(ws_tk(lexer).ok_or(Expect::Value)?, lexer)?;
+                expect_ws(lexer, ws_tk, b':')?.ok_or(Expect::Colon)?;
+                let value = parse(ws_tk(lexer)?.ok_or(Expect::Value)?, lexer)?;
                 obj.insert(key, value);
                 Ok::<_, hifijson::Error>(())
             })?;

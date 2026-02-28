@@ -161,3 +161,45 @@ fn empty_input_with_only_comments() {
     let input = b"// just a comment\n";
     single_err(input);
 }
+
+// --------------------------------------------------------------------------
+// Incomplete comment errors
+// --------------------------------------------------------------------------
+
+#[test]
+fn bare_slash_is_error() {
+    single_err(b"/");
+}
+
+#[test]
+fn bare_slash_after_value_is_error() {
+    // "1 /" should parse 1 then error on the trailing "/"
+    let results: Vec<_> = parse_many(b"1 /").collect();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_err());
+}
+
+#[test]
+fn unterminated_block_comment_after_value_is_error() {
+    // "1 /*" should parse 1 then error on the unterminated block comment
+    let results: Vec<_> = parse_many(b"1 /*").collect();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_ok());
+    assert!(results[1].is_err());
+}
+
+#[test]
+fn unterminated_block_comment_with_content_is_error() {
+    single_err(b"/* comment without end");
+}
+
+#[test]
+fn bare_slash_in_array_is_error() {
+    single_err(b"[1, /]");
+}
+
+#[test]
+fn unterminated_block_comment_in_object_is_error() {
+    single_err(b"{\"key\": /* unterminated");
+}
