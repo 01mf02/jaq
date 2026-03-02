@@ -62,9 +62,11 @@ impl<F> Lut<F> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Tailrec {
+pub(crate) enum CallType {
+    Inline,
     Throw,
-    Catch,
+    CatchOne,
+    CatchAll,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -88,8 +90,10 @@ pub(crate) enum Term<T = TermId> {
 
     /// Bound variable (`$x`), label (`label $x`), or filter argument (`a`)
     Var(VarId),
+
     /// Call to a filter (`filter`, `filter(…)`)
-    CallDef(TermId, Box<[Arg<T>]>, VarSkip, Option<Tailrec>),
+    CallDef(TermId, Box<[Arg<T>]>, VarSkip, CallType),
+
     Native(NativeId, Box<[Arg<T>]>),
 
     /// Binding of a break label (`label $x | f`)
@@ -197,7 +201,7 @@ pub struct Compiler<S, F> {
     lut: Lut<(Sig<S>, F)>,
 
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
-    mod_map: Vec<Vec<(Sig<S>, Def)>>,
+    mod_map: Vec<Vec<(Sig<S>, TermId, Tr)>>,
 
     imported_mods: Vec<(ModId, S)>,
     included_mods: Vec<ModId>,
@@ -206,9 +210,6 @@ pub struct Compiler<S, F> {
     imported_vars: Vec<(S, ModId)>,
 
     locals: Locals<S>,
-
-    /// `tailrecs` stores every tail-recursive definition `id`
-    tailrecs: BTreeSet<TermId>,
 
     errs: Vec<Error<S>>,
 }
@@ -225,7 +226,6 @@ impl<S, F> Default for Compiler<S, F> {
             included_mods: Vec::new(),
             global_vars: Vec::new(),
             imported_vars: Vec::new(),
-            tailrecs: BTreeSet::new(),
             locals: Locals::default(),
             errs: Vec::new(),
         }
@@ -254,27 +254,9 @@ fn binds<T, U: Copy>(binds: &[Arg<T>], args: &[U]) -> Box<[Arg<U>]> {
     args.map(|(bind, id)| bind.as_ref().map(|_| *id)).collect()
 }
 
-#[derive(Clone, Debug)]
-struct Def {
-    id: TermId,
-    /// true if function is recursive, i.e. it contains calls to itself
-    rec: bool,
-    /// true if all calls to this function from itself are tail-recursive
-    tailrec: bool,
-}
-
 impl<S: Eq, A> Sig<S, A> {
     fn matches(&self, name: S, args: &[TermId]) -> bool {
         name == self.name && args.len() == self.args.len()
-    }
-}
-
-impl Def {
-    fn call(&self, args: Box<[Arg<TermId>]>, vars: usize) -> Term {
-        // we pretend that the function call is tail-recursive,
-        // and at the very end of compilation, we will correct calls
-        // to non-tail-recursive functions
-        Term::CallDef(self.id, args, vars, Some(Tailrec::Catch))
     }
 }
 
@@ -311,9 +293,9 @@ impl<S: Ord> MapVecLen<S> {
 
 enum Fun<S> {
     Arg,
-    Parent(Box<[Arg<S>]>, Def),
-    // Tr is for tail-rec allowed funs
-    Sibling(Box<[Arg<S>]>, Def, Tr),
+    Parent(Box<[Arg<S>]>, TermId),
+    /// Tr stores which tail-recursive calls the sibling can return
+    Sibling(Box<[Arg<S>]>, TermId, Tr),
 }
 
 /// Single binding.
@@ -331,7 +313,6 @@ struct Locals<S> {
     // usize = number of vars
     funs: MapVec<(S, Arity), (Fun<S>, usize)>,
     vars: MapVecLen<Bind<S>>,
-    parents: Tr,
 }
 
 impl<S> Default for Locals<S> {
@@ -339,11 +320,11 @@ impl<S> Default for Locals<S> {
         Self {
             funs: MapVec::default(),
             vars: MapVecLen::default(),
-            parents: Tr::default(),
         }
     }
 }
 
+/// Mapping from `K` to sequence of `V`.
 struct MapVec<K, V>(BTreeMap<K, Vec<V>>);
 
 impl<K, V> Default for MapVec<K, V> {
@@ -370,36 +351,29 @@ impl<K: Ord, V> MapVec<K, V> {
         self.0.get(k)?.last()
     }
 
-    fn get_last_mut(&mut self, k: &K) -> Option<&mut V> {
-        self.0.get_mut(k)?.last_mut()
-    }
-
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
 
 impl<S: Copy + Ord> Locals<S> {
-    fn push_sibling(&mut self, name: S, args: Box<[Arg<S>]>, def: Def) {
-        let tr = self.parents.clone();
+    fn push_sibling(&mut self, name: S, args: Box<[Arg<S>]>, id: TermId, tr: Tr) {
         self.funs.push(
             (name, args.len()),
-            (Fun::Sibling(args, def, tr), self.vars.total),
+            (Fun::Sibling(args, id, tr), self.vars.total),
         );
     }
 
-    fn pop_sibling(&mut self, name: S, arity: Arity) -> (Box<[Arg<S>]>, Def, Tr) {
+    fn pop_sibling(&mut self, name: S, arity: Arity) -> (Box<[Arg<S>]>, TermId, Tr) {
         let (y, vars) = match self.funs.pop(&(name, arity)) {
-            Some((Fun::Sibling(args, def, tr), vars)) => ((args, def, tr), vars),
+            Some((Fun::Sibling(args, id, tr), vars)) => ((args, id, tr), vars),
             _ => panic!(),
         };
         assert_eq!(self.vars.total, vars);
         y
     }
 
-    fn push_parent(&mut self, name: S, args: Box<[Arg<S>]>, def: Def) {
-        self.parents.insert(def.id);
-
+    fn push_parent(&mut self, name: S, args: Box<[Arg<S>]>, id: TermId) {
         let vars = self.vars.total;
 
         for arg in args.iter() {
@@ -410,11 +384,11 @@ impl<S: Copy + Ord> Locals<S> {
         }
 
         self.funs
-            .push((name, args.len()), (Fun::Parent(args, def), vars));
+            .push((name, args.len()), (Fun::Parent(args, id), vars));
     }
 
-    fn pop_parent(&mut self, name: S, arity: Arity) -> Def {
-        let (args, def, vars) = match self.funs.pop(&(name, arity)) {
+    fn pop_parent(&mut self, name: S, arity: Arity) -> TermId {
+        let (args, id, vars) = match self.funs.pop(&(name, arity)) {
             Some((Fun::Parent(args, def), vars)) => (args, def, vars),
             _ => panic!(),
         };
@@ -425,8 +399,7 @@ impl<S: Copy + Ord> Locals<S> {
             }
         }
         assert_eq!(self.vars.total, vars);
-        assert!(self.parents.remove(&def.id));
-        def
+        id
     }
 
     fn push_arg(&mut self, name: S) {
@@ -443,33 +416,50 @@ impl<S: Copy + Ord> Locals<S> {
         self.vars.pop(&Bind::Fun(name));
     }
 
-    fn call(&mut self, name: S, args: &[TermId], tr: &Tr) -> Option<Term> {
-        Some(match self.funs.get_last_mut(&(name, args.len()))? {
-            (Fun::Arg, vars) => Term::Var(self.vars.total - *vars),
-            (Fun::Sibling(args_, def, tr_), vars) => {
-                // we are at a position that may only call `tr` tail-recursively and
-                // we call a sibling that may only call `tr_` tail-recursively,
-                // so we update the sibling with additional `tr`
-                tr_.retain(|id| tr.contains(id));
-                def.call(binds(args_, args), self.vars.total - *vars)
+    fn call(&self, name: S, args: &[TermId], tr: &Tr) -> Option<(Term, Tr)> {
+        Some(match self.funs.get_last(&(name, args.len()))? {
+            (Fun::Arg, vars) => (Term::Var(self.vars.total - *vars), Tr::new()),
+            // we   may only return tail-recursive calls to `tr` and call a sibling
+            // that may only return tail-recursive calls to `tr_`
+            (Fun::Sibling(args_, id, tr_), vars) => {
+                // if we may return tail-recursive calls to the sibling
+                let (typ, tr_) = if tr.contains(id) {
+                    debug_assert!(tr_.is_subset(tr));
+                    let mut tr_ = tr_.clone();
+                    // if the sibling returns tail-recursive calls to itself
+                    if tr_.remove(id) {
+                        (CallType::CatchOne, tr_)
+                    } else {
+                        (CallType::Inline, tr_)
+                    }
+                // if we may *NOT* return tail-recursive calls to the sibling
+                } else {
+                    // if the sibling performs only permitted tail-recursive calls
+                    // (in particular, that means that it does not call itself)
+                    if tr_.is_subset(tr) {
+                        (CallType::Inline, tr_.clone())
+                    } else {
+                        (CallType::CatchAll, Tr::new())
+                    }
+                };
+                let vars = self.vars.total - *vars;
+                (Term::CallDef(*id, binds(args_, args), vars, typ), tr_)
             }
-            (Fun::Parent(args_, def), vars) => {
-                // we have a recursive call!
-                def.rec = true;
-                // if the current position does not allow for
-                // a tail-recursive call to this function, then
-                // we know for sure that the function is not tail-recursive!
-                if !tr.contains(&def.id) {
-                    def.tailrec = false;
-                }
-                let call = Some(Tailrec::Throw);
-                Term::CallDef(def.id, binds(args_, args), self.vars.total - *vars, call)
+            (Fun::Parent(args_, id), vars) => {
+                // if we can return a tail-recursive call to the parent
+                let (typ, tr_) = if tr.contains(id) {
+                    (CallType::Throw, Tr::from([*id]))
+                } else {
+                    (CallType::CatchAll, Tr::new())
+                };
+                let vars = self.vars.total - *vars;
+                (Term::CallDef(*id, binds(args_, args), vars, typ), tr_)
             }
         })
     }
 
     fn is_empty(&self) -> bool {
-        self.funs.is_empty() && self.vars.is_empty() && self.parents.is_empty()
+        self.funs.is_empty() && self.vars.is_empty()
     }
 }
 
@@ -518,21 +508,6 @@ impl<'s, F> Compiler<&'s str, F> {
             assert!(self.locals.is_empty());
         }
 
-        // uncomment the following line to disable tail-call optimisation (TCO)
-        //self.tailrecs.clear();
-
-        // only after the end, we know which definitions are actually tail-recursive
-        // before, we assumed that every call is tail-recursive
-        // (that way, we can conveniently record whether a call to a function
-        // happens from inside or outside the function)
-        // therefore, we only have to adapt calls to non-tail-recursive functions here
-        for t in self.lut.terms.iter_mut() {
-            match t {
-                Term::CallDef(id, .., tr) if !self.tailrecs.contains(id) => *tr = None,
-                _ => (),
-            }
-        }
-
         /*
         for (i, t) in self.lut.terms.iter().enumerate() {
             std::println!("{i} -> {t:?}");
@@ -541,12 +516,12 @@ impl<'s, F> Compiler<&'s str, F> {
 
         if errs.is_empty() {
             // the main filter corresponds to the last definition of the last module
-            let (main_sig, main_def) = self.mod_map.last().unwrap().last().unwrap();
-            assert!(main_sig.matches("main", &[]));
-            assert!(!main_def.rec && main_def.tailrec);
-            //std::println!("main: {:?}", main_def.id);
+            let (sig, id, tr) = self.mod_map.last().unwrap().last().unwrap();
+            assert!(sig.matches("main", &[]));
+            assert!(tr.is_empty());
+            //std::println!("main: {:?}", id);
             Ok(Filter {
-                id: main_def.id,
+                id: *id,
                 lut: self.lut.map_funs(|(_sig, f)| f),
             })
         } else {
@@ -581,56 +556,51 @@ impl<'s, F> Compiler<&'s str, F> {
             }
         }
 
-        m.body.iter().for_each(|def| self.def_pre(def));
-        let defs = m.body.into_iter().rev().map(|def| self.def_post(def));
+        let mut siblings = Vec::new();
+        for def in m.body {
+            siblings.push((def.name, def.args.len()));
+            let args: Box<[_]> = def.args.iter().map(|a| bind_from(a, *a)).collect();
+            let (sig, def, tr_) = self.def(def, &Tr::new());
+            self.locals.push_sibling(sig.name, args, def, tr_);
+        }
+
+        let defs = siblings.into_iter().rev().map(|(name, arity)| {
+            let (args, id, tr) = self.locals.pop_sibling(name, arity);
+            let args = args.into_vec().into_iter().map(|a| a.map(|_| ())).collect();
+            (Sig { name, args }, id, tr)
+        });
         let mut defs: Vec<_> = defs.collect();
         defs.reverse();
         self.mod_map.push(defs)
     }
 
-    /// Create a placeholder sibling for a definition.
-    ///
-    /// Once we have processed all places where the sibling can be called from outside,
-    /// we can then call `def_post`.
-    fn def_pre(&mut self, d: &parse::Def<&'s str>) {
-        let tid = self.lut.insert_term(Term::Id);
+    /// Compile a definition LHS.
+    fn def(&mut self, d: parse::Def<&'s str>, tr: &Tr) -> (Sig<&'s str>, TermId, Tr) {
+        // insert placeholder
+        let id = self.lut.insert_term(Term::default());
         let args = d.args.iter().map(|a| bind_from(a, *a)).collect();
-        // by default, we assume that the function is not recursive and
-        // that all recursive calls to it are tail-recursive
-        let def = Def {
-            id: tid,
-            rec: false,
-            tailrec: true,
-        };
-        // furthermore, we initially assume that the function can call
-        // any of its ancestors without breaking their tail-recursiveness
-        self.locals.push_sibling(d.name, args, def)
-    }
 
-    /// Compile a placeholder sibling with its corresponding definition.
-    fn def_post(&mut self, d: parse::Def<&'s str>) -> (Sig<&'s str, Arg>, Def) {
-        let (args, def, mut tr) = self.locals.pop_sibling(d.name, d.args.len());
-        let tid = def.id;
-        self.locals.push_parent(d.name, args, def);
-        // at the beginning, we assume that any function can call itself tail-recursively
-        assert!(tr.insert(tid));
-        self.lut.terms[tid.0] = self.term(d.body, &tr);
-        let def = self.locals.pop_parent(d.name, d.args.len());
-        // only if there is at least one recursive call and all calls are tail-recursive,
-        // then the definition is tail-recursive
-        if def.rec && def.tailrec {
-            self.tailrecs.insert(def.id);
-        }
+        self.locals.push_parent(d.name, args, id);
+        let mut tr = tr.clone();
+        // any function can call itself tail-recursively
+        assert!(tr.insert(id));
+        let (body, tr_) = self.term(d.body, &tr);
+        self.lut.terms[id.0] = body;
+        assert_eq!(self.locals.pop_parent(d.name, d.args.len()), id);
         let sig = Sig {
             name: d.name,
             args: d.args.iter().map(|a| bind_from(a, ())).collect(),
         };
-        (sig, def)
+        (sig, id, tr_)
     }
 
-    fn term(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> Term {
+    /// Compile a term that may call any function in `tr` tail-recursively.
+    ///
+    /// Returns which of the functions in `tr` it actually calls tail-recursively.
+    /// The output `Tr` must be a subset of the input `Tr`.
+    fn term(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> (Term, Tr) {
         use parse::Term::*;
-        match t {
+        let t = match t {
             Id => Term::Id,
             Recurse => Term::Recurse,
             Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
@@ -638,14 +608,14 @@ impl<'s, F> Compiler<&'s str, F> {
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
-                let else_ = else_.map_or(Term::Id, |else_| self.term(*else_, tr));
-                if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
-                    Term::Ite(
-                        self.iterm(if_),
-                        self.iterm_tr(then_, tr),
-                        self.lut.insert_term(acc),
-                    )
-                })
+                let else_ = else_.map_or((Term::Id, Tr::new()), |else_| self.term(*else_, tr));
+                return if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
+                    let if_ = self.iterm(if_);
+                    let (then_, tr_) = self.iterm_tr(then_, tr);
+                    let else_ = self.lut.insert_term(acc.0);
+                    let tr_ = tr_.union(&acc.1).copied().collect();
+                    (Term::Ite(if_, then_, else_), tr_)
+                });
             }
             Var(x) => self.var(x),
             Call(name, args) => {
@@ -653,21 +623,25 @@ impl<'s, F> Compiler<&'s str, F> {
                 if let Some((module, name)) = name.split_once("::") {
                     self.call_mod(module, name, &args)
                 } else {
-                    self.call(name, &args, tr)
+                    return self.call(name, &args, tr);
                 }
             }
             Def(defs, t) => {
-                defs.iter().for_each(|def| self.def_pre(def));
-                let t = self.term(*t, tr);
-                // we have to process the siblings in *reverse*, because that way,
-                // all potential call-sites of a sibling are processed before the sibling itself
-                // (because a sibling can only be called by functions *after* it, not before it)
-                // this is important to establish which functions can be called
-                // tail-recursively from a sibling
-                defs.into_iter().rev().for_each(|def| {
-                    self.def_post(def);
-                });
-                t
+                let mut siblings = Vec::new();
+                for def in defs {
+                    siblings.push((def.name, def.args.len()));
+                    let args: Box<[_]> = def.args.iter().map(|a| bind_from(a, *a)).collect();
+                    let (sig, def, tr_) = self.def(def, tr);
+                    self.locals.push_sibling(sig.name, args, def, tr_);
+                }
+
+                let (t, tr_) = self.term(*t, tr);
+
+                for (name, arity) in siblings.into_iter().rev() {
+                    self.locals.pop_sibling(name, arity);
+                }
+
+                return (t, tr_);
             }
             Num(n) => n.parse().map_or_else(|_| Term::Num(n.into()), Term::Int),
             TryCatch(try_, catch) => {
@@ -680,7 +654,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 let mut args = args.into_iter();
                 let (init, update) = match (args.next(), args.next()) {
                     (Some(init), Some(update)) => (init, update),
-                    _ => return self.fail(name, Undefined::Filter(arity)),
+                    _ => return (self.fail(name, Undefined::Filter(arity)), Tr::new()),
                 };
                 let vars: Vec<_> = pat.vars().copied().collect();
                 let xs = self.iterm(*xs);
@@ -691,25 +665,32 @@ impl<'s, F> Compiler<&'s str, F> {
                 match (name, args.next(), args.next()) {
                     ("reduce", None, None) => Term::Fold(xs, pat, init, update, Reduce),
                     ("foreach", proj, None) => {
-                        let proj = proj.map(|p| self.with_vars(&vars, |c| c.iterm_tr(p, tr)));
-                        Term::Fold(xs, pat, init, update, Foreach(proj))
+                        let (proj, tr_) = proj
+                            .map(|p| self.with_vars(&vars, |c| c.iterm_tr(p, tr)))
+                            .unzip();
+                        let tr_ = tr_.unwrap_or_default();
+                        return (Term::Fold(xs, pat, init, update, Foreach(proj)), tr_);
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
-                let (l, r) = match op {
-                    Comma => (self.iterm_tr(*l, tr), self.iterm_tr(*r, tr)),
+                let (l, (r, tr_)) = match op {
+                    Comma => {
+                        let (l, trl) = self.iterm_tr(*l, tr);
+                        let (r, trr) = self.iterm_tr(*r, tr);
+                        (l, (r, trl.union(&trr).copied().collect()))
+                    }
                     Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
                     Pipe(ref pat) => {
                         let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
                         let r = self.with_vars(&vars, |c| c.iterm_tr(*r, tr));
                         (self.iterm(*l), r)
                     }
-                    _ => (self.iterm(*l), self.iterm(*r)),
+                    _ => (self.iterm(*l), (self.iterm(*r), Tr::new())),
                 };
-                match op {
+                let t = match op {
                     Pipe(pat) => Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r),
                     Comma => Term::Comma(l, r),
                     Math(op) => Term::Math(l, op, r),
@@ -721,7 +702,8 @@ impl<'s, F> Compiler<&'s str, F> {
                     And => Term::Logic(l, false, r),
                     Alt => Term::Alt(l, r),
                     UpdateAlt => Term::UpdateAlt(l, r),
-                }
+                };
+                return (t, tr_);
             }
             Path(t, path) => {
                 let t = self.iterm(*t);
@@ -747,21 +729,21 @@ impl<'s, F> Compiler<&'s str, F> {
                 let kvs = o.into_iter().map(|(k, v)| self.obj_entry(k, v)).collect();
                 self.sum_or(|| Term::ObjEmpty, kvs)
             }
-        }
+        };
+        (t, Tr::new())
     }
 
     /// Compile a term in a context that does *not* permit tail-recursion.
     ///
     /// One example of such a term is `t` in `1 + t` or `t | .+1`.
     fn iterm(&mut self, t: parse::Term<&'s str>) -> TermId {
-        // if anything in our term calls an ancestor of our term, then we know that
-        // this ancestor cannot be tail-recursive!
-        self.iterm_tr(t, &Tr::new())
+        self.iterm_tr(t, &Tr::new()).0
     }
 
-    fn iterm_tr(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> TermId {
-        let t = self.term(t, tr);
-        self.lut.insert_term(t)
+    fn iterm_tr(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> (TermId, Tr) {
+        let (t, tr_) = self.term(t, tr);
+        debug_assert!(tr_.is_subset(tr));
+        (self.lut.insert_term(t), tr_)
     }
 
     fn pattern(&mut self, p: parse::Pattern<&'s str>) -> Pattern<TermId> {
@@ -788,8 +770,16 @@ impl<'s, F> Compiler<&'s str, F> {
 
     fn call_mod_id(&self, mid: ModId, name: &'s str, args: &[TermId]) -> Option<Term> {
         let mut sig_defs = self.mod_map[mid].iter().rev();
-        let (sig, def) = sig_defs.find(|(sig, _)| sig.matches(name, args))?;
-        Some(def.call(binds(&sig.args, args), self.locals.vars.total))
+        let (sig, id, tr) = sig_defs.find(|(sig, ..)| sig.matches(name, args))?;
+        let typ = if tr.contains(id) {
+            assert_eq!(tr.len(), 1);
+            CallType::CatchOne
+        } else {
+            assert_eq!(tr.len(), 0);
+            CallType::Inline
+        };
+        let vars = self.locals.vars.total;
+        Some(Term::CallDef(*id, binds(&sig.args, args), vars, typ))
     }
 
     /// Resolve call to `mod::filter(a1, ..., an)`.
@@ -806,22 +796,22 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     /// Resolve call to `filter(a1, ..., an)`.
-    fn call(&mut self, name: &'s str, args: &[TermId], tr: &Tr) -> Term {
+    fn call(&mut self, name: &'s str, args: &[TermId], tr: &Tr) -> (Term, Tr) {
         if let Some(t) = self.locals.call(name, args, tr) {
             return t;
         }
         for mid in self.included_mods.iter().rev() {
             if let Some(call) = self.call_mod_id(*mid, name, args) {
-                return call;
+                return (call, Tr::new());
             }
         }
         for (nid, (sig, _f)) in self.lut.funs.iter().enumerate() {
             if sig.matches(name, args) {
-                return Term::Native(nid, binds(&sig.args, args));
+                return (Term::Native(nid, binds(&sig.args, args)), Tr::new());
             }
         }
 
-        self.fail(name, Undefined::Filter(args.len()))
+        (self.fail(name, Undefined::Filter(args.len())), Tr::new())
     }
 
     fn var(&mut self, x: &'s str) -> Term {
