@@ -735,9 +735,11 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn iterm_tr(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> (TermId, Tr) {
+        let id = self.lut.insert_term(Term::default());
         let (t, tr_) = self.term(t, tr);
         debug_assert!(tr_.is_subset(tr));
-        (self.lut.insert_term(t), tr_)
+        self.lut.terms[id.0] = t;
+        (id, tr_)
     }
 
     fn pattern(&mut self, p: parse::Pattern<&'s str>) -> Pattern<TermId> {
