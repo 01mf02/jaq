@@ -422,25 +422,19 @@ impl<S: Copy + Ord> Locals<S> {
             // we   may only return tail-recursive calls to `tr` and call a sibling
             // that may only return tail-recursive calls to `tr_`
             (Fun::Sibling(args_, id, tr_), vars) => {
-                // if we may return tail-recursive calls to the sibling
-                let (typ, tr_) = if tr.contains(id) {
-                    debug_assert!(tr_.is_subset(tr));
-                    let mut tr_ = tr_.clone();
-                    // if the sibling returns tail-recursive calls to itself
-                    if tr_.remove(id) {
-                        (CallType::CatchOne, tr_)
+                let mut tr_ = tr_.clone();
+                // does the sibling return tail-recursive calls to itself?
+                let rec = tr_.remove(id);
+                // are all remaining tail-recursive calls from the sibling permitted?
+                let typ = if tr_.is_subset(tr) {
+                    if rec {
+                        CallType::CatchOne
                     } else {
-                        (CallType::Inline, tr_)
+                        CallType::Inline
                     }
-                // if we may *NOT* return tail-recursive calls to the sibling
                 } else {
-                    // if the sibling performs only permitted tail-recursive calls
-                    // (in particular, that means that it does not call itself)
-                    if tr_.is_subset(tr) {
-                        (CallType::Inline, tr_.clone())
-                    } else {
-                        (CallType::CatchAll, Tr::new())
-                    }
+                    tr_ = Tr::new();
+                    CallType::CatchAll
                 };
                 let vars = self.vars.total - *vars;
                 (Term::CallDef(*id, binds(args_, args), vars, typ), tr_)
