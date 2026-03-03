@@ -1,10 +1,11 @@
 //! Integer / decimal numbers.
 use super::Rc;
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{Hash, Hasher};
-use num_bigint::{BigInt, Sign};
+use num_bigint::{BigInt, BigUint, Sign};
 use num_traits::cast::ToPrimitive;
 
 /// Integer / decimal number.
@@ -47,11 +48,9 @@ impl Num {
 
     /// Try to parse an integer from a string with given radix.
     pub fn from_str_radix(i: &str, radix: u32) -> Option<Self> {
-        let big = || BigInt::parse_bytes(i.as_bytes(), radix).map(Self::big_int);
-        isize::from_str_radix(i, radix)
-            .ok()
-            .map(Num::Int)
-            .or_else(big)
+        let int = || isize::from_str_radix(i, radix).ok().map(Num::Int);
+        let big = || bigint_from_str_radix(i, radix).map(Self::big_int);
+        int().or_else(big)
     }
 
     /// Try to parse a decimal string to a [`Self::Float`], else return NaN.
@@ -136,6 +135,35 @@ fn int_or_big<const N: usize>(
     i.map_or_else(|| Num::big_int(f(x.map(BigInt::from))), Num::Int)
 }
 
+// Do not use `BigInt::parse_bytes`, because it accepts arbitrary underscores between digits.
+// https://github.com/rust-num/num-bigint/issues/340
+fn bigint_from_str_radix(s: &str, radix: u32) -> Option<BigInt> {
+    use num_bigint::Sign::{Minus, Plus};
+    let f = |c, sign| s.strip_prefix(c).map(|s| (sign, s));
+    let (sign, num) = f('-', Minus).or_else(|| f('+', Plus)).unwrap_or((Plus, s));
+    biguint_from_str_radix(num, radix).map(|bu| BigInt::from_biguint(sign, bu))
+}
+
+fn biguint_from_str_radix(s: &str, radix: u32) -> Option<BigUint> {
+    assert!((2..=36).contains(&radix));
+    if s.is_empty() {
+        return None;
+    }
+
+    // normalize all characters to plain digit values
+    let digits = s.bytes().map(|b| {
+        Some(match b {
+            b'0'..=b'9' => b - b'0',
+            b'a'..=b'z' => b - b'a' + 10,
+            b'A'..=b'Z' => b - b'A' + 10,
+            _ => return None,
+        })
+        .filter(|d| *d < radix as u8)
+    });
+    BigUint::from_radix_be(&digits.collect::<Option<Vec<_>>>()?, radix)
+}
+
+
 impl core::ops::Add for Num {
     type Output = Num;
     fn add(self, rhs: Self) -> Self::Output {
@@ -216,7 +244,11 @@ impl core::ops::Rem for Num {
         use num_bigint::BigInt;
         use Num::*;
         match (self, rhs) {
-            (Int(x), Int(y)) => Int(x % y),
+            // `x.checked_rem(y)` is `None` only for:
+            //
+            // - `isize::MIN % -1`: The remainder is always 0.
+            // - `x % 0`: This is guarded by `Val`.
+            (Int(x), Int(y)) => Int(x.checked_rem(y).unwrap_or(0)),
             (BigInt(x), BigInt(y)) => Num::big_int(&*x % &*y),
             (Int(i), BigInt(b)) => Num::big_int(&BigInt::from(i) % &*b),
             (BigInt(b), Int(i)) => Num::big_int(&*b % &BigInt::from(i)),

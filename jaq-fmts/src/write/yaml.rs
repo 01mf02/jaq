@@ -86,11 +86,66 @@ macro_rules! write_yaml {
     }};
 }
 
-fn must_quote(s: &[u8]) -> bool {
-    if s.last().filter(|c| c.is_ascii_whitespace()).is_some() {
-        return true;
-    }
+// https://yaml.org/spec/1.2.2/#rule-ns-plain-one-line
+fn ns_plain_one_line(s: &[u8]) -> bool {
+    // naming:
+    // - ns = no-space
+    // - nb = no-break
+    // -  b =    break
+    // -  c = character
+    // -  s = space
 
+    // https://yaml.org/spec/1.2.2/#rule-c-indicator
+    let c_indicator = |c: &u8| br#"-?:,[]{}#&*!|>'"%@`"#.contains(c);
+    // https://yaml.org/spec/1.2.2/#rule-b-char
+    let b_char = |c: &u8| b"\n\r".contains(c);
+    // https://yaml.org/spec/1.2.2/#rule-c-printable
+    // we omit the check for valid UTF-8 here
+    let c_printable = |c: &u8| c.is_ascii_control() == b"\t\n\r".contains(c);
+    // https://yaml.org/spec/1.2.2/#rule-nb-char
+    // we omit the check for c-byte-order-mark here
+    let nb_char = |c: &u8| c_printable(c) && !b_char(c);
+    // https://yaml.org/spec/1.2.2/#rule-s-white
+    let s_white = |c: &u8| b" \t".contains(c);
+    // https://yaml.org/spec/1.2.2/#rule-ns-char
+    let ns_char = |c: &u8| nb_char(c) && !s_white(c);
+    // https://yaml.org/spec/1.2.2/#rule-c-flow-indicator
+    let c_flow_indicator = |c: &u8| b",[]{}".contains(c);
+    // https://yaml.org/spec/1.2.2/#rule-ns-plain-safe-in
+    let ns_plain_safe_in = |c: &u8| ns_char(c) && !c_flow_indicator(c);
+    // we choose safe-in because it is more restrictive than safe-out
+    let ns_plain_safe = ns_plain_safe_in;
+    // https://yaml.org/spec/1.2.2/#rule-ns-plain-first
+    let ns_plain_first = |c: &u8, next: Option<&u8>| {
+        (ns_char(c) && !c_indicator(c)) || (b"?:-".contains(c) && next.is_some_and(ns_plain_safe))
+    };
+    // https://yaml.org/spec/1.2.2/#rule-ns-plain-char
+    let ns_plain_char = |prev: &u8, c: &u8, next: Option<&u8>| {
+        (ns_plain_safe(c) && !b":#".contains(c))
+            || (ns_char(prev) && *c == b'#')
+            || (*c == b':' && next.is_some_and(ns_plain_safe))
+    };
+
+    let mut iter = s.iter();
+    let Some(c) = iter.next() else {
+        return false;
+    };
+    let mut next = iter.next();
+    if !ns_plain_first(c, next) {
+        return false;
+    }
+    let mut prev = c;
+    while let Some(c) = next.take() {
+        next = iter.next();
+        if !s_white(c) && !ns_plain_char(prev, c, next) {
+            return false;
+        }
+        prev = c;
+    }
+    true
+}
+
+fn must_quote(s: &[u8]) -> bool {
     let null = ["null", "Null", "NULL"];
     let on = ["on", "On", "ON"];
     let off = ["off", "Off", "OFF"];
@@ -98,22 +153,63 @@ fn must_quote(s: &[u8]) -> bool {
     let no = ["no", "No", "NO"];
     let true_ = ["True", "TRUE", "true"];
     let false_ = ["False", "FALSE", "false"];
-    let kws = [&null, &on, &off, &yes, &no, &true_, &false_].map(|a| a.map(str::as_bytes));
-    if s == b"~" || kws.iter().any(|ss| ss.contains(&s)) {
-        return true;
-    }
+    let inf = [".inf", ".Inf", ".INF"];
+    let nan = [".nan", ".NaN", ".NAN"];
+    let kws = [&null, &on, &off, &yes, &no, &true_, &false_, &inf, &nan];
+    let kws = kws.map(|a| a.map(str::as_bytes));
 
-    let good_head = |c| b"$()./;^_~".contains(c);
-    let good_tail = |c| b" !%&*+-<=>?@|".contains(c) || good_head(c);
+    // https://yaml.org/spec/1.2.2/#912-document-markers
+    let is_doc_marker = |s: &[u8]| matches!(s, b"---" | b"...");
 
-    let mut iter = s.iter();
-    match iter.next() {
-        None => return true,
-        Some(c) if c.is_ascii() && !c.is_ascii_alphabetic() && !good_head(c) => return true,
-        _ => (),
-    }
+    // number overapproximation
+    let is_pos_num = |s: &[u8]| s.first().is_some_and(u8::is_ascii_digit);
+    let is_num = |s: &[u8]| is_pos_num(s.strip_prefix(b"-").unwrap_or(s));
 
-    iter.any(|c| c.is_ascii() && !c.is_ascii_alphanumeric() && !good_tail(c))
+    s == b"~"
+        || is_doc_marker(s)
+        || is_num(s)
+        || kws.iter().any(|ss| ss.contains(&s))
+        || !ns_plain_one_line(s)
+}
+
+#[test]
+fn must_quote_test() {
+    // "~" is YAML shorthand for null
+    assert!(must_quote(b"~"));
+
+    assert!(must_quote(b"null"));
+    assert!(must_quote(b"on"));
+    assert!(must_quote(b"off"));
+    assert!(must_quote(b"true"));
+    assert!(must_quote(b"false"));
+
+    assert!(!must_quote(b"nul"));
+    assert!(!must_quote(b"trues"));
+
+    assert!(!must_quote(b"_foo"));
+    assert!(!must_quote(b"foo-bar"));
+    assert!(!must_quote(b"foo_bar"));
+    assert!(must_quote(b"- a"));
+    assert!(must_quote(b"-,a"));
+
+    assert!(!must_quote(b"What hath God wrought"));
+    assert!(!must_quote(b"What hath God wrought?"));
+
+    assert!(!must_quote(b"a# bla"));
+    assert!(must_quote(b"a # bla"));
+    assert!(!must_quote(b"a:1"));
+    assert!(must_quote(b"a: 1"));
+
+    assert!(!must_quote(b"(a)"));
+    assert!(!must_quote(b"_a_"));
+    assert!(!must_quote(b"(1 + 2 * 3 / 4 % 5 <= 6"));
+    assert!(!must_quote(b"a > b || c && d"));
+    assert!(!must_quote(b"a > b || c && d"));
+    assert!(!must_quote(b"Beer is good! Are you sure? Hmm ... Yes."));
+    assert!(!must_quote(b"Sure?"));
+
+    assert!(must_quote(b"-1"));
+    assert!(!must_quote(b"-a1"));
 }
 
 /// Write a value as YAML document, without explicit document start/end markers.

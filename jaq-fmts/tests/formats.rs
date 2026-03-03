@@ -32,6 +32,12 @@ fn jc(json: &str, cbor_hex: &str) {
     assert_eq!(cbor_val, cbor_val2);
 }
 
+fn cbor_fail(cbor_hex: &str) {
+    let cbor_bin = decode_hex(cbor_hex).unwrap();
+    let iter = read::cbor::parse_many(&*cbor_bin);
+    assert!(iter.collect::<Result<Vec<_>, _>>().is_err())
+}
+
 #[test]
 fn cbor() {
     jc("0", "00");
@@ -122,6 +128,11 @@ fn cbor() {
     jc("[\"a\", {_ \"b\": \"c\"}]", "826161bf61626163ff");
     jc("{_ \"Fun\": true, \"Amt\": -2}", "bf6346756ef563416d7421ff");
     */
+
+    // array / object with incredibly large capacity
+    // this must fail in a controlled way, instead of panicking
+    cbor_fail("9b9b9b9393a59393a5");
+    cbor_fail("bb5bf90703ffffffff03b2b2");
 }
 
 // TODO: test encoding!
