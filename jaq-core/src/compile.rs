@@ -430,9 +430,6 @@ impl<S: Copy + Ord> Locals<S> {
     }
 
     /// Call `f(f_1; ...; f_n)`, allowing tail-recursive calls to `tr`.
-    ///
-    /// We can analyse tail call behaviour of filters by annotating each
-    /// definition by what tail calls it might return.
     fn call(&self, name: S, args: &[TermId], tr: &Tr) -> Option<(Term, Tr)> {
         Some(match self.funs.get_last(&(name, args.len()))? {
             (Fun::Arg, vars) => (Term::Var(self.vars.total - *vars), Tr::new()),
@@ -904,10 +901,7 @@ fn tco() {
         let tk = lex::Lexer::new(filter).lex().unwrap();
         let tm = parse::Parser::new(&tk).term().unwrap();
         let mut c = Compiler::<_, ()>::default();
-        let id = c.lut.insert_term(Term::default());
-        let (tm, tr) = c.term(tm, &Tr::new());
-        c.lut.terms[id.0] = tm;
-        assert_eq!(tr, Tr::new());
+        let _id = c.iterm(tm);
         let calls = c.lut.terms.iter().filter_map(|tm| match tm {
             Term::CallDef(.., typ) => Some(*typ),
             _ => None,
@@ -920,10 +914,13 @@ fn tco() {
     // no calls to definitions here
     assert_eq!(*calls_in("1+1"), []);
 
-    // Here, the call to `f` in `.+1 | f` is a tail call ([`CallType::Throw`]), because:
+    // The call to `f` in `.+1 | f` is a tail call ([`CallType::Throw`]), because:
     //
     // - `|` returns all outputs of the right-hand side as-is, and
     // - `f` is an ancestor of the filter `.+1 | f`.
+    //
+    // We can analyse tail call behaviour of filters by annotating each
+    // definition by what tail calls it might return.
     let f = r#"
       def f:
         .+1 | f;  # f    -> {f} (f is called with Throw)
