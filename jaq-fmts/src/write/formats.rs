@@ -26,7 +26,7 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
         }
         (Val::BStr(b) | Val::TStr(b), Format::Raw | Format::Raw0) => w.write_all(b)?,
         (_, Format::Cbor) => cbor::write(w, val)?,
-        (_, Format::Json | Format::Raw | Format::Raw0) => jaq_json::write::write(w, pp, 0, val)?,
+        (_, Format::Json | Format::Jsonc | Format::Json5 | Format::Raw | Format::Raw0) => jaq_json::write::write(w, pp, 0, val)?,
         (_, Format::Yaml) => yaml::write(w, pp, 0, val)?,
         (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Toml::try_from(val))?)?,
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,

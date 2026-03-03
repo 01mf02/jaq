@@ -8,9 +8,36 @@
 jaq (pronounced /ʒaːk/, like *Jacques*[^jacques]) is a clone of
 the JSON data processing tool [`jq`](https://jqlang.github.io/jq/).
 It has a few features not present in `jq`, such as
-support for the data formats YAML, CBOR, TOML, and XML.
+support for the data formats YAML, CBOR, TOML, XML, and **JSONC**.
 jaq has an own [manual](https://gedenkt.at/jaq/manual/).
 You can try jaq on the [playground](https://gedenkt.at/jaq/).
+
+## JSONC Support
+
+jaq supports both `//` single-line and `/* */` block comments in JSON input:
+
+```bash
+echo '{"name": "test" // comment
+}' | jaq '.name'
+# "test"
+
+echo '{"host": /* inline */ "localhost"}' | jaq '.host'
+# "localhost"
+```
+
+Files with `.jsonc` extension are auto-detected:
+
+```bash
+jaq '.host' config.jsonc
+```
+
+You can also use `--from jsonc` explicitly:
+
+```bash
+jaq --from jsonc '.key' settings.txt
+```
+
+Comments inside strings are preserved as-is (not stripped).
 
 jaq is two things at a time:
 

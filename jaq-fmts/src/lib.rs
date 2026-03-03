@@ -33,6 +33,10 @@ pub enum Format {
     /// JavaScript Object Notation
     #[default]
     Json,
+    /// JSON with Comments (`//` and `/* */`)
+    Jsonc,
+    /// JSON5 (JSON with extensions: trailing commas, single-quoted strings, etc.)
+    Json5,
     /// Concise Binary Object Representation
     Cbor,
     /// Tom's Obvious, Minimal Language
@@ -45,7 +49,7 @@ pub enum Format {
 
 impl Format {
     /// List of all currently supported formats.
-    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml";
+    pub const ALL: &str = "raw, json, jsonc, json5, cbor, yaml, toml, xml";
 
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {
@@ -55,6 +59,8 @@ impl Format {
             "xml" | "xhtml" => Some(Format::Xml),
             "yml" | "yaml" => Some(Format::Yaml),
             "json" => Some(Format::Json),
+            "jsonc" => Some(Format::Jsonc),
+            "json5" => Some(Format::Json5),
             _ => None,
         }
     }
@@ -66,6 +72,8 @@ impl Format {
             "raw" => Some(Format::Raw),
             "raw0" => Some(Format::Raw0),
             "json" => Some(Format::Json),
+            "jsonc" => Some(Format::Jsonc),
+            "json5" => Some(Format::Json5),
             "toml" => Some(Format::Toml),
             "xml" => Some(Format::Xml),
             "yaml" => Some(Format::Yaml),
