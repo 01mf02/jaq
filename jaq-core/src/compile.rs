@@ -867,3 +867,89 @@ impl<'s, F> Compiler<&'s str, F> {
         })
     }
 }
+
+/// Tail Call Optimisation.
+#[test]
+fn tco() {
+    let calls_in = |filter| -> Vec<CallType> {
+        let tk = lex::Lexer::new(filter).lex().unwrap();
+        let tm = parse::Parser::new(&tk).term().unwrap();
+        let mut c = Compiler::<_, ()>::default();
+        let id = c.lut.insert_term(Term::default());
+        let (tm, tr) = c.term(tm, &Tr::new());
+        c.lut.terms[id.0] = tm;
+        assert_eq!(tr, Tr::new());
+        let calls = c.lut.terms.iter().filter_map(|tm| match tm {
+            Term::CallDef(.., typ) => Some(*typ),
+            _ => None,
+        });
+        calls.collect()
+    };
+
+    use CallType::*;
+
+    // no calls to definitions here
+    assert_eq!(*calls_in("1+1"), []);
+
+    // Here, the call to `f` in `.+1 | f` is a tail call ([`CallType::Throw`]), because:
+    //
+    // - `|` returns all outputs of the right-hand side as-is, and
+    // - `f` is an ancestor of the filter `.+1 | f`.
+    let f = r#"
+      def f:
+        .+1 | f;  # f    -> {f} (f is called with Throw)
+      f           # main -> {}  (f is called with CatchOne)
+    "#;
+    assert_eq!(*calls_in(f), [CatchOne, Throw]);
+
+    // In contexts where actual filter outputs are required,
+    // filters that may return tail calls need to be called with [`CallType::CatchAll`].
+    let f = r#"
+      def f:
+        f+1;  # f    -> {} (f is called with CatchAll)
+      f       # main -> {} (f is called with Inline)
+    "#;
+    // This leads to a stack overflow in jaq and an OOM error in jq.
+    assert_eq!(*calls_in(f), [Inline, CatchAll]);
+
+    // Here, it is very important that
+    // CatchOne is used instead of CatchAll ---
+    // using the latter in the call to `g` would prevent
+    // tail-recursive calls to `f` being handled by the outer call to `f`,
+    // and would thus lead to a stack overflow.
+    let f = r#"
+      def f:
+        def g:
+          f, g;  # g    -> {f, g} (f and g are called with Throw)
+        g;       # f    -> {f}    (g is called with CatchOne)
+      f          # main -> {}     (f is called with CatchOne)
+    "#;
+    assert_eq!(*calls_in(f), [CatchOne, CatchOne, Throw, Throw]);
+
+    // Here, we do not need to catch outputs from `g` when we call it in `f`, because:
+    //
+    // - `g` does not return tail-calls to itself and
+    // - at the call site of `g`, we may return tail calls to `f`,
+    //   which is what `g` returns
+    let f = r#"
+      def f:
+        def g:
+          f;     # g    -> {f} (f is called with Throw)
+        g;       # f    -> {f} (g is called with *Inline*)
+      f          # main -> { } (f is called with CatchOne)
+    "#;
+    assert_eq!(*calls_in(f), [CatchOne, Inline, Throw]);
+
+    // If a definition is at a place that prohibits tail calls to a parent,
+    // then calls to the parent are wrapped with [`CallType::CatchAll`]:
+    let f = r#"
+      def f:
+        1 + (
+          def g:
+            g;   # g    -> {g} (g is called with Throw)
+          g      #             (g is called with CatchOne)
+        );       # f    -> { }
+      f          # main -> { } (f is called with Inline)
+    "#;
+    assert_eq!(*calls_in(f), [Inline, CatchOne, Throw]);
+}
