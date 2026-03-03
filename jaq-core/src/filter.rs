@@ -352,9 +352,9 @@ fn def_run<'a, D: DataT, T: 'a>(
 ) -> ValXs<'a, T, D::V<'a>> {
     use core::ops::ControlFlow;
     let outs = |cvs| flat_map_then(cvs, move |cv| run(*id, cv));
-    let catch = |id: Option<Id>| {
+    let catch = |all: bool| {
         move |r| match r {
-            Err(Exn(exn::Inner::TailCall(tc))) if id == Some(tc.0) || id.is_none() => {
+            Err(Exn(exn::Inner::TailCall(tc))) if all || tc.0 == *id => {
                 ControlFlow::Continue(run(tc.0, (with_vars(tc.1), from(tc.2))))
             }
             Ok(_) | Err(_) => ControlFlow::Break(r),
@@ -363,8 +363,8 @@ fn def_run<'a, D: DataT, T: 'a>(
 
     match call_typ {
         CallType::Inline => outs(cvs),
-        CallType::CatchOne => Box::new(crate::Stack::new([outs(cvs)].into(), catch(Some(*id)))),
-        CallType::CatchAll => Box::new(crate::Stack::new([outs(cvs)].into(), catch(None))),
+        CallType::CatchOne => Box::new(crate::Stack::new([outs(cvs)].into(), catch(false))),
+        CallType::CatchAll => Box::new(crate::Stack::new([outs(cvs)].into(), catch(true))),
         CallType::Throw => Box::new(cvs.map(move |cv| {
             cv.and_then(|cv| {
                 let tc = (*id, cv.0.vars, into(cv.1));
