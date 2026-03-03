@@ -61,11 +61,24 @@ impl<F> Lut<F> {
     }
 }
 
-#[derive(Clone, Debug)]
+/// How to call a filter implemented by definition.
+///
+/// This is important to achieve tail-call optimisation (TCO).
+/// In particular, a *tail call* is any call to an ancestor from
+/// a position where the output is returned as-is by the ancestor.
+///
+/// See
+/// [`Compiler::term`] for a list of filters that return outputs of sub-filters as-is, and
+/// [`Locals::call`] for how the [`CallType`] is determined.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum CallType {
+    /// Run filter and return its outputs as-is
     Inline,
+    /// Return exception that encodes filter ID, arguments and input (tail call)
     Throw,
+    /// Run filter and expand thrown exceptions that match the filter ID
     CatchOne,
+    /// Run filter and expand thrown exceptions
     CatchAll,
 }
 
@@ -416,6 +429,10 @@ impl<S: Copy + Ord> Locals<S> {
         self.vars.pop(&Bind::Fun(name));
     }
 
+    /// Call `f(f_1; ...; f_n)`, allowing tail-recursive calls to `tr`.
+    ///
+    /// We can analyse tail call behaviour of filters by annotating each
+    /// definition by what tail calls it might return.
     fn call(&self, name: S, args: &[TermId], tr: &Tr) -> Option<(Term, Tr)> {
         Some(match self.funs.get_last(&(name, args.len()))? {
             (Fun::Arg, vars) => (Term::Var(self.vars.total - *vars), Tr::new()),
@@ -592,6 +609,18 @@ impl<'s, F> Compiler<&'s str, F> {
     ///
     /// Returns which of the functions in `tr` it actually calls tail-recursively.
     /// The output `Tr` must be a subset of the input `Tr`.
+    ///
+    /// The following filters return the outputs of the filters `F` or `G` as-is:
+    ///
+    /// - `F, G`
+    /// - `f // G`
+    /// - `f as ... | G`
+    /// - `f        | G`
+    /// - `if p then F else G end`
+    /// - `foreach fx as ... (init; f; G)`
+    /// - `def x: f; G`
+    ///
+    /// All other filters do not return outputs of sub-filters as-is.
     fn term(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> (Term, Tr) {
         use parse::Term::*;
         let t = match t {

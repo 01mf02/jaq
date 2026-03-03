@@ -134,7 +134,7 @@ impl<V: ValT + 'static> Filter<data::JustLut<V>> {
 
 /// Minimal set of definitions.
 ///
-/// This depends on [`funs`] being loaded.
+/// This depends on [`funs()`] being loaded.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
     load::parse(include_str!("defs.jq"), |p| p.defs())
         .unwrap()
