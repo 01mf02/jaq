@@ -638,9 +638,8 @@ impl<'s, F> Compiler<&'s str, F> {
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
-                let if_thens: Vec<_> = if_thens.into_iter().map(|(if_, then_)| {
-                    (self.iterm(if_), self.iterm_tr(then_, tr))
-                }).collect();
+                let f = |(if_, then_)| (self.iterm(if_), self.iterm_tr(then_, tr));
+                let if_thens: Vec<_> = if_thens.into_iter().map(f).collect();
                 let else_ = else_.map_or((Term::Id, Tr::new()), |else_| self.term(*else_, tr));
                 return if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
                     let else_ = self.lut.insert_term(acc.0);
@@ -796,11 +795,10 @@ impl<'s, F> Compiler<&'s str, F> {
     fn call_mod_id(&self, mid: ModId, name: &'s str, args: &[TermId]) -> Option<Term> {
         let mut sig_defs = self.mod_map[mid].iter().rev();
         let (sig, id, tr) = sig_defs.find(|(sig, ..)| sig.matches(name, args))?;
+        debug_assert!(tr.len() <= 1);
         let typ = if tr.contains(id) {
-            assert_eq!(tr.len(), 1);
             CallType::CatchOne
         } else {
-            assert_eq!(tr.len(), 0);
             CallType::Inline
         };
         let vars = self.locals.vars.total;
@@ -927,7 +925,7 @@ fn tco() {
     let f = r#"
       def f:
         .+1 | f;  # f    -> {f} (f is called with Throw)
-      f           # main -> {}  (f is called with CatchOne)
+      f           # main -> { } (f is called with CatchOne)
     "#;
     assert_eq!(*calls_in(f), [CatchOne, Throw]);
 
@@ -950,8 +948,8 @@ fn tco() {
       def f:
         def g:
           f, g;  # g    -> {f, g} (f and g are called with Throw)
-        g;       # f    -> {f}    (g is called with CatchOne)
-      f          # main -> {}     (f is called with CatchOne)
+        g;       # f    -> {f   } (g is called with CatchOne)
+      f          # main -> {    } (f is called with CatchOne)
     "#;
     assert_eq!(*calls_in(f), [CatchOne, CatchOne, Throw, Throw]);
 
