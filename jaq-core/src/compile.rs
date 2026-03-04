@@ -214,7 +214,7 @@ pub struct Compiler<S, F> {
     lut: Lut<(Sig<S>, F)>,
 
     /// `mod_map[mid]` yields all top-level definitions contained inside a module with ID `mid`
-    mod_map: Vec<Vec<(Sig<S>, TermId, Tr)>>,
+    mod_map: Vec<Vec<Def<S>>>,
 
     imported_mods: Vec<(ModId, S)>,
     included_mods: Vec<ModId>,
@@ -226,6 +226,8 @@ pub struct Compiler<S, F> {
 
     errs: Vec<Error<S>>,
 }
+
+type Def<S> = (Sig<S>, TermId, Tr);
 
 impl<S, F> Default for Compiler<S, F> {
     fn default() -> Self {
@@ -502,19 +504,22 @@ impl<'s, F> Compiler<&'s str, F> {
         mods: load::Modules<&'s str, P>,
     ) -> Result<Filter<F>, Errors<&'s str, P>> {
         self.imported_vars = mods
-            .iter()
+            .file_vars()
             .enumerate()
-            .flat_map(|(mid, (_file, m))| m.vars.iter().map(move |(_path, x, _meta)| (*x, mid)))
+            .flat_map(|(mid, (_file, vars))| vars.iter().map(move |(_path, x, _meta)| (*x, mid)))
             .collect();
 
         let mut errs = Vec::new();
-        for (file, m) in mods {
-            self.module(m);
-            if !self.errs.is_empty() {
-                errs.push((file, core::mem::take(&mut self.errs)));
-            }
-            assert!(self.locals.is_empty());
+        for (file, module) in mods.deps {
+            let defs = self.open_module(module);
+            let defs = self.module(defs);
+            self.mod_map.push(defs);
+            self.close_module(file, &mut errs)
         }
+        let (file, module) = mods.main;
+        let main = self.open_module(module);
+        let id = self.iterm(main);
+        self.close_module(file, &mut errs);
 
         /*
         for (i, t) in self.lut.terms.iter().enumerate() {
@@ -522,19 +527,8 @@ impl<'s, F> Compiler<&'s str, F> {
         }
         */
 
-        if errs.is_empty() {
-            // the main filter corresponds to the last definition of the last module
-            let (sig, id, tr) = self.mod_map.last().unwrap().last().unwrap();
-            assert!(sig.matches("main", &[]));
-            assert!(tr.is_empty());
-            //std::println!("main: {:?}", id);
-            Ok(Filter {
-                id: *id,
-                lut: self.lut.map_funs(|(_sig, f)| f),
-            })
-        } else {
-            Err(errs)
-        }
+        let lut = self.lut.map_funs(|(_sig, f)| f);
+        errs.is_empty().then(|| Filter { id, lut }).ok_or(errs)
     }
 
     fn with_label<T>(&mut self, label: &'s str, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -554,7 +548,7 @@ impl<'s, F> Compiler<&'s str, F> {
         y
     }
 
-    fn module(&mut self, m: load::Module<&'s str>) {
+    fn open_module<B>(&mut self, m: load::Module<&'s str, B>) -> B {
         self.imported_mods.clear();
         self.included_mods.clear();
         for (mid, as_) in m.mods {
@@ -563,23 +557,39 @@ impl<'s, F> Compiler<&'s str, F> {
                 Some(as_) => self.imported_mods.push((mid, as_)),
             }
         }
+        m.body
+    }
 
-        let mut siblings = Vec::new();
-        for def in m.body {
-            siblings.push((def.name, def.args.len()));
-            let args: Box<[_]> = def.args.iter().map(|a| bind_from(a, *a)).collect();
-            let (sig, def, tr_) = self.def(def, &Tr::new());
-            self.locals.push_sibling(sig.name, args, def, tr_);
+    fn close_module<P>(&mut self, file: load::File<&'s str, P>, errs: &mut Errors<&'s str, P>) {
+        if !self.errs.is_empty() {
+            errs.push((file, core::mem::take(&mut self.errs)));
         }
+        assert!(self.locals.is_empty());
+    }
 
-        let defs = siblings.into_iter().rev().map(|(name, arity)| {
-            let (args, id, tr) = self.locals.pop_sibling(name, arity);
-            let args = args.into_vec().into_iter().map(|a| a.map(|_| ())).collect();
-            (Sig { name, args }, id, tr)
-        });
+    fn open_def(&mut self, def: parse::Def<&'s str>, tr: &Tr) -> (&'s str, usize) {
+        let args: Box<[_]> = def.args.iter().map(|a| bind_from(a, *a)).collect();
+        let arity = args.len();
+        let (sig, def, tr_) = self.def(def, tr);
+        self.locals.push_sibling(sig.name, args, def, tr_);
+        (sig.name, arity)
+    }
+
+    fn close_def(&mut self, (name, arity): (&'s str, usize)) -> Def<&'s str> {
+        let (args, id, tr) = self.locals.pop_sibling(name, arity);
+        let args = args.into_vec().into_iter().map(|a| a.map(|_| ())).collect();
+        (Sig { name, args }, id, tr)
+    }
+
+    fn module(&mut self, defs: Vec<parse::Def<&'s str>>) -> Vec<Def<&'s str>> {
+        let siblings = defs.into_iter().map(|def| self.open_def(def, &Tr::new()));
+        let siblings: Vec<_> = siblings.collect();
+
+        let defs = siblings.into_iter().rev().map(|sig| self.close_def(sig));
         let mut defs: Vec<_> = defs.collect();
+
         defs.reverse();
-        self.mod_map.push(defs)
+        defs
     }
 
     /// Compile a definition LHS.
@@ -647,19 +657,11 @@ impl<'s, F> Compiler<&'s str, F> {
                 }
             }
             Def(defs, t) => {
-                let mut siblings = Vec::new();
-                for def in defs {
-                    siblings.push((def.name, def.args.len()));
-                    let args: Box<[_]> = def.args.iter().map(|a| bind_from(a, *a)).collect();
-                    let (sig, def, tr_) = self.def(def, tr);
-                    self.locals.push_sibling(sig.name, args, def, tr_);
-                }
-
+                let siblings: Vec<_> = defs.into_iter().map(|def| self.open_def(def, tr)).collect();
                 let (t, tr_) = self.term(*t, tr);
-
-                for (name, arity) in siblings.into_iter().rev() {
-                    self.locals.pop_sibling(name, arity);
-                }
+                siblings.into_iter().rev().for_each(|sig| {
+                    self.close_def(sig);
+                });
 
                 return (t, tr_);
             }

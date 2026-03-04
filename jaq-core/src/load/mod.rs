@@ -94,11 +94,14 @@ pub enum Error<S> {
     Parse(Vec<parse::Error<S>>),
 }
 
+type Vars<S> = Vec<(S, S, Option<Term<S>>)>;
+
 /// Module containing strings `S` and a body `B`.
 #[derive(Default)]
 pub struct Module<S, B = Vec<Def<S>>> {
     /// metadata (optional)
-    pub(crate) meta: Option<Term<S>>,
+    #[allow(dead_code)]
+    meta: Option<Term<S>>,
     /// included and imported modules
     ///
     /// Suppose that we have [`Modules`] `mods` and the current [`Module`] is `mods[id]`.
@@ -107,15 +110,23 @@ pub struct Module<S, B = Vec<Def<S>>> {
     /// the module is included if `name` is `None` and imported if `name` is `Some(name)`.
     pub(crate) mods: Vec<(usize, Option<S>)>,
     /// imported variables, storing path and name (always starts with `$`)
-    pub(crate) vars: Vec<(S, S, Option<Term<S>>)>,
+    pub(crate) vars: Vars<S>,
     /// everything that comes after metadata and includes/imports
     pub(crate) body: B,
 }
 
-/// Tree of modules containing definitions.
-///
-/// By convention, the last module contains a single definition that is the `main` filter.
-pub type Modules<S, P> = Vec<(File<S, P>, Module<S>)>;
+/// Tree of modules containing definitions, and a main module.
+pub struct Modules<S, P> {
+    pub(crate) deps: Vec<(File<S, P>, Module<S>)>,
+    pub(crate) main: (File<S, P>, Module<S, Term<S>>),
+}
+
+impl<S, P> Modules<S, P> {
+    pub(crate) fn file_vars(&self) -> impl Iterator<Item = (&File<S, P>, &Vars<S>)> {
+        let mod_vars = self.deps.iter().map(|(file, module)| (file, &module.vars));
+        mod_vars.chain([(&self.main.0, &self.main.1.vars)])
+    }
+}
 
 /// Errors occurring during loading of multiple modules.
 ///
@@ -154,17 +165,6 @@ impl<S: core::ops::Deref<Target = str>, B> parse::Module<S, B> {
             })
         } else {
             Err(Error::Io(errs))
-        }
-    }
-}
-
-impl<S, B> Module<S, B> {
-    fn map_body<B2>(self, f: impl FnOnce(B) -> B2) -> Module<S, B2> {
-        Module {
-            meta: self.meta,
-            mods: self.mods,
-            vars: self.vars,
-            body: f(self.body),
         }
     }
 }
@@ -295,9 +295,9 @@ pub fn import<S: Copy, P: Clone>(
 ) -> Result<(), Errors<S, P>> {
     let mut errs = Vec::new();
     let mut vals = Vec::new();
-    for (mod_file, module) in mods {
+    for (mod_file, vars) in mods.file_vars() {
         let mut mod_errs = Vec::new();
-        for (path, _name, meta) in &module.vars {
+        for (path, _name, meta) in vars {
             let parent = &mod_file.path;
             match f(Import { parent, path, meta }) {
                 Ok(v) => vals.push(v),
@@ -308,11 +308,7 @@ pub fn import<S: Copy, P: Clone>(
             errs.push((mod_file.clone(), Error::Io(mod_errs)));
         }
     }
-    if errs.is_empty() {
-        Ok(())
-    } else {
-        Err(errs)
-    }
+    errs.is_empty().then_some(()).ok_or(errs)
 }
 
 impl<S, P, R> Loader<S, P, R> {
@@ -345,28 +341,31 @@ impl<'s, P: Clone + Eq, R: FnMut(Import<&'s str, P>) -> ReadResult<P>> Loader<&'
         arena: &'s Arena,
         file: File<&'s str, P>,
     ) -> Result<Modules<&'s str, P>, Errors<&'s str, P>> {
-        let result = parse_main(file.code)
-            .and_then(|m| {
-                m.map(|path, meta| {
-                    let (parent, meta) = (&file.path, &meta);
-                    self.find(arena, Import { parent, path, meta })
-                })
+        let result = parse_main(file.code).and_then(|m| {
+            m.map(|path, meta| {
+                let (parent, meta) = (&file.path, &meta);
+                self.find(arena, Import { parent, path, meta })
             })
-            .map(|m| m.map_body(|body| Vec::from([Def::new("main", Vec::new(), body)])));
-        self.mods.push((file, result));
+        });
 
-        let mut mods = Vec::new();
+        let mut main = None;
+        let mut deps = Vec::new();
         let mut errs = Vec::new();
+
+        match result {
+            Ok(m) => main = Some((file, m)),
+            Err(e) => errs.push((file, e)),
+        };
         for (file, result) in self.mods {
             match result {
-                Ok(m) => mods.push((file, m)),
+                Ok(m) => deps.push((file, m)),
                 Err(e) => errs.push((file, e)),
             }
         }
-        if errs.is_empty() {
-            Ok(mods)
-        } else {
-            Err(errs)
+
+        match main {
+            Some(main) if errs.is_empty() => Ok(Modules { main, deps }),
+            _ => Err(errs),
         }
     }
 
