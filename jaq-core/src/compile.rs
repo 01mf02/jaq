@@ -981,4 +981,11 @@ fn tco() {
       f          # main -> { } (f is called with Inline)
     "#;
     assert_eq!(*calls_in(f), [Inline, CatchOne, Throw]);
+
+    let f = r#"
+      def f:
+        f | f;   # f    -> {f} (f is called with CatchAll and Throw)
+      f          # main -> { } (f is called with CatchOne)
+    "#;
+    assert_eq!(*calls_in(f), [CatchOne, CatchAll, Throw]);
 }
