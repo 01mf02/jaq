@@ -5,7 +5,7 @@ use crate::compile::{Bind, CallType, Fold, Pattern, Term as Ast, TermId as Id};
 use crate::data::{DataT, HasLut};
 use crate::fold::fold;
 use crate::val::{ValR, ValT, ValX, ValXs};
-use crate::{exn, rc_lazy_list, Bind as Arg, Error, Exn, RcList};
+use crate::{exn, rc_lazy_list, stack, Bind as Arg, Error, Exn, RcList};
 use alloc::boxed::Box;
 use dyn_clone::DynClone;
 
@@ -500,9 +500,15 @@ impl Id {
                     None => r.run(cv),
                 }
             }
-            Ast::Ite(if_, then_, else_) => pipe(if_, cv, move |cv, v| {
-                if v.as_bool() { then_ } else { else_ }.run(cv)
-            }),
+            Ast::IfThenElse(if_thens, else_) => {
+                let (if_then, elifs) = if_thens.split_first().unwrap();
+                Box::new(
+                    stack::Ite::new(cv, *if_then, elifs, *else_, |p, cv| {
+                        p.run(cv).map(|y| y.map(|y| y.as_bool()))
+                    })
+                    .flat_map(|y| box_iter::then(y, |(f, cv)| f.run(cv))),
+                )
+            }
             Ast::Path(f, path) => {
                 let path = path.map_ref(|i| {
                     let cv = cv.clone();
@@ -608,10 +614,15 @@ impl Id {
                     .any(|v| v.as_ref().map_or(true, ValT::as_bool));
                 if any_true { l } else { r }.paths(cv)
             }
-            Ast::Ite(if_, then_, else_) => {
-                flat_map_then_with(if_.run(proj_cv(&cv)), cv, move |v, cv| {
-                    if v.as_bool() { then_ } else { else_ }.paths(cv)
-                })
+            Ast::IfThenElse(if_thens, else_) => {
+                // TODO: consider elif branches!
+                let (if_then, elifs) = if_thens.split_first().unwrap();
+                Box::new(
+                    stack::Ite::new(cv, *if_then, elifs, *else_, |p, (c, v)| {
+                        p.run((c, v.0)).map(|y| y.map(|y| y.as_bool()))
+                    })
+                    .flat_map(|y| box_iter::then(y, |(f, cv)| f.paths(cv))),
+                )
             }
             Ast::TryCatch(f, c) => try_catch_run(f.paths((cv.0.clone(), cv.1)), move |e| {
                 c.run((cv.0.clone(), e.into_val()))
@@ -701,9 +712,12 @@ impl Id {
                 (cv.0, f),
                 move |v, (ctx, f)| r.update((ctx, v), f),
             ),
-            Ast::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
-                if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
-            }),
+            Ast::IfThenElse(if_thens, else_) => {
+                let (if_, then_) = if_thens.first().unwrap();
+                reduce(if_.run(cv.clone()), cv.1, move |x, v| {
+                    if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
+                })
+            }
             Ast::Alt(l, r) => {
                 let some_true = l.run(cv.clone()).any(|y| y.map_or(true, |y| y.as_bool()));
                 if some_true { l } else { r }.update(cv, f)

@@ -136,8 +136,9 @@ pub(crate) enum Term<T = TermId> {
     Alt(T, T),
     /// Try-catch (`try f catch g`)
     TryCatch(T, T),
-    /// If-then-else (`if f then g else h end`)
-    Ite(T, T, T),
+
+    /// If-then-else (`if p1 then f1 elif p2 then f2 ... else g end`)
+    IfThenElse(Vec<(T, T)>, T),
     /// `reduce` and `foreach`
     ///
     ///  Assuming that `xs` evaluates to `x0`, `x1`, ..., `xn`,
@@ -638,14 +639,23 @@ impl<'s, F> Compiler<&'s str, F> {
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
-                let f = |(if_, then_)| (self.iterm(if_), self.iterm_tr(then_, tr));
+                let mut tr_ = Tr::new();
+                let f = |(if_, then_)| {
+                    let if_ = self.iterm(if_);
+                    let (then, tr_then) = self.iterm_tr(then_, tr);
+                    tr_.extend(tr_then);
+                    (if_, then)
+                };
                 let if_thens: Vec<_> = if_thens.into_iter().map(f).collect();
-                let else_ = else_.map_or((Term::Id, Tr::new()), |else_| self.term(*else_, tr));
-                return if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
-                    let else_ = self.lut.insert_term(acc.0);
-                    let tr_ = then_.1.union(&acc.1).copied().collect();
-                    (Term::Ite(if_, then_.0, else_), tr_)
-                });
+                let else_ = match else_ {
+                    None => self.iterm(Id),
+                    Some(else_) => {
+                        let (else_, tr_else) = self.iterm_tr(*else_, tr);
+                        tr_.extend(tr_else);
+                        else_
+                    }
+                };
+                return (Term::IfThenElse(if_thens, else_), tr_);
             }
             Var(x) => self.var(x),
             Call(name, args) => {
