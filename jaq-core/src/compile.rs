@@ -638,13 +638,14 @@ impl<'s, F> Compiler<&'s str, F> {
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
             Break(x) => self.break_(x),
             IfThenElse(if_thens, else_) => {
+                let if_thens: Vec<_> = if_thens.into_iter().map(|(if_, then_)| {
+                    (self.iterm(if_), self.iterm_tr(then_, tr))
+                }).collect();
                 let else_ = else_.map_or((Term::Id, Tr::new()), |else_| self.term(*else_, tr));
                 return if_thens.into_iter().rev().fold(else_, |acc, (if_, then_)| {
-                    let if_ = self.iterm(if_);
-                    let (then_, tr_) = self.iterm_tr(then_, tr);
                     let else_ = self.lut.insert_term(acc.0);
-                    let tr_ = tr_.union(&acc.1).copied().collect();
-                    (Term::Ite(if_, then_, else_), tr_)
+                    let tr_ = then_.1.union(&acc.1).copied().collect();
+                    (Term::Ite(if_, then_.0, else_), tr_)
                 });
             }
             Var(x) => self.var(x),
@@ -706,9 +707,9 @@ impl<'s, F> Compiler<&'s str, F> {
                     }
                     Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
                     Pipe(ref pat) => {
+                        let l = self.iterm(*l);
                         let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
-                        let r = self.with_vars(&vars, |c| c.iterm_tr(*r, tr));
-                        (self.iterm(*l), r)
+                        (l, self.with_vars(&vars, |c| c.iterm_tr(*r, tr)))
                     }
                     _ => (self.iterm(*l), (self.iterm(*r), Tr::new())),
                 };
