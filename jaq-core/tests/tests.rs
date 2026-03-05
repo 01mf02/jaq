@@ -482,6 +482,12 @@ yields!(
 );
 
 yields!(
+    tc_nested,
+    r#"def f: "f", def g: "g", f, g; g; nth(10000; f)"#,
+    "f"
+);
+
+yields!(
     comments,
     r#"
 [
