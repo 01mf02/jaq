@@ -15,7 +15,7 @@ default = ["all"]
 all = ["cbor", "toml", "xml", "yaml"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
-toml = ["toml_edit"]
+toml = ["toml-span"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser", "base64"]
 
@@ -34,7 +34,7 @@ base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }
 saphyr-parser = { version = "0.0.6", optional = true }
-toml_edit = { version = "0.23.2", optional = true }
+toml-span = { version = "0.7.0", optional = true }
 xmlparser = { version = "0.13.6", optional = true }
 
 [dev-dependencies]
