@@ -163,7 +163,6 @@ fn biguint_from_str_radix(s: &str, radix: u32) -> Option<BigUint> {
     BigUint::from_radix_be(&digits.collect::<Option<Vec<_>>>()?, radix)
 }
 
-
 impl core::ops::Add for Num {
     type Output = Num;
     fn add(self, rhs: Self) -> Self::Output {

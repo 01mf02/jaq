@@ -486,6 +486,12 @@ impl Val {
                 .as_pos_usize()
                 .and_then(|i| abs_index(i, a.len()))
                 .map(|i| a[i].clone()),
+            (Val::Arr(x), Val::Arr(y)) => {
+                // adapted from the implementation of the `indices` filter
+                let iw = x.windows(y.len()).enumerate();
+                let indices = iw.filter_map(|(i, w)| (w == **y).then_some(i));
+                Some(indices.map(Val::from).collect())
+            }
             (Val::Obj(o), i) => o.get(i).cloned(),
             (v @ (Val::BStr(_) | Val::TStr(_) | Val::Arr(_)), Val::Obj(o)) => {
                 use jaq_core::ValT;
