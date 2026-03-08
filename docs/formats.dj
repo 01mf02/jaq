@@ -435,7 +435,7 @@ When it isn't present, the fields are given as arrays of each column's value.
 Fields with numeric data are automatically converted on reading.
 
 ```
-$ printf "a,b\n1,2\n3,4" | jaq --from csv .
+$ printf "a,b\n1,2\n3,4" | jaq --from csv
 [
   {
     "a": 1,
@@ -446,7 +446,7 @@ $ printf "a,b\n1,2\n3,4" | jaq --from csv .
     "b": 4
   }
 ]
-$ printf "a,b\n1,2\n3,4" | jaq --from csv_no_header .
+$ printf "a,b\n1,2\n3,4" | jaq --from csv_no_header
 [
   [
     "a",
