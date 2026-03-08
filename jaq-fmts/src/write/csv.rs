@@ -78,14 +78,17 @@ fn write_field<'a>(w: &mut dyn std::io::Write, field: &Val) -> Result<(), std::i
 fn write_row<'a>(
     w: &mut dyn std::io::Write,
     fields: impl Iterator<Item = &'a Val>,
+    newline: bool,
 ) -> Result<(), std::io::Error> {
+    if newline {
+        writeln!(w);
+    }
     let mut delim = "";
     for field in fields {
         write!(w, "{delim}")?;
         write_field(w, field)?;
         delim = ",";
     }
-    writeln!(w, "")?;
     Ok(())
 }
 
@@ -95,13 +98,13 @@ pub fn write(w: &mut dyn std::io::Write, v: &Val) -> Result<(), std::io::Error> 
         Val::Arr(vals) => match vals.get(0) {
             Some(Val::Obj(map)) => {
                 let ks: Vec<Val> = map.keys().cloned().collect();
-                write_row(w, ks.iter())?;
+                write_row(w, ks.iter(), false)?;
                 for val in vals.iter() {
                     match val {
                         Val::Obj(map)
                             if map.len() == ks.len() && ks.iter().all(|k| map.contains_key(k)) =>
                         {
-                            write_row(w, ks.iter().map(|k| &map[k]))?
+                            write_row(w, ks.iter().map(|k| &map[k]), true)?
                         }
                         _ => return fail(Error::RowNotObject(ks, val.clone())),
                     }
@@ -110,10 +113,12 @@ pub fn write(w: &mut dyn std::io::Write, v: &Val) -> Result<(), std::io::Error> 
             }
             Some(Val::Arr(vs)) => {
                 let length = vs.len();
+                let mut newline = false;
                 for val in vals.iter() {
                     match val {
                         Val::Arr(fields) if fields.len() == length => {
-                            write_row(w, fields.iter())?;
+                            write_row(w, fields.iter(), newline)?;
+                            newline = true;
                         }
                         _ => return fail(Error::RowWrongLength(length, val.clone())),
                     }
