@@ -425,3 +425,58 @@ $ jaq . examples/test.xhtml
 The output contains several values consisting only of whitespace, such as `"\n    "`.
 These are conserved by jaq because XML is a whitespace-sensitive format.
 
+## CSV
+
+[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma Sepparated Value) files can be read in two formats, with a header and without.
+The file is represented as an array of records, whose keys and values must be scalars.
+Headerless input files can be specified by using the `--from csv_no_header` option.
+When a header is present, the values in each part of the header are used as the keys for each following record of the file.
+When it isn't present, the fields are given as arrays of each column's value.
+Fields with numeric data are automatically converted on reading.
+
+```
+$ printf "a,b\n1,2\n3,4" | jaq --from csv
+[
+  {
+    "a": 1,
+    "b": 2
+  },
+  {
+    "a": 3,
+    "b": 4
+  }
+]
+$ printf "a,b\n1,2\n3,4" | jaq --from csv_no_header
+[
+  [
+    "a",
+    "b"
+  ],
+  [
+    1,
+    2
+  ],
+  [
+    3,
+    4
+  ]
+]
+```
+
+When writing CSV output, all elements of the output array must have the same shape.
+Ojbects must have the exact same key set, and arrays the same length.
+The columns of the file will follow the order of the keys in the first object.
+The order does not matter in subseqwuent objects.
+
+the presence of a header is automatically detected based on the type of objects written.
+
+```
+$ echo '[["a", "b"], [1, 2]]' | jaq --to csv
+a,b
+1,2
+$ echo '[{"a": 1, "b": 2}, {"b": 4, "a": 3}]' | jaq --to csv
+a,b
+1,2
+3,4
+```
+
