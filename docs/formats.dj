@@ -427,7 +427,7 @@ These are conserved by jaq because XML is a whitespace-sensitive format.
 
 ## CSV
 
-CSV (Comma Sepparated Value) files can be read in two formats, with a header and without.
+[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma Sepparated Value) files can be read in two formats, with a header and without.
 The file is represented as an array of records, whose keys and values must be scalars.
 Headerless input files can be specified by using the `--from csv_no_header` option.
 When a header is present, the values in each part of the header are used as the keys for each following record of the file.
