@@ -81,7 +81,7 @@ fn write_row<'a>(
     newline: bool,
 ) -> Result<(), std::io::Error> {
     if newline {
-        writeln!(w);
+        writeln!(w)?;
     }
     let mut delim = "";
     for field in fields {
