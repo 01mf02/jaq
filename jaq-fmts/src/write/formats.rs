@@ -30,6 +30,8 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
         (_, Format::Yaml) => yaml::write(w, pp, 0, val)?,
         (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Root::try_from(val))?)?,
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
+        (_, Format::Csv) => csv::write(w, val)?,
+        (_, Format::CsvNoHeader) => csv::write(w, val)?,
     };
 
     w.write_all(match format {
