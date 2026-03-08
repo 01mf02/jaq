@@ -12,7 +12,7 @@ pub enum Error {
     RowScalar(Val),
     /// record wasn't an object with the correct keys
     RowNotObject(Vec<Val>, Val),
-    /// record wasn't an object with the correct keys
+    /// record wasn't an array of the correct length
     RowWrongLength(usize, Val),
     /// field had wrong type
     FieldType(Val),
