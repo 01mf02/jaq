@@ -8,6 +8,7 @@ readme = "README.md"
 repository = "https://github.com/01mf02/jaq"
 license = "MIT"
 edition = "2021"
+publish = false
 
 [package.metadata.wasm-pack.profile.dev]
 wasm-opt = false
