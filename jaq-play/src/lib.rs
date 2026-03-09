@@ -9,7 +9,7 @@ use jaq_all::fmts::{read, write};
 use jaq_all::json::write::{Pp, Styles};
 use jaq_all::json::{self, bstr, style, write_bytes, write_utf8, Val, ValR};
 use jaq_all::load::{Color, FileReportsDisp};
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::prelude::{JsValue, wasm_bindgen};
 use web_sys::DedicatedWorkerGlobalScope as Scope;
 
 struct FormatterFn<F>(F);
