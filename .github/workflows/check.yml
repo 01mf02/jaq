@@ -46,3 +46,6 @@ jobs:
 
     - name: Clippy
       run: cargo clippy -- -Dwarnings
+
+    - name: Format
+      run: cargo fmt --check
