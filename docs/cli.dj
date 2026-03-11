@@ -28,7 +28,7 @@ jaq determines the format to parse a _FILE_ as follows:
 
 - If [`--from`](#--from) _FORMAT_ is used, jaq uses that format.
 - Otherwise, if _FILE_ has a file extension known by jaq, such as
-  `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`, `.csv`,
+  `.json`, `.yaml`, `.cbor`, `.toml`, `.xml`, `.csv`, `.tsv`
   jaq uses the corresponding format.
 - Otherwise, jaq assumes JSON.
 
@@ -40,7 +40,7 @@ For example,
 `jaq --from yaml . myfile.yml`
 parses `myfile.yml` as YAML.
 Possible values of _FORMAT_ include:
-`raw`, `raw0`, `json`, `yaml`, `cbor`, `toml`, `xml`, `csv`, `csv_no_header`.
+`raw`, `raw0`, `json`, `yaml`, `cbor`, `toml`, `xml`, `csv`, `csv_lines`, `tsv`, `tsv_lines`.
 
 jaq automatically chooses the corresponding input format for
 files with the extensions

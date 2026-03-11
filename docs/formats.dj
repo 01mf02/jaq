@@ -446,7 +446,7 @@ $ printf "a,b\n1,2\n3,4" | jaq --from csv
     "b": 4
   }
 ]
-$ printf "a,b\n1,2\n3,4" | jaq --from csv_no_header
+$ printf "a,b\n1,2\n3,4" | jaq --from csv_lines
 [
   [
     "a",

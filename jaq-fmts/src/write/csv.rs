@@ -1,4 +1,4 @@
-//! CSV support.
+//! CSV and TSV support.
 use crate::invalid_data;
 use core::fmt::{self, Display, Formatter};
 use jaq_json::Val;
@@ -92,7 +92,6 @@ fn write_row<'a>(
     Ok(())
 }
 
-/// Write a value as CBOR.
 pub fn write(w: &mut dyn std::io::Write, v: &Val) -> Result<(), std::io::Error> {
     match v {
         Val::Arr(vals) => match vals.get(0) {

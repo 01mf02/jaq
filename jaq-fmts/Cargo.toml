@@ -12,7 +12,7 @@ rust-version = "1.70"
 
 [features]
 default = ["all"]
-all = ["cbor", "toml", "xml", "yaml", "csv"]
+all = ["cbor", "toml", "xml", "yaml"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
 toml = ["toml-span"]
@@ -30,7 +30,6 @@ memmap2 = "0.9"
 num-bigint = { version = "0.4.6", default-features = false }
 
 # parsers
-csv = { version = "1.4.0", optional = true }
 base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }

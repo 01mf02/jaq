@@ -44,12 +44,16 @@ pub enum Format {
     /// Comma separated values
     Csv,
     /// Comma separated values, without a header row for column names
-    CsvNoHeader,
+    CsvLines,
+    /// Tab separated values
+    Tsv,
+    /// Tab separated values, without a header row for column names
+    TsvLines,
 }
 
 impl Format {
     /// List of all currently supported formats.
-    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml, csv, csv_no_header";
+    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml, csv, csv_lines, tsv, tsv_lines";
 
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {
@@ -60,6 +64,7 @@ impl Format {
             "yml" | "yaml" => Some(Format::Yaml),
             "json" => Some(Format::Json),
             "csv" => Some(Format::Csv),
+            "tsv" => Some(Format::Tsv),
             _ => None,
         }
     }
@@ -75,7 +80,9 @@ impl Format {
             "xml" => Some(Format::Xml),
             "yaml" => Some(Format::Yaml),
             "csv" => Some(Format::Csv),
-            "csv_no_header" => Some(Format::CsvNoHeader),
+            "csv_lines" => Some(Format::CsvLines),
+            "tsv" => Some(Format::Tsv),
+            "tsv_lines" => Some(Format::TsvLines),
             _ => None,
         }
     }
