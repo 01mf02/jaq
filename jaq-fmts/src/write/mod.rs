@@ -5,7 +5,7 @@ pub mod cbor;
 pub mod toml;
 #[cfg(feature = "xml")]
 pub mod xml;
-pub mod csv;
+pub mod tabular;
 #[cfg(feature = "yaml")]
 pub mod yaml;
 pub use jaq_json::write as json;

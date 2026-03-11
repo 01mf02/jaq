@@ -3,7 +3,7 @@
 pub mod cbor;
 #[cfg(feature = "toml")]
 pub mod toml;
-pub mod csv;
+pub mod tabular;
 #[cfg(feature = "xml")]
 pub mod xml;
 #[cfg(feature = "yaml")]

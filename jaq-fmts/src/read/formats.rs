@@ -1,4 +1,4 @@
-use super::{cbor, collect_if, csv, json, toml, xml, yaml, Result};
+use super::{cbor, collect_if, json, tabular, toml, xml, yaml, Result};
 use crate::{invalid_data, map_invalid_data, Format};
 use bytes::Bytes;
 use jaq_core::box_iter::{box_once, BoxIter};
@@ -24,7 +24,6 @@ pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
 pub fn bytes_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
-
         Raw | Raw0 | Json | Cbor | Csv | CsvLines | Tsv | TsvLines => "",
         Toml | Xml | Yaml => core::str::from_utf8(bytes).map_err(invalid_data)?,
     })
@@ -47,15 +46,15 @@ pub fn read<'a>(fmt: Format, read: impl io::BufRead + 'a, s: &'a str, slurp: boo
         Format::Toml => box_once(toml::parse(s).map_err(invalid_data)),
         Format::Xml => collect_if(slurp, xml::parse_many(s).map(map_invalid_data)),
         Format::Yaml => collect_if(slurp, yaml::parse_many(s).map(map_invalid_data)),
-        Format::Csv => box_once(csv::records(csv::csv(read.bytes())).map_err(invalid_data)),
+        Format::Csv => box_once(tabular::records(tabular::csv(read.bytes())).map_err(invalid_data)),
         Format::CsvLines => collect_if(
             slurp,
-            csv::lines(csv::csv(read.bytes())).map(map_invalid_data),
+            tabular::lines(tabular::csv(read.bytes())).map(map_invalid_data),
         ),
-        Format::Tsv => box_once(csv::records(csv::tsv(read.bytes())).map_err(invalid_data)),
+        Format::Tsv => box_once(tabular::records(tabular::tsv(read.bytes())).map_err(invalid_data)),
         Format::TsvLines => collect_if(
             slurp,
-            csv::lines(csv::tsv(read.bytes())).map(map_invalid_data),
+            tabular::lines(tabular::tsv(read.bytes())).map(map_invalid_data),
         ),
     }
 }
@@ -72,15 +71,19 @@ pub fn parse<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals
         Format::Json => collect_if(slurp, json::parse_many(bytes).map(map_invalid_data)),
         Format::Cbor => collect_if(slurp, cbor::parse_many(bytes).map(map_invalid_data)),
         Format::Toml | Format::Xml | Format::Yaml => read(fmt, &[][..], s, slurp),
-        Format::Csv => box_once(csv::records(csv::csv(bytes.iter().copied().map(Ok))).map_err(invalid_data)),
+        Format::Csv => box_once(
+            tabular::records(tabular::csv(bytes.iter().copied().map(Ok))).map_err(invalid_data),
+        ),
         Format::CsvLines => collect_if(
             slurp,
-            csv::lines(csv::csv(bytes.iter().copied().map(Ok))).map(map_invalid_data),
+            tabular::lines(tabular::csv(bytes.iter().copied().map(Ok))).map(map_invalid_data),
         ),
-        Format::Tsv => box_once(csv::records(csv::tsv(bytes.iter().copied().map(Ok))).map_err(invalid_data)),
+        Format::Tsv => box_once(
+            tabular::records(tabular::tsv(bytes.iter().copied().map(Ok))).map_err(invalid_data),
+        ),
         Format::TsvLines => collect_if(
             slurp,
-            csv::lines(csv::tsv(bytes.iter().copied().map(Ok))).map(map_invalid_data),
+            tabular::lines(tabular::tsv(bytes.iter().copied().map(Ok))).map(map_invalid_data),
         ),
     }
 }
