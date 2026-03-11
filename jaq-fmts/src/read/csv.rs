@@ -13,6 +13,10 @@ fn convert_field(b: &[u8]) -> Val {
             Val::Num(Num::BigInt(bi.into()))
         } else if let Ok(f) = s.parse() {
             Val::Num(Num::Float(f))
+        } else if s == "true" {
+            Val::Bool(true)
+        } else if s == "false" {
+            Val::Bool(false)
         } else {
             Val::utf8_str(Box::from(b))
         }
