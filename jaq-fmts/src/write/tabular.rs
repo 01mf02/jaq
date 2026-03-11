@@ -80,10 +80,10 @@ pub fn tsv(
     }
 }
 
-fn write_row<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+fn write_row<'a>(
     w: &mut dyn std::io::Write,
     fields: impl Iterator<Item = &'a Val>,
-    f: &F,
+    f: impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
     newline: bool,
 ) -> Result<(), std::io::Error> {
     if newline {
@@ -97,9 +97,9 @@ fn write_row<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::i
     Ok(())
 }
 
-fn write_objects<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+fn write_objects<'a>(
     w: &mut dyn std::io::Write,
-    f: &F,
+    f: &impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
     map: &Map,
     records: impl Iterator<Item = &'a Val>,
 ) -> Result<(), std::io::Error> {
@@ -116,9 +116,9 @@ fn write_objects<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), st
     Ok(())
 }
 
-fn write_arrays<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+fn write_arrays<'a>(
     w: &mut dyn std::io::Write,
-    f: &F,
+    f: &impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
     records: impl Iterator<Item = &'a Val>,
 ) -> Result<(), std::io::Error> {
     let mut newline = false;
@@ -135,9 +135,9 @@ fn write_arrays<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std
 }
 
 /// Using a specified field writer, write tabular data to output.
-pub fn write<F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+pub fn write(
     w: &mut dyn std::io::Write,
-    f: &F,
+    f: &impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
     v: &Val,
 ) -> Result<(), std::io::Error> {
     match v {
