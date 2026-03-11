@@ -425,14 +425,15 @@ $ jaq . examples/test.xhtml
 The output contains several values consisting only of whitespace, such as `"\n    "`.
 These are conserved by jaq because XML is a whitespace-sensitive format.
 
-## CSV
+## Tabular Data
 
-[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma Sepparated Value) files can be read in two formats, with a header and without.
-The file is represented as an array of records, whose keys and values must be scalars.
-Headerless input files can be specified by using the `--from csv_no_header` option.
-When a header is present, the values in each part of the header are used as the keys for each following record of the file.
-When it isn't present, the fields are given as arrays of each column's value.
-Fields with numeric data are automatically converted on reading.
+For details around string escaping and the formats used, see [`@csv`](#atcsv) and [`@tsv`](#attsv).
+
+### CSV
+
+[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma Sepparated Value) data can be read in two ways.
+The default method when reading files with the `.csv` extension or using `--from csv` is to interpret the first row of the file as a header specifying record names, and each subsequent row as a record with those names.
+Alternatives, the file may be interpreted as an array of lines by specifying `--from csv_lines`, which will produce an array from each input line.
 
 ```
 $ printf "a,b\n1,2\n3,4" | jaq --from csv
@@ -447,6 +448,19 @@ $ printf "a,b\n1,2\n3,4" | jaq --from csv
   }
 ]
 $ printf "a,b\n1,2\n3,4" | jaq --from csv_lines
+[
+  "a",
+  "b"
+]
+[
+  1,
+  2
+]
+[
+  3,
+  4
+]
+$ printf "a,b\n1,2\n3,4" | jaq --from csv_lines --slurp
 [
   [
     "a",
@@ -463,12 +477,9 @@ $ printf "a,b\n1,2\n3,4" | jaq --from csv_lines
 ]
 ```
 
-When writing CSV output, all elements of the output array must have the same shape.
-Ojbects must have the exact same key set, and arrays the same length.
-The columns of the file will follow the order of the keys in the first object.
-The order does not matter in subseqwuent objects.
-
-the presence of a header is automatically detected based on the type of objects written.
+When writing CSV output, a single record or array of records can be used.
+If the records are objects, then they must all have the same keys and a header line will be printed.
+If the records are arrays, then each one will be printed as is.
 
 ```
 $ echo '[["a", "b"], [1, 2]]' | jaq --to csv
@@ -480,3 +491,7 @@ a,b
 3,4
 ```
 
+### TSV
+
+The conversion of records in TSV works identically to in CSV.
+The only change is how values are escaped and the separator used.
