@@ -1,58 +1,24 @@
 //! CSV and TSV support.
 use crate::invalid_data;
-use core::fmt::{self, Display, Formatter};
-use jaq_json::Val;
+use core::iter;
+use jaq_json::{Map, Val};
 
-/// Serialisation error.
-#[derive(Debug)]
-pub enum Error {
-    /// asked to serialise non-array
-    NotArray(Val),
-    /// record wasn't an array or object
-    RowScalar(Val),
-    /// record wasn't an object with the correct keys
-    RowNotObject(Vec<Val>, Val),
-    /// record wasn't an array of the correct length
-    RowWrongLength(usize, Val),
-    /// field had wrong type
-    FieldType(Val),
+fn fail<T>(msg: String) -> Result<T, std::io::Error> {
+    Err(invalid_data(msg))
 }
 
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::NotArray(val) => write!(f, "CSV data must be an array, got: {val}"),
-            Self::RowScalar(val) => write!(f, "CSV rows must be an array or object, found: {val}"),
-            Self::FieldType(val) => {
-                write!(
-                    f,
-                    "CSV fields must be bool, number, or string, found: {val}"
-                )
-            }
-            Error::RowNotObject(keys, val) => {
-                write!(f, "CSV field expected object with keys [")?;
-                let mut delimiter = "";
-                for key in keys {
-                    write!(f, "{delimiter}{key}")?;
-                    delimiter = ", ";
-                }
-                write!(f, "], found {val}")
-            }
-            Error::RowWrongLength(len, val) => {
-                write!(f, "CSV field expected array of length {len}, found {val}")
-            }
-        }
+/// Writer for CSV files.
+pub fn csv(
+    w: &mut dyn std::io::Write,
+    prefix_delimiter: bool,
+    field: &Val,
+) -> Result<(), std::io::Error> {
+    if prefix_delimiter {
+        write!(w, ",")?;
     }
-}
-
-fn fail<T>(e: Error) -> Result<T, std::io::Error> {
-    Err(invalid_data(e.to_string()))
-}
-
-fn write_field<'a>(w: &mut dyn std::io::Write, field: &Val) -> Result<(), std::io::Error> {
     match field {
+        Val::Null => Ok(()),
         Val::Bool(b) => write!(w, "{b}"),
-
         Val::Num(num) => write!(w, "{num}"),
         Val::TStr(bytes) => {
             if bytes.iter().any(|b| *b == b'"' || *b == b',') {
@@ -71,62 +37,119 @@ fn write_field<'a>(w: &mut dyn std::io::Write, field: &Val) -> Result<(), std::i
                 Ok(())
             }
         }
-        _ => fail(Error::FieldType(field.clone())),
+        _ => fail(format!(
+            "CSV field was wrong type, expected null, bool, number, or string, got {}",
+            field
+        )),
+    }
+}
+/// Writer for TSV files.
+pub fn tsv(
+    w: &mut dyn std::io::Write,
+    prefix_delimiter: bool,
+    field: &Val,
+) -> Result<(), std::io::Error> {
+    if prefix_delimiter {
+        write!(w, "\t")?;
+    }
+    match field {
+        Val::Null => Ok(()),
+        Val::Bool(b) => write!(w, "{b}"),
+        Val::Num(num) => write!(w, "{num}"),
+        Val::TStr(bytes) => {
+            if bytes.iter().any(|b| *b == b'"' || *b == b',') {
+                write!(w, "\"")?;
+                for byte in bytes.iter().copied() {
+                    if byte == b'"' {
+                        write!(w, "\"\"")?;
+                    } else {
+                        w.write(&[byte])?;
+                    }
+                }
+                write!(w, "\"")?;
+                Ok(())
+            } else {
+                w.write(bytes)?;
+                Ok(())
+            }
+        }
+        _ => fail(format!(
+            "CSV field was wrong type, expected null, bool, number, or string, got {}",
+            field
+        )),
     }
 }
 
-fn write_row<'a>(
+fn write_row<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
     w: &mut dyn std::io::Write,
     fields: impl Iterator<Item = &'a Val>,
+    f: &F,
     newline: bool,
 ) -> Result<(), std::io::Error> {
     if newline {
         writeln!(w)?;
     }
-    let mut delim = "";
+    let mut delim = false;
     for field in fields {
-        write!(w, "{delim}")?;
-        write_field(w, field)?;
-        delim = ",";
+        f(w, delim, field)?;
+        delim = true;
     }
     Ok(())
 }
 
-pub fn write(w: &mut dyn std::io::Write, v: &Val) -> Result<(), std::io::Error> {
+fn write_objects<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+    w: &mut dyn std::io::Write,
+    f: &F,
+    map: &Map,
+    records: impl Iterator<Item = &'a Val>,
+) -> Result<(), std::io::Error> {
+    let ks: Vec<Val> = map.keys().cloned().collect();
+    write_row(w, ks.iter(), f, false)?;
+    for val in records {
+        match val {
+            Val::Obj(map) if map.len() == ks.len() && ks.iter().all(|k| map.contains_key(k)) => {
+                write_row(w, ks.iter().map(|k| &map[k]), f, true)?
+            }
+            _ => return fail(format!("Wanted object for table row, found {val}")),
+        }
+    }
+    Ok(())
+}
+
+fn write_arrays<'a, F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+    w: &mut dyn std::io::Write,
+    f: &F,
+    records: impl Iterator<Item = &'a Val>,
+) -> Result<(), std::io::Error> {
+    let mut newline = false;
+    for val in records {
+        match val {
+            Val::Arr(fields) => {
+                write_row(w, fields.iter(), f, newline)?;
+                newline = true;
+            }
+            _ => return fail(format!("Expected array of tabular data, got {val}")),
+        }
+    }
+    Ok(())
+}
+
+/// Using a specified field writer, write tabular data to output.
+pub fn write<F: Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>>(
+    w: &mut dyn std::io::Write,
+    f: &F,
+    v: &Val,
+) -> Result<(), std::io::Error> {
     match v {
         Val::Arr(vals) => match vals.get(0) {
-            Some(Val::Obj(map)) => {
-                let ks: Vec<Val> = map.keys().cloned().collect();
-                write_row(w, ks.iter(), false)?;
-                for val in vals.iter() {
-                    match val {
-                        Val::Obj(map)
-                            if map.len() == ks.len() && ks.iter().all(|k| map.contains_key(k)) =>
-                        {
-                            write_row(w, ks.iter().map(|k| &map[k]), true)?
-                        }
-                        _ => return fail(Error::RowNotObject(ks, val.clone())),
-                    }
-                }
-                Ok(())
-            }
-            Some(Val::Arr(vs)) => {
-                let length = vs.len();
-                let mut newline = false;
-                for val in vals.iter() {
-                    match val {
-                        Val::Arr(fields) if fields.len() == length => {
-                            write_row(w, fields.iter(), newline)?;
-                            newline = true;
-                        }
-                        _ => return fail(Error::RowWrongLength(length, val.clone())),
-                    }
-                }
-                Ok(())
-            }
-            Some(v) => fail(Error::RowScalar(v.clone())),
-            _ => Ok(()),
+            Some(Val::Obj(map)) => write_objects(w, f, map, vals.iter()),
+            Some(Val::Arr(_)) => write_arrays(w, f, vals.iter()),
+            Some(_) => write_arrays(w, f, iter::once(v)),
+            None => Ok(()),
         },
-        _ => fail(Error::NotArray(v.clone()).into()),
+        Val::Obj(map) => write_objects(w, f, map, iter::once(v)),
+        _ => fail(format!(
+            "Expected an array of records or single record for tabular output, got {v}"
+        )),
     }
 }

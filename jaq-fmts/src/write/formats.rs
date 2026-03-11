@@ -30,10 +30,10 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
         (_, Format::Yaml) => yaml::write(w, pp, 0, val)?,
         (_, Format::Toml) => write!(w, "{}", map_err_to_string(toml::Root::try_from(val))?)?,
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
-        (_, Format::Csv) => tabular::write(w, val)?,
-        (_, Format::CsvLines) => tabular::write(w, val)?,
-        (_, Format::Tsv) => todo!(),
-        (_, Format::TsvLines) => todo!(),
+        (_, Format::Csv) => tabular::write(w, &tabular::csv, val)?,
+        (_, Format::CsvLines) => tabular::write(w, &tabular::csv, val)?,
+        (_, Format::Tsv) => tabular::write(w, &tabular::tsv, val)?,
+        (_, Format::TsvLines) => tabular::write(w, &tabular::tsv, val)?,
     };
 
     w.write_all(match format {

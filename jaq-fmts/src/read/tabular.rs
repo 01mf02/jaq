@@ -217,7 +217,10 @@ impl<'a, T: Iterator<Item = FieldItem>> Iterator for RecordReader<T> {
                 } else {
                     Some(Err(Error::new(
                         ErrorKind::InvalidData,
-                        format!("CSV or TSV had incorrect field count"),
+                        format!("Record in table had incorrect field count, got {} but expect records for keys {}",
+                                Val::Arr(line.to_vec().into()),
+                                Val::Arr(self.header.clone().into())
+                        ),
                     )))
                 }
             }
