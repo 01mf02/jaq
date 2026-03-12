@@ -28,7 +28,7 @@ fn write_tsv_str(w: &mut dyn Write, b: &[u8]) -> Result {
     w.write_all(&jaq_std::escape_tsv(b))
 }
 
-fn write_row<'a>(w: &mut dyn Write, v: &Val, delim: char, f: WriteFn<Val>) -> Result {
+fn write_row(w: &mut dyn Write, v: &Val, delim: char, f: WriteFn<Val>) -> Result {
     let fail = || format!("expected CSV/TSV row (array), got {v}");
     let mut iter = match v {
         Val::Arr(a) => a.iter(),
