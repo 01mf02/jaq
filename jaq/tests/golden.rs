@@ -1,5 +1,8 @@
 use std::{env, io, process, str};
 
+/// Run `jaq` with the given args, pipe `input` to stdin, and compare output.
+/// When `expect_success` is true, asserts success and checks stdout;
+/// when false, asserts failure and checks stderr.
 fn golden_test(args: &[&str], input: &str, expect_success: bool, out_ex: &str) -> io::Result<()> {
     let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
         .args(args)
@@ -37,11 +40,42 @@ macro_rules! test {
     };
 }
 
+/// Like `golden_test`, but writes input to a temp file and passes it as a file argument.
+/// This exercises the slice-based parsing path (`parse_many` / `byte_offset_to_position`)
+/// rather than the iterator-based path (`read_many` / `PositionTracker`).
+fn golden_test_file(
+    args: &[&str],
+    input: &str,
+    expect_success: bool,
+    out_ex: &str,
+) -> io::Result<()> {
+    use io::Write;
+    let mut file = tempfile::NamedTempFile::new()?;
+    file.write_all(input.as_bytes())?;
+    file.flush()?;
+
+    let path = file.path().to_str().expect("non-UTF-8 temp path");
+    let path: String = path.to_string();
+    let mut all_args: Vec<&str> = args.to_vec();
+    all_args.push(&path);
+
+    golden_test(&all_args, "", expect_success, out_ex)
+}
+
+/// Generates two tests: one via stdin (stream-based `PositionTracker` path)
+/// and one via a temp file (slice-based `byte_offset_to_position` path).
 macro_rules! test_error {
     ($name:ident, $args:expr, $input:expr, $stderr:expr) => {
-        #[test]
-        fn $name() -> io::Result<()> {
-            golden_test($args, $input, false, $stderr)
+        paste::paste! {
+            #[test]
+            fn [<$name _stdin>]() -> io::Result<()> {
+                golden_test($args, $input, false, $stderr)
+            }
+
+            #[test]
+            fn [<$name _file>]() -> io::Result<()> {
+                golden_test_file($args, $input, false, $stderr)
+            }
         }
     };
 }
