@@ -209,3 +209,10 @@ test_error!(
 }"#,
     "Error: failed to parse: at line 5, column 5: comma or end of sequence expected\n"
 );
+
+test_error!(
+    parse_error_utf8_column,
+    &["."],
+    r#"{"ąćę": 1 "b": 2}"#,
+    "Error: failed to parse: at line 1, column 11: comma or end of sequence expected\n"
+);

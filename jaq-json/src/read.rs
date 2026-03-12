@@ -40,14 +40,17 @@ impl core::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 /// Convert a byte offset in a slice to a (line, column) pair (both 1-based).
+/// Column counts Unicode characters, not bytes.
 fn byte_offset_to_position(slice: &[u8], offset: usize) -> (usize, usize) {
     let before = &slice[..offset];
     let line = before.iter().filter(|&&byte| byte == b'\n').count() + 1;
-    let column = before
+    let last_newline = before.iter().rposition(|&byte| byte == b'\n');
+    let line_start = last_newline.map_or(before, |pos| &before[pos + 1..]);
+    // TODO: replace with `!byte.is_utf8_continuation()` once stable.
+    let column = line_start
         .iter()
-        .rev()
-        .position(|&byte| byte == b'\n')
-        .unwrap_or(offset)
+        .filter(|&&byte| byte & 0xC0 != 0x80)
+        .count()
         + 1;
     (line, column)
 }
@@ -102,7 +105,8 @@ impl<I: Iterator<Item = io::Result<u8>>> Iterator for PositionTracker<I> {
             if *byte == b'\n' {
                 line += 1;
                 column = 0;
-            } else {
+            } else if *byte & 0xC0 != 0x80 {
+                // TODO: replace with `!byte.is_utf8_continuation()` once stable.
                 column += 1;
             }
             self.position.set((line, column));
