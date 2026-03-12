@@ -1,5 +1,5 @@
 //! CSV and TSV support.
-use jaq_json::{Num, Val};
+use jaq_json::{read::parse_single_num, Val};
 
 #[derive(Default)]
 struct Field {
@@ -19,6 +19,7 @@ impl Field {
 
 impl From<Field> for Val {
     fn from(field: Field) -> Self {
+        // TODO: should we also convert "null"?
         if field.quote {
             Val::utf8_str(field.bytes)
         } else if &*field.bytes == b"true" {
@@ -26,16 +27,7 @@ impl From<Field> for Val {
         } else if &*field.bytes == b"false" {
             Val::Bool(false)
         } else {
-            use hifijson::num::LexWrite;
-            let mut lexer = hifijson::SliceLexer::new(&*field.bytes);
-            let num = lexer.num_string_with(hifijson::num::Num::signed_digits());
-            match num.validated().ok().filter(|_| lexer.as_slice().is_empty()) {
-                Some((num, parts)) if parts.is_int() => {
-                    Val::Num(Num::from_str_radix(num, 10).unwrap())
-                }
-                Some((num, _)) => Val::Num(Num::Dec(num.to_string().into())),
-                None => Val::utf8_str(field.bytes),
-            }
+            parse_single_num(&field.bytes).map_or_else(|| Val::utf8_str(field.bytes), Val::Num)
         }
     }
 }
