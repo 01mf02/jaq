@@ -41,11 +41,15 @@ pub enum Format {
     Xml,
     /// YAML Ain't Markup Language™
     Yaml,
+    /// Comma-Separated Values
+    Csv,
+    /// Tab-Separated Values
+    Tsv,
 }
 
 impl Format {
     /// List of all currently supported formats.
-    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml";
+    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml, csv, csv_lines, tsv, tsv_lines";
 
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {
@@ -55,6 +59,8 @@ impl Format {
             "xml" | "xhtml" => Some(Format::Xml),
             "yml" | "yaml" => Some(Format::Yaml),
             "json" => Some(Format::Json),
+            "csv" => Some(Format::Csv),
+            "tsv" => Some(Format::Tsv),
             _ => None,
         }
     }
@@ -69,6 +75,8 @@ impl Format {
             "toml" => Some(Format::Toml),
             "xml" => Some(Format::Xml),
             "yaml" => Some(Format::Yaml),
+            "csv" => Some(Format::Csv),
+            "tsv" => Some(Format::Tsv),
             _ => None,
         }
     }

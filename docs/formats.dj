@@ -425,3 +425,29 @@ $ jaq . examples/test.xhtml
 The output contains several values consisting only of whitespace, such as `"\n    "`.
 These are conserved by jaq because XML is a whitespace-sensitive format.
 
+## CSV/TSV
+
+[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma-Separated Values) data is
+interpreted as an array of values by specifying `--from csv`, which will produce an array from each input line.
+
+```
+$ printf "a,b\n1,2\n3,4" | jaq -c --from csv
+["a","b"]
+[1,2]
+[3,4]
+$ printf "a,b\n1,2\n3,4" | jaq -c --from csv --slurp
+[["a","b"],[1,2],[3,4]]
+```
+
+When writing CSV output, a single array of fields can be used.
+
+```
+$ echo '["a", "b"] [1, 2]' | jaq --to csv
+"a","b"
+1,2
+```
+
+The conversion of records in TSV works identically to in CSV.
+The only change is how values are escaped and the separator used.
+
+For details around string escaping and the formats used, see [`@csv`](#atcsv) and [`@tsv`](#attsv).
