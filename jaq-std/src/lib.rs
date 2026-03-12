@@ -486,6 +486,7 @@ fn replace(s: &[u8], patterns: &[&str], replacements: &[&str]) -> Vec<u8> {
     ac.replace_all_bytes(s, replacements)
 }
 
+/// Escape string as required by TSV.
 #[cfg(feature = "format")]
 pub fn escape_tsv(s: &[u8]) -> Vec<u8> {
     let pats = ["\n", "\r", "\t", "\\", "\0"];

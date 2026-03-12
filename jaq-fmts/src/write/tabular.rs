@@ -45,10 +45,12 @@ fn write_row<'a>(w: &mut dyn Write, v: &Val, delim: char, f: WriteFn<Val>) -> Re
     writeln!(w)
 }
 
+/// Format array value as CSV row.
 pub fn write_csv_row(w: &mut dyn Write, v: &Val) -> Result {
     write_row(w, v, ',', |w, v| write_value(w, v, write_csv_str))
 }
 
+/// Format array value as TSV row.
 pub fn write_tsv_row(w: &mut dyn Write, v: &Val) -> Result {
     write_row(w, v, ',', |w, v| write_value(w, v, write_tsv_str))
 }
