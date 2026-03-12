@@ -74,16 +74,14 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_
     let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
     let mut lexer = SliceLexer::new(slice);
     core::iter::from_fn(move || {
-        Some(
-            parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|inner| {
-                let (line, column) = byte_offset_to_position(slice, offset(lexer.as_slice()));
-                Error {
-                    line,
-                    column,
-                    inner,
-                }
-            }),
-        )
+        Some(parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|inner| {
+            let (line, column) = byte_offset_to_position(slice, offset(lexer.as_slice()));
+            Error {
+                line,
+                column,
+                inner,
+            }
+        }))
     })
 }
 
