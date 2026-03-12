@@ -435,34 +435,12 @@ For details around string escaping and the formats used, see [`@csv`](#atcsv) an
 interpreted as an array of values by specifying `--from csv`, which will produce an array from each input line.
 
 ```
-$ printf "a,b\n1,2\n3,4" | jaq --from csv
-[
-  "a",
-  "b"
-]
-[
-  1,
-  2
-]
-[
-  3,
-  4
-]
-$ printf "a,b\n1,2\n3,4" | jaq --from csv --slurp
-[
-  [
-    "a",
-    "b"
-  ],
-  [
-    1,
-    2
-  ],
-  [
-    3,
-    4
-  ]
-]
+$ printf "a,b\n1,2\n3,4" | jaq -c --from csv
+["a","b"]
+[1,2]
+[3,4]
+$ printf "a,b\n1,2\n3,4" | jaq -c --from csv --slurp
+[["a","b"],[1,2],[3,4]]
 ```
 
 When writing CSV output, a single record or array of records can be used.

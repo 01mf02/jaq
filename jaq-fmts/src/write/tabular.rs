@@ -13,7 +13,7 @@ fn write_value(w: &mut dyn Write, v: &Val, f: WriteFn<[u8]>) -> Result {
         Val::Null => Ok(()),
         Val::Bool(_) | Val::Num(_) => write!(w, "{v}"),
         Val::TStr(b) => f(w, b),
-        _ => Err(invalid_data(fail)),
+        _ => Err(invalid_data(fail())),
     }
 }
 
