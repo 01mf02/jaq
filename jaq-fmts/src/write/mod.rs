@@ -1,11 +1,11 @@
 //! Write values in different formats.
 #[cfg(feature = "cbor")]
 pub mod cbor;
+pub mod tabular;
 #[cfg(feature = "toml")]
 pub mod toml;
 #[cfg(feature = "xml")]
 pub mod xml;
-pub mod tabular;
 #[cfg(feature = "yaml")]
 pub mod yaml;
 pub use jaq_json::write as json;

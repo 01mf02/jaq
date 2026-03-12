@@ -1,9 +1,9 @@
 //! Read values in different formats.
 #[cfg(feature = "cbor")]
 pub mod cbor;
+pub mod tabular;
 #[cfg(feature = "toml")]
 pub mod toml;
-pub mod tabular;
 #[cfg(feature = "xml")]
 pub mod xml;
 #[cfg(feature = "yaml")]

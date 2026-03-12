@@ -1,259 +1,135 @@
 //! CSV and TSV support.
-use core::iter::{Fuse, FusedIterator, Iterator};
-use jaq_json::{Map, Num, Val};
-use num_bigint::BigInt;
-use std::io::{Error, ErrorKind};
-use std::str::FromStr;
+use jaq_json::{Num, Val};
 
-fn convert_field(b: &[u8]) -> Val {
-    if let Ok(s) = str::from_utf8(b) {
-        if let Ok(i) = s.parse() {
-            Val::Num(Num::Int(i))
-        } else if let Ok(bi) = BigInt::from_str(s) {
-            Val::Num(Num::BigInt(bi.into()))
-        } else if let Ok(f) = s.parse() {
-            Val::Num(Num::Float(f))
-        } else if s == "true" {
+#[derive(Default)]
+struct Field {
+    /// normalised contents of the field
+    bytes: Vec<u8>,
+    /// how the field was terminated
+    last: Option<u8>,
+    /// were there any escape characters or quotes in the field?
+    quote: bool,
+}
+
+impl Field {
+    fn is_empty(&self) -> bool {
+        self.bytes.is_empty() && self.last.is_none() && !self.quote
+    }
+}
+
+impl From<Field> for Val {
+    fn from(field: Field) -> Self {
+        if field.quote {
+            Val::utf8_str(field.bytes)
+        } else if &*field.bytes == b"true" {
             Val::Bool(true)
-        } else if s == "false" {
+        } else if &*field.bytes == b"false" {
             Val::Bool(false)
         } else {
-            Val::utf8_str(Box::from(b))
-        }
-    } else {
-        Val::byte_str(Box::from(b))
-    }
-}
-
-/// The boolean indicates whether this field was the last on the given line.
-type FieldItem = Result<(bool, Val), Error>;
-
-struct CSVFieldReader<T> {
-    buffer: Vec<u8>,
-    input: Fuse<T>,
-}
-impl<T: Iterator<Item = Result<u8, Error>>> FusedIterator for CSVFieldReader<T> {}
-impl<T: Iterator<Item = Result<u8, Error>>> CSVFieldReader<T> {
-    fn new(it: T) -> Self {
-        Self {
-            buffer: vec![],
-            input: it.fuse(),
+            use hifijson::num::LexWrite;
+            let mut lexer = hifijson::SliceLexer::new(&*field.bytes);
+            let num = lexer.num_string_with(hifijson::num::Num::signed_digits());
+            match num.validated().ok().filter(|_| lexer.as_slice().is_empty()) {
+                Some((num, parts)) if parts.is_int() => {
+                    Val::Num(Num::from_str_radix(num, 10).unwrap())
+                }
+                Some((num, _)) => Val::Num(Num::Dec(num.to_string().into())),
+                None => Val::utf8_str(field.bytes),
+            }
         }
     }
 }
-impl<T: Iterator<Item = Result<u8, Error>>> Iterator for CSVFieldReader<T> {
-    type Item = FieldItem;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.buffer.clear();
-        let first = match self.input.next() {
-            Some(Ok(b)) => b,
-            Some(Err(e)) => return Some(Err(e)),
-            None => return None,
-        };
-        if first == b'"' {
-            while let Some(byte) = self.input.next() {
-                match byte {
-                    Ok(b'"') => match self.input.next() {
-                        Some(Ok(b',')) => return Some(Ok((false, convert_field(&self.buffer)))),
-                        None | Some(Ok(b'\n')) => {
-                            return Some(Ok((true, convert_field(&self.buffer))))
+
+fn csv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
+    let mut field = Field::default();
+    field.last = 'outer: loop {
+        match iter.next() {
+            None => break None,
+            Some(Ok(c @ (b',' | b'\n'))) => break Some(c),
+            Some(Ok(b'"')) => loop {
+                field.quote = true;
+                match iter.next() {
+                    Some(Ok(b'"')) => match iter.next() {
+                        Some(Ok(b'"')) => field.bytes.push(b'"'),
+                        Some(Ok(c)) => {
+                            field.bytes.push(c);
+                            continue 'outer;
                         }
-                        Some(Ok(b'"')) => self.buffer.push(b'"'),
-                        Some(Ok(b)) => {
-                            return Some(Err(Error::new(
-                                ErrorKind::InvalidData,
-                                format!("Unexpected character '{}' after '\"'", char::from(b)),
-                            )))
-                        }
-                        Some(Err(e)) => return Some(Err(e)),
+                        Some(Err(e)) => return Err(e),
+                        None => break 'outer None,
                     },
-                    Ok(byte) => self.buffer.push(byte),
-                    Err(e) => return Some(Err(e)),
+                    Some(Ok(c)) => field.bytes.push(c),
+                    Some(Err(e)) => return Err(e),
+                    None => break 'outer None,
+                }
+            },
+            Some(Ok(byte)) => field.bytes.push(byte),
+            Some(Err(e)) => return Err(e),
+        }
+    };
+    Ok(field)
+}
+
+fn tsv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
+    let mut field = Field::default();
+    field.last = loop {
+        match iter.next() {
+            None => break None,
+            Some(Ok(c @ (b'\t' | b'\n'))) => break Some(c),
+            Some(Ok(b'\\')) => {
+                field.quote = true;
+                match iter.next() {
+                    None => break None,
+                    Some(Ok(b'n')) => field.bytes.push(b'\n'),
+                    Some(Ok(b't')) => field.bytes.push(b'\t'),
+                    Some(Ok(b'r')) => field.bytes.push(b'\r'),
+                    Some(Ok(b'0')) => field.bytes.push(b'\0'),
+                    Some(Ok(b'\\')) => field.bytes.push(b'\\'),
+                    Some(Ok(byte)) => field.bytes.extend([b'\\', byte]),
+                    Some(Err(e)) => return Err(e),
                 }
             }
-            Some(Err(ErrorKind::UnexpectedEof.into()))
-        } else {
-            self.buffer.push(first);
-            loop {
-                match self.input.next() {
-                    Some(Ok(b',')) => return Some(Ok((false, convert_field(&self.buffer)))),
-                    Some(Ok(b'\n')) => return Some(Ok((true, convert_field(&self.buffer)))),
-                    Some(Ok(byte)) => self.buffer.push(byte),
-                    Some(Err(e)) => return Some(Err(e)),
-                    None => {
-                        return if self.buffer.is_empty() {
-                            None
-                        } else {
-                            Some(Ok((true, convert_field(&self.buffer))))
-                        }
-                    }
-                }
-            }
+            Some(Ok(byte)) => field.bytes.push(byte),
+            Some(Err(e)) => return Err(e),
         }
-    }
+    };
+    Ok(field)
 }
-struct TSVFieldReader<T> {
-    buffer: Vec<u8>,
-    input: Fuse<T>,
-}
-impl<T: Iterator<Item = Result<u8, Error>>> FusedIterator for TSVFieldReader<T> {}
-impl<T: Iterator<Item = Result<u8, Error>>> TSVFieldReader<T> {
-    fn new(it: T) -> Self {
-        Self {
-            buffer: vec![],
-            input: it.fuse(),
-        }
-    }
-}
-impl<T: Iterator<Item = Result<u8, Error>>> Iterator for TSVFieldReader<T> {
-    type Item = FieldItem;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.buffer.clear();
+
+fn lines<E, I: Iterator<Item = Result<u8, E>>>(
+    mut iter: I,
+    field: fn(&mut I) -> Result<Field, E>,
+) -> impl Iterator<Item = Result<Val, E>> {
+    core::iter::from_fn(move || {
+        let mut fields = Vec::new();
         loop {
-            match self.input.next() {
-                Some(Ok(b'\\')) => match self.input.next() {
-                    None => return Some(Ok((true, convert_field(&self.buffer)))),
-                    Some(Ok(b'n')) => self.buffer.push(b'\n'),
-                    Some(Ok(b't')) => self.buffer.push(b'\t'),
-                    Some(Ok(b'r')) => self.buffer.push(b'\r'),
-                    Some(Ok(b'0')) => self.buffer.push(b'\0'),
-                    Some(Ok(b'\\')) => self.buffer.push(b'\\'),
-                    Some(Ok(byte)) => {
-                        self.buffer.push(b'\\');
-                        self.buffer.push(byte);
-                    }
-                    Some(Err(e)) => return Some(Err(e)),
-                },
-                Some(Ok(b'\t')) => return Some(Ok((false, convert_field(&self.buffer)))),
-                Some(Ok(b'\n')) => return Some(Ok((true, convert_field(&self.buffer)))),
-                None => {
-                    return if self.buffer.is_empty() {
-                        None
-                    } else {
-                        Some(Ok((true, convert_field(&self.buffer))))
-                    }
+            let field = match field(&mut iter) {
+                Ok(ok) => ok,
+                Err(e) => return Some(Err(e)),
+            };
+            match field.last {
+                None if fields.is_empty() && field.is_empty() => return None,
+                None | Some(b'\n') => {
+                    fields.push(field.into());
+                    break;
                 }
-                Some(Ok(byte)) => self.buffer.push(byte),
-                Some(Err(e)) => return Some(Err(e)),
+                _ => fields.push(field.into()),
             }
         }
-    }
+        Some(Ok(Val::Arr(fields.into())))
+    })
 }
 
-struct LinesReader<T> {
-    buffer: Vec<Val>,
-    input: Fuse<T>,
-}
-impl<T: Iterator<Item = FieldItem>> FusedIterator for LinesReader<T> {}
-impl<T: Iterator<Item = FieldItem>> LinesReader<T> {
-    fn new(it: T) -> Self {
-        Self {
-            buffer: vec![],
-            input: it.fuse(),
-        }
-    }
-    fn read(&mut self) -> Option<Result<&[Val], Error>> {
-        self.buffer.clear();
-        loop {
-            match self.input.next() {
-                Some(Ok((true, val))) => {
-                    self.buffer.push(val);
-                    return Some(Ok(&self.buffer));
-                }
-                Some(Ok((false, val))) => self.buffer.push(val),
-                Some(Err(e)) => return Some(Err(e)),
-                None => {
-                    if self.buffer.len() == 0 {
-                        return None;
-                    } else {
-                        return Some(Ok(&self.buffer));
-                    }
-                }
-            }
-        }
-    }
-}
-impl<T: Iterator<Item = FieldItem>> Iterator for LinesReader<T> {
-    type Item = Result<Val, Error>;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.read().map(|x| x.map(|y| Val::Arr(y.to_vec().into())))
-    }
+/// Read lines of a CSV file.
+pub fn read_csv<E>(
+    iter: impl Iterator<Item = Result<u8, E>>,
+) -> impl Iterator<Item = Result<Val, E>> {
+    lines(iter, csv_field)
 }
 
-struct RecordReader<T> {
-    header: Vec<Val>,
-    input: LinesReader<T>,
-}
-impl<T: Iterator<Item = FieldItem>> FusedIterator for RecordReader<T> {}
-impl<T: Iterator<Item = FieldItem>> RecordReader<T> {
-    fn new(it: T) -> Self {
-        Self {
-            header: vec![],
-            input: LinesReader::new(it),
-        }
-    }
-}
-impl<'a, T: Iterator<Item = FieldItem>> Iterator for RecordReader<T> {
-    type Item = Result<Val, Error>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.header.is_empty() {
-            match self.input.read() {
-                Some(Ok(line)) => self.header = line.into(),
-                Some(Err(e)) => return Some(Err(e)),
-                None => return None,
-            }
-        }
-        match self.input.read() {
-            Some(Ok(line)) => {
-                if line.len() == self.header.len() {
-                    Some(Ok(Val::Obj(
-                        self.header
-                            .iter()
-                            .cloned()
-                            .zip(line.iter().cloned())
-                            .collect::<Map>()
-                            .into(),
-                    )))
-                } else {
-                    Some(Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("Record in table had incorrect field count, got {} but expect records for keys {}",
-                                Val::Arr(line.to_vec().into()),
-                                Val::Arr(self.header.clone().into())
-                        ),
-                    )))
-                }
-            }
-            Some(Err(e)) => return Some(Err(e)),
-            None => return None,
-        }
-    }
-}
-
-/// Read a stream of CSV data to fields.
-pub fn csv<'a, T: 'a + Iterator<Item = Result<u8, Error>>>(
-    bytes: T,
-) -> impl 'a + Iterator<Item = FieldItem> {
-    CSVFieldReader::new(bytes)
-}
-/// Read a stream of TSV data to fields.
-pub fn tsv<'a, T: 'a + Iterator<Item = Result<u8, Error>>>(
-    bytes: T,
-) -> impl 'a + Iterator<Item = FieldItem> {
-    TSVFieldReader::new(bytes)
-}
-/// Convert a list of fields into line objects.
-pub fn lines<'a, T: 'a + Iterator<Item = FieldItem>>(
-    fields: T,
-) -> impl 'a + Iterator<Item = Result<Val, Error>> {
-    LinesReader::new(fields)
-}
-
-/// Convert a list of fields into line objects.
-pub fn records<'a, T: 'a + Iterator<Item = FieldItem>>(fields: T) -> Result<Val, Error> {
-    Ok(Val::Arr(
-        RecordReader::new(fields)
-            .collect::<Result<Vec<_>, _>>()?
-            .into(),
-    ))
+/// Read lines of a TSV file.
+pub fn read_tsv<E>(
+    iter: impl Iterator<Item = Result<u8, E>>,
+) -> impl Iterator<Item = Result<Val, E>> {
+    lines(iter, tsv_field)
 }

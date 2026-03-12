@@ -431,23 +431,11 @@ For details around string escaping and the formats used, see [`@csv`](#atcsv) an
 
 ### CSV
 
-[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma Sepparated Value) data can be read in two ways.
-The default method when reading files with the `.csv` extension or using `--from csv` is to interpret the first row of the file as a header specifying record names, and each subsequent row as a record with those names.
-Alternatives, the file may be interpreted as an array of lines by specifying `--from csv_lines`, which will produce an array from each input line.
+[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma-Separated Values) data is
+interpreted as an array of values by specifying `--from csv`, which will produce an array from each input line.
 
 ```
 $ printf "a,b\n1,2\n3,4" | jaq --from csv
-[
-  {
-    "a": 1,
-    "b": 2
-  },
-  {
-    "a": 3,
-    "b": 4
-  }
-]
-$ printf "a,b\n1,2\n3,4" | jaq --from csv_lines
 [
   "a",
   "b"
@@ -460,7 +448,7 @@ $ printf "a,b\n1,2\n3,4" | jaq --from csv_lines
   3,
   4
 ]
-$ printf "a,b\n1,2\n3,4" | jaq --from csv_lines --slurp
+$ printf "a,b\n1,2\n3,4" | jaq --from csv --slurp
 [
   [
     "a",

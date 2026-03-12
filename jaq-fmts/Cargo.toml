@@ -33,6 +33,7 @@ num-bigint = { version = "0.4.6", default-features = false }
 base64 = { version = "0.22", optional = true }
 ciborium-io = { version = "0.2.2", optional = true, features = ["std"] }
 ciborium-ll = { version = "0.2.2", optional = true }
+hifijson = { version = "0.5.0", default-features = false }
 saphyr-parser = { version = "0.0.6", optional = true }
 toml-span = { version = "0.7.0", optional = true }
 xmlparser = { version = "0.13.6", optional = true }

@@ -338,6 +338,7 @@ dependencies = [
  "bytes",
  "ciborium-io",
  "ciborium-ll",
+ "hifijson",
  "jaq-core",
  "jaq-json",
  "jaq-std",
