@@ -1,19 +1,24 @@
 use std::{env, io, process, str};
 
-fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
+fn golden_test(args: &[&str], input: &str, expect_success: bool, out_ex: &str) -> io::Result<()> {
     let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
         .args(args)
         .stdin(process::Stdio::piped())
         .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::piped())
         .spawn()?;
 
     use io::Write;
     child.stdin.take().unwrap().write_all(input.as_bytes())?;
     let output = child.wait_with_output()?;
-    assert!(output.status.success());
+    assert_eq!(output.status.success(), expect_success);
 
-    let out_act = str::from_utf8(&output.stdout).expect("invalid UTF-8 in output");
-    // remove '\r' from output for compatibility with Windows
+    let out_act = if expect_success {
+        str::from_utf8(&output.stdout).expect("invalid UTF-8 in stdout")
+    } else {
+        str::from_utf8(&output.stderr).expect("invalid UTF-8 in stderr")
+    };
+    // Remove '\r' from output for compatibility with Windows.
     let out_act = out_act.replace('\r', "");
     if out_ex.trim() != out_act.trim() {
         println!("Expected output:\n{}\n---", out_ex);
@@ -27,7 +32,16 @@ macro_rules! test {
     ($name:ident, $args:expr, $input:expr, $output:expr) => {
         #[test]
         fn $name() -> io::Result<()> {
-            golden_test($args, $input, $output)
+            golden_test($args, $input, true, $output)
+        }
+    };
+}
+
+macro_rules! test_error {
+    ($name:ident, $args:expr, $input:expr, $stderr:expr) => {
+        #[test]
+        fn $name() -> io::Result<()> {
+            golden_test($args, $input, false, $stderr)
         }
     };
 }
@@ -182,4 +196,16 @@ test!(
     &["-c", "-L", "tests", r#"include "a"; [a, data, d]"#],
     "0",
     r#"["bcddd",[1,2],3]"#
+);
+
+test_error!(
+    parse_error_missing_comma,
+    &["."],
+    r#"{
+    "key1": 1,
+    "key2": "value",
+    "key3": false
+    "key4": null
+}"#,
+    "Error: failed to parse: at line 5, column 5: comma or end of sequence expected\n"
 );
