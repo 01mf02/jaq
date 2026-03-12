@@ -1,155 +1,54 @@
 //! CSV and TSV support.
 use crate::invalid_data;
-use core::iter;
-use jaq_json::{Map, Val};
+use jaq_json::Val;
+use std::io::Write;
 
-fn fail<T>(msg: String) -> Result<T, std::io::Error> {
-    Err(invalid_data(msg))
-}
+type Result<T = (), E = std::io::Error> = core::result::Result<T, E>;
 
-/// Writer for CSV files.
-pub fn csv(
-    w: &mut dyn std::io::Write,
-    prefix_delimiter: bool,
-    field: &Val,
-) -> Result<(), std::io::Error> {
-    if prefix_delimiter {
-        write!(w, ",")?;
-    }
-    match field {
-        Val::Null => Ok(()),
-        Val::Bool(b) => write!(w, "{b}"),
-        Val::Num(num) => write!(w, "{num}"),
-        Val::TStr(bytes) => {
-            if bytes.iter().any(|b| *b == b'"' || *b == b',') {
-                write!(w, "\"")?;
-                for byte in bytes.iter().copied() {
-                    if byte == b'"' {
-                        write!(w, "\"\"")?;
-                    } else {
-                        w.write(&[byte])?;
-                    }
-                }
-                write!(w, "\"")?;
-                Ok(())
-            } else {
-                w.write(bytes)?;
-                Ok(())
-            }
-        }
-        _ => fail(format!(
-            "CSV field was wrong type, expected null, bool, number, or string, got {}",
-            field
-        )),
-    }
-}
-/// Writer for TSV files.
-pub fn tsv(
-    w: &mut dyn std::io::Write,
-    prefix_delimiter: bool,
-    field: &Val,
-) -> Result<(), std::io::Error> {
-    if prefix_delimiter {
-        write!(w, "\t")?;
-    }
-    match field {
-        Val::Null => Ok(()),
-        Val::Bool(b) => write!(w, "{b}"),
-        Val::Num(num) => write!(w, "{num}"),
-        Val::TStr(bytes) => {
-            if bytes.iter().any(|b| *b == b'"' || *b == b',') {
-                write!(w, "\"")?;
-                for byte in bytes.iter().copied() {
-                    if byte == b'"' {
-                        write!(w, "\"\"")?;
-                    } else {
-                        w.write(&[byte])?;
-                    }
-                }
-                write!(w, "\"")?;
-                Ok(())
-            } else {
-                w.write(bytes)?;
-                Ok(())
-            }
-        }
-        _ => fail(format!(
-            "CSV field was wrong type, expected null, bool, number, or string, got {}",
-            field
-        )),
-    }
-}
+type WriteFn<T> = fn(&mut dyn Write, &T) -> Result;
 
-fn write_row<'a>(
-    w: &mut dyn std::io::Write,
-    fields: impl Iterator<Item = &'a Val>,
-    f: impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
-    newline: bool,
-) -> Result<(), std::io::Error> {
-    if newline {
-        writeln!(w)?;
-    }
-    let mut delim = false;
-    for field in fields {
-        f(w, delim, field)?;
-        delim = true;
-    }
-    Ok(())
-}
-
-fn write_objects<'a>(
-    w: &mut dyn std::io::Write,
-    f: &impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
-    map: &Map,
-    records: impl Iterator<Item = &'a Val>,
-) -> Result<(), std::io::Error> {
-    let ks: Vec<Val> = map.keys().cloned().collect();
-    write_row(w, ks.iter(), f, false)?;
-    for val in records {
-        match val {
-            Val::Obj(map) if map.len() == ks.len() && ks.iter().all(|k| map.contains_key(k)) => {
-                write_row(w, ks.iter().map(|k| &map[k]), f, true)?
-            }
-            _ => return fail(format!("Wanted object for table row, found {val}")),
-        }
-    }
-    Ok(())
-}
-
-fn write_arrays<'a>(
-    w: &mut dyn std::io::Write,
-    f: &impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
-    records: impl Iterator<Item = &'a Val>,
-) -> Result<(), std::io::Error> {
-    let mut newline = false;
-    for val in records {
-        match val {
-            Val::Arr(fields) => {
-                write_row(w, fields.iter(), f, newline)?;
-                newline = true;
-            }
-            _ => return fail(format!("Expected array of tabular data, got {val}")),
-        }
-    }
-    Ok(())
-}
-
-/// Using a specified field writer, write tabular data to output.
-pub fn write(
-    w: &mut dyn std::io::Write,
-    f: &impl Fn(&mut dyn std::io::Write, bool, &Val) -> Result<(), std::io::Error>,
-    v: &Val,
-) -> Result<(), std::io::Error> {
+fn write_value(w: &mut dyn Write, v: &Val, f: WriteFn<[u8]>) -> Result {
+    let fail = || format!("expected CSV/TSV field (null, bool, number, or string), found {v}");
     match v {
-        Val::Arr(vals) => match vals.get(0) {
-            Some(Val::Obj(map)) => write_objects(w, f, map, vals.iter()),
-            Some(Val::Arr(_)) => write_arrays(w, f, vals.iter()),
-            Some(_) => write_arrays(w, f, iter::once(v)),
-            None => Ok(()),
-        },
-        Val::Obj(map) => write_objects(w, f, map, iter::once(v)),
-        _ => fail(format!(
-            "Expected an array of records or single record for tabular output, got {v}"
-        )),
+        Val::Null => Ok(()),
+        Val::Bool(_) | Val::Num(_) => write!(w, "{v}"),
+        Val::TStr(b) => f(w, b),
+        _ => Err(invalid_data(fail)),
     }
+}
+
+fn write_csv_str(w: &mut dyn Write, b: &[u8]) -> Result {
+    use bstr::ByteSlice;
+    write!(w, "\"")?;
+    w.write_all(&b.replace(b"\"", b"\"\""))?;
+    write!(w, "\"")
+}
+
+fn write_tsv_str(w: &mut dyn Write, b: &[u8]) -> Result {
+    w.write_all(&jaq_std::escape_tsv(b))
+}
+
+fn write_row<'a>(w: &mut dyn Write, v: &Val, delim: char, f: WriteFn<Val>) -> Result {
+    let fail = || format!("expected CSV/TSV row (array), got {v}");
+    let mut iter = match v {
+        Val::Arr(a) => a.iter(),
+        _ => Err(invalid_data(fail()))?,
+    };
+
+    if let Some(v) = iter.next() {
+        f(w, v)?;
+    }
+    for v in iter {
+        write!(w, "{delim}")?;
+        f(w, v)?;
+    }
+    writeln!(w)
+}
+
+pub fn write_csv_row(w: &mut dyn Write, v: &Val) -> Result {
+    write_row(w, v, ',', |w, v| write_value(w, v, write_csv_str))
+}
+
+pub fn write_tsv_row(w: &mut dyn Write, v: &Val) -> Result {
+    write_row(w, v, ',', |w, v| write_value(w, v, write_tsv_str))
 }

@@ -13,7 +13,7 @@ type Vals<'a> = BoxIter<'a, io::Result<Val>>;
 pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
     use Format::*;
     match fmt {
-        Raw | Raw0 | Json | Cbor | Csv | CsvLines | Tsv | TsvLines => Ok(String::new()),
+        Raw | Raw0 | Json | Cbor | Csv | Tsv => Ok(String::new()),
         Toml | Xml | Yaml => io::read_to_string(read),
     }
 }
@@ -24,7 +24,7 @@ pub fn read_string(fmt: Format, read: impl Read) -> Result<String> {
 pub fn bytes_str(fmt: Format, bytes: &[u8]) -> Result<&str> {
     use Format::*;
     Ok(match fmt {
-        Raw | Raw0 | Json | Cbor | Csv | CsvLines | Tsv | TsvLines => "",
+        Raw | Raw0 | Json | Cbor | Csv | Tsv => "",
         Toml | Xml | Yaml => core::str::from_utf8(bytes).map_err(invalid_data)?,
     })
 }
@@ -48,7 +48,6 @@ pub fn read<'a>(fmt: Format, read: impl io::BufRead + 'a, s: &'a str, slurp: boo
         Format::Yaml => collect_if(slurp, yaml::parse_many(s).map(map_invalid_data)),
         Format::Csv => collect_if(slurp, tabular::read_csv(read.bytes()).map(map_invalid_data)),
         Format::Tsv => collect_if(slurp, tabular::read_tsv(read.bytes()).map(map_invalid_data)),
-        Format::CsvLines | Format::TsvLines => todo!(),
     }
 }
 
@@ -67,6 +66,5 @@ pub fn parse<'a>(fmt: Format, bytes: &'a Bytes, s: &'a str, slurp: bool) -> Vals
         Format::Toml | Format::Xml | Format::Yaml => read(fmt, &[][..], s, slurp),
         Format::Csv => collect_if(slurp, tabular::read_csv(iter).map(map_invalid_data)),
         Format::Tsv => collect_if(slurp, tabular::read_tsv(iter).map(map_invalid_data)),
-        Format::CsvLines | Format::TsvLines => todo!(),
     }
 }

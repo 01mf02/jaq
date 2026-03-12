@@ -41,14 +41,10 @@ pub enum Format {
     Xml,
     /// YAML Ain't Markup Language™
     Yaml,
-    /// Comma separated values
+    /// Comma-Separated Values
     Csv,
-    /// Comma separated values, without a header row for column names
-    CsvLines,
-    /// Tab separated values
+    /// Tab-Separated Values
     Tsv,
-    /// Tab separated values, without a header row for column names
-    TsvLines,
 }
 
 impl Format {
@@ -80,9 +76,7 @@ impl Format {
             "xml" => Some(Format::Xml),
             "yaml" => Some(Format::Yaml),
             "csv" => Some(Format::Csv),
-            "csv_lines" => Some(Format::CsvLines),
             "tsv" => Some(Format::Tsv),
-            "tsv_lines" => Some(Format::TsvLines),
             _ => None,
         }
     }
