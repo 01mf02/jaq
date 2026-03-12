@@ -487,6 +487,13 @@ fn replace(s: &[u8], patterns: &[&str], replacements: &[&str]) -> Vec<u8> {
 }
 
 #[cfg(feature = "format")]
+pub fn escape_tsv(s: &[u8]) -> Vec<u8> {
+    let pats = ["\n", "\r", "\t", "\\", "\0"];
+    let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
+    replace(s, &pats, &reps)
+}
+
+#[cfg(feature = "format")]
 fn format<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
 where
     for<'a> D::V<'a>: ValT,
@@ -500,11 +507,7 @@ where
         ("unescape_html", v(0), |cv| {
             bome(cv.1.map_utf8_str(|s| replace(s, &HTML_REPS, &HTML_PATS)))
         }),
-        ("escape_tsv", v(0), |cv| {
-            let pats = ["\n", "\r", "\t", "\\", "\0"];
-            let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
-            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
-        }),
+        ("escape_tsv", v(0), |cv| bome(cv.1.map_utf8_str(escape_tsv))),
         ("encode_uri", v(0), |cv| {
             bome(cv.1.map_utf8_str(|s| urlencoding::encode_binary(s).to_string()))
         }),
