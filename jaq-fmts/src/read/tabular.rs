@@ -33,60 +33,67 @@ impl From<Field> for Val {
     }
 }
 
-fn csv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
+fn field<E, I, F>(iter: &mut I, sep: u8, quote: u8, f: F) -> Result<Field, E>
+where
+    I: Iterator<Item = Result<u8, E>>,
+    F: Fn(&mut I, &mut Field) -> Result<(), E>,
+{
     let mut field = Field::default();
-    field.last = 'outer: loop {
-        match iter.next() {
+    field.last = loop {
+        let next = field.last.take().map(Ok).or_else(|| iter.next());
+        match next.transpose()? {
             None => break None,
-            Some(Ok(c @ (b',' | b'\n'))) => break Some(c),
-            Some(Ok(b'"')) => loop {
-                field.quote = true;
-                match iter.next() {
-                    Some(Ok(b'"')) => match iter.next() {
-                        Some(Ok(b'"')) => field.bytes.push(b'"'),
-                        Some(Ok(c)) => {
-                            field.bytes.push(c);
-                            continue 'outer;
-                        }
-                        Some(Err(e)) => return Err(e),
-                        None => break 'outer None,
-                    },
-                    Some(Ok(c)) => field.bytes.push(c),
-                    Some(Err(e)) => return Err(e),
-                    None => break 'outer None,
+            Some(c) if c == sep || c == b'\n' => break Some(c),
+            Some(b'\r') => match iter.next().transpose()? {
+                Some(c @ b'\n') => break Some(c),
+                c @ (Some(_) | None) => {
+                    field.bytes.push(b'\r');
+                    field.last = c
                 }
             },
-            Some(Ok(byte)) => field.bytes.push(byte),
-            Some(Err(e)) => return Err(e),
+            Some(c) if c == quote => {
+                field.quote = true;
+                f(iter, &mut field)?
+            }
+            Some(byte) => field.bytes.push(byte),
         }
     };
     Ok(field)
 }
 
-fn tsv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
-    let mut field = Field::default();
-    field.last = loop {
-        match iter.next() {
-            None => break None,
-            Some(Ok(c @ (b'\t' | b'\n'))) => break Some(c),
-            Some(Ok(b'\\')) => {
-                field.quote = true;
-                match iter.next() {
-                    None => break None,
-                    Some(Ok(b'n')) => field.bytes.push(b'\n'),
-                    Some(Ok(b't')) => field.bytes.push(b'\t'),
-                    Some(Ok(b'r')) => field.bytes.push(b'\r'),
-                    Some(Ok(b'0')) => field.bytes.push(b'\0'),
-                    Some(Ok(b'\\')) => field.bytes.push(b'\\'),
-                    Some(Ok(byte)) => field.bytes.extend([b'\\', byte]),
-                    Some(Err(e)) => return Err(e),
+fn csv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
+    field(iter, b',', b'"', |iter, field| loop {
+        match iter.next().transpose()? {
+            Some(b'"') => match iter.next().transpose()? {
+                Some(b'"') => field.bytes.push(b'"'),
+                c @ Some(_) => {
+                    field.last = c;
+                    return Ok(());
                 }
-            }
-            Some(Ok(byte)) => field.bytes.push(byte),
-            Some(Err(e)) => return Err(e),
+                None => return Ok(()),
+            },
+            Some(c) => field.bytes.push(c),
+            None => return Ok(()),
         }
-    };
-    Ok(field)
+    })
+}
+
+fn tsv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
+    field(iter, b'\t', b'\\', |iter, field| {
+        match iter.next().transpose()? {
+            None => (),
+            Some(b'n') => field.bytes.push(b'\n'),
+            Some(b't') => field.bytes.push(b'\t'),
+            Some(b'r') => field.bytes.push(b'\r'),
+            Some(b'0') => field.bytes.push(b'\0'),
+            Some(b'\\') => field.bytes.push(b'\\'),
+            c @ Some(_) => {
+                field.bytes.push(b'\\');
+                field.last = c
+            }
+        };
+        Ok(())
+    })
 }
 
 fn lines<E, I: Iterator<Item = Result<u8, E>>>(
