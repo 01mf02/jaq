@@ -1,7 +1,7 @@
 //! CSV and TSV support.
 use jaq_json::{read::parse_single_num, Val};
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Field {
     /// normalised contents of the field
     bytes: Vec<u8>,
@@ -13,15 +13,16 @@ struct Field {
 
 impl Field {
     fn is_empty(&self) -> bool {
-        self.bytes.is_empty() && self.last.is_none() && !self.quote
+        self.bytes.is_empty() && !self.quote
     }
 }
 
 impl From<Field> for Val {
     fn from(field: Field) -> Self {
-        // TODO: should we also convert "null"?
         if field.quote {
             Val::utf8_str(field.bytes)
+        } else if field.bytes.is_empty() {
+            Val::Null
         } else if &*field.bytes == b"true" {
             Val::Bool(true)
         } else if &*field.bytes == b"false" {
@@ -101,6 +102,7 @@ fn lines<E, I: Iterator<Item = Result<u8, E>>>(
             };
             match field.last {
                 None if fields.is_empty() && field.is_empty() => return None,
+                Some(b'\n') if fields.is_empty() && field.is_empty() => break,
                 None | Some(b'\n') => {
                     fields.push(field.into());
                     break;
