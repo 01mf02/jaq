@@ -19,7 +19,7 @@ fn jc(json: &str, cbor_hex: &str) {
 
     let cbor_bin = decode_hex(cbor_hex).unwrap();
     //dbg!(&cbor_bin);
-    let cbor_val = unwrap_collect(read::cbor::parse_many(&*cbor_bin));
+    let cbor_val = unwrap_collect(read::cbor::parse_many(&cbor_bin));
     assert_eq!(json_val, cbor_val);
 
     let mut cbor_bin2 = Vec::new();
@@ -28,13 +28,13 @@ fn jc(json: &str, cbor_hex: &str) {
     }
     //dbg!(&cbor_bin2);
 
-    let cbor_val2 = unwrap_collect(read::cbor::parse_many(&*cbor_bin2));
+    let cbor_val2 = unwrap_collect(read::cbor::parse_many(&cbor_bin2));
     assert_eq!(cbor_val, cbor_val2);
 }
 
 fn cbor_fail(cbor_hex: &str) {
     let cbor_bin = decode_hex(cbor_hex).unwrap();
-    let iter = read::cbor::parse_many(&*cbor_bin);
+    let iter = read::cbor::parse_many(&cbor_bin);
     assert!(iter.collect::<Result<Vec<_>, _>>().is_err())
 }
 

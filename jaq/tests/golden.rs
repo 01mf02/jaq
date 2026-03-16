@@ -151,7 +151,7 @@ test!(
     fmt_str,
     &[],
     r#""\u0000\u200b\r\t\n asdf""#,
-    r#""\u0000​\r\t\n asdf""#
+    "\"\\u0000\u{200b}\\r\\t\\n asdf\""
 );
 
 test!(
