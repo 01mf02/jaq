@@ -26,6 +26,9 @@ To ensure this, you must:
 - Test:
   Add unit or shell tests to the documentation if they might interest users.
   Include more exotic tests in the test suites of the respective crates.
+- Benchmark:
+  Benchmark performance-critical changes and provide
+  results as well as instructions how to reproduce them.
 
 You must not:
 
