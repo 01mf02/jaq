@@ -121,7 +121,7 @@ pub type Error = jaq_core::Error<Val>;
 /// A value or an eRror.
 pub type ValR = jaq_core::ValR<Val>;
 /// A value or an eXception.
-pub type ValX = jaq_core::ValX<Val>;
+pub type ValX<'a> = jaq_core::ValX<'a, Val>;
 
 // This is part of the Rust standard library since 1.76:
 // <https://doc.rust-lang.org/std/rc/struct.Rc.html#method.unwrap_or_clone>.
@@ -176,7 +176,11 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_values<I: Iterator<Item = ValX>>(self, opt: path::Opt, f: impl Fn(Self) -> I) -> ValX {
+    fn map_values<'a, I: Iterator<Item = ValX<'a>>>(
+        self,
+        opt: path::Opt,
+        f: impl Fn(Self) -> I,
+    ) -> ValX<'a> {
         match self {
             Self::Arr(a) => {
                 let iter = rc_unwrap_or_clone(a).into_iter().flat_map(f);
@@ -191,12 +195,12 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_index<I: Iterator<Item = ValX>>(
+    fn map_index<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
         index: &Self,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX {
+    ) -> ValX<'a> {
         if let (Val::BStr(_) | Val::TStr(_) | Val::Arr(_), Val::Obj(o)) = (&self, index) {
             let range = o.get(&Val::utf8_str("start"))..o.get(&Val::utf8_str("end"));
             return self.map_range(range, opt, f);
@@ -243,12 +247,12 @@ impl jaq_core::ValT for Val {
         }
     }
 
-    fn map_range<I: Iterator<Item = ValX>>(
+    fn map_range<'a, I: Iterator<Item = ValX<'a>>>(
         mut self,
         range: val::Range<&Self>,
         opt: path::Opt,
         f: impl Fn(Self) -> I,
-    ) -> ValX {
+    ) -> ValX<'a> {
         let fs = |b: Bytes, range, skip_take: SkipTakeFn, from: ValBytesFn, into: BytesValFn| {
             let (skip, take) = match Self::range_int(range) {
                 Ok(range) => skip_take(range, &b),

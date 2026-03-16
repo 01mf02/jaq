@@ -114,7 +114,7 @@ impl Val {
 }
 
 /// Box Map, Map Error.
-fn bmme<'a>(iter: BoxIter<'a, ValR>) -> BoxIter<'a, ValX> {
+fn bmme<'a>(iter: BoxIter<'a, ValR>) -> BoxIter<'a, ValX<'a>> {
     Box::new(iter.map(|r| r.map_err(Exn::from)))
 }
 

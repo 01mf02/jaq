@@ -173,9 +173,9 @@ trait ValTx: ValT + Sized {
     }
 
     /// Apply a function to an array.
-    fn try_mutate_arr<F>(self, f: F) -> ValX<Self>
+    fn try_mutate_arr<'a, F>(self, f: F) -> ValX<'a, Self>
     where
-        F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<Self>>,
+        F: FnOnce(&mut Vec<Self>) -> Result<(), Exn<'a, Self>>,
     {
         let mut a = self.into_vec()?;
         f(&mut a)?;
@@ -237,7 +237,7 @@ trait ValTx: ValT + Sized {
 impl<T: ValT> ValTx for T {}
 
 /// Sort array by the given function.
-fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<V>> {
+fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<'a, V>> {
     // Some(e) iff an error has previously occurred
     let mut err = None;
     xs.sort_by_cached_key(|x| {
@@ -256,7 +256,7 @@ fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(
 }
 
 /// Group an array by the given function.
-fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<V> {
+fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<'a, V> {
     let mut yx: Vec<(Vec<V>, V)> = xs
         .into_iter()
         .map(|x| Ok((f(x.clone()).collect::<Result<_, _>>()?, x)))
@@ -284,7 +284,7 @@ fn group_by<'a, V: ValT>(xs: Vec<V>, f: impl Fn(V) -> ValXs<'a, V>) -> ValX<V> {
 }
 
 /// Get the minimum or maximum element from an array according to the given function.
-fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<V>>
+fn cmp_by<'a, V: Clone, F, R>(xs: Vec<V>, f: F, replace: R) -> Result<Option<V>, Exn<'a, V>>
 where
     F: Fn(V) -> ValXs<'a, V>,
     R: Fn(&[V], &[V]) -> bool,
