@@ -5,8 +5,8 @@ use jaq_json::{read::parse_single_num, Val};
 struct Field {
     /// normalised contents of the field
     bytes: Vec<u8>,
-    /// how the field was terminated
-    last: Option<u8>,
+    /// character immediately after the field
+    next: Option<u8>,
     /// were there any escape characters or quotes in the field?
     quote: bool,
 }
@@ -39,8 +39,8 @@ where
     F: Fn(&mut I, &mut Field) -> Result<(), E>,
 {
     let mut field = Field::default();
-    field.last = loop {
-        let next = field.last.take().map(Ok).or_else(|| iter.next());
+    field.next = loop {
+        let next = field.next.take().map(Ok).or_else(|| iter.next());
         match next.transpose()? {
             None => break None,
             Some(c) if c == sep || c == b'\n' => break Some(c),
@@ -48,7 +48,7 @@ where
                 Some(c @ b'\n') => break Some(c),
                 c @ (Some(_) | None) => {
                     field.bytes.push(b'\r');
-                    field.last = c
+                    field.next = c
                 }
             },
             Some(c) if c == quote => {
@@ -67,7 +67,7 @@ fn csv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field,
             Some(b'"') => match iter.next().transpose()? {
                 Some(b'"') => field.bytes.push(b'"'),
                 c @ Some(_) => {
-                    field.last = c;
+                    field.next = c;
                     return Ok(());
                 }
                 None => return Ok(()),
@@ -89,7 +89,7 @@ fn tsv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field,
             Some(b'\\') => field.bytes.push(b'\\'),
             c @ Some(_) => {
                 field.bytes.push(b'\\');
-                field.last = c
+                field.next = c
             }
         };
         Ok(())
@@ -107,7 +107,7 @@ fn lines<E, I: Iterator<Item = Result<u8, E>>>(
                 Ok(ok) => ok,
                 Err(e) => return Some(Err(e)),
             };
-            match field.last {
+            match field.next {
                 None if fields.is_empty() && field.is_empty() => return None,
                 Some(b'\n') if fields.is_empty() && field.is_empty() => break,
                 None | Some(b'\n') => {
