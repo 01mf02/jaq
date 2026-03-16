@@ -46,7 +46,7 @@ where
     ])
 }
 
-fn inputs<'a, D: DataT>(cv: Cv<'a, D>) -> impl Iterator<Item = ValX<D::V<'a>>> + 'a
+fn inputs<'a, D: DataT>(cv: Cv<'a, D>) -> impl Iterator<Item = ValX<'a, D::V<'a>>> + 'a
 where
     D::Data<'a>: HasInputs<'a, D::V<'a>>,
 {

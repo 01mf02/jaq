@@ -229,9 +229,9 @@ fn bind_run<'a, D: DataT, T: Clone + 'a>(
     run: IdRunFn<'a, D, T>,
 ) -> ValXs<'a, T, D::V<'a>> {
     match pat {
-        Pattern::Var => run(*r, (cv.0.cons_var(y), cv.1)),
+        Pattern::Var => run(r, (cv.0.cons_var(y), cv.1)),
         Pattern::Idx(pats) => {
-            let r = move |ctx, vp| run(*r, (ctx, vp));
+            let r = move |ctx, vp| run(r, (ctx, vp));
             flat_map_then_with(bind_pats(pats, cv.0.clone(), (cv.0, y)), cv.1, r)
         }
     }
@@ -249,7 +249,7 @@ fn label_run<'a, D: DataT, T: 'a>(
     }))
 }
 
-fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<T, V>> + 'a>(
+fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<'a, T, V>> + 'a>(
     mut ys: ValXs<'a, T, V>,
     f: impl Fn(Error<V>) -> I + 'a,
 ) -> ValXs<'a, T, V> {
@@ -267,15 +267,15 @@ fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<T, V>> + 'a>(
 }
 
 fn fold_run<'a, D: DataT, T: Clone + 'a>(
-    xs: impl Iterator<Item = ValX<Ctx<'a, D>, D::V<'a>>> + Clone + 'a,
+    xs: impl Iterator<Item = ValX<'a, Ctx<'a, D>, D::V<'a>>> + Clone + 'a,
     cv: Cv<'a, D, T>,
     init: &'a Id,
     update: &'a Id,
     fold_type: &'a Fold<Id>,
     run: IdRunFn<'a, D, T>,
 ) -> ValXs<'a, T, D::V<'a>> {
-    let init = run(*init, cv.clone());
-    let update = move |ctx, v| run(*update, (ctx, v));
+    let init = run(init, cv.clone());
+    let update = move |ctx, v| run(update, (ctx, v));
     let inner = |_, y: &T| Some(y.clone());
     let inner_proj = |ctx, y: &T| Some((ctx, y.clone()));
     flat_map_then_with(init, xs, move |i, xs| match fold_type {
@@ -283,7 +283,7 @@ fn fold_run<'a, D: DataT, T: Clone + 'a>(
         Fold::Foreach(None) => Box::new(fold(xs, i, update, |_| (), inner, |_| None)),
         Fold::Foreach(Some(proj)) => flat_map_then(
             fold(xs, i, update, |ctx| ctx.clone(), inner_proj, |_| None),
-            move |(ctx, y)| run(*proj, (ctx, y)),
+            move |(ctx, y)| run(proj, (ctx, y)),
         ),
     })
 }
@@ -302,7 +302,7 @@ where
 type Pairs<'a, T> = box_iter::BoxIter<'a, (T, T)>;
 
 /// Run `self` and `r` and return the cartesian product of their outputs.
-fn cartesian<'a, D: DataT>(l: &'a Id, r: &'a Id, cv: Cv<'a, D>) -> Pairs<'a, ValX<D::V<'a>>> {
+fn cartesian<'a, D: DataT>(l: &'a Id, r: &'a Id, cv: Cv<'a, D>) -> Pairs<'a, ValX<'a, D::V<'a>>> {
     flat_map_with(l.run(cv.clone()), cv, move |l, cv| {
         map_with(r.run(cv), l, |r, l| (l, r))
     })
@@ -312,7 +312,7 @@ fn fold_update<'a, D: DataT>(
     fold_type: &'a Fold<Id>,
     path: &'a Id,
     v: D::V<'a>,
-    mut xs: impl Iterator<Item = ValX<Ctx<'a, D>, D::V<'a>>> + Clone + 'a,
+    mut xs: impl Iterator<Item = ValX<'a, Ctx<'a, D>, D::V<'a>>> + Clone + 'a,
     f: BoxUpdate<'a, D::V<'a>>,
 ) -> ValXs<'a, D::V<'a>> {
     let ctx = match xs.next() {
@@ -351,10 +351,10 @@ fn def_run<'a, D: DataT, T: 'a>(
     from: fn(exn::CallInput<D::V<'a>>) -> T,
 ) -> ValXs<'a, T, D::V<'a>> {
     use core::ops::ControlFlow;
-    let outs = |cvs| flat_map_then(cvs, move |cv| run(*id, cv));
+    let outs = |cvs| flat_map_then(cvs, move |cv| run(id, cv));
     let catch = |all: bool| {
         move |r| match r {
-            Err(Exn(exn::Inner::TailCall(tc))) if all || tc.0 == *id => {
+            Err(Exn(exn::Inner::TailCall(tc))) if all || tc.0 == id => {
                 ControlFlow::Continue(run(tc.0, (with_vars(tc.1), from(tc.2))))
             }
             Ok(_) | Err(_) => ControlFlow::Break(r),
@@ -367,7 +367,7 @@ fn def_run<'a, D: DataT, T: 'a>(
         CallType::CatchAll => Box::new(crate::Stack::new([outs(cvs)].into(), catch(true))),
         CallType::Throw => Box::new(cvs.map(move |cv| {
             cv.and_then(|cv| {
-                let tc = (*id, cv.0.vars, into(cv.1));
+                let tc = (id, cv.0.vars, into(cv.1));
                 Err(Exn(exn::Inner::TailCall(Box::new(tc))))
             })
         })),
@@ -423,7 +423,7 @@ pub struct Native<D: DataT + ?Sized> {
     update: UpdatePtr<D>,
 }
 
-type IdRunFn<'a, D, T> = fn(Id, Cv<'a, D, T>) -> ValXs<'a, T, <D as DataT>::V<'a>>;
+type IdRunFn<'a, D, T> = fn(&Id, Cv<'a, D, T>) -> ValXs<'a, T, <D as DataT>::V<'a>>;
 
 /// Run function pointer (see [`Id::run`]).
 pub type RunPtr<D> = for<'a> fn(Cv<'a, D>) -> ValXs<'a, <D as DataT>::V<'a>>;
@@ -461,7 +461,7 @@ impl<D: DataT> Native<D> {
 
 impl Id {
     /// `f.run((c, v))` returns the output of `v | f` in the context `c`.
-    pub fn run<'a, D: DataT>(self, cv: Cv<'a, D>) -> ValXs<'a, D::V<'a>> {
+    pub fn run<'a, D: DataT>(&self, cv: Cv<'a, D>) -> ValXs<'a, D::V<'a>> {
         use core::iter::once;
         match &cv.0.lut().terms[self.0] {
             Ast::Id => box_once(Ok(cv.1)),
@@ -575,7 +575,7 @@ impl Id {
     ///
     /// In particular, `v | path(f)` in context `c` yields the same paths as
     /// `f.paths((c, (v, Default::default())))`.
-    pub fn paths<'a, D: DataT>(self, cv: Cvp<'a, D>) -> ValPathXs<'a, D::V<'a>> {
+    pub fn paths<'a, D: DataT>(&self, cv: Cvp<'a, D>) -> ValPathXs<'a, D::V<'a>> {
         let err = |v| box_once(Err(Exn::from(Error::path_expr(v))));
         let proj_cv = |cv: &Cvp<'a, D>| (cv.0.clone(), cv.1 .0.clone());
         let proj_val = |(val, _path): &(D::V<'a>, _)| val.clone();
@@ -658,7 +658,7 @@ impl Id {
 
     /// `p.update((c, v), f)` returns the output of `v | p |= f` in the context `c`.
     pub fn update<'a, D: DataT>(
-        self,
+        &self,
         cv: Cv<'a, D>,
         f: BoxUpdate<'a, D::V<'a>>,
     ) -> ValXs<'a, D::V<'a>> {

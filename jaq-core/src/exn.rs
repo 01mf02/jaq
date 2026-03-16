@@ -1,6 +1,6 @@
 //! Exceptions and errors.
 
-use crate::RcList;
+use crate::{compile::TermId, filter::Vars, RcList};
 use alloc::{boxed::Box, string::String, string::ToString, vec::Vec};
 use core::fmt::{self, Display};
 
@@ -11,16 +11,16 @@ use core::fmt::{self, Display};
 ///
 /// Use [`crate::val::unwrap_valr`] to convert a [`crate::val::ValX`] to an error.
 #[derive(Clone, Debug)]
-pub struct Exn<V>(pub(crate) Inner<V>);
+pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
 
 #[derive(Clone, Debug)]
-pub(crate) enum Inner<V> {
+pub(crate) enum Inner<'a, V> {
     Err(Box<Error<V>>),
     /// Tail-recursive call.
     ///
     /// This is used internally to execute tail-recursive filters.
     /// If this can be observed by users, then this is a bug.
-    TailCall(Box<(crate::compile::TermId, crate::filter::Vars<V>, CallInput<V>)>),
+    TailCall(Box<(&'a TermId, Vars<V>, CallInput<V>)>),
     Break(usize),
 }
 
@@ -46,7 +46,7 @@ impl<V> CallInput<V> {
     }
 }
 
-impl<V> Exn<V> {
+impl<V> Exn<'_, V> {
     /// If the exception is an error, yield it, else yield the exception.
     pub(crate) fn get_err(self) -> Result<Error<V>, Self> {
         match self.0 {
@@ -56,7 +56,7 @@ impl<V> Exn<V> {
     }
 }
 
-impl<V> From<Error<V>> for Exn<V> {
+impl<V> From<Error<V>> for Exn<'_, V> {
     fn from(e: Error<V>) -> Self {
         Exn(Inner::Err(Box::new(e)))
     }
