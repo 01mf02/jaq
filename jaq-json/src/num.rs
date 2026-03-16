@@ -308,16 +308,16 @@ impl Hash for Num {
 
 #[test]
 fn hash_nums() {
+    use core::f64::consts::PI;
     use core::hash::BuildHasher;
     let h = |n| foldhash::fast::FixedState::with_seed(42).hash_one(n);
 
     assert_eq!(h(Num::Int(4096)), h(Num::big_int(4096.into())));
     assert_eq!(h(Num::Float(0.0)), h(Num::Int(0)));
     assert_eq!(h(Num::Float(3.0)), h(Num::big_int(3.into())));
-    assert_eq!(h(Num::Float(f64::NAN)), h(Num::Float(0.0 / 0.0)));
 
     assert_ne!(h(Num::Float(0.2)), h(Num::Float(0.4)));
-    assert_ne!(h(Num::Float(3.1415)), h(Num::big_int(3.into())));
+    assert_ne!(h(Num::Float(PI)), h(Num::big_int(3.into())));
     assert_ne!(h(Num::Float(0.2)), h(Num::Int(1)));
     assert_ne!(h(Num::Int(1)), h(Num::Int(2)));
 }

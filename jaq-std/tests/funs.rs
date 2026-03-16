@@ -141,6 +141,7 @@ yields!(
 );
 
 #[test]
+#[allow(clippy::zero_prefixed_literal)]
 fn regex() {
     let date = r#"(\\d{4})-(\\d{2})-(\\d{2})"#;
     let s = "2012-03-14, 2013-01-01 and 2014-07-05";
