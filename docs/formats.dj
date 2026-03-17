@@ -329,7 +329,8 @@ For example, to transform all `em` tags to `i` tags:
 To yield XML output instead of JSON output, use the option `--to xml`:
 
 ```
-$ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>' | jaq --from xml --to xml '(.. | select(.t? == "em") | .t) = "i"'
+$ echo '<a href="https://www.w3.org">World Wide Web Consortium (<em>W3C</em>)</a>' \
+| jaq --from xml --to xml '(.. | select(.t? == "em") | .t) = "i"'
 <a href="https://www.w3.org">World Wide Web Consortium (<i>W3C</i>)</a>
 ```
 
@@ -425,10 +426,15 @@ $ jaq . examples/test.xhtml
 The output contains several values consisting only of whitespace, such as `"\n    "`.
 These are conserved by jaq because XML is a whitespace-sensitive format.
 
-## CSV/TSV
+## CSV
 
-[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma-Separated Values) data is
-interpreted as an array of values by specifying `--from csv`, which will produce an array from each input line.
+[CSV](https://www.rfc-editor.org/rfc/rfc4180) (Comma-Separated Values)
+is a tabular data format.
+A CSV file consists of rows of fields.
+Rows are separated by newlines and
+fields are separated by commas.
+
+jaq interprets each row as an array of values.
 
 ```
 $ printf "a,b\n1,2\n3,4" | jaq -c --from csv
@@ -439,15 +445,110 @@ $ printf "a,b\n1,2\n3,4" | jaq -c --from csv --slurp
 [["a","b"],[1,2],[3,4]]
 ```
 
-When writing CSV output, a single array of fields can be used.
+When writing CSV using `--to csv`, jaq prints the raw output of the filter
+[`@csv`](#atcsv):
 
 ```
-$ echo '["a", "b"] [1, 2]' | jaq --to csv
+$ jaq -n '["a","b"], [1,2], [3,4]' --to csv
 "a","b"
 1,2
+3,4
+$ jaq -n '["a","b"], [1,2], [3,4] | @csv' --raw-output
+"a","b"
+1,2
+3,4
 ```
 
-The conversion of records in TSV works identically to in CSV.
-The only change is how values are escaped and the separator used.
+The filter `fromcsv` takes a string and yields each CSV row as an array of values.
+For example, `"1,2\n3,4\n" | fromcsv --> [1,2] [3,4]`.
 
-For details around string escaping and the formats used, see [`@csv`](#atcsv) and [`@tsv`](#attsv).
+Strings can be written quoted or unquoted.
+Inside quoted strings, `""` denotes a single quote (`"`).
+
+- `"plain,with space"  | fromcsv --> ["plain","with space"]`
+- `"\"with,comma\""    | fromcsv --> ["with,comma"]`
+- `"\"with\nnewline\"" | fromcsv --> ["with\nnewline"]`
+- `"\"with\"\"quote\"" | fromcsv --> ["with\"quote"]`
+
+The booleans `true` and `false` are returned as such.
+An empty field is returned as `null`:
+
+- `"true,,false" | fromcsv --> [true, null, false]`
+
+Any field that is a valid [XJON](#xjon) number is returned as such:
+
+```
+"0,1,3.14,Infinity,+Infinity,-Infinity" | fromcsv -->
+[0,1,3.14,Infinity, Infinity,-Infinity]
+```
+
+Quoted booleans, numbers, or empty strings are always returned as strings:
+
+`"\"true\",\"\",\"false\",\"3.14\"" | fromcsv --> ["true", "", "false", "3.14"]`
+
+Rows can be terminated with LF (`"\n"`) or CRLF (`"\r\n"`).
+The last row may or may not be terminated with LF/CRLF.
+
+- `"1,2\r\n3,4\n" | fromcsv --> [1,2] [3,4]`
+- `"1,2\n3,4\r\n" | fromcsv --> [1,2] [3,4]`
+- `"1,2\n3,4"     | fromcsv --> [1,2] [3,4]`
+
+A few extreme cases:
+
+- `""   | fromcsv --> ` (no output)
+- `"\n" | fromcsv --> [null]` (empty lines are interpreted as `null`)
+- `","  | fromcsv --> [null, null]`
+
+::: Advanced
+jaq currently does not provide any special handling for CSV headers,
+where the first row of a CSV file contains field names.
+However, using existing filters, you can handle CSV headers yourself.
+
+One useful pattern is to use
+[`inputs`](#inputs) *without* the habitual [`-n`](#--null-input) option.
+That way, the first row (= header) becomes the filter input,
+and the remaining rows can then be retrieved with `inputs`.
+We can find the indices of fields with [`index`](#indices).
+Putting this together, we can extract only certain fields from a CSV file:
+
+```
+$ printf "last,first,birthyear\nBach,J. S.,1685\nMozart,W. A.,1756\nvan Beethoven,L.,1770" \
+| jaq -c --from csv 'inputs as $row | [$row[index("last", "birthyear")]]'
+["Bach",1685]
+["Mozart",1756]
+["van Beethoven",1770]
+```
+
+You can also convert rows to objects via:
+
+```
+$ printf "last,first,birthyear\nBach,J. S.,1685\nMozart,W. A.,1756\nvan Beethoven,L.,1770" \
+| jaq -c --from csv 'to_entries | inputs as $row | map({(.value): $row[.key]}) | add'
+{"last":"Bach","first":"J. S.","birthyear":1685}
+{"last":"Mozart","first":"W. A.","birthyear":1756}
+{"last":"van Beethoven","first":"L.","birthyear":1770}
+```
+:::
+
+## TSV
+
+TSV (Tabulator-Separated Values) is a tabular data format similar to CSV,
+using tabs instead of commas to separate fields.
+You can use `--from tsv`, `--to tsv`, `fromcsv`, and `@csv` like for CSV.
+For example, `"1\t2\n3\t4\n" | fromtsv --> [1,2] [3,4]`.
+See [`@tsv`](#attsv) for more details.
+
+TSV strings are always unquoted.
+Encode control characters using `\0`, `\t`, `\r`, `\n`, and `\\`:
+
+- `"with\\0NUL" | fromtsv --> ["with\u0000NUL"]`
+- `"with\\tTAB" | fromtsv --> ["with\tTAB"]`
+- `"with\\rCR"  | fromtsv --> ["with\rCR"]`
+- `"with\\nLF"  | fromtsv --> ["with\nLF"]`
+- `"with\\\\"   | fromtsv --> ["with\\"]`
+
+For round-tripping, CSV is preferable to TSV, because in TSV output,
+non-string values are undistinguishable from their string equivalents:
+
+- `[1, "1", true, "true"] | @csv | fromcsv --> [1, "1", true, "true"]`
+- `[1, "1", true, "true"] | @tsv | fromtsv --> [1,  1,  true,  true ]`
