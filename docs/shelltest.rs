@@ -6,6 +6,7 @@ fn main() -> io::Result<()> {
     let mut passed = 0;
     let mut failed = 0;
     for (cmd, out_exp) in tests {
+        let cmd = cmd.join("");
         println!("Test: {cmd}");
         let (mut reader, writer) = io::pipe()?;
         let mut child = std::process::Command::new("sh")
@@ -32,16 +33,22 @@ fn main() -> io::Result<()> {
         .ok_or(io::Error::from(io::ErrorKind::Other))
 }
 
-type Test<S> = (S, Vec<S>);
+type Test<S> = (Vec<S>, Vec<S>);
 
 fn parse<'a>(mut lines: impl Iterator<Item = &'a str>) -> impl Iterator<Item = Test<&'a str>> {
     let mut cmd = None;
     let mut out = Vec::new();
 
     core::iter::from_fn(move || {
-        for line in &mut lines {
+        while let Some(line) = lines.next() {
             match line.strip_prefix("$ ") {
-                Some(new_cmd) => {
+                Some(mut line) => {
+                    let mut new_cmd = Vec::new();
+                    while let Some(cont) = line.strip_suffix('\\') {
+                        new_cmd.push(cont);
+                        line = lines.next()?;
+                    }
+                    new_cmd.push(line);
                     if let Some(cmd) = cmd.replace(new_cmd) {
                         return Some((cmd, core::mem::take(&mut out)));
                     }
