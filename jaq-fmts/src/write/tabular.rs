@@ -1,56 +1,91 @@
 //! CSV and TSV support.
-use crate::invalid_data;
+use core::fmt::{self, Display, Formatter};
 use jaq_json::Val;
-use std::io::Write;
+use std::io;
 
-type Result<T = (), E = std::io::Error> = core::result::Result<T, E>;
+/// CSV/TSV row, i.e. a list of fields.
+pub struct Row(Vec<Val>);
 
-type WriteFn<T> = fn(&mut dyn Write, &T) -> Result;
+/// Serialisation error.
+pub enum Error {
+    /// invalid row value
+    Row(Val),
+    /// invalid field value
+    Field(Val),
+}
 
-fn write_value(w: &mut dyn Write, v: &Val, f: WriteFn<[u8]>) -> Result {
-    let fail = || format!("expected CSV/TSV field (null, bool, number, or string), found {v}");
-    match v {
-        Val::Null => Ok(()),
-        Val::Bool(_) | Val::Num(_) => write!(w, "{v}"),
-        Val::TStr(b) => f(w, b),
-        _ => Err(invalid_data(fail())),
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let field = "null, bool, number, or string";
+        match self {
+            Self::Field(v) => write!(f, "expected table field ({field}), found {v}"),
+            Self::Row(v) => write!(f, "expected table row (array), found {v}"),
+        }
     }
 }
 
-fn write_csv_str(w: &mut dyn Write, b: &[u8]) -> Result {
+impl TryFrom<&Val> for Row {
+    type Error = Error;
+    fn try_from(v: &Val) -> Result<Self, Self::Error> {
+        if let Val::Arr(a) = v {
+            let iter = a.iter().map(|v| match v {
+                Val::Null | Val::Bool(_) | Val::Num(_) | Val::TStr(_) => Ok(v.clone()),
+                _ => Err(Error::Field(v.clone())),
+            });
+            iter.collect::<Result<_, _>>().map(Self)
+        } else {
+            Err(Error::Row(v.clone()))
+        }
+    }
+}
+
+macro_rules! write_field {
+    ($w:ident, $v:ident, $fs:expr) => {{
+        match $v {
+            Val::TStr(s) => $fs(s),
+            v => write!($w, "{v}"),
+        }
+    }};
+}
+
+macro_rules! write_row {
+    ($w:ident, $v:ident, $delim:expr, $f:expr) => {{
+        let mut iter = $v.0.iter();
+
+        if let Some(v) = iter.next() {
+            $f(v)?;
+        }
+        for v in iter {
+            write!($w, "{}", $delim)?;
+            $f(v)?;
+        }
+        Ok(())
+    }};
+}
+
+fn write_csv_str(w: &mut dyn io::Write, b: &[u8]) -> io::Result<()> {
     use bstr::ByteSlice;
     write!(w, "\"")?;
     w.write_all(&b.replace(b"\"", b"\"\""))?;
     write!(w, "\"")
 }
 
-fn write_tsv_str(w: &mut dyn Write, b: &[u8]) -> Result {
+fn write_tsv_str(w: &mut dyn io::Write, b: &[u8]) -> io::Result<()> {
     w.write_all(&jaq_std::escape_tsv(b))
 }
 
-fn write_row(w: &mut dyn Write, v: &Val, delim: char, f: WriteFn<Val>) -> Result {
-    let fail = || format!("expected CSV/TSV row (array), got {v}");
-    let mut iter = match v {
-        Val::Arr(a) => a.iter(),
-        _ => Err(invalid_data(fail()))?,
-    };
-
-    if let Some(v) = iter.next() {
-        f(w, v)?;
+impl Row {
+    /// Format array value as CSV row.
+    pub fn write_csv(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        write_row!(w, self, ',', |v: &Val| write_field!(w, v, |s| {
+            write_csv_str(w, s)
+        }))
     }
-    for v in iter {
-        write!(w, "{delim}")?;
-        f(w, v)?;
+
+    /// Format array value as CSV row.
+    pub fn write_tsv(&self, w: &mut dyn io::Write) -> io::Result<()> {
+        write_row!(w, self, ',', |v: &Val| write_field!(w, v, |s| {
+            write_tsv_str(w, s)
+        }))
     }
-    writeln!(w)
-}
-
-/// Format array value as CSV row.
-pub fn write_csv_row(w: &mut dyn Write, v: &Val) -> Result {
-    write_row(w, v, ',', |w, v| write_value(w, v, write_csv_str))
-}
-
-/// Format array value as TSV row.
-pub fn write_tsv_row(w: &mut dyn Write, v: &Val) -> Result {
-    write_row(w, v, ',', |w, v| write_value(w, v, write_tsv_str))
 }
