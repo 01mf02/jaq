@@ -82,9 +82,9 @@ impl Row {
         }))
     }
 
-    /// Format array value as CSV row.
+    /// Format array value as TSV row.
     pub fn write_tsv(&self, w: &mut dyn io::Write) -> io::Result<()> {
-        write_row!(w, self, ',', |v: &Val| write_field!(w, v, |s| {
+        write_row!(w, self, '\t', |v: &Val| write_field!(w, v, |s| {
             write_tsv_str(w, s)
         }))
     }
