@@ -109,7 +109,6 @@ fn lines<E, I: Iterator<Item = Result<u8, E>>>(
             };
             match field.next {
                 None if fields.is_empty() && field.is_empty() => return None,
-                Some(b'\n') if fields.is_empty() && field.is_empty() => break,
                 None | Some(b'\n') => {
                     fields.push(field.into());
                     break;
