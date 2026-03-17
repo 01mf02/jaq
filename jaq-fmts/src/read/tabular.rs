@@ -27,8 +27,10 @@ impl From<Field> for Val {
             Val::Bool(true)
         } else if &*field.bytes == b"false" {
             Val::Bool(false)
+        } else if let Some(num) = parse_single_num(&field.bytes) {
+            Val::Num(num)
         } else {
-            parse_single_num(&field.bytes).map_or_else(|| Val::utf8_str(field.bytes), Val::Num)
+            Val::utf8_str(field.bytes)
         }
     }
 }
