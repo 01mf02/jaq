@@ -42,6 +42,7 @@ impl TryFrom<&Val> for Row {
 macro_rules! write_field {
     ($w:ident, $v:ident, $fs:expr) => {{
         match $v {
+            Val::Null => Ok(()),
             Val::TStr(s) => $fs(s),
             v => write!($w, "{v}"),
         }
