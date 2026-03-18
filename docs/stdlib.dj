@@ -1800,6 +1800,11 @@ non-string values are undistinguishable from their string equivalents:
 
 - `[1, "1", true, "true"] | tocsv | fromcsv --> [1, "1", true, "true"]`
 - `[1, "1", true, "true"] | totsv | fromtsv --> [1,  1,  true,  true ]`
+
+For CSV, only the values `[]` and `[null]` are undistinguishable, i.e.:
+
+- `[    ] | tocsv --> ""`
+- `[null] | tocsv --> ""`
 :::
 
 
