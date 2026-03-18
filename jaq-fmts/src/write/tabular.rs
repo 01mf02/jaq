@@ -72,7 +72,10 @@ fn write_csv_str(w: &mut dyn io::Write, b: &[u8]) -> io::Result<()> {
 }
 
 fn write_tsv_str(w: &mut dyn io::Write, b: &[u8]) -> io::Result<()> {
-    w.write_all(&jaq_std::escape_tsv(b))
+    let pats = ["\n", "\r", "\t", "\\", "\0"];
+    let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
+    let ac = aho_corasick::AhoCorasick::new(pats).unwrap();
+    w.write_all(&ac.replace_all_bytes(b, &reps))
 }
 
 impl Row {
