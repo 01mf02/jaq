@@ -6,14 +6,14 @@ mod tests;
 mod windows;
 
 use cli::{Cli, Format};
-use core::fmt::{self, Formatter};
+use core::fmt::{self, Display, Formatter};
 use filter::run;
 use jaq_all::data::{Filter, Runner};
 use jaq_all::fmts::read;
 use jaq_all::fmts::write::{with_stdout, write, Writer};
 use jaq_all::json::write::{Pp, Styles};
 use jaq_all::json::Val;
-use jaq_all::load::{Color, FileReports, FileReportsDisp};
+use jaq_all::load::{Color, FileReports, FileReportsDisp, Paint};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Termination};
@@ -232,11 +232,16 @@ enum Error {
     NoOutput,
 }
 
-struct ErrorColor<'e>(&'e Error, fn(Color, String) -> String);
+struct ErrorColor<'e>(&'e Error, Paint);
 
 impl<'e> ErrorColor<'e> {
     fn new(e: &'e Error, color: bool) -> Self {
-        Self(e, if color { Color::ansi } else { |_, text| text })
+        let with_color = |f: &mut Formatter, c: &Option<Color>, d: &dyn Display| match c {
+            Some(color) => color.ansi(f, d),
+            None => d.fmt(f),
+        };
+        let without_color = |f: &mut Formatter, _c: &_, d: &dyn Display| d.fmt(f);
+        Self(e, if color { with_color } else { without_color })
     }
 }
 

@@ -37,7 +37,7 @@ type StringColors = Vec<(String, Option<Color>)>;
 #[derive(Debug)]
 pub struct Report {
     /// error summary
-    pub message: String,
+    message: String,
     labels: Vec<(core::ops::Range<usize>, StringColors, Color)>,
 }
 
@@ -52,9 +52,9 @@ pub enum Color {
 
 impl Color {
     /// Format a string with ANSI colors.
-    pub fn ansi(self, text: impl core::fmt::Display) -> String {
-        let ansi = |i| format!("\x1b[{i}m");
-        format!("{}{text}{}", ansi(self as usize), ansi(0))
+    pub fn ansi(self, f: &mut Formatter, text: &dyn Display) -> fmt::Result {
+        write!(f, "\x1b[{}m{}", self as usize, text)?;
+        write!(f, "\x1b[{}m", 0)
     }
 }
 
@@ -127,25 +127,36 @@ fn report_compile(code: &str, (found, undefined): compile::Error<&str>) -> Repor
     }
 }
 
-type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, String>;
+type CodeBlock = codesnake::Block<codesnake::CodeWidth<String>, Box<dyn Display>, Option<Color>>;
 
-type PaintFn = fn(Color, String) -> String;
+/// Function to apply color to snakes/text.
+pub type Paint = fn(&mut Formatter, &Option<Color>, &dyn Display) -> fmt::Result;
+
+struct FromFn<F>(F);
+
+fn from_fn<F: Fn(&mut Formatter) -> fmt::Result>(f: F) -> FromFn<F> {
+    FromFn(f)
+}
+
+impl<F: Fn(&mut Formatter) -> fmt::Result> Display for FromFn<F> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        (self.0)(f)
+    }
+}
 
 impl Report {
     /// Convert report to a code block.
-    pub fn to_block(&self, idx: &codesnake::LineIndex, paint: PaintFn) -> CodeBlock {
+    pub fn to_block(&self, idx: &codesnake::LineIndex, paint: Paint) -> CodeBlock {
         use codesnake::{Block, CodeWidth, Label};
-        let color_maybe = |(text, color): (String, Option<Color>)| match color {
-            None => text,
-            Some(color) => paint(color, text),
-        };
         let labels = self.labels.iter().cloned().map(|(range, text, color)| {
-            let text = text.into_iter().map(color_maybe).collect::<Vec<_>>();
             Label::new(range)
-                .with_text(text.join(""))
-                .with_style(move |s| paint(color, s))
+                .with_style(Some(color))
+                .with_text(Box::new(from_fn(move |f| {
+                    text.iter().try_for_each(|(text, col)| paint(f, col, text))
+                })) as Box<dyn Display>)
         });
-        Block::new(idx, labels).unwrap().map_code(|c| {
+        let block = Block::new(idx, labels).unwrap();
+        block.with_paint(paint).map_code(|c| {
             let c = c.replace('\t', "    ");
             let w = unicode_width::UnicodeWidthStr::width(&*c);
             CodeWidth::new(c, core::cmp::max(w, 1))
@@ -156,7 +167,7 @@ impl Report {
 /// Pretty-printer for file reports.
 pub struct FileReportsDisp<'a, P> {
     file_reports: &'a FileReports<P>,
-    paint: PaintFn,
+    paint: Paint,
     path: fn(&P) -> String,
 }
 
@@ -167,13 +178,13 @@ impl<'a, P> FileReportsDisp<'a, P> {
     pub fn new(file_reports: &'a FileReports<P>) -> Self {
         Self {
             file_reports,
-            paint: |_, text| text,
+            paint: |f, _style, disp| disp.fmt(f),
             path: |_| "".into(),
         }
     }
 
     /// Set a function that determines how colors should be applied to text.
-    pub fn with_paint(mut self, paint: PaintFn) -> Self {
+    pub fn with_paint(mut self, paint: Paint) -> Self {
         self.paint = paint;
         self
     }
@@ -194,6 +205,7 @@ impl<'a, P> Display for FileReportsDisp<'a, P> {
             writeln!(f, "Error: {}", e.message)?;
             let block = e.to_block(&idx, self.paint);
             writeln!(f, "{}{}", block.prologue(), path)?;
+            writeln!(f, "{}", block.space_vert())?;
             writeln!(f, "{}{}", block, block.epilogue())
         })
     }

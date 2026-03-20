@@ -193,8 +193,8 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
     }
 }
 
-fn color(color: Color, text: String) -> String {
+fn color(f: &mut Formatter, color: &Option<Color>, text: &dyn Display) -> fmt::Result {
     let mut color = format!("{color:?}");
     color.make_ascii_lowercase();
-    format!("<span class={color}>{text}</span>",)
+    write!(f, "<span class={color}>{text}</span>",)
 }

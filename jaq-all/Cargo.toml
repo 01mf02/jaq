@@ -20,7 +20,7 @@ jaq-std  = { workspace = true }
 jaq-json = { workspace = true }
 jaq-fmts = { workspace = true }
 
-codesnake = { version = "0.2" }
+codesnake = { version = "0.3" }
 unicode-width = "0.1.13"
 
 [dev-dependencies]
