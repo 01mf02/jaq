@@ -204,8 +204,11 @@ indexing them with `.c?` just yields nothing, allowing us to ignore the space.)
 We can see the effects of that on a slightly simplified version of the HTML:
 
 ```
-"<table><tr> <td>25</td> <td>0x1819</td> </tr><tr> <td>100</td> <td>0x1864</td> </tr></table>" | fromxml |
-.. | select(.t? == "tr").c | [.[].c?[]] -->
+"<table>" +
+"<tr>  <td>25</td> <td>0x1819</td> </tr>" +
+"<tr> <td>100</td> <td>0x1864</td> </tr>" +
+"</table>"
+| fromxml | .. | select(.t? == "tr").c | [.[].c?[]] -->
 [ "25", "0x1819"]
 ["100", "0x1864"]
 ```
@@ -219,7 +222,8 @@ jaq '.. | select(.t? == "tr").c | [.[].c?[]]' examples/cbor-examples.xhtml
 We can create a series of tests as follows:
 
 ```
-jaq '.. | select(.t? == "tr").c | [.[].c?[]] | @json "jc(\(.[0]), \(.[1][2:]));"' examples/cbor-examples.xhtml -r
+jaq '.. | select(.t? == "tr").c | [.[].c?[]] | @json "jc(\(.[0]), \(.[1][2:]));"' \
+  examples/cbor-examples.xhtml -r
 ```
 
 I used exactly this command to create a draft for jaq's CBOR parsing test suite.

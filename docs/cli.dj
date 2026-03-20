@@ -485,7 +485,8 @@ Set variable `$A` to JSON value _V_.
 For example:
 
 ```
-$ jaq --argjson song '{"name": "One of Us", "artist": "ABBA", "year": 1981}' -n '"Currently playing: \($song.name) (\($song.year))"'
+$ jaq --argjson song '{"name": "One of Us", "artist": "ABBA", "year": 1981}' -n \
+  '"Currently playing: \($song.name) (\($song.year))"'
 "Currently playing: One of Us (1981)"
 ```
 

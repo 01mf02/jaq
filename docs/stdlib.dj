@@ -216,7 +216,7 @@ The filter `add(f)` is equivalent to
 The filter `empty` yields no output.
 
 ::: Advanced
-This filter is defined as `([][] as $x | .)`.
+This filter is defined as `({}[] as $x | .)`.
 While a simpler filter like `[][]` also yields no outputs,
 this rather contrived-looking definition guarantees that
 `empty` can be used on the left-hand side of [assignments](#assignments).
@@ -1034,7 +1034,8 @@ The filter `group_by(f)` sorts its input array by `f`, then
 groups all values for which `f` produced identical outputs into the same array.
 For example:
 
-- `["foo", "", "bar", "quux", "baz"] | group_by(length) --> [[""], ["foo", "bar", "baz"], ["quux"]]`
+- `["foo", "", "bar", "quux", "baz"] | group_by(length) -->
+   [[""], ["foo", "bar", "baz"], ["quux"]]`
 - `[1, 2, 3, 4] | group_by(. % 2) --> [[2, 4], [1, 3]]`
 
 {#unique}
