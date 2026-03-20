@@ -61,6 +61,20 @@ pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Re
     })
 }
 
+/// Parse a single number.
+pub fn parse_single_num(slice: &[u8]) -> Option<Num> {
+    Some(match slice {
+        b"Infinity" => Num::Float(f64::INFINITY),
+        b"NaN" => Num::Float(f64::NAN),
+        _ => {
+            let mut lexer = SliceLexer::new(slice);
+            parse_num(&mut lexer)
+                .ok()
+                .filter(|_| lexer.as_slice().is_empty())?
+        }
+    })
+}
+
 /// Parse a JSON string as byte or text string, preserving invalid UTF-8 as-is.
 fn parse_string<L: LexAlloc>(lexer: &mut L, bytes: bool) -> Result<Vec<u8>, hifijson::Error> {
     let on_string = |bytes: &mut L::Bytes, out: &mut Vec<u8>| {

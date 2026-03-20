@@ -1450,6 +1450,13 @@ The filter `@text` is equivalent to [`tostring`](#tostring).
 
 The filter `@json` is equivalent to [`tojson`](#fromjson-tojson).
 
+{#atcsv-attsv}
+### `@csv`, `@tsv`
+
+The filters `@csv` and `@tsv` are equivalent to
+[`tocsv`](#fromcsv-tocsv) and
+[`totsv`](#fromtsv-totsv), respectively.
+
 {#athtml}
 ### `@html`, `@htmld`
 
@@ -1535,43 +1542,6 @@ which you can execute in good conscience.
 Unescaping can be avoided by running `jaq` with [`--raw-output`](#--raw-output),
 which does not escape `\` with `\\` in the first place.)
 :::
-
-{#atcsv}
-### `@csv`
-
-The filter `@csv` takes an array of scalars.
-It transforms each array element depending on its type:
-
-- `null`: Yield `""`.
-- Boolean, number: Transform it via [`tostring`](#tostring).
-- String: Replace occurrences of `"` by `""` and surround by `"`.
-- Fail for any other type of value.
-
-Finally, the filter joins the transformed elements with `","` as separator.
-For example:
-
-```
-[true, null, false, 1, "Give me \"quotes\" or die"] | @csv -->
-"true,,false,1,\"Give me \"\"quotes\"\" or die\""
-```
-
-{#attsv}
-### `@tsv`
-
-The filter `@tsv` is similar to `@csv`, with the following differences:
-
-- In strings, the characters `'\n'`, `'\r'`, `'\t'`, `'\'`, and `'\u0000'` are
-  replaced by strings `"\\n"`, `"\\r"`, `"\\t"`, `"\\\\"`, `"\\0"`.
-  (In raw output, these look like `\n`, `\r`, `\t`, `\\`, and `\0`.)
-  The result is not surrounded by `"`.
-- The transformed elements are joined with `\t` (tabulator).
-
-For example:
-
-```
-[true, null, false, 1, "Newline\nBackslash\\NUL\u0000"] | @tsv -->
-"true\t\tfalse\t1\tNewline\\nBackslash\\\\NUL\\0"
-```
 
 {#byte-strings-stdlib}
 ## Byte strings
@@ -1740,6 +1710,106 @@ Hello HTML!
 </body>
 </html>"
 ```
+
+### `fromcsv`, `tocsv`
+
+The filter `fromcsv` takes a string and yields each CSV row as an array of values.
+For example, `"1,2\n3,4\n" | fromcsv --> [1,2] [3,4]`.
+
+Strings can be written quoted or unquoted.
+Inside quoted strings, `""` denotes a single quote (`"`).
+
+- `"plain,with space"  | fromcsv --> ["plain","with space"]`
+- `"\"with,comma\""    | fromcsv --> ["with,comma"]`
+- `"\"with\nnewline\"" | fromcsv --> ["with\nnewline"]`
+- `"\"with\"\"quote\"" | fromcsv --> ["with\"quote"]`
+
+The booleans `true` and `false` are returned as such.
+An empty field is returned as `null`:
+
+- `"true,,false" | fromcsv --> [true, null, false]`
+
+Any field that is a valid [XJON](#xjon) number is returned as such:
+
+```
+"0,1,3.14,Infinity,+Infinity,-Infinity" | fromcsv -->
+[0,1,3.14,Infinity, Infinity,-Infinity]
+```
+
+Quoted booleans, numbers, or empty strings are always returned as strings:
+
+`"\"true\",\"\",\"false\",\"3.14\"" | fromcsv --> ["true", "", "false", "3.14"]`
+
+Rows can be terminated with LF (`"\n"`) or CRLF (`"\r\n"`).
+The last row may or may not be terminated with LF/CRLF.
+
+- `"1,2\r\n3,4\n" | fromcsv --> [1,2] [3,4]`
+- `"1,2\n3,4\r\n" | fromcsv --> [1,2] [3,4]`
+- `"1,2\n3,4"     | fromcsv --> [1,2] [3,4]`
+
+A few extreme cases:
+
+- `""   | fromcsv --> ` (no output)
+- `"\n" | fromcsv --> [null]` (empty lines are interpreted as `null`)
+- `","  | fromcsv --> [null, null]`
+
+The filter `tocsv` takes an array of scalars.
+It transforms each array element depending on its type:
+
+- `null`: Yield `""`.
+- Boolean, number: Transform it via [`tostring`](#tostring).
+- String: Replace occurrences of `"` by `""` and surround by `"`.
+- Fail for any other type of value.
+
+Finally, the filter joins the transformed elements with `","` as separator.
+For example:
+
+```
+[true, null, false, 1, "Give me \"quotes\", or die"] | tocsv -->
+"true,,false,1,\"Give me \"\"quotes\"\", or die\""
+```
+
+### `fromtsv`, `totsv`
+
+The filter `fromtsv` takes a string and yields each TSV row as an array of values.
+For example, `"1\t2\n3\t4\n" | fromtsv --> [1,2] [3,4]`.
+
+The filter `totsv` is similar to `tocsv`, with the following differences:
+
+- In strings, the characters `'\n'`, `'\r'`, `'\t'`, `'\'`, and `'\u0000'` are
+  replaced by strings `"\\n"`, `"\\r"`, `"\\t"`, `"\\\\"`, `"\\0"`.
+  (In raw output, these look like `\n`, `\r`, `\t`, `\\`, and `\0`.)
+  The result is not surrounded by `"`.
+- The transformed elements are joined with `\t` (tabulator).
+
+For example:
+
+```
+[true, null, false, 1, "hello \"quotes\" and \n\r\t\\ escapes"] | totsv -->
+"true\t\tfalse\t1\thello \"quotes\" and \\n\\r\\t\\\\ escapes"
+```
+
+TSV strings are always unquoted.
+Encode control characters using `\0`, `\t`, `\r`, `\n`, and `\\`:
+
+- `"with\\0NUL" | fromtsv --> ["with\u0000NUL"]`
+- `"with\\tTAB" | fromtsv --> ["with\tTAB"]`
+- `"with\\rCR"  | fromtsv --> ["with\rCR"]`
+- `"with\\nLF"  | fromtsv --> ["with\nLF"]`
+- `"with\\\\"   | fromtsv --> ["with\\"]`
+
+::: Advanced
+For round-tripping, CSV is preferable to TSV, because in TSV output,
+non-string values are undistinguishable from their string equivalents:
+
+- `[1, "1", true, "true"] | tocsv | fromcsv --> [1, "1", true, "true"]`
+- `[1, "1", true, "true"] | totsv | fromtsv --> [1,  1,  true,  true ]`
+
+For CSV, only the values `[]` and `[null]` are undistinguishable, i.e.:
+
+- `[    ] | tocsv --> ""`
+- `[null] | tocsv --> ""`
+:::
 
 
 ## Date & Time

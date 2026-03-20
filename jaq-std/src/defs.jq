@@ -118,10 +118,7 @@ def   todate:   todateiso8601;
 def fromdate: fromdateiso8601;
 
 # Formatting
-def fmt_row(n; s): if . >= "" then s elif . == null then n else "\(.)" end;
-def @csv: .[] |= fmt_row(""; "\"\(escape_csv)\"") | join("," );
-def @tsv: .[] |= fmt_row("";      escape_tsv    ) | join("\t");
-def @sh: [if isarray then .[] end | fmt_row("null"; "'\(escape_sh)'")] | join(" ");
+def @sh: [if isarray then .[] end | if . >= "" then "'\(escape_sh)'" else "\(.)" end] | join(" ");
 def @text: "\(.)";
 def @html   : tostring | escape_html;
 def @htmld  : tostring | unescape_html;

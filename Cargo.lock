@@ -331,6 +331,7 @@ dependencies = [
 name = "jaq-fmts"
 version = "0.1.0-gamma"
 dependencies = [
+ "aho-corasick",
  "base64",
  "bstr",
  "bytes",

@@ -436,12 +436,6 @@ where
         ("rtrim", v(0), |cv| {
             bome(cv.1.trim_utf8_with(ByteSlice::trim_end))
         }),
-        ("escape_csv", v(0), |cv| {
-            bome(
-                cv.1.try_as_utf8_bytes()
-                    .map(|s| ValT::from_utf8_bytes(s.replace(b"\"", b"\"\""))),
-            )
-        }),
         ("escape_sh", v(0), |cv| {
             bome(
                 cv.1.try_as_utf8_bytes()
@@ -499,11 +493,6 @@ where
         }),
         ("unescape_html", v(0), |cv| {
             bome(cv.1.map_utf8_str(|s| replace(s, &HTML_REPS, &HTML_PATS)))
-        }),
-        ("escape_tsv", v(0), |cv| {
-            let pats = ["\n", "\r", "\t", "\\", "\0"];
-            let reps = ["\\n", "\\r", "\\t", "\\\\", "\\0"];
-            bome(cv.1.map_utf8_str(|s| replace(s, &pats, &reps)))
         }),
         ("encode_uri", v(0), |cv| {
             bome(cv.1.map_utf8_str(|s| urlencoding::encode_binary(s).to_string()))

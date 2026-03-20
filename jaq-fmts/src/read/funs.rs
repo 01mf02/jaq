@@ -1,4 +1,4 @@
-use super::{cbor, toml, xml, yaml};
+use super::{cbor, tabular, toml, xml, yaml};
 use alloc::boxed::Box;
 use bytes::Bytes;
 use core::fmt;
@@ -33,6 +33,20 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             let from_utf8 = |b| core::str::from_utf8(b).map_err(Error::str);
             let parse = |b| toml::parse(b).map_err(|e| parse_fail(&cv.1, "TOML", e));
             bome(cv.1.try_as_utf8_bytes().and_then(from_utf8).and_then(parse))
+        }),
+        ("fromcsv", v(0), |cv| {
+            bmme(then(cv.1.try_as_bytes_owned(), |s| {
+                bytes_valrs(s, |s| {
+                    Box::new(tabular::read_csv(s.iter().copied().map(Ok)))
+                })
+            }))
+        }),
+        ("fromtsv", v(0), |cv| {
+            bmme(then(cv.1.try_as_bytes_owned(), |s| {
+                bytes_valrs(s, |s| {
+                    Box::new(tabular::read_tsv(s.iter().copied().map(Ok)))
+                })
+            }))
         }),
     ])
 }

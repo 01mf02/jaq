@@ -12,18 +12,20 @@ rust-version = "1.70"
 
 [features]
 default = ["all"]
-all = ["cbor", "toml", "xml", "yaml"]
+all = ["cbor", "toml", "xml", "yaml", "tabular"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
 toml = ["toml-span"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser", "base64"]
+tabular = ["aho-corasick"]
 
 [dependencies]
 jaq-core = { workspace = true }
 jaq-std  = { workspace = true }
 jaq-json = { workspace = true }
 
+aho-corasick = { version = "1.0", optional = true }
 bstr = "1"
 bytes = "1.10.1"
 memmap2 = "0.9"
