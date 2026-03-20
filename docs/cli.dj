@@ -40,11 +40,11 @@ For example,
 `jaq --from yaml . myfile.yml`
 parses `myfile.yml` as YAML.
 Possible values of _FORMAT_ include:
-`raw`, `raw0`, `json`, `yaml`, `cbor`, `toml`, `xml`, `csv`, `csv_lines`, `tsv`, `tsv_lines`.
+`raw`, `raw0`, `json`, `yaml`, `cbor`, `toml`, `xml`, `csv`, `tsv`.
 
 jaq automatically chooses the corresponding input format for
 files with the extensions
-`.json`, `.yaml`, `.cbor`, `.toml`, `.xml`, `.xhtml`, `.csv`.
+`.json`, `.yaml`, `.cbor`, `.toml`, `.xml`, `.xhtml`, `.csv`, `.tsv`.
 That means that
 `jaq --from cbor . myfile.cbor` is equivalent to
 `jaq . myfile.cbor`.

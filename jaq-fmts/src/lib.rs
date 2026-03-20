@@ -49,7 +49,7 @@ pub enum Format {
 
 impl Format {
     /// List of all currently supported formats.
-    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml, csv, csv_lines, tsv, tsv_lines";
+    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml, csv, tsv";
 
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {
