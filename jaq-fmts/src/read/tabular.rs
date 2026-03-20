@@ -98,40 +98,38 @@ fn tsv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field,
     })
 }
 
-fn lines<E, I: Iterator<Item = Result<u8, E>>>(
-    mut iter: I,
+/// Read single table row.
+fn row<E, I: Iterator<Item = Result<u8, E>>>(
+    iter: &mut I,
     field: fn(&mut I) -> Result<Field, E>,
-) -> impl Iterator<Item = Result<Val, E>> {
-    core::iter::from_fn(move || {
-        let mut fields = Vec::new();
-        loop {
-            let field = match field(&mut iter) {
-                Ok(ok) => ok,
-                Err(e) => return Some(Err(e)),
-            };
-            match field.next {
-                None if fields.is_empty() && field.is_empty() => return None,
-                None | Some(b'\n') => {
-                    fields.push(field.into());
-                    break;
-                }
-                _ => fields.push(field.into()),
+) -> Option<Result<Val, E>> {
+    let mut fields = Vec::new();
+    loop {
+        let field = match field(iter) {
+            Ok(ok) => ok,
+            Err(e) => return Some(Err(e)),
+        };
+        match field.next {
+            None if fields.is_empty() && field.is_empty() => return None,
+            None | Some(b'\n') => {
+                fields.push(field.into());
+                return Some(Ok(Val::Arr(fields.into())));
             }
+            _ => fields.push(field.into()),
         }
-        Some(Ok(Val::Arr(fields.into())))
-    })
+    }
 }
 
-/// Read lines of a CSV file.
+/// Read rows of a CSV file.
 pub fn read_csv<E>(
-    iter: impl Iterator<Item = Result<u8, E>>,
+    mut iter: impl Iterator<Item = Result<u8, E>>,
 ) -> impl Iterator<Item = Result<Val, E>> {
-    lines(iter, csv_field)
+    core::iter::from_fn(move || row(&mut iter, csv_field))
 }
 
-/// Read lines of a TSV file.
+/// Read rows of a TSV file.
 pub fn read_tsv<E>(
-    iter: impl Iterator<Item = Result<u8, E>>,
+    mut iter: impl Iterator<Item = Result<u8, E>>,
 ) -> impl Iterator<Item = Result<Val, E>> {
-    lines(iter, tsv_field)
+    core::iter::from_fn(move || row(&mut iter, tsv_field))
 }
