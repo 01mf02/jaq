@@ -461,31 +461,108 @@ $ jaq -n '["a","b"], [1,2], [3,4] | @csv' --raw-output
 3,4
 ```
 
+### Headers
+
 jaq currently does not provide any special handling for table headers,
 where the first row of a table contains field names.
-However, using existing filters, you can handle table headers yourself.
+However, there are a few filters in `examples/table.jq`
+that aim to simplify handling of tables with headers.
+Let us see their usage.
 
-One useful pattern is to use
+For example, let us look at
+[Ferris Bueller](https://en.wikipedia.org/wiki/Ferris_Bueller%27s_Day_Off)'s student record:
+
+```
+$ cat examples/ferris.csv
+ID,Name,Home phone,Days absent
+38-106,"Bueller, Ferris",555-6452,9
+```
+
+Hmmm, this is a bit hard to read, and Edward R. Rooney, Dean of Students, is a busy man.
+Let us help him out a bit:
+
+```
+$ jaq -L examples 'include "table"; from_table' -s examples/ferris.csv
+{
+  "ID": "38-106",
+  "Name": "Bueller, Ferris",
+  "Home phone": "555-6452",
+  "Days absent": 9
+}
+```
+
+Ah, much better. So what does Edward R. Rooney have to say about Ferris to Ferris's mom?
+
+> "So far this semester, he has been absent nine times."
+> --- "Nine times?"
+> --- "Nine times."
+> --- "I don't remember him being sick nine times."
+> --- "That's probably because he wasn't sick. He was skipping school. Wake up and smell the coffee, Mrs. Bueller. It's a fool's paradise. He's just leading you down the primrose path."
+> --- "I can't believe it."
+> --- "I got it right here in front of me. He has missed nine days."
+
+Now it's time for Ferris to shine:
+
+```
+$ jaq -L examples 'include "table"; from_table | .["Days absent"] -= 7' -s examples/ferris.csv
+{
+  "ID": "38-106",
+  "Name": "Bueller, Ferris",
+  "Home phone": "555-6452",
+  "Days absent": 2
+}
+```
+
+> "Grace! GRACE!!!"
+
+Next, let's have a look at Ferris's courses:
+
+```
+$ cat examples/ferris-courses.tsv
+Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A
+05-08	MWTF	Calculus	McMurry	309	B	A-
+09-10	TWTF	Chemistry	Gunner	260	A-	A
+11-13	All	Lunch		Caf
+14-19	MTWF	Gym	Carlyle	127	B+	A-
+23-25	TWTF	Computr Sc	Cohen	114	A-	A
+26-29	MWTF	Utpian Scy	Jardin	241	A	A
+30-32	MTWF	Euro Hist	Rice	334	B+	B+
+```
+
+Let's see ... in which courses did Ferris get a B+ as first grade? Anyone? Anyone?
+
+```
+$ jaq -L examples 'include "table"; [from_table | select(.["Grade 1"] == "B+")] | to_table' \
+  -s examples/ferris-courses.tsv --to tsv
+Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
+14-19	MTWF	Gym	Carlyle	127	B+	A-		
+30-32	MTWF	Euro Hist	Rice	334	B+	B+		
+```
+
+Yeah, Ferris ... you still got a bit of work ahead of you on the database.
+
+So far, we slurped in all tables before processing them, using [`-s`](#--slurp).
+This can be wasteful, especially when processing large tables, because
+this reads the whole table into memory.
+We can also read tables row-by-row:
+One useful pattern there is to use
 [`inputs`](#inputs) *without* the habitual [`-n`](#--null-input) option.
 That way, the first row (= header) becomes the filter input,
 and the remaining rows can then be retrieved with `inputs`.
-We can find the indices of fields with [`index`](#indices).
-Putting this together, we can extract only certain fields from a table:
+Putting this together, we can rewrite the previous example:
 
 ```
-$ printf "last,first,birthyear\nBach,J. S.,1685\nMozart,W. A.,1756\nvan Beethoven,L.,1770" \
-| jaq -c --from csv 'inputs as $row | [$row[index("last", "birthyear")]]'
-["Bach",1685]
-["Mozart",1756]
-["van Beethoven",1770]
+$ jaq -L examples 'include "table"; ., . as $header | from_row(inputs) | select(.["Grade 1"] == "B+") | to_row($header)' \
+  examples/ferris-courses.tsv --to tsv
+Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
+14-19	MTWF	Gym	Carlyle	127	B+	A-		
+30-32	MTWF	Euro Hist	Rice	334	B+	B+		
 ```
 
-You can also convert rows to objects via:
+This concludes our little Ferris Bueller arc.
+If you do not know the film yet, I greatly recommend you to change that.
+And remember: "Life moves pretty fast. If you don't stop and look around once in a while, you could miss it."
 
-```
-$ printf "last,first,birthyear\nBach,J. S.,1685\nMozart,W. A.,1756\nvan Beethoven,L.,1770" \
-| jaq -c --from csv 'to_entries | inputs as $row | map({(.value): $row[.key]}) | add'
-{"last":"Bach","first":"J. S.","birthyear":1685}
-{"last":"Mozart","first":"W. A.","birthyear":1756}
-{"last":"van Beethoven","first":"L.","birthyear":1770}
-```
