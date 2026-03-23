@@ -533,7 +533,7 @@ Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
 Let's see ... in which courses did Ferris get a B+ as first grade? Anyone? Anyone?
 
 ```
-$ jaq -L examples 'include "table"; [from_table | select(.["Grade 1"] == "B+")] | to_table' \
+$ jaq -L examples 'include "table"; with_table(map(select(.["Grade 1"] == "B+")))' \
   -s examples/ferris-courses.tsv --to tsv
 Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
 01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
