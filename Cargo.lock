@@ -363,7 +363,7 @@ dependencies = [
  "num-traits",
  "ryu",
  "self_cell",
- "serde",
+ "serde_core",
  "serde_json",
 ]
 

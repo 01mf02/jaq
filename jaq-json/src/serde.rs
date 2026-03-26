@@ -1,7 +1,7 @@
 use crate::{Num, Val};
 use alloc::{fmt, string::String};
-use serde::de::{Error, MapAccess, SeqAccess, Visitor};
-use serde::{Deserialize, Deserializer};
+use serde_core::de::{Error, MapAccess, SeqAccess, Visitor};
+use serde_core::{Deserialize, Deserializer};
 
 struct ValueVisitor;
 
