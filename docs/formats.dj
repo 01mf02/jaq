@@ -467,6 +467,9 @@ jaq currently does not provide any special handling for table headers,
 where the first row of a table contains field names.
 However, there are a few filters in `examples/table.jq`
 that aim to simplify handling of tables with headers.
+If you find these filters useful or have a problem with them,
+please [leave your feedback](https://github.com/01mf02/jaq/issues/418)
+to help me decide whether to integrate them into jaq's standard library.
 Let us see their usage.
 
 For example, let us look at
