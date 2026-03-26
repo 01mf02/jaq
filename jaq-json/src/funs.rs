@@ -17,10 +17,10 @@ impl Val {
         match self {
             Val::Null => Ok(Val::from(0usize)),
             Val::Num(n) => Ok(Val::Num(n.length())),
-            Val::TStr(s) => Ok(Val::from(s.chars().count() as isize)),
-            Val::BStr(b) => Ok(Val::from(b.len() as isize)),
-            Val::Arr(a) => Ok(Val::from(a.len() as isize)),
-            Val::Obj(o) => Ok(Val::from(o.len() as isize)),
+            Val::TStr(s) => Ok(Val::from(utf8_length(s))),
+            Val::BStr(b) => Ok(Val::from(b.len())),
+            Val::Arr(a) => Ok(Val::from(a.len())),
+            Val::Obj(o) => Ok(Val::from(o.len())),
             Val::Bool(_) => Err(Error::str(format_args!("{self} has no length"))),
         }
     }
@@ -143,6 +143,32 @@ type ValRs<'a> = BoxIter<'a, ValR>;
 /// Apply a function to bytes and yield the resulting value results.
 pub fn bytes_valrs(b: Bytes, f: impl FnOnce(&[u8]) -> ValRs) -> ValRs<'static> {
     Box::new(BytesValRs::new(b, |b| f(b)))
+}
+
+/// Obtain length of string that is assumed to be UTF-8 encoded.
+///
+/// This can be removed once https://github.com/BurntSushi/bstr/pull/223 lands.
+fn utf8_length(mut s: &[u8]) -> usize {
+    let mut count = 0;
+    loop {
+        // ASCII fast path taken if two consecutive ASCII chars found
+        match s {
+            [fst, snd, ..] if *fst <= 0x7F && *snd <= 0x7F => {
+                let size = s.find_non_ascii_byte().unwrap_or(s.len());
+                count += size;
+                s = &s[size..];
+            }
+            _ => (),
+        }
+
+        let (_ch, size) = bstr::decode_utf8(s);
+        if size == 0 {
+            return count;
+        } else {
+            count += 1;
+            s = &s[size..];
+        }
+    }
 }
 
 /// Functions of the standard library.
