@@ -20,6 +20,6 @@ jaq-all  = { workspace = true }
 dirs = { version = "6.0" }
 env_logger = { version = "0.10.0", default-features = false }
 log = { version = "0.4.17" }
-mimalloc = { version = "0.1.29", default-features = false, optional = true }
+mimalloc = { version = "0.1.29", features = ["v3"], default-features = false, optional = true }
 rustyline = { version = "13.0.0", default-features = false, features = ["with-file-history"] }
 tempfile = "3.3.0"
