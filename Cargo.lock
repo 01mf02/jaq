@@ -290,7 +290,7 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "jaq"
-version = "3.0.0-gamma"
+version = "3.0.0"
 dependencies = [
  "dirs",
  "env_logger",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-all"
-version = "0.1.0-gamma"
+version = "0.1.0"
 dependencies = [
  "codesnake",
  "jaq-core",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "3.0.0-gamma"
+version = "3.0.0"
 dependencies = [
  "arbitrary",
  "dyn-clone",
@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-fmts"
-version = "0.1.0-gamma"
+version = "0.1.0"
 dependencies = [
  "aho-corasick",
  "base64",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-json"
-version = "2.0.0-gamma"
+version = "2.0.0"
 dependencies = [
  "bstr",
  "bytes",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "3.0.0-gamma"
+version = "3.0.0"
 dependencies = [
  "aho-corasick",
  "base64",
