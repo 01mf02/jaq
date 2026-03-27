@@ -21,6 +21,7 @@ pub fn funs<D: for<'a> jaq_core::DataT<V<'a> = jaq_json::Val>>() -> impl Iterato
 }
 
 /// Input/Output format.
+#[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Format {
     /// Raw text string
@@ -28,7 +29,7 @@ pub enum Format {
     /// When the option `--slurp` is used additionally,
     /// then the whole input is read into a single string.
     Raw,
-    /// Zero-terminated text strings
+    /// Zero-terminated text string
     Raw0,
     /// JavaScript Object Notation
     #[default]
@@ -49,7 +50,7 @@ pub enum Format {
 
 impl Format {
     /// List of all currently supported formats.
-    pub const ALL: &str = "raw, json, cbor, yaml, toml, xml, csv, tsv";
+    pub const ALL: &str = "raw, raw0, json, cbor, yaml, toml, xml, csv, tsv";
 
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {

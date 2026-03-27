@@ -110,46 +110,47 @@ I then processed the results with a "one-liner" (stretching the term and the lin
 (Of course, you can also use jaq here instead of jq.)
 Finally, I concatenated the table header with the output and piped it through `pandoc -t gfm`.
 
-[^binaries]: The binaries for jq-1.8.1 and gojq-0.12.17 were retrieved from their GitHub release pages.
+[^binaries]: jq-1.8.1 was installed from the official Arch Linux package and gojq-0.12.18 was retrieved from its GitHub release page.
 
 Table: Evaluation results in milliseconds ("N/A" if error or more than 10 seconds).
 
-| Benchmark       |       n | jaq-2.3 | jq-1.8.1 | gojq-0.12.17 |
+| Benchmark       |       n | jaq-3.0 | jq-1.8.1 | gojq-0.12.18 |
 |-----------------|--------:|--------:|---------:|-------------:|
-| `empty`         |     512 |     330 |      440 |      **290** |
-| `bf-fib`        |      13 | **430** |     1110 |          540 |
-| `defs`          |  100000 |  **60** |      N/A |         1000 |
-| `upto`          |    8192 |   **0** |      470 |          450 |
-| `reduce-update` |   16384 |  **10** |      490 |         1200 |
-| `reverse`       | 1048576 |  **30** |      500 |          270 |
-| `sort`          | 1048576 | **100** |      450 |          540 |
-| `group-by`      | 1048576 | **340** |     1750 |         1540 |
-| `min-max`       | 1048576 |     190 |  **170** |          260 |
-| `add`           | 1048576 | **440** |      570 |         1150 |
-| `kv`            |  131072 | **100** |      140 |          270 |
-| `kv-update`     |  131072 | **110** |      480 |          480 |
-| `kv-entries`    |  131072 | **520** |     1050 |          800 |
-| `ex-implode`    | 1048576 | **470** |     1010 |          590 |
-| `reduce`        | 1048576 | **720** |      850 |          N/A |
-| `try-catch`     | 1048576 | **170** |      220 |          370 |
-| `repeat`        | 1048576 | **140** |      690 |          530 |
-| `from`          | 1048576 | **280** |      800 |          550 |
-| `last`          | 1048576 |  **40** |      160 |          110 |
-| `pyramid`       |  524288 |     310 |  **270** |          480 |
-| `tree-contains` |      23 |  **60** |      590 |          220 |
-| `tree-flatten`  |      17 |     750 |      340 |        **0** |
-| `tree-update`   |      17 | **470** |      970 |         1300 |
-| `tree-paths`    |      17 | **130** |      250 |          770 |
-| `to-fromjson`   |   65536 |  **40** |      370 |          100 |
-| `ack`           |       7 | **510** |      540 |         1090 |
-| `range-prop`    |     128 |     350 |      270 |      **230** |
-| `cumsum`        | 1048576 | **250** |      260 |          460 |
-| `cumsum-xy`     | 1048576 |     400 |  **350** |          680 |
+| `empty`         |     512 |     410 |      430 |      **270** |
+| `bf-fib`        |      13 | **530** |     1030 |      **530** |
+| `defs`          |  100000 |  **50** |      N/A |          960 |
+| `upto`          |    8192 |   **0** |      440 |          450 |
+| `reduce-update` |   16384 |   **0** |      720 |         1320 |
+| `reverse`       | 1048576 |  **30** |      440 |          300 |
+| `sort`          | 1048576 |  **90** |      430 |          550 |
+| `group-by`      | 1048576 | **260** |     1790 |         1580 |
+| `min-max`       | 1048576 | **180** |      200 |          300 |
+| `add`           | 1048576 | **390** |      520 |         1290 |
+| `kv`            |  131072 | **110** |      120 |          280 |
+| `kv-update`     |  131072 | **130** |      440 |          550 |
+| `kv-entries`    |  131072 | **520** |      980 |          870 |
+| `ex-implode`    | 1048576 |     600 |      890 |      **560** |
+| `reduce`        | 1048576 |     740 |  **700** |          N/A |
+| `try-catch`     | 1048576 |     220 |  **200** |          390 |
+| `repeat`        | 1048576 | **170** |      610 |          500 |
+| `from`          | 1048576 | **340** |      730 |          550 |
+| `last`          | 1048576 |  **20** |      150 |          170 |
+| `pyramid`       |  524288 |     300 |  **250** |          470 |
+| `tree-contains` |      23 |  **90** |      830 |          230 |
+| `tree-flatten`  |      17 |     700 |      330 |       **10** |
+| `tree-update`   |      17 | **430** |      910 |         1830 |
+| `tree-paths`    |      17 | **140** |      230 |          780 |
+| `to-fromjson`   |   65536 |  **50** |      350 |          100 |
+| `ack`           |       7 |     570 |  **490** |          540 |
+| `range-prop`    |     128 |     370 |      250 |      **210** |
+| `cumsum`        | 1048576 | **240** |      250 |          510 |
+| `cumsum-xy`     | 1048576 |     380 |  **350** |          750 |
+| `str-slice`     |    8192 |     170 |      650 |      **120** |
 
 The results show that
-jaq-2.3 is fastest on 23 benchmarks, whereas
-jq-1.8.1 is fastest on 3 benchmark and
-gojq-0.12.17 is fastest on 3 benchmarks.
+jaq-3.0 is fastest on 20 benchmarks, whereas
+jq-1.8.1 is fastest on 5 benchmarks and
+gojq-0.12.18 is fastest on 6 benchmarks.
 gojq is much faster on `tree-flatten` because it implements the filter `flatten` natively instead of by definition.
 
 [gojq]: https://github.com/itchyny/gojq
