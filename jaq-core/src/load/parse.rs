@@ -107,6 +107,8 @@ pub enum Term<S> {
     Label(S, Box<Self>),
     /// Break out from control flow to location variable, e.g. `break $x`
     Break(S),
+    /// TODO!!!
+    Yield(S),
 
     /// `reduce` and `foreach`, e.g. `reduce .[] as $x (0; .+$x)`
     Fold(S, Box<Self>, Pattern<S>, Vec<Self>),
@@ -515,6 +517,7 @@ impl<'s, 't> Parser<'s, 't> {
                 Term::Label(x, Box::new(tm))
             }
             Some(Token("break", _)) => Term::Break(self.var()?),
+            Some(Token("yield", _)) => Term::Yield(self.var()?),
             Some(Token(fold @ ("reduce" | "foreach"), _)) => {
                 let xs = self.atom()?;
                 self.just("as")?;

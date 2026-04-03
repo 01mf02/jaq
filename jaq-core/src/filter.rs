@@ -239,12 +239,14 @@ fn bind_run<'a, D: DataT, T: Clone + 'a>(
 
 fn label_run<'a, D: DataT, T: 'a>(
     cv: Cv<'a, D, T>,
+    from: fn(D::V<'a>) -> ValX<'a, T, D::V<'a>>,
     run: impl Fn(Cv<'a, D, T>) -> ValXs<'a, T, D::V<'a>>,
 ) -> ValXs<'a, T, D::V<'a>> {
     let ctx = cv.0.cons_label();
     let labels = ctx.labels;
     Box::new(run((ctx, cv.1)).map_while(move |y| match y {
         Err(Exn(exn::Inner::Break(b))) if b == labels => None,
+        Err(Exn(exn::Inner::Yield(y))) if y.0 == labels => Some(from(y.1)),
         y => Some(y),
     }))
 }
@@ -549,8 +551,14 @@ impl Id {
             Ast::Var(v) => match cv.0.vars.get(*v).unwrap() {
                 Bind::Var(v) => box_once(Ok(v.clone())),
                 Bind::Fun((id, vars)) => id.run((cv.0.with_vars(vars.clone()), cv.1)),
-                Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
+                Bind::Label(_) => panic!(),
             },
+            Ast::Break(v) => box_once(Err(Exn(exn::Inner::Break(
+                *cv.0.vars.get(*v).unwrap().get_label().unwrap(),
+            )))),
+            Ast::Yield(v) => box_once(Err(Exn(exn::Inner::Yield(
+                (*cv.0.vars.get(*v).unwrap().get_label().unwrap(), cv.1).into(),
+            )))),
             Ast::CallDef(id, args, skip, call_typ) => {
                 let data = cv.0.data.clone();
                 let with_vars = move |vars| Ctx {
@@ -566,7 +574,7 @@ impl Id {
                 let cvs = bind_vars(args, cv.0.with_vars(Vars::new([])), cv, Clone::clone);
                 flat_map_then(cvs, |cv| (cv.0.lut().funs[*id].run)(cv))
             }
-            Ast::Label(id) => label_run(cv, |cv| id.run(cv)),
+            Ast::Label(id) => label_run(cv, Ok, |cv| id.run(cv)),
         }
     }
 
@@ -576,7 +584,8 @@ impl Id {
     /// In particular, `v | path(f)` in context `c` yields the same paths as
     /// `f.paths((c, (v, Default::default())))`.
     pub fn paths<'a, D: DataT>(&self, cv: Cvp<'a, D>) -> ValPathXs<'a, D::V<'a>> {
-        let err = |v| box_once(Err(Exn::from(Error::path_expr(v))));
+        let err1 = |v| Err(Exn::from(Error::path_expr(v)));
+        let err = |v| box_once(err1(v));
         let proj_cv = |cv: &Cvp<'a, D>| (cv.0.clone(), cv.1 .0.clone());
         let proj_val = |(val, _path): &(D::V<'a>, _)| val.clone();
         match &cv.0.lut().terms[self.0] {
@@ -633,6 +642,12 @@ impl Id {
                 Bind::Fun(l) => l.0.paths((cv.0.with_vars(l.1.clone()), cv.1)),
                 Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
+            Ast::Break(v) => box_once(Err(Exn(exn::Inner::Break(
+                *cv.0.vars.get(*v).unwrap().get_label().unwrap(),
+            )))),
+            Ast::Yield(v) => box_once(Err(Exn(exn::Inner::Yield(
+                (*cv.0.vars.get(*v).unwrap().get_label().unwrap(), cv.1 .0).into(),
+            )))),
             Ast::Fold(xs, pat, init, update, fold_type) => {
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, proj_cv(&cv), pat));
                 fold_run(xs, cv, init, update, fold_type, |f, cv| f.paths(cv))
@@ -648,7 +663,7 @@ impl Id {
                 let (into, from) = (exn::CallInput::Paths, exn::CallInput::unwrap_paths);
                 def_run(id, call_typ, cvs, Id::paths, with_vars, into, from)
             }
-            Ast::Label(id) => label_run(cv, |cv| id.paths(cv)),
+            Ast::Label(id) => label_run(cv, err1, |cv| id.paths(cv)),
             Ast::Native(id, args) => {
                 let cvs = bind_vars(args, cv.0.with_vars(Vars::new([])), cv, proj_val);
                 flat_map_then(cvs, |cv| (cv.0.lut().funs[*id].paths)(cv))
@@ -718,6 +733,12 @@ impl Id {
                 Bind::Fun(l) => l.0.update((cv.0.with_vars(l.1.clone()), cv.1), f),
                 Bind::Label(l) => box_once(Err(Exn(exn::Inner::Break(*l)))),
             },
+            Ast::Break(v) => box_once(Err(Exn(exn::Inner::Break(
+                *cv.0.vars.get(*v).unwrap().get_label().unwrap(),
+            )))),
+            Ast::Yield(v) => box_once(Err(Exn(exn::Inner::Yield(
+                (*cv.0.vars.get(*v).unwrap().get_label().unwrap(), cv.1).into(),
+            )))),
             Ast::CallDef(id, args, skip, _call_typ) => {
                 let init = cv.1.clone();
                 let cvs = bind_vars(args, cv.0.clone().skip_vars(*skip), cv, Clone::clone);

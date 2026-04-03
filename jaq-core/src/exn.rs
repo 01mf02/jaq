@@ -22,6 +22,7 @@ pub(crate) enum Inner<'a, V> {
     /// If this can be observed by users, then this is a bug.
     TailCall(Box<(&'a TermId, Vars<V>, CallInput<V>)>),
     Break(usize),
+    Yield(Box<(usize, V)>),
 }
 
 #[derive(Clone, Debug)]

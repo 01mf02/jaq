@@ -101,8 +101,10 @@ pub(crate) enum Term<T = TermId> {
     /// Singleton object (`{f: g}`)
     ObjSingle(T, T),
 
-    /// Bound variable (`$x`), label (`label $x`), or filter argument (`a`)
+    /// Bound variable (`$x`) or filter argument (`a`)
     Var(VarId),
+    Break(VarId),
+    Yield(VarId),
 
     /// Call to a filter (`filter`, `filter(…)`)
     CallDef(TermId, Box<[Arg<T>]>, VarSkip, CallType),
@@ -322,6 +324,16 @@ pub(crate) enum Bind<V, L = V, F = V> {
     Label(L),
     /// binding to a filter
     Fun(F),
+}
+
+impl<V, L, F> Bind<V, L, F> {
+    pub(crate) fn get_label(&self) -> Option<&L> {
+        if let Self::Label(l) = self {
+            Some(l)
+        } else {
+            None
+        }
+    }
 }
 
 struct Locals<S> {
@@ -636,7 +648,12 @@ impl<'s, F> Compiler<&'s str, F> {
             Arr(t) => Term::Arr(self.iterm(t.map_or_else(|| Call("!empty", Vec::new()), |t| *t))),
             Neg(t) => Term::Neg(self.iterm(*t)),
             Label(x, t) => Term::Label(self.with_label(x, |c| c.iterm(*t))),
-            Break(x) => self.break_(x),
+            Break(x) => self
+                .label(x)
+                .map_or_else(|| self.fail(x, Undefined::Label), Term::Break),
+            Yield(x) => self
+                .label(x)
+                .map_or_else(|| self.fail(x, Undefined::Label), Term::Yield),
             IfThenElse(if_thens, else_) => {
                 let f = |(if_, then_)| (self.iterm(if_), self.iterm_tr(then_, tr));
                 let if_thens: Vec<_> = if_thens.into_iter().map(f).collect();
@@ -860,11 +877,12 @@ impl<'s, F> Compiler<&'s str, F> {
         self.fail(x, Undefined::Var)
     }
 
-    fn break_(&mut self, x: &'s str) -> Term {
-        if let Some(l) = self.locals.vars.bound.get_last(&Bind::Label(x)) {
-            return Term::Var(self.locals.vars.total - l);
-        }
-        self.fail(x, Undefined::Label)
+    fn label(&mut self, x: &'s str) -> Option<usize> {
+        self.locals
+            .vars
+            .bound
+            .get_last(&Bind::Label(x))
+            .map(|l| self.locals.vars.total - l)
     }
 
     fn obj_entry(&mut self, k: parse::Term<&'s str>, v: Option<parse::Term<&'s str>>) -> Term {
