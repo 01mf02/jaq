@@ -437,17 +437,38 @@ For example:
 
 ### Compound paths
 
-For each of the filters in this section,
-you can employ any atomic filter instead of the leading `.` (identity).
-For example, you can write `explode[]` as short form for `explode | .[]`.
+You can concatenate arbitrarily many path operators to an atomic filter.
+Such a sequence of path operators is called a _compound path_.
+For example, you can write
+`explode.[]` as short form for `explode | .[]`.
 
-You can also terminate any filter in this section with a `?`,
+If the leading atomic filter is `.` (identity), you can omit it.
+For example, the following filters are all equivalent:
+
+- `{a: [{b: 1}]} | . | .a | .[] | .b --> 1`
+- `{a: [{b: 1}]} | .   .a   .[]   .b --> 1`
+- `{a: [{b: 1}]} |     .a   .[]   .b --> 1`
+- `{a: [{b: 1}]}       .a   .[]   .b --> 1`
+
+You can omit the leading `.` of path operators that have the shape `.[...]`,
+unless the path operator is the head of the compound path and
+the leading atomic filter `.` has been omitted.
+For example, the following filters are all equivalent:
+
+- `[[[1, 2, 3]]] | .[0] | .[] | .[:-1] --> [1, 2]`
+- `[[[1, 2, 3]]] | .[0]   .[]   .[:-1] --> [1, 2]`
+- `[[[1, 2, 3]]] | .[0]    []    [:-1] --> [1, 2]`
+- `[[[1, 2, 3]]]    [0]    []    [:-1] --> [1, 2]`
+
+You can also terminate any path operator in this section with a `?`,
 which silences errors from that operator.
 For example, `.[]` yields an error if the input is neither an array nor an object,
 but `.[]?` silences such errors, yielding no output instead.
+Examples:
 
-You can chain together an arbitrary number of these operators;
-for example, `.[0][]?[:-1]` is the same as `.[0] | .[]? | .[:-1]`.
+- `[1, {a:  2 }, {a:  3 }] | .[].a? --> 2 3`
+- `[1, [2,  3 ], [4,  5 ]] | .[][]? --> 2 3 4 5`
+- ` 1, {a: [2]}, {a: [3]}  | .a?[]  --> 2 3`
 
 ::: Advanced
 

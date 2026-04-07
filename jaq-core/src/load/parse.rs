@@ -651,12 +651,15 @@ impl<'s, 't> Parser<'s, 't> {
     fn path(&mut self) -> Result<'s, 't, Path<Term<&'s str>>> {
         let mut path: Vec<_> = core::iter::from_fn(|| self.path_part_opt()).collect();
         while let Some(key) = self.dot() {
-            let key = if key.is_empty() {
-                self.str_key()?
+            path.push(if key.is_empty() {
+                match self.path_part_opt() {
+                    Some(part_opt) => part_opt,
+                    None => (path::Part::Index(self.str_key()?), self.opt()),
+                }
             } else {
-                Term::from_str(key)
-            };
-            path.push((path::Part::Index(key), self.opt()));
+                (path::Part::Index(Term::from_str(key)), self.opt())
+            });
+
             path.extend(core::iter::from_fn(|| self.path_part_opt()));
         }
         Ok(Path(path))
