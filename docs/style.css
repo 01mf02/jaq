@@ -74,6 +74,7 @@ pre > .run-example {
 code {
     background-color: #eee;
     white-space: pre-wrap;
+    font-variant-ligatures: none;
 }
 
 table {

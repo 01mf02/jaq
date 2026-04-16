@@ -391,12 +391,8 @@ For example:
 - `32`   is turned into `\x1b[32m`.
 - `1;39` is turned into `\x1b[1;39m`.
 
-::: Compatibility
-`jq` also considers a style for object keys, after objects.
-However, in jaq, object keys can be any kind of values, so jaq ignores this.
-On the other hand, jaq does not allow changing the color of byte strings,
+jaq does not allow changing the color of byte strings,
 because jq does not provide any facilities to do that.
-:::
 
 ## Compilation
 
@@ -513,7 +509,7 @@ jaq tries to load the file via memory mapping,
 taking constant time and allowing to load files that do not fit into memory.
 If this fails, jaq loads the file regularly, taking linear time.
 This is also what happens when using
-`-Rs` ([--raw-input](#--raw-input) and [--slurp](#--slurp))
+`-Rs` ([`--raw-input`](#--raw-input) and [`--slurp`](#--slurp))
 to load a file (as opposed to standard input).
 
 ::: Compatibility
@@ -606,7 +602,6 @@ Print jaq version.
 The following command-line options are supported by `jq`, but not by jaq:
 
 - `--ascii-output`, `-a`
-- `--raw-output0`
 - `--unbuffered`
 - `--stream`
 - `--stream-errors`
