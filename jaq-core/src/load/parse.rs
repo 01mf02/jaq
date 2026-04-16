@@ -77,7 +77,7 @@ pub struct Parser<'s, 't> {
 }
 
 /// Function from value to stream of values, such as `.[] | add / length`.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub enum Term<S> {
     /// Identity, i.e. `.`
     #[default]
@@ -127,7 +127,7 @@ pub enum Term<S> {
 }
 
 /// Variable-binding pattern, such as in `.[] as [$x, {$y, (f): $z}]`
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Pattern<S> {
     /// Variable
     Var(S),
@@ -138,7 +138,7 @@ pub enum Pattern<S> {
 }
 
 /// Binary operators, such as `|`, `,`, `//`, ...
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum BinaryOp<S> {
     /// Application, i.e. `l | r` if no string is given, else `l as $x | r`
     Pipe(Option<Pattern<S>>),
@@ -824,6 +824,7 @@ pub(crate) struct Module<S, B> {
 /// def map(f): [.[] | f];
 /// def recurse(f; cond): recurse(f | select(cond));
 /// ~~~
+#[derive(Clone)]
 pub struct Def<S = &'static str, F = Term<S>> {
     /// name, e.g. `"double"` or `"map"`
     pub name: S,

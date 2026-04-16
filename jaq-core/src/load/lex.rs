@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 ///
 /// `S` is a type of strings (without escape sequences), and
 /// `F` is a type of interpolated filters.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum StrPart<S, T> {
     /// string without escape sequences
     Str(S),
