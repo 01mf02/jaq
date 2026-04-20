@@ -1,19 +1,27 @@
 use std::{env, io, process, str};
 
-fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
+/// Run `jaq` with the given args, pipe `input` to stdin, and compare output.
+/// When `expect_success` is true, asserts success and checks stdout;
+/// when false, asserts failure and checks stderr.
+fn golden_test(args: &[&str], input: &str, expect_success: bool, out_ex: &str) -> io::Result<()> {
     let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
         .args(args)
         .stdin(process::Stdio::piped())
         .stdout(process::Stdio::piped())
+        .stderr(process::Stdio::piped())
         .spawn()?;
 
     use io::Write;
     child.stdin.take().unwrap().write_all(input.as_bytes())?;
     let output = child.wait_with_output()?;
-    assert!(output.status.success());
+    assert_eq!(output.status.success(), expect_success);
 
-    let out_act = str::from_utf8(&output.stdout).expect("invalid UTF-8 in output");
-    // remove '\r' from output for compatibility with Windows
+    let out_act = if expect_success {
+        str::from_utf8(&output.stdout).expect("invalid UTF-8 in stdout")
+    } else {
+        str::from_utf8(&output.stderr).expect("invalid UTF-8 in stderr")
+    };
+    // Remove '\r' from output for compatibility with Windows.
     let out_act = out_act.replace('\r', "");
     if out_ex.trim() != out_act.trim() {
         println!("Expected output:\n{}\n---", out_ex);
@@ -27,7 +35,47 @@ macro_rules! test {
     ($name:ident, $args:expr, $input:expr, $output:expr) => {
         #[test]
         fn $name() -> io::Result<()> {
-            golden_test($args, $input, $output)
+            golden_test($args, $input, true, $output)
+        }
+    };
+}
+
+/// Like `golden_test`, but writes input to a temp file and passes it as a file argument.
+/// This exercises the slice-based parsing path (`parse_many` / `byte_offset_to_position`)
+/// rather than the iterator-based path (`read_many` / `PositionTracker`).
+fn golden_test_file(
+    args: &[&str],
+    input: &str,
+    expect_success: bool,
+    out_ex: &str,
+) -> io::Result<()> {
+    use io::Write;
+    let mut file = tempfile::NamedTempFile::new()?;
+    file.write_all(input.as_bytes())?;
+    file.flush()?;
+
+    let path = file.path().to_str().expect("non-UTF-8 temp path");
+    let path: String = path.to_string();
+    let mut all_args: Vec<&str> = args.to_vec();
+    all_args.push(&path);
+
+    golden_test(&all_args, "", expect_success, out_ex)
+}
+
+/// Generates two tests: one via stdin (stream-based `PositionTracker` path)
+/// and one via a temp file (slice-based `byte_offset_to_position` path).
+macro_rules! test_error {
+    ($name:ident, $args:expr, $input:expr, $stderr:expr) => {
+        paste::paste! {
+            #[test]
+            fn [<$name _stdin>]() -> io::Result<()> {
+                golden_test($args, $input, false, $stderr)
+            }
+
+            #[test]
+            fn [<$name _file>]() -> io::Result<()> {
+                golden_test_file($args, $input, false, $stderr)
+            }
         }
     };
 }
@@ -182,4 +230,23 @@ test!(
     &["-c", "-L", "tests", r#"include "a"; [a, data, d]"#],
     "0",
     r#"["bcddd",[1,2],3]"#
+);
+
+test_error!(
+    parse_error_missing_comma,
+    &["."],
+    r#"{
+    "key1": 1,
+    "key2": "value",
+    "key3": false
+    "key4": null
+}"#,
+    "Error: failed to parse: at line 5, column 5: comma or end of sequence expected\n"
+);
+
+test_error!(
+    parse_error_utf8_column,
+    &["."],
+    r#"{"ąćę": 1 "b": 2}"#,
+    "Error: failed to parse: at line 1, column 11: comma or end of sequence expected\n"
 );
