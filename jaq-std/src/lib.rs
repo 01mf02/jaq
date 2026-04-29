@@ -469,7 +469,11 @@ where
         ("now", v(0), |_| bome(now().map(D::V::from))),
         ("halt", v(1), |mut cv| {
             let exit_code = cv.0.pop_var().try_as_isize();
-            bome(exit_code.map(|exit_code| std::process::exit(exit_code as i32)))
+            box_once(
+                exit_code
+                    .map_err(Exn::from)
+                    .and_then(|exit_code| Err(Exn::halt(exit_code))),
+            )
         }),
     ])
 }

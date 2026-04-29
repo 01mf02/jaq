@@ -22,6 +22,7 @@ pub(crate) enum Inner<'a, V> {
     /// If this can be observed by users, then this is a bug.
     TailCall(Box<(&'a TermId, Vars<V>, CallInput<V>)>),
     Break(usize),
+    Halt(isize),
 }
 
 #[derive(Clone, Debug)]
@@ -52,6 +53,26 @@ impl<V> Exn<'_, V> {
         match self.0 {
             Inner::Err(e) => Ok(*e),
             _ => Err(self),
+        }
+    }
+
+    /// Create an exception intended to halt filter execution, such as for the
+    /// `halt/1` filter.
+    ///
+    /// See [`Self::exit_code`] for more details.
+    pub fn halt(exit_code: isize) -> Self {
+        Self(Inner::Halt(exit_code))
+    }
+
+    /// Returns the exit code passed to [`Self::halt`], if any.
+    ///
+    /// Exceptions with a `Some(_)` return value are precisely those that would cause
+    /// [`unwrap_valr`](crate::val::unwrap_valr) to call [`exit`](std::process::exit).
+    pub fn exit_code(&self) -> Option<isize> {
+        if let Inner::Halt(exit_code) = self.0 {
+            Some(exit_code)
+        } else {
+            None
         }
     }
 }

@@ -27,11 +27,18 @@ pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
 ///
 /// This should always succeed when called on results of a main filter.
 /// For any other filter, this may not succeed, i.e. panic.
+/// Note that this will call [`std::process::exit`] if passed an exception
+/// produced by [`Exn::halt`](crate::Exn::halt).
 ///
 /// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
 /// do not use this function on outputs of `fi`!
 pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
-    v.map_err(|e| e.get_err().ok().unwrap())
+    v.map_err(|e| {
+        if let Some(exit_code) = e.exit_code() {
+            std::process::exit(exit_code as i32)
+        }
+        e.get_err().ok().unwrap()
+    })
 }
 
 /// Range of options, used for iteration operations.
