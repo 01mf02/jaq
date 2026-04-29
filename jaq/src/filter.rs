@@ -19,7 +19,7 @@ pub fn parse_compile(
 
     let vars: Vec<_> = vars.iter().map(|v| format!("${v}")).collect();
     let arena = Arena::default();
-    let loader = Loader::new(jaq_all::defs()).with_std_read(paths);
+    let loader = Loader::new(jaq_all::defs().chain(defs())).with_std_read(paths);
     //let loader = Loader::new([]).with_std_read(paths);
     let path = path.into();
     let modules = loader
@@ -56,4 +56,10 @@ pub(crate) fn run(
         f(v).map_err(Into::into)
     })?;
     Ok(last)
+}
+
+fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
+    load::parse(include_str!("defs.jq"), |p| p.defs())
+        .unwrap()
+        .into_iter()
 }

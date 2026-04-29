@@ -105,7 +105,17 @@ impl Cli {
 }
 
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
-    let (var_names, mut vars): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
+    let mut var_val = binds(cli)?;
+    let input_filename_idx = if var_val.iter().any(|(name, _)| name == "input_filename") {
+        // don't automatically set `$input_filename` for use by `input_filename/0` - the user has
+        // overridden it, respect that instead
+        None
+    } else {
+        let idx = var_val.len();
+        var_val.push(("input_filename".to_string(), Val::Null));
+        Some(idx)
+    };
+    let (var_names, mut vars): (Vec<String>, Vec<Val>) = var_val.into_iter().unzip();
 
     let (var_vals, filter) = match &cli.filter {
         None => (Vec::new(), Filter::default()),
@@ -119,14 +129,19 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         }
     };
     vars.extend(var_vals);
-    let vars = jaq_all::jaq_core::Vars::new(vars);
-    //println!("Filter: {:?}", filter);
 
     let runner = &cli.runner();
     let writer = &runner.writer;
 
     let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or_default();
     let last = if cli.files.is_empty() {
+        if let Some(idx) = input_filename_idx {
+            if !cli.null_input {
+                vars[idx] = Val::TStr(Default::default());
+            }
+        }
+        let vars = jaq_all::jaq_core::Vars::new(vars);
+
         let format = unwrap_or_json(cli.from);
         let s = read::read_string(format, io::stdin().lock())?;
         let inputs = read::read(format, io::stdin().lock(), &s, cli.slurp);
@@ -140,6 +155,14 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
             let format = unwrap_or_json(cli.from.or_else(|| Format::determine(path)));
             let s = read::bytes_str(format, &bytes)?;
             let inputs = read::parse(format, &bytes, s, cli.slurp);
+
+            let mut vars = vars.clone();
+            if let Some(idx) = input_filename_idx {
+                if !cli.null_input {
+                    vars[idx] = Val::utf8_str(file.as_os_str().as_encoded_bytes().to_owned());
+                }
+            }
+            let vars = jaq_all::jaq_core::Vars::new(vars);
 
             if cli.in_place {
                 // create a temporary file where output is written to
