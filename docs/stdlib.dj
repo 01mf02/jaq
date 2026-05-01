@@ -2222,6 +2222,11 @@ $ jaq -n '1, halt(42), 2'; echo $?
 `jq` does not implement `halt($exit_code)`, only `halt`.
 :::
 
+Note that not all values for `$exit_code` will work as intended on all platforms: see the
+[Rust documentation on `std::process::exit`](https://doc.rust-lang.org/stable/std/process/fn.exit.html#platform-specific-behavior)
+for more information. As a general rule of thumb, the 8-bit signed integers (-128 to 127 inclusive) are safe to use and
+anything outside of that range _may_ be silently truncated by the operating system.
+
 {#halt_error}
 ### `halt_error`, `halt_error($exit_code)`
 

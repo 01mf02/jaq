@@ -468,7 +468,7 @@ where
         }),
         ("now", v(0), |_| bome(now().map(D::V::from))),
         ("halt", v(1), |mut cv| {
-            let exit_code = cv.0.pop_var().try_as_isize();
+            let exit_code = cv.0.pop_var().try_as_i32();
             box_once(
                 exit_code
                     .map_err(Exn::from)

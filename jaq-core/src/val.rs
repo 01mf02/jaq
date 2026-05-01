@@ -35,7 +35,7 @@ pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
 pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
     v.map_err(|e| {
         if let Some(exit_code) = e.exit_code() {
-            std::process::exit(exit_code as i32)
+            std::process::exit(exit_code)
         }
         e.get_err().ok().unwrap()
     })
