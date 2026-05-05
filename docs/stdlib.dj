@@ -2264,35 +2264,21 @@ $ MYFLAG=42 jaq -n '$ENV.MYFLAG'
 
 The filter `env` is equivalent to `$ENV`.
 
-### `input_filename`, `$input_filename`
+### `input_filename`
 
-The filter `input_filename` returns:
+The filter `input_filename` returns
+the name of the file currently read, or
+`"<stdin>"` if standard input is currently read.
+If `--null-input` is used, this filter returns `null` instead.
 
-- The name of the file whose input is currently being filtered;
-- `"<stdin>"` when filtering data on standard input;
-- Or `null` if the data source is unknown (such as when using `--null-input`).
-
-This filter is implemented on top of the `$input_filename` variable, which gets set by the CLI automatically.
-
-Note that the CLI will only set the variable if it has not been explicitly set on the command line; for example,
-`jaq 'input_filename' ./data.json` will output `"./data.json"`, but
-`jaq --argjson input_filename 123 'input_filename' ./data.json` will output `123` instead.
-
-::: Compatibility
-`jq`'s version of the `input_filename/0` filter returns `"<stdin>"` when filtering data on standard input. While this
-behaviour has been preserved for `jaq`'s `input_filename/0` filter, the filter alone thus cannot be used to
-differentiate between filtering on standard input and filtering a file called `<stdin>`.
-
-To work around this, the `jaq` CLI sets the `$input_filename` variable to the actual input source: the path (if known),
-the _empty string_ for filtering data on standard input, or `null` if the data source is unknown. If your script needs
-to be able to distinguish between filtering data on standard input and filtering a file called `<stdin>`, use the
-variable rather than the filter.
-:::
-
-::: Advanced
-This filter and variable are only defined in the CLI, so are unavailable if you are using the `jaq-*` crates directly
-from Rust code.
-:::
+```
+$ jaq --slurp 'input_filename' "examples/benches.json"
+"examples/benches.json"
+$ echo 0 | jaq 'input_filename'
+"<stdin>"
+$ jaq -n 'input_filename'
+null
+```
 
 ### `repl`
 

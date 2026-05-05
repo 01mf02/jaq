@@ -187,24 +187,3 @@ test!(
     "0",
     r#"["bcddd",[1,2],3]"#
 );
-
-test!(
-    input_filename_file,
-    &["--slurp", "input_filename", "./tests/data.json"],
-    "",
-    r#""./tests/data.json""#
-);
-
-test!(
-    input_filename_stdin,
-    &["input_filename"],
-    "0",
-    r#""<stdin>""#
-);
-
-test!(
-    input_filename_null_input,
-    &["-n", "input_filename"],
-    "",
-    r#"null"#
-);
