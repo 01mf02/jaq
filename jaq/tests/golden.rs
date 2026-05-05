@@ -9,6 +9,7 @@ fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
 
     use io::Write;
     child.stdin.take().unwrap().write_all(input.as_bytes())?;
+
     let output = child.wait_with_output()?;
     assert!(output.status.success());
 
@@ -18,7 +19,10 @@ fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
     if out_ex.trim() != out_act.trim() {
         println!("Expected output:\n{}\n---", out_ex);
         println!("Actual output:\n{}\n---", out_act);
-        process::exit(2);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "incorrect test output",
+        ));
     }
     Ok(())
 }

@@ -11,6 +11,7 @@ use filter::run;
 use jaq_all::data::{Filter, Runner};
 use jaq_all::fmts::read;
 use jaq_all::fmts::write::{with_stdout, write, Writer};
+use jaq_all::jaq_core::Vars;
 use jaq_all::json::write::{Pp, Styles};
 use jaq_all::json::Val;
 use jaq_all::load::{Color, FileReports, FileReportsDisp, Paint};
@@ -105,7 +106,10 @@ impl Cli {
 }
 
 fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
-    let (var_names, mut vars): (Vec<String>, Vec<Val>) = binds(cli)?.into_iter().unzip();
+    let mut var_val = binds(cli)?;
+    let input_filename_idx = var_val.len();
+    var_val.push(("!input_filename".to_string(), Val::Null));
+    let (var_names, mut vars): (Vec<String>, Vec<Val>) = var_val.into_iter().unzip();
 
     let (var_vals, filter) = match &cli.filter {
         None => (Vec::new(), Filter::default()),
@@ -119,14 +123,17 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         }
     };
     vars.extend(var_vals);
-    let vars = jaq_all::jaq_core::Vars::new(vars);
-    //println!("Filter: {:?}", filter);
 
     let runner = &cli.runner();
     let writer = &runner.writer;
 
     let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or_default();
     let last = if cli.files.is_empty() {
+        if !cli.null_input {
+            vars[input_filename_idx] = Val::utf8_str("<stdin>");
+        }
+        let vars = Vars::new(vars);
+
         let format = unwrap_or_json(cli.from);
         let s = read::read_string(format, io::stdin().lock())?;
         let inputs = read::read(format, io::stdin().lock(), &s, cli.slurp);
@@ -134,6 +141,12 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     } else {
         let mut last = None;
         for file in &cli.files {
+            if !cli.null_input {
+                vars[input_filename_idx] =
+                    Val::utf8_str(file.as_os_str().to_string_lossy().into_owned());
+            }
+            let vars = Vars::new(vars.clone());
+
             let path = Path::new(file);
             let bytes = read::load_file(path)
                 .map_err(|e| Error::Io(Some(path.display().to_string()), e))?;
