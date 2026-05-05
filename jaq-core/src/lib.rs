@@ -7,7 +7,7 @@
 //! more complex use cases, such as lazy JSON file loading, error handling etc.
 //!
 //! ~~~
-//! use jaq_core::{data, unwrap_valr, Compiler, Ctx, Vars};
+//! use jaq_core::{data, Compiler, Ctx, Vars};
 //! use jaq_core::load::{Arena, File, Loader};
 //! use jaq_json::{read, Val};
 //!
@@ -34,7 +34,7 @@
 //! // context for filter execution
 //! let ctx = Ctx::<data::JustLut<Val>>::new(&filter.lut, Vars::new([]));
 //! // iterator over the output values
-//! let mut out = filter.id.run((ctx, input)).map(unwrap_valr);
+//! let mut out = filter.id.run((ctx, input)).map(|r| r.map_err(|x| x.handle(std::convert::identity, |exit_code| panic!("halt({exit_code})"))));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from("Hello".to_owned()))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from("world".to_owned()))));;
@@ -68,7 +68,7 @@ pub mod val;
 pub use data::DataT;
 pub use exn::{Error, Exn};
 pub use filter::{Ctx, Cv, Native, PathsPtr, RunPtr, UpdatePtr, Vars};
-pub use val::{unwrap_valr, ValR, ValT, ValX, ValXs};
+pub use val::{ValR, ValT, ValX, ValXs};
 
 use rc_list::List as RcList;
 use stack::Stack;
@@ -127,7 +127,13 @@ impl<V: ValT + 'static> Filter<data::JustLut<V>> {
     /// This is for testing purposes.
     pub fn yields(&self, x: V, ys: impl Iterator<Item = ValR<V>>) {
         let ctx = Ctx::<data::JustLut<V>>::new(&self.lut, Vars::new([]));
-        let out = self.id.run((ctx, x)).map(unwrap_valr);
+        let out = self.id.run((ctx, x)).map(|valx| {
+            valx.map_err(|x| {
+                x.handle(std::convert::identity, |exit_code| {
+                    panic!("tests shouldn't call halt/1 (code {exit_code})")
+                })
+            })
+        });
         assert!(out.eq(ys));
     }
 }

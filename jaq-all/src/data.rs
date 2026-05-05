@@ -1,8 +1,8 @@
 //! Commonly used data for filter compilation & execution.
 use crate::{compile_with, FileReports, Fun};
-use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
+use jaq_core::{DataT, Lut, Vars, data};
 use jaq_fmts::write::Writer;
-use jaq_json::{Val, ValR, ValX};
+use jaq_json::{Val, ValX};
 use jaq_std::input::{self, Inputs, RcIter};
 
 /// Filter for given kind of data.
@@ -85,26 +85,9 @@ pub fn compile(code: &str) -> Result<Filter, Vec<FileReports>> {
 
 /// Run a filter with given input values and run `f` for every value output.
 ///
-/// This will call [`std::process::exit`] if the filter calls `halt/1` - use [`run_exns`] and manually check
-/// [`Exn::exit_code`](jaq_core::Exn::exit_code) to change this behaviour.
-///
 /// This function cannot return an `Iterator` because it creates an `RcIter`.
 /// This is most unfortunate. We should think about how to simplify this ...
 pub fn run<E>(
-    runner: &Runner,
-    filter: &Filter,
-    vars: Vars<Val>,
-    inputs: impl Iterator<Item = Result<Val, impl ToString>>,
-    fi: impl Fn(String) -> E,
-    mut f: impl FnMut(ValR) -> Result<(), E>,
-) -> Result<(), E> {
-    run_exns(runner, filter, vars, inputs, fi, |r| f(unwrap_valr(r)))
-}
-
-/// Run a filter with given input values and run `f` for every value output, handling exceptions manually.
-///
-/// You will likely need to use the [`unwrap_valr`] function to convert [`ValX`] to [`ValR`].
-pub fn run_exns<E>(
     runner: &Runner,
     filter: &Filter,
     vars: Vars<Val>,

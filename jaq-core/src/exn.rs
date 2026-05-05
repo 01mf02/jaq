@@ -6,10 +6,8 @@ use core::fmt::{self, Display};
 
 /// Exception.
 ///
-/// This is either an error or control flow data internal to jaq.
-/// Users should only be able to observe errors.
-///
-/// Use [`crate::val::unwrap_valr`] to convert a [`crate::val::ValX`] to an error.
+/// This is either an error, a runtime halt, or control flow data internal to jaq.
+/// Users should only be able to observe the first two cases.
 #[derive(Clone, Debug)]
 pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
 
@@ -48,32 +46,29 @@ impl<V> CallInput<V> {
 }
 
 impl<V> Exn<'_, V> {
-    /// If the exception is an error, yield it, else yield the exception.
-    pub(crate) fn get_err(self) -> Result<Error<V>, Self> {
+    /// Handle the exception kinds that can be returned from executing a main filter.
+    ///
+    /// For any other filter, this may not succeed, i.e. panic.
+    ///
+    /// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
+    /// do not use this method on outputs of `fi`!
+    pub fn handle<T>(self, err: impl FnOnce(Error<V>) -> T, halt: impl FnOnce(i32) -> T) -> T {
         match self.0 {
-            Inner::Err(e) => Ok(*e),
-            _ => Err(self),
+            Inner::Err(e) => err(*e),
+            Inner::Halt(exit_code) => halt(exit_code),
+            Inner::TailCall(_) => {
+                panic!("tried to handle an internal exception variant: TailCall")
+            }
+            Inner::Break(_) => {
+                panic!("tried to handle an internal exception variant: Break")
+            }
         }
     }
 
     /// Create an exception intended to halt filter execution, such as for the
     /// `halt/1` filter.
-    ///
-    /// See [`Self::exit_code`] for more details.
     pub fn halt(exit_code: i32) -> Self {
         Self(Inner::Halt(exit_code))
-    }
-
-    /// Returns the exit code passed to [`Self::halt`], if any.
-    ///
-    /// Exceptions with a `Some(_)` return value are precisely those that would cause
-    /// [`unwrap_valr`](crate::val::unwrap_valr) to call [`exit`](std::process::exit).
-    pub fn exit_code(&self) -> Option<i32> {
-        if let Inner::Halt(exit_code) = self.0 {
-            Some(exit_code)
-        } else {
-            None
-        }
     }
 }
 

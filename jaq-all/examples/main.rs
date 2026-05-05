@@ -18,7 +18,12 @@ fn main() -> io::Result<()> {
     let fi = |e| Error::new(ErrorKind::InvalidData, e);
 
     data::run(&runner, &filter, vars, inputs, fi, |v| {
-        let v = v.map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
+        let v = v.map_err(|e| {
+            e.handle(
+                |e| Error::new(ErrorKind::Other, e.to_string()),
+                |exit_code| std::process::exit(exit_code),
+            )
+        });
         fmts::write::write(stdout, &runner.writer, &v?)
     })
 }
