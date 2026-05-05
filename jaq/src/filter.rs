@@ -59,7 +59,9 @@ pub(crate) fn run(
 }
 
 fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
-    load::parse(include_str!("defs.jq"), |p| p.defs())
-        .unwrap()
-        .into_iter()
+    core::iter::once(load::parse::Def {
+        name: "input_filename",
+        args: Vec::new(),
+        body: load::parse::Term::Var("$!input_filename"),
+    })
 }

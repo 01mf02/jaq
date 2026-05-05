@@ -1,6 +1,15 @@
 use std::{env, io, process, str};
 
-fn test_expected(child: process::Child, out_ex: &str) -> io::Result<()> {
+fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
+    let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
+        .args(args)
+        .stdin(process::Stdio::piped())
+        .stdout(process::Stdio::piped())
+        .spawn()?;
+
+    use io::Write;
+    child.stdin.take().unwrap().write_all(input.as_bytes())?;
+
     let output = child.wait_with_output()?;
     assert!(output.status.success());
 
@@ -16,29 +25,6 @@ fn test_expected(child: process::Child, out_ex: &str) -> io::Result<()> {
         ));
     }
     Ok(())
-}
-
-fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
-    let mut child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
-        .args(args)
-        .stdin(process::Stdio::piped())
-        .stdout(process::Stdio::piped())
-        .spawn()?;
-
-    use io::Write;
-    child.stdin.take().unwrap().write_all(input.as_bytes())?;
-
-    test_expected(child, out_ex)
-}
-
-fn test_no_input(args: &[&str], out_ex: &str) -> io::Result<()> {
-    let child = process::Command::new(env!("CARGO_BIN_EXE_jaq"))
-        .args(args)
-        .stdin(process::Stdio::null())
-        .stdout(process::Stdio::piped())
-        .spawn()?;
-
-    test_expected(child, out_ex)
 }
 
 macro_rules! test {
@@ -202,46 +188,23 @@ test!(
     r#"["bcddd",[1,2],3]"#
 );
 
-#[test]
-fn input_filename_file() -> io::Result<()> {
-    test_no_input(
-        &["--slurp", "true | input_filename", "./tests/data.json"],
-        r#""./tests/data.json""#,
-    )
-}
-
-#[test]
-fn input_filename_override() -> io::Result<()> {
-    test_no_input(
-        &[
-            "--slurp",
-            "--argjson",
-            "input_filename",
-            "0",
-            "true | input_filename",
-            "./tests/data.json",
-        ],
-        r#"0"#,
-    )
-}
+test!(
+    input_filename_file,
+    &["--slurp", "input_filename", "./tests/data.json"],
+    "",
+    r#""./tests/data.json""#
+);
 
 test!(
     input_filename_stdin,
-    &["true | input_filename"],
+    &["input_filename"],
     "0",
     r#""<stdin>""#
 );
 
 test!(
-    input_filename_stdin_variable,
-    &["true | $input_filename"],
-    "0",
-    r#""""#
-);
-
-test!(
     input_filename_null_input,
-    &["-n", "true | input_filename"],
+    &["-n", "input_filename"],
     "",
     r#"null"#
 );
