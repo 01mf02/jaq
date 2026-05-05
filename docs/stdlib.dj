@@ -2297,10 +2297,6 @@ and it allows calls to `repl` anywhere in a filter, not only last in the pipelin
 `jq` does not have this filter.
 :::
 
-::: Advanced
-This filter is only defined in the CLI, so is unavailable if you are using the `jaq-*` crates directly from Rust code.
-:::
-
 
 {#unsupported-stdlib}
 ## Unsupported
