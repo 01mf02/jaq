@@ -18,21 +18,10 @@ pub type ValR<T, V = T> = Result<T, crate::Error<V>>;
 pub type ValRs<'a, T, V = T> = BoxIter<'a, ValR<T, V>>;
 /// Value or eXception.
 ///
-/// Use [`unwrap_valr`] to convert to [`ValR`].
+/// Use [`Exn::handle`](crate::Exn::handle) to extract the [`Error`](crate::Error) from an [`Exn`](crate::Exn).
 pub type ValX<'a, T, V = T> = Result<T, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
 pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
-
-/// Convert a value exception [`ValX`] into a value result [`ValR`].
-///
-/// This should always succeed when called on results of a main filter.
-/// For any other filter, this may not succeed, i.e. panic.
-///
-/// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
-/// do not use this function on outputs of `fi`!
-pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
-    v.map_err(|e| e.get_err().ok().unwrap())
-}
 
 /// Range of options, used for iteration operations.
 pub type Range<V> = core::ops::Range<Option<V>>;

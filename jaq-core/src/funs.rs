@@ -1,4 +1,4 @@
-use crate::box_iter::BoxIter;
+use crate::box_iter::{BoxIter, box_once};
 use crate::native::{bome, v, Filter, RunPathsPtr};
 use crate::{Bind, DataT, Error, Exn, RunPtr, ValT, ValX};
 use alloc::{boxed::Box, vec::Vec};
@@ -40,6 +40,10 @@ where
         ("key_values", v(0), |cv| {
             let f = |(k, v)| [k, v].into_iter().collect();
             bome(cv.1.key_values().map(|kv| kv.map(f)).collect())
+        }),
+        ("halt", v(1), |mut cv| {
+            let exit_code = cv.0.pop_var();
+            box_once(Err(Exn::halt(exit_code)))
         }),
     ])
 }

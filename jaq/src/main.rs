@@ -61,6 +61,9 @@ fn main() -> io::Result<ExitCode> {
         }
     } else {
         real_main(&cli).or_else(|e| {
+            if let Error::Halt(exit_code) = e {
+                std::process::exit(exit_code);
+            }
             write!(err, "{}", ErrorColor::new(&e, cli.color_errors()))?;
             Ok(e.report())
         })
@@ -228,6 +231,7 @@ enum Error {
     Report(Vec<FileReports<PathBuf>>),
     Parse(String),
     Jaq(jaq_all::json::Error),
+    Halt(i32),
     FalseOrNull,
     NoOutput,
 }
@@ -265,6 +269,7 @@ impl fmt::Display for ErrorColor<'_> {
             }),
             Error::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
             Error::Jaq(e) => writeln!(f, "Error: {e}"),
+            Error::Halt(exit_code) => writeln!(f, "Exited with code {exit_code}"),
         }
     }
 }
@@ -277,6 +282,7 @@ impl Termination for Error {
             Self::Report(_) => 3,
             Self::NoOutput => 4,
             Self::Parse(_) | Self::Jaq(_) => 5,
+            Self::Halt(_) => 101, // this branch should never be encountered in practice
         })
     }
 }

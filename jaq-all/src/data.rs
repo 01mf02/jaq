@@ -1,8 +1,8 @@
 //! Commonly used data for filter compilation & execution.
 use crate::{compile_with, FileReports, Fun};
-use jaq_core::{data, unwrap_valr, DataT, Lut, Vars};
+use jaq_core::{DataT, Lut, Vars, data};
 use jaq_fmts::write::Writer;
-use jaq_json::{Val, ValR};
+use jaq_json::{Val, ValX};
 use jaq_std::input::{self, Inputs, RcIter};
 
 /// Filter for given kind of data.
@@ -93,7 +93,7 @@ pub fn run<E>(
     vars: Vars<Val>,
     inputs: impl Iterator<Item = Result<Val, impl ToString>>,
     fi: impl Fn(String) -> E,
-    mut f: impl FnMut(ValR) -> Result<(), E>,
+    mut f: impl FnMut(ValX) -> Result<(), E>,
 ) -> Result<(), E> {
     let inputs = Box::new(inputs.map(|r| r.map_err(|e| e.to_string())));
     let null = Box::new(core::iter::once(Ok(Val::Null)));
@@ -109,7 +109,7 @@ pub fn run<E>(
 
     let outputs = |x| filter.id.run((ctx.clone(), x));
     (if runner.null_input { null } else { data.inputs }).try_for_each(|x| match x {
-        Ok(x) => outputs(x).try_for_each(|y| f(unwrap_valr(y))),
+        Ok(x) => outputs(x).try_for_each(&mut f),
         Err(e) => Err(fi(e)),
     })
 }

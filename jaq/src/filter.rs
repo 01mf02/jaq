@@ -51,7 +51,7 @@ pub(crate) fn run(
 ) -> Result<Option<bool>, Error> {
     let mut last = None;
     jaq_all::data::run(runner, filter, vars, inputs, Error::Parse, |v| {
-        let v = v.map_err(Error::Jaq)?;
+        let v = v.map_err(|x| jaq_all::jaq_std::handle_exn_i32(x, Error::Jaq, Error::Halt))?;
         last = Some(v.as_bool());
         f(v).map_err(Into::into)
     })?;
