@@ -19,7 +19,8 @@ fn main() -> io::Result<()> {
 
     data::run(&runner, &filter, vars, inputs, fi, |v| {
         let v = v.map_err(|e| {
-            e.handle(
+            jaq_std::handle_exn_i32(
+                e,
                 |e| Error::new(ErrorKind::Other, e.to_string()),
                 |exit_code| std::process::exit(exit_code),
             )

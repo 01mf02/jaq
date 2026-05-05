@@ -20,7 +20,7 @@ pub(crate) enum Inner<'a, V> {
     /// If this can be observed by users, then this is a bug.
     TailCall(Box<(&'a TermId, Vars<V>, CallInput<V>)>),
     Break(usize),
-    Halt(i32),
+    Halt(V),
 }
 
 #[derive(Clone, Debug)]
@@ -52,7 +52,7 @@ impl<V> Exn<'_, V> {
     ///
     /// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
     /// do not use this method on outputs of `fi`!
-    pub fn handle<T>(self, err: impl FnOnce(Error<V>) -> T, halt: impl FnOnce(i32) -> T) -> T {
+    pub fn handle<T>(self, err: impl FnOnce(Error<V>) -> T, halt: impl FnOnce(V) -> T) -> T {
         match self.0 {
             Inner::Err(e) => err(*e),
             Inner::Halt(exit_code) => halt(exit_code),
@@ -67,7 +67,7 @@ impl<V> Exn<'_, V> {
 
     /// Create an exception intended to halt filter execution, such as for the
     /// `halt/1` filter.
-    pub fn halt(exit_code: i32) -> Self {
+    pub fn halt(exit_code: V) -> Self {
         Self(Inner::Halt(exit_code))
     }
 }

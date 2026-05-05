@@ -51,7 +51,7 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
     let vars = Default::default();
     let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
     run(runner, &filter, vars, input, Error::Parse, |v| {
-        obtain.push(v.map_err(|x| x.handle(Error::Jaq, Error::Halt))?);
+        obtain.push(v.map_err(|x| jaq_all::jaq_std::handle_exn_i32(x, Error::Jaq, Error::Halt))?);
         Ok(())
     })?;
 

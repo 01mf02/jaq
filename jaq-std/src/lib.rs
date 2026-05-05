@@ -154,8 +154,6 @@ trait ValTx: ValT + Sized {
             .ok_or_else(|| Error::typ(self.clone(), "integer"))
     }
 
-    #[cfg(feature = "math")]
-    /// Use as an i32 to be given as an argument to a libm function.
     fn try_as_i32(&self) -> Result<i32, Error<Self>> {
         self.try_as_isize()?.try_into().map_err(Error::str)
     }
@@ -235,6 +233,19 @@ trait ValTx: ValT + Sized {
     }
 }
 impl<T: ValT> ValTx for T {}
+
+/// Convenience function around [`Exn::handle`] for cases where you want the
+/// exit code to strictly be an [`i32`], such as when calling [`std::process::exit`].
+pub fn handle_exn_i32<T: ValT, R>(
+    x: Exn<'_, T>,
+    err: impl Fn(Error<T>) -> R,
+    halt: impl FnOnce(i32) -> R,
+) -> R {
+    x.handle(&err, |exit_val| match exit_val.try_as_i32() {
+        Ok(exit_code) => halt(exit_code),
+        Err(e) => err(e),
+    })
+}
 
 /// Sort array by the given function.
 fn sort_by<'a, V: ValT>(xs: &mut [V], f: impl Fn(V) -> ValXs<'a, V>) -> Result<(), Exn<'a, V>> {
@@ -467,14 +478,6 @@ where
             ))
         }),
         ("now", v(0), |_| bome(now().map(D::V::from))),
-        ("halt", v(1), |mut cv| {
-            let exit_code = cv.0.pop_var().try_as_i32();
-            box_once(
-                exit_code
-                    .map_err(Exn::from)
-                    .and_then(|exit_code| Err(Exn::halt(exit_code))),
-            )
-        }),
     ])
 }
 

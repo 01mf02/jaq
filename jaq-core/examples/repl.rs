@@ -31,7 +31,7 @@ fn eval_print(code: &str) -> std::io::Result<()> {
     // iterator over the output values
     for y in filter.id.run((ctx, Val::default())).map(|v| {
         v.map_err(|x| {
-            x.handle(std::convert::identity, |exit_code| {
+            jaq_std::handle_exn_i32(x, std::convert::identity, |exit_code| {
                 std::process::exit(exit_code)
             })
         })
