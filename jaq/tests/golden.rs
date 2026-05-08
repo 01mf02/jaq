@@ -9,7 +9,6 @@ fn golden_test(args: &[&str], input: &str, out_ex: &str) -> io::Result<()> {
 
     use io::Write;
     child.stdin.take().unwrap().write_all(input.as_bytes())?;
-
     let output = child.wait_with_output()?;
     assert!(output.status.success());
 

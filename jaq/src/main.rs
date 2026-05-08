@@ -123,6 +123,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         }
     };
     vars.extend(var_vals);
+    //println!("Filter: {:?}", filter);
 
     let runner = &cli.runner();
     let writer = &runner.writer;
