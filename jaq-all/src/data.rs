@@ -1,6 +1,6 @@
 //! Commonly used data for filter compilation & execution.
 use crate::{compile_with, FileReports, Fun};
-use jaq_core::{DataT, Lut, Vars, data};
+use jaq_core::{data, DataT, Lut, Vars};
 use jaq_fmts::write::Writer;
 use jaq_json::{Val, ValX};
 use jaq_std::input::{self, Inputs, RcIter};

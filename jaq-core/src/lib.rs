@@ -129,8 +129,8 @@ impl<V: ValT + 'static> Filter<data::JustLut<V>> {
         let ctx = Ctx::<data::JustLut<V>>::new(&self.lut, Vars::new([]));
         let out = self.id.run((ctx, x)).map(|valx| {
             valx.map_err(|x| {
-                x.handle(std::convert::identity, |exit_code| {
-                    panic!("tests shouldn't call halt/1 (code {exit_code})")
+                x.unwrap_err_or_halt(core::convert::identity, |exit_code| {
+                    panic!("test called halt (code {exit_code})")
                 })
             })
         });

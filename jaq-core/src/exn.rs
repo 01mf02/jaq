@@ -20,7 +20,7 @@ pub(crate) enum Inner<'a, V> {
     /// If this can be observed by users, then this is a bug.
     TailCall(Box<(&'a TermId, Vars<V>, CallInput<V>)>),
     Break(usize),
-    Halt(V),
+    Halt(i32),
 }
 
 #[derive(Clone, Debug)]
@@ -52,22 +52,22 @@ impl<V> Exn<'_, V> {
     ///
     /// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
     /// do not use this method on outputs of `fi`!
-    pub fn handle<T>(self, err: impl FnOnce(Error<V>) -> T, halt: impl FnOnce(V) -> T) -> T {
+    pub fn unwrap_err_or_halt<T>(
+        self,
+        fail: impl FnOnce(Error<V>) -> T,
+        halt: impl FnOnce(i32) -> T,
+    ) -> T {
         match self.0 {
-            Inner::Err(e) => err(*e),
+            Inner::Err(e) => fail(*e),
             Inner::Halt(exit_code) => halt(exit_code),
-            Inner::TailCall(_) => {
-                panic!("tried to handle an internal exception variant: TailCall")
-            }
-            Inner::Break(_) => {
-                panic!("tried to handle an internal exception variant: Break")
-            }
+            Inner::TailCall(_) | Inner::Break(_) => panic!(),
         }
     }
 
-    /// Create an exception intended to halt filter execution, such as for the
-    /// `halt/1` filter.
-    pub fn halt(exit_code: V) -> Self {
+    /// Create an exception intended to halt filter execution.
+    ///
+    /// This is used by the `halt/1` filter.
+    pub fn halt(exit_code: i32) -> Self {
         Self(Inner::Halt(exit_code))
     }
 }

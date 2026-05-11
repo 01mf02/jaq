@@ -9,7 +9,7 @@
 //!     rlwrap cargo run --example repl
 
 use jaq_core::load::{Arena, File, Loader};
-use jaq_core::{Compiler, Ctx, Vars, data};
+use jaq_core::{data, Compiler, Ctx, Vars};
 use jaq_json::{write, Val};
 use std::io::{stdin, stdout, Write};
 
