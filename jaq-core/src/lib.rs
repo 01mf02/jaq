@@ -34,7 +34,7 @@
 //! // context for filter execution
 //! let ctx = Ctx::<data::JustLut<Val>>::new(&filter.lut, Vars::new([]));
 //! // iterator over the output values
-//! let mut out = filter.id.run((ctx, input)).map(|r| r.map_err(|x| x.handle(std::convert::identity, |exit_code| panic!("halt({exit_code})"))));
+//! let mut out = filter.id.run((ctx, input)).map(|r| r.map_err(|x| x.unwrap_err_or_halt(std::convert::identity, |exit_code| panic!("halt({exit_code})"))));
 //!
 //! assert_eq!(out.next(), Some(Ok(Val::from("Hello".to_owned()))));;
 //! assert_eq!(out.next(), Some(Ok(Val::from("world".to_owned()))));;
