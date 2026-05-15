@@ -61,9 +61,6 @@ fn main() -> io::Result<ExitCode> {
         }
     } else {
         real_main(&cli).or_else(|e| {
-            if let Error::Halt(exit_code) = e {
-                std::process::exit(exit_code);
-            }
             write!(err, "{}", ErrorColor::new(&e, cli.color_errors()))?;
             Ok(e.report())
         })
@@ -253,7 +250,7 @@ impl fmt::Display for ErrorColor<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let Self(error, color) = self;
         match error {
-            Error::FalseOrNull | Error::NoOutput => Ok(()),
+            Error::FalseOrNull | Error::NoOutput | Error::Halt(_) => Ok(()),
             Error::Io(prefix, e) => {
                 write!(f, "Error: ")?;
                 if let Some(p) = prefix {
@@ -269,7 +266,6 @@ impl fmt::Display for ErrorColor<'_> {
             }),
             Error::Parse(e) => writeln!(f, "Error: failed to parse: {e}"),
             Error::Jaq(e) => writeln!(f, "Error: {e}"),
-            Error::Halt(exit_code) => writeln!(f, "Exited with code {exit_code}"),
         }
     }
 }
@@ -282,7 +278,8 @@ impl Termination for Error {
             Self::Report(_) => 3,
             Self::NoOutput => 4,
             Self::Parse(_) | Self::Jaq(_) => 5,
-            Self::Halt(_) => 101, // this branch should never be encountered in practice
+            // ExitCode ~= u8, but exit_code: i32
+            Self::Halt(exit_code) => std::process::exit(exit_code),
         })
     }
 }
