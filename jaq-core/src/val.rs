@@ -42,7 +42,7 @@ pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
     #[cfg(not(feature = "std"))]
     let exit = |exit_code| panic!("halt({})", exit_code);
 
-    v.map_err(|e| e.unwrap_err_or_halt(core::convert::identity, exit))
+    v.map_err(|e| e.err_or_halt(core::convert::identity, exit).ok().unwrap())
 }
 
 /// Range of options, used for iteration operations.

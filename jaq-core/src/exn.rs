@@ -47,20 +47,15 @@ impl<V> CallInput<V> {
 
 impl<V> Exn<'_, V> {
     /// Handle the exception kinds that can be returned from executing a main filter.
-    ///
-    /// For any other filter, this may not succeed, i.e. panic.
-    ///
-    /// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
-    /// do not use this method on outputs of `fi`!
-    pub fn unwrap_err_or_halt<T>(
+    pub fn err_or_halt<T>(
         self,
         fail: impl FnOnce(Error<V>) -> T,
         halt: impl FnOnce(i32) -> T,
-    ) -> T {
+    ) -> Result<T, Self> {
         match self.0 {
-            Inner::Err(e) => fail(*e),
-            Inner::Halt(exit_code) => halt(exit_code),
-            Inner::TailCall(_) | Inner::Break(_) => panic!(),
+            Inner::Err(e) => Ok(fail(*e)),
+            Inner::Halt(exit_code) => Ok(halt(exit_code)),
+            Inner::TailCall(_) | Inner::Break(_) => Err(self),
         }
     }
 

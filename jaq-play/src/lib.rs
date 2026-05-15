@@ -148,7 +148,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
 
     let post = |s: String| scope.post_message(&s.into()).unwrap();
     let post_value = |y: ValX| {
-        let y = y.map_err(|x| x.unwrap_err_or_halt(Error::Jaq, Error::Halt))?;
+        let y = y.map_err(|x| x.err_or_halt(Error::Jaq, Error::Halt).ok().unwrap())?;
         let s = FormatterFn(|f: &mut Formatter| match &y {
             Val::TStr(s) | Val::BStr(s) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
             y => fmt_json(f, &runner.writer.pp, 0, y),
