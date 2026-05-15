@@ -23,6 +23,28 @@ pub type ValX<'a, T, V = T> = Result<T, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
 pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
 
+/// Convert a value exception [`ValX`] into a value result [`ValR`].
+///
+/// This should always succeed when called on results of a main filter.
+/// For any other filter, this may not succeed, i.e. panic.
+///
+/// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
+/// do not use this function on outputs of `fi`!
+///
+/// This function will exit the current process if
+/// the value exception results from a call to the filter `halt`.
+/// If the `std` feature is disabled, this function panics instead.
+/// In a future jaq 3.0, this function should only be provided if
+/// the `std` feature is enabled.
+pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
+    #[cfg(feature = "std")]
+    let exit = |exit_code| std::process::exit(exit_code);
+    #[cfg(not(feature = "std"))]
+    let exit = |exit_code| panic!("halt({})", exit_code);
+
+    v.map_err(|e| e.unwrap_err_or_halt(core::convert::identity, exit))
+}
+
 /// Range of options, used for iteration operations.
 pub type Range<V> = core::ops::Range<Option<V>>;
 
