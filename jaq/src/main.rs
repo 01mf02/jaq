@@ -130,9 +130,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
 
     let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or_default();
     let last = if cli.files.is_empty() {
-        if !cli.null_input {
-            vars[input_filename_idx] = Val::utf8_str("<stdin>");
-        }
+        vars[input_filename_idx] = Val::utf8_str("<stdin>");
         let vars = Vars::new(vars);
 
         let format = unwrap_or_json(cli.from);
@@ -142,10 +140,8 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
     } else {
         let mut last = None;
         for file in &cli.files {
-            if !cli.null_input {
-                vars[input_filename_idx] =
-                    Val::utf8_str(file.as_os_str().to_string_lossy().into_owned());
-            }
+            vars[input_filename_idx] =
+                Val::utf8_str(file.as_os_str().to_string_lossy().into_owned());
             let vars = Vars::new(vars.clone());
 
             let path = Path::new(file);
