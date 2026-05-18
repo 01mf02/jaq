@@ -46,16 +46,19 @@ impl<V> CallInput<V> {
 }
 
 impl<V> Exn<'_, V> {
-    /// Handle the exception kinds that can be returned from executing a main filter.
-    pub fn err_or_halt<T>(
-        self,
-        fail: impl FnOnce(Error<V>) -> T,
-        halt: impl FnOnce(i32) -> T,
-    ) -> Result<T, Self> {
+    /// If the exception is an error, yield it, else yield the exception.
+    pub fn get_err(self) -> Result<Error<V>, Self> {
         match self.0 {
-            Inner::Err(e) => Ok(fail(*e)),
-            Inner::Halt(exit_code) => Ok(halt(exit_code)),
-            Inner::TailCall(_) | Inner::Break(_) => Err(self),
+            Inner::Err(e) => Ok(*e),
+            _ => Err(self),
+        }
+    }
+
+    /// If the exception halts, yield the exit code, else yield the exception.
+    pub fn get_halt(self) -> Result<i32, Self> {
+        match self.0 {
+            Inner::Halt(code) => Ok(code),
+            _ => Err(self),
         }
     }
 

@@ -2,6 +2,7 @@
 
 use crate::Error;
 use alloc::vec::Vec;
+use jaq_all::jaq_core::Exn;
 use jaq_all::json::Val;
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
@@ -51,7 +52,8 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
     let vars = Default::default();
     let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
     run(runner, &filter, vars, input, Error::Parse, |v| {
-        obtain.push(v.map_err(|x| x.err_or_halt(Error::Jaq, Error::Halt).ok().unwrap())?);
+        let halt = |e: Exn<_>| Error::Halt(e.get_halt().ok().unwrap());
+        obtain.push(v.map_err(|e| e.get_err().map_or_else(halt, Error::Jaq))?);
         Ok(())
     })?;
 
