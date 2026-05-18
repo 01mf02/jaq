@@ -6,8 +6,9 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 use jaq_all::data::{self, compile, Runner};
 use jaq_all::fmts::{read, write};
+use jaq_all::jaq_core::Exn;
 use jaq_all::json::write::{Pp, Styles};
-use jaq_all::json::{self, bstr, style, write_bytes, write_utf8, Val, ValR};
+use jaq_all::json::{self, bstr, style, write_bytes, write_utf8, Val, ValX};
 use jaq_all::load::{Color, FileReportsDisp};
 use wasm_bindgen::prelude::{wasm_bindgen, JsValue};
 use web_sys::DedicatedWorkerGlobalScope as Scope;
@@ -134,6 +135,7 @@ impl Settings {
 enum Error {
     Hifijson(String),
     Jaq(json::Error),
+    Halt(i32),
 }
 
 #[wasm_bindgen]
@@ -146,8 +148,10 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
     let runner = &settings.runner();
 
     let post = |s: String| scope.post_message(&s.into()).unwrap();
-    let post_value = |y: ValR| {
-        let y = y.map_err(Error::Jaq)?;
+    let post_value = |y: ValX| {
+        let halt = |e: Exn<_>| Error::Halt(e.get_halt().ok().unwrap());
+        let y = y.map_err(|e| e.get_err().map_or_else(halt, Error::Jaq))?;
+
         let s = FormatterFn(|f: &mut Formatter| match &y {
             Val::TStr(s) | Val::BStr(s) if settings.raw_output => bstr(&escape_bytes(s)).fmt(f),
             y => fmt_json(f, &runner.writer.pp, 0, y),
@@ -166,6 +170,7 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
             Ok(()) => (),
             Err(Error::Hifijson(e)) => post(format!("Parse error: {e}")),
             Err(Error::Jaq(e)) => post(format!("Error: {e}")),
+            Err(Error::Halt(exit_code)) => post(format!("Exited with code {exit_code}")),
         },
     }
 

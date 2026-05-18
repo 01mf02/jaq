@@ -6,10 +6,8 @@ use core::fmt::{self, Display};
 
 /// Exception.
 ///
-/// This is either an error or control flow data internal to jaq.
-/// Users should only be able to observe errors.
-///
-/// Use [`crate::val::unwrap_valr`] to convert a [`crate::val::ValX`] to an error.
+/// This is either an error, a runtime halt, or control flow data internal to jaq.
+/// Users should only be able to observe the first two cases.
 #[derive(Clone, Debug)]
 pub struct Exn<'a, V>(pub(crate) Inner<'a, V>);
 
@@ -22,6 +20,7 @@ pub(crate) enum Inner<'a, V> {
     /// If this can be observed by users, then this is a bug.
     TailCall(Box<(&'a TermId, Vars<V>, CallInput<V>)>),
     Break(usize),
+    Halt(i32),
 }
 
 #[derive(Clone, Debug)]
@@ -48,11 +47,26 @@ impl<V> CallInput<V> {
 
 impl<V> Exn<'_, V> {
     /// If the exception is an error, yield it, else yield the exception.
-    pub(crate) fn get_err(self) -> Result<Error<V>, Self> {
+    pub fn get_err(self) -> Result<Error<V>, Self> {
         match self.0 {
             Inner::Err(e) => Ok(*e),
             _ => Err(self),
         }
+    }
+
+    /// If the exception halts, yield the exit code, else yield the exception.
+    pub fn get_halt(self) -> Result<i32, Self> {
+        match self.0 {
+            Inner::Halt(code) => Ok(code),
+            _ => Err(self),
+        }
+    }
+
+    /// Create an exception intended to halt filter execution.
+    ///
+    /// This is used by the `halt/1` filter.
+    pub fn halt(exit_code: i32) -> Self {
+        Self(Inner::Halt(exit_code))
     }
 }
 

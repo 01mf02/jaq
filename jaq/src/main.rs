@@ -228,6 +228,7 @@ enum Error {
     Report(Vec<FileReports<PathBuf>>),
     Parse(String),
     Jaq(jaq_all::json::Error),
+    Halt(i32),
     FalseOrNull,
     NoOutput,
 }
@@ -249,7 +250,7 @@ impl fmt::Display for ErrorColor<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let Self(error, color) = self;
         match error {
-            Error::FalseOrNull | Error::NoOutput => Ok(()),
+            Error::FalseOrNull | Error::NoOutput | Error::Halt(_) => Ok(()),
             Error::Io(prefix, e) => {
                 write!(f, "Error: ")?;
                 if let Some(p) = prefix {
@@ -277,6 +278,8 @@ impl Termination for Error {
             Self::Report(_) => 3,
             Self::NoOutput => 4,
             Self::Parse(_) | Self::Jaq(_) => 5,
+            // ExitCode ~= u8, but exit_code: i32
+            Self::Halt(exit_code) => std::process::exit(exit_code),
         })
     }
 }
