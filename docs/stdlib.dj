@@ -2271,6 +2271,38 @@ $ MYFLAG=42 jaq -n '$ENV.MYFLAG'
 
 The filter `env` is equivalent to `$ENV`.
 
+### `input_filename`
+
+The filter `input_filename` returns
+the name of the file currently read, or
+`"<stdin>"` if standard input is currently read.
+
+```
+$ jaq --slurp 'input_filename' "examples/benches.json"
+"examples/benches.json"
+$ echo 0 | jaq 'input_filename'
+"<stdin>"
+```
+
+::: Compatibility
+In jq, this filter returns the name of the file most recently read from.
+This can lead to subtle differences compared to jaq. For example:
+
+```
+$ echo 0 | jaq --null-input '(., inputs) | input_filename'
+"<stdin>"
+"<stdin>"
+```
+
+Here, jq yields `null "<stdin>"`. Why?
+When executing the filter `.`, jq did not read any input, so
+`input_filename` returns `null`.
+However, when executing `inputs`, jq starts reading from standard input, so
+`input_filename` returns `"<stdin>"`.
+
+In contrast, jaq considers a file as being read even when it has only been opened.
+:::
+
 ### `repl`
 
 The filter `repl` starts an interactive REPL (read-eval-print-loop).
@@ -2300,7 +2332,6 @@ This section lists filters present in `jq`, but not in jaq.
 - [`have_decnum`](https://jqlang.org/manual/#have_decnum)
 - [`$JQ_BUILD_CONFIGURATION`](https://jqlang.org/manual/#$jq_build_configuration)
 - [`builtins`](https://jqlang.org/manual/#builtins)
-- [`input_filename`](https://jqlang.org/manual/#input_filename)
 - [`input_line_number`](https://jqlang.org/manual/#input_line_number)
 
 jaq supports none of jq's
