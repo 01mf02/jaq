@@ -2269,16 +2269,32 @@ The filter `env` is equivalent to `$ENV`.
 The filter `input_filename` returns
 the name of the file currently read, or
 `"<stdin>"` if standard input is currently read.
-If `--null-input` is used, this filter returns `null` instead.
 
 ```
 $ jaq --slurp 'input_filename' "examples/benches.json"
 "examples/benches.json"
 $ echo 0 | jaq 'input_filename'
 "<stdin>"
-$ jaq -n 'input_filename'
-null
 ```
+
+::: Compatibility
+In jq, this filter returns the name of the file most recently read from.
+This can lead to subtle differences compared to jaq. For example:
+
+```
+$ echo 0 | jaq --null-input '(., inputs) | input_filename'
+"<stdin>"
+"<stdin>"
+```
+
+Here, jq yields `null "<stdin>"`. Why?
+When executing the filter `.`, jq did not read any input, so
+`input_filename` returns `null`.
+However, when executing `inputs`, jq starts reading from standard input, so
+`input_filename` returns `"<stdin>"`.
+
+In contrast, jaq considers a file as being read even when it has only been opened.
+:::
 
 ### `repl`
 
