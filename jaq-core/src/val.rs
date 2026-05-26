@@ -30,8 +30,20 @@ pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
 ///
 /// If you are writing a native filter, e.g. `f(f1; ...; fn)`,
 /// do not use this function on outputs of `fi`!
+///
+/// This function will exit the current process if
+/// the value exception results from a call to the filter `halt`.
+/// If the `std` feature is disabled, this function panics instead.
+/// In a future jaq 3.0, this function should only be provided if
+/// the `std` feature is enabled.
 pub fn unwrap_valr<T, V>(v: ValX<T, V>) -> ValR<T, V> {
-    v.map_err(|e| e.get_err().ok().unwrap())
+    #[cfg(feature = "std")]
+    let exit = |exit_code| std::process::exit(exit_code);
+    #[cfg(not(feature = "std"))]
+    let exit = |exit_code| panic!("halt({})", exit_code);
+
+    let halt = |e: crate::Exn<_>| exit(e.get_halt().ok().unwrap());
+    v.map_err(|e| e.get_err().unwrap_or_else(halt))
 }
 
 /// Range of options, used for iteration operations.

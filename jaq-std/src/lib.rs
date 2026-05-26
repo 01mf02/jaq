@@ -154,8 +154,6 @@ trait ValTx: ValT + Sized {
             .ok_or_else(|| Error::typ(self.clone(), "integer"))
     }
 
-    #[cfg(feature = "math")]
-    /// Use as an i32 to be given as an argument to a libm function.
     fn try_as_i32(&self) -> Result<i32, Error<Self>> {
         self.try_as_isize()?.try_into().map_err(Error::str)
     }
@@ -442,6 +440,10 @@ where
                     .map(|s| ValT::from_utf8_bytes(s.replace(b"'", b"'\\''"))),
             )
         }),
+        ("halt", v(1), |mut cv| {
+            let exit_code = cv.0.pop_var().try_as_i32().map_err(Exn::from);
+            box_once(exit_code.and_then(|exit_code| Err(Exn::halt(exit_code))))
+        }),
     ])
 }
 
@@ -467,10 +469,6 @@ where
             ))
         }),
         ("now", v(0), |_| bome(now().map(D::V::from))),
-        ("halt", v(1), |mut cv| {
-            let exit_code = cv.0.pop_var().try_as_isize();
-            bome(exit_code.map(|exit_code| std::process::exit(exit_code as i32)))
-        }),
     ])
 }
 
