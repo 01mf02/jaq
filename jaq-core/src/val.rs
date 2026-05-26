@@ -18,7 +18,7 @@ pub type ValR<T, V = T> = Result<T, crate::Error<V>>;
 pub type ValRs<'a, T, V = T> = BoxIter<'a, ValR<T, V>>;
 /// Value or eXception.
 ///
-/// Use [`Exn::handle`](crate::Exn::handle) to extract the [`Error`](crate::Error) from an [`Exn`](crate::Exn).
+/// Use [`unwrap_valr`] to convert to [`ValR`].
 pub type ValX<'a, T, V = T> = Result<T, crate::Exn<'a, V>>;
 /// Stream of values and eXceptions.
 pub type ValXs<'a, T, V = T> = BoxIter<'a, ValX<'a, T, V>>;
