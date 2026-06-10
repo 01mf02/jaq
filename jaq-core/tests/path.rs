@@ -89,6 +89,9 @@ yields!(null_index2, ".[0]", json!(null));
 yields!(index_opt_inner, "try .[0[]]? catch 1", 1);
 yields!(index_opt_outer, "1, (.[0[]])?", 1);
 
+yields!(index_arr_empty, "[1, 2, 3][[]]", json!([]));
+yields!(index_arr_match, "[0, 1, 2, 1, 2] | .[[1, 2]]", [1, 3]);
+
 #[test]
 fn index_update() {
     give(json!({"a": 1}), ".b |= .", json!({"a": 1, "b": null}));
