@@ -57,6 +57,9 @@ yields!(indices_arr_str, r#"["a", "b", "c"] | indices("b")"#, [1]);
 yields!(indices_arr_empty, "[0, 1] | indices([])", json!([]));
 yields!(indices_arr_larger, "[1, 2] | indices([1, 2, 3])", json!([]));
 
+yields!(index_arr_empty, "[1, 2, 3] | .[[]]", json!([]));
+yields!(index_arr_match, "[0, 1, 2, 1, 2] | .[[1, 2]]", [1, 3]);
+
 yields!(indices_arr_overlap, "[0, 0, 0] | indices([0, 0])", [0, 1]);
 yields!(indices_str_overlap, r#""aaa" | indices("aa")"#, [0, 1]);
 yields!(indices_str_gb1, r#""🇬🇧!" | indices("!")"#, [2]);
