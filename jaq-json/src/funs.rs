@@ -31,7 +31,6 @@ impl Val {
             (Val::BStr(_), Val::BStr(y)) | (Val::TStr(_), Val::TStr(y)) if y.is_empty() => {
                 Ok(Box::new(core::iter::empty()))
             }
-            (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
             (Val::TStr(x), Val::TStr(y)) => {
                 let index = |(i, _, _)| x.get(i..i + y.len());
                 let iw = x.char_indices().map_while(index).enumerate();
@@ -41,6 +40,7 @@ impl Val {
                 let iw = x.windows(y.len()).enumerate();
                 Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
             }
+            (Val::Arr(_), Val::Arr(y)) if y.is_empty() => Ok(Box::new(core::iter::empty())),
             (Val::Arr(x), Val::Arr(y)) => {
                 let iw = x.windows(y.len()).enumerate();
                 Ok(Box::new(iw.filter_map(|(i, w)| (w == **y).then_some(i))))
