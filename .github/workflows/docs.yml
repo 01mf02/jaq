@@ -12,7 +12,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Install jotdown
       run: cargo install jotdown@0.8.1 --locked
     - name: Generate documentation and run unit tests
