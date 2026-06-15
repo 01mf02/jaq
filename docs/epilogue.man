@@ -1,0 +1,4 @@
+.SH AUTHOR
+Michael Färber
+.SH SEE ALSO
+\f[I]jq\f[R](1)
