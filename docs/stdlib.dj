@@ -1462,10 +1462,13 @@ The filters `@csv` and `@tsv` are equivalent to
 ### `@html`, `@htmld`
 
 The filter `@html` escapes a string so that it can be embedded in an HTML document.
-It replaces the following characters by HTML version:
+It replaces the following characters by HTML equivalents:
 
-| Text | `<`    | `>`    | `&`     | `'`      | `"`      |
-| HTML | `&lt;` | `&gt;` | `&amp;` | `&apos;` | `&quot;` |
+- `"<"  | @html --> "&lt;"`
+- `">"  | @html --> "&gt;"`
+- `"&"  | @html --> "&amp;"`
+- `"'"  | @html --> "&apos;"`
+- `"\"" | @html --> "&quot;"`
 
 The filter `@htmld` reverses the effect of `@html`.
 For example:
