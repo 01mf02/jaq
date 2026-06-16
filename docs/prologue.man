@@ -1,6 +1,0 @@
-.TH "JAQ" "1" "" ""
-.SH NAME
-\f[B]\f[CB]jaq\f[B]\f[R] \[em] Command\-line JSON processor
-.SH SYNOPSIS
-\f[B]\f[CB]jaq\f[B]\f[R]\ [\f[I]OPTION\f[R]]\&...\ [\f[I]FILTER\f[R]]\ [\f[I]FILE\f[R]]\&...
-.SH DESCRIPTION
