@@ -1,3 +1,5 @@
+# Convert HTML to man page.
+
 def esc_str:
   gsub("\\\\"  ; "\\[rs]") |
   gsub("'"     ; "\\[aq]") |
@@ -29,9 +31,9 @@ rec_tags |=
   elif .t == "strong" then "\\f[B]" , .c[], "\\f[R]"
   elif .t == "code"   then "\\f[CB]", .c[], "\\f[R]"
   elif .t == "blockquote" then ".RS\n", .c[], ".RE\n"
+  elif .t == "h1" then ".SH ", .c[], "\n" | ascii_upcase
+  elif .t == "h2" then ".SS ", .c[], "\n" | ascii_upcase
+  elif .t == "h3" then ".SS ", .c[], "\n"
   elif .t == "section" or .t == "body" then .c[]
-  elif .t == "h1" then ".SH " , (.c[] | ascii_upcase), "\n"
-  elif .t == "h2" then ".SS " , (.c[] | ascii_upcase), "\n"
-  elif .t == "h3" then ".SS " , .c[], "\n"
   else error
   end
