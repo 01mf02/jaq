@@ -18,8 +18,13 @@ def rec_tags: .. | select(isobject and has("t"));
 
 rec_tags |= if .t == "div" and .a.class == "Advanced" or .t == "header" then empty end |
 rec_tags |= (.c[] | select(isstring)) |= esc_str |
-rec_tags |= if .t == "code" then .c[] |= sub("^ "; "\\ ") end |
-rec_tags |= if .t == "pre" then ".IP\n", ".EX\n", .c[].c[], ".EE\n" end |
+rec_tags |=
+    if .t == "code" then .c[] |= sub("^ "; "\\ ")
+  elif .t == "pre" then ".IP\n", ".EX\n", .c[].c[], ".EE\n"
+  elif .t == "div" then .c |=
+    # strip away first paragraph to avoid ugly empty line after header
+    if .[0] == "\n" and .[1].t == "p" then .[1].c + .[2:] else error end
+  end |
 rec_tags |=
     if .t == "p"  then ".PP\n", .c[], "\n"
   elif .t == "a" then conv_link
@@ -34,8 +39,6 @@ rec_tags |=
   elif .t == "h3" then ".SS ", .c[], "\n"
   elif .t == "section" or .t == "body" then .c[]
   elif .t == "div" then
-    # strip away first paragraph to avoid ugly empty line after header
-    if .c[:2] == ["\n", ".PP\n"] then .c |= .[2:] else error end |
     ".PP\n", "\\f[I]", .a.class, "\\f[R]", "\n",
     ".RS\n", .c[], ".RE\n"
   else error
