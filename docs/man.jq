@@ -29,9 +29,9 @@ rec_tags |=
     }]}
   end |
 rec_tags |=
-    if .t == "p"  then ".PP\n", .c[], "\n"
+    if .t == "p"  then ".PP\n", .c[]
   elif .t == "a" then conv_link
-  elif .t == "ul" or .t == "ol" then ".RS 2\n", .c[], ".RE"
+  elif .t == "ul" or .t == "ol" then ".RS 2\n", .c[], ".RE\n"
   elif .t == "li" then ".IP \\[bu] 2", .c[]
   elif .t == "em"     then "\\f[I]" , .c[], "\\f[R]"
   elif .t == "strong" then "\\f[B]" , .c[], "\\f[R]"
