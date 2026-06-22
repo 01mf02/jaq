@@ -21,9 +21,12 @@ rec_tags |= (.c[] | select(isstring)) |= esc_str |
 rec_tags |=
     if .t == "code" then .c[] |= sub("^ "; "\\ ")
   elif .t == "pre" then ".IP\n", ".EX\n", .c[].c[], ".EE\n"
-  elif .t == "div" then .c |=
-    # strip away first paragraph to avoid ugly empty line after header
-    if .[0] == "\n" and .[1].t == "p" then .[1].c + .[2:] else error end
+  elif .t == "div" then {t: "p", c: [
+    {t: "em", c: [.a.class]}, "\n",
+    {t: "blockquote", c:
+      # strip away first paragraph to avoid ugly empty line after header
+      if .c[0] == "\n" and .c[1].t == "p" then .c[1].c + .c[2:] else error end
+    }]}
   end |
 rec_tags |=
     if .t == "p"  then ".PP\n", .c[], "\n"
@@ -38,8 +41,5 @@ rec_tags |=
   elif .t == "h2" then ".SS ", .c[], "\n" | ascii_upcase
   elif .t == "h3" then ".SS ", .c[], "\n"
   elif .t == "section" or .t == "body" then .c[]
-  elif .t == "div" then
-    ".PP\n", "\\f[I]", .a.class, "\\f[R]", "\n",
-    ".RS\n", .c[], ".RE\n"
   else error
   end
