@@ -18,6 +18,7 @@ def rec_tags: .. | select(isobject and has("t"));
 
 rec_tags |= if .t == "div" and .a.class == "Advanced" or .t == "header" then empty end |
 rec_tags |= (.c[] | select(isstring)) |= esc_str |
+rec_tags |= if .t == "code" then .c[] |= sub("^ "; "\\ ") end |
 rec_tags |= if .t == "pre" then ".IP\n", ".EX\n", .c[].c[], ".EE\n" end |
 rec_tags |=
     if .t == "p"  then ".PP\n", .c[], "\n"
