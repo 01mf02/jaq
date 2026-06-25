@@ -1,4 +1,5 @@
 body.xhtml
 MANUAL.xhtml
+*.man
 jaq.1
 shelltest
