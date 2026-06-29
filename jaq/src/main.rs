@@ -26,6 +26,13 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 extern crate alloc;
 
 fn main() -> io::Result<ExitCode> {
+    match main_pipe() {
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(ExitCode::from(141)),
+        r => r,
+    }
+}
+
+fn main_pipe() -> io::Result<ExitCode> {
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "jaq=debug"))
         .format(|buf, record| match record.level() {
@@ -261,6 +268,7 @@ impl fmt::Display for ErrorColor<'_> {
         let Self(error, color) = self;
         match error {
             Error::FalseOrNull | Error::NoOutput | Error::Halt(_) => Ok(()),
+            Error::Io(_, e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
             Error::Io(prefix, e) => {
                 write!(f, "Error: ")?;
                 if let Some(p) = prefix {
@@ -284,6 +292,7 @@ impl Termination for Error {
     fn report(self) -> ExitCode {
         ExitCode::from(match self {
             Self::FalseOrNull => 1,
+            Self::Io(_, e) if e.kind() == io::ErrorKind::BrokenPipe => 141,
             Self::Io(_, _) => 2,
             Self::Report(_) => 3,
             Self::NoOutput => 4,
