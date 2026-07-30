@@ -89,7 +89,7 @@ def flatten($d): if $d > 0 then map(if isarray then flatten($d-1) else [.] end) 
 def capture_of_match: map(select(.name) | { (.name): .string} ) | add + {};
 
 def    test(re; flags): matches(re; flags) | any;
-def    scan(re; flags): matches(re; flags)[] | .[0].string;
+def    scan(re; flags): matches(re; "g" + flags)[] | .[0].string;
 def   match(re; flags): matches(re; flags)[] | .[0] + { captures: .[1:] };
 def capture(re; flags): matches(re; flags)[] | capture_of_match;
 

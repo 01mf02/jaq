@@ -79,6 +79,15 @@ yields!(
     ["a", "A", "b", "B"]
 );
 
+// scan is global by definition (jq: `match(re; "g"+flags)`); the author
+// flags ride alongside the forced global.
+yields!(
+    scan_words,
+    r#""one two three" | [scan("\\S+")]"#,
+    ["one", "two", "three"]
+);
+yields!(scan_with_flags, r#""one Two THREE" | [scan("t"; "i")]"#, ["T", "T"]);
+
 #[test]
 fn min_max() {
     give(json!([1, 4, 2]), "min", json!(1));
