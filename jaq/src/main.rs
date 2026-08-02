@@ -25,7 +25,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 extern crate alloc;
 
-fn main() -> io::Result<ExitCode> {
+fn main() -> ExitCode {
     use env_logger::Env;
     env_logger::Builder::from_env(Env::default().filter_or("LOG", "jaq=debug"))
         .format(|buf, record| match record.level() {
@@ -36,9 +36,17 @@ fn main() -> io::Result<ExitCode> {
         })
         .init();
 
-    let mut out = io::stdout();
-    let mut err = io::stderr();
+    // last line of defense against I/O errors that happen during printing,
+    // e.g. catching broken pipes during error printing
+    main_io(&mut io::stdin(), &mut io::stdout(), &mut io::stderr())
+        .unwrap_or_else(|e: io::Error| Error::from(e).report())
+}
 
+fn main_io(
+    inp: &mut io::Stdin,
+    out: &mut io::Stdout,
+    err: &mut io::Stderr,
+) -> io::Result<ExitCode> {
     let cli = match Cli::parse() {
         Ok(cli) => cli,
         Err(e) => {
@@ -58,10 +66,10 @@ fn main() -> io::Result<ExitCode> {
     } else if let Some(test_files) = &cli.run_tests {
         match test_files.last() {
             Some(file) => tests::run(io::BufReader::new(std::fs::File::open(file)?)),
-            None => tests::run(io::stdin().lock()),
+            None => tests::run(inp.lock()),
         }
     } else {
-        real_main(&cli).or_else(|e| {
+        real_main(&cli, inp, out).or_else(|e| {
             write!(err, "{}", ErrorColor::new(&e, cli.color_errors()))?;
             Ok(e.report())
         })
@@ -105,7 +113,7 @@ impl Cli {
     }
 }
 
-fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
+fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<ExitCode, Error> {
     let mut var_val = binds(cli)?;
     let input_filename_idx = var_val.len();
     var_val.push(("!input_filename".to_string(), Val::Null));
@@ -134,9 +142,11 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
         let vars = Vars::new(vars);
 
         let format = unwrap_or_json(cli.from);
-        let s = read::read_string(format, io::stdin().lock())?;
-        let inputs = read::read(format, io::stdin().lock(), &s, cli.slurp);
-        with_stdout(|out| run(runner, &filter, vars, inputs, |v| write(out, writer, &v)))?
+        let s = read::read_string(format, inp.lock())?;
+        let inputs = read::read(format, inp.lock(), &s, cli.slurp);
+        with_stdout(out, |out| {
+            run(runner, &filter, vars, inputs, |v| write(out, writer, &v))
+        })?
     } else {
         let mut last = None;
         for file in &cli.files {
@@ -168,7 +178,7 @@ fn real_main(cli: &Cli) -> Result<ExitCode, Error> {
                 tmp.persist(path).map_err(|e| Error::Io(None, e.into()))?;
                 std::fs::set_permissions(path, perms)?;
             } else {
-                last = with_stdout(|out| {
+                last = with_stdout(out, |out| {
                     run(runner, &filter, vars.clone(), inputs, |v| {
                         write(out, writer, &v)
                     })
@@ -261,6 +271,7 @@ impl fmt::Display for ErrorColor<'_> {
         let Self(error, color) = self;
         match error {
             Error::FalseOrNull | Error::NoOutput | Error::Halt(_) => Ok(()),
+            Error::Io(_, e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
             Error::Io(prefix, e) => {
                 write!(f, "Error: ")?;
                 if let Some(p) = prefix {
@@ -284,6 +295,7 @@ impl Termination for Error {
     fn report(self) -> ExitCode {
         ExitCode::from(match self {
             Self::FalseOrNull => 1,
+            Self::Io(_, e) if e.kind() == io::ErrorKind::BrokenPipe => 141,
             Self::Io(_, _) => 2,
             Self::Report(_) => 3,
             Self::NoOutput => 4,

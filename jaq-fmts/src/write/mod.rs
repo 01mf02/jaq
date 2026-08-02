@@ -34,8 +34,7 @@ pub struct Writer {
 }
 
 /// Buffer writes if stdout is terminal, else just lock stdout.
-pub fn with_stdout<T>(f: impl FnOnce(&mut dyn Write) -> T) -> T {
-    let stdout = io::stdout();
+pub fn with_stdout<T>(stdout: &mut io::Stdout, f: impl FnOnce(&mut dyn Write) -> T) -> T {
     if stdout.is_terminal() {
         f(&mut stdout.lock())
     } else {

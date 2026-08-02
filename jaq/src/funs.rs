@@ -36,7 +36,9 @@ fn eval(runner: &Runner, code: String, input: Val) -> Result<(), Error> {
     let ctx = Vars::new(ctx);
     let inputs = core::iter::once(Ok(input));
     let writer = &runner.writer;
-    with_stdout(|out| run(runner, &filter, ctx, inputs, |v| write(out, writer, &v)))?;
+    with_stdout(&mut std::io::stdout(), |out| {
+        run(runner, &filter, ctx, inputs, |v| write(out, writer, &v))
+    })?;
     Ok(())
 }
 
