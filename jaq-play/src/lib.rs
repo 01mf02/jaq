@@ -168,8 +168,8 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
             .for_each(|fr| post(format!("{}", FileReportsDisp::new(fr).with_paint(color)))),
         Ok(filter) => match data::run(runner, &filter, vars, inputs, Error::Hifijson, post_value) {
             Ok(()) => (),
-            Err(Error::Hifijson(e)) => post(format!("Parse error: {e}")),
-            Err(Error::Jaq(e)) => post(format!("Error: {e}")),
+            Err(Error::Hifijson(e)) => post(format!("Parse error: {}", escape_str(&e.to_string()))),
+            Err(Error::Jaq(e)) => post(format!("Error: {}", escape_str(&e.to_string()))),
             Err(Error::Halt(exit_code)) => post(format!("Exited with code {exit_code}")),
         },
     }
@@ -199,7 +199,12 @@ fn raw_input(slurp: bool, input: &str) -> impl Iterator<Item = &str> {
 }
 
 fn color(f: &mut Formatter, color: &Option<Color>, text: &dyn Display) -> fmt::Result {
-    let mut color = format!("{color:?}");
-    color.make_ascii_lowercase();
-    write!(f, "<span class={color}>{text}</span>",)
+    let text = escape_str(&text.to_string());
+    if let Some(color) = color {
+        let mut color = format!("{color:?}");
+        color.make_ascii_lowercase();
+        write!(f, "<span class={color}>{text}</span>")
+    } else {
+        write!(f, "{text}")
+    }
 }
