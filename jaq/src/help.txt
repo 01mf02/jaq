@@ -38,7 +38,8 @@ Variable options:
       --args                Collect remaining positional arguments into `$ARGS.positional`
 
 Remaining options:
-      --run-tests <FILE>    Run tests from a file
   -e, --exit-status         Use the last output value as exit status code
   -V, --version             Print version
   -h, --help                Print help
+
+Full documentation: <https://gedenkt.at/jaq/manual/>
