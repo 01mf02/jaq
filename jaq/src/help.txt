@@ -41,3 +41,5 @@ Remaining options:
   -e, --exit-status         Use the last output value as exit status code
   -V, --version             Print version
   -h, --help                Print help
+
+Full documentation: <https://gedenkt.at/jaq/manual/>
