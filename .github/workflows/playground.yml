@@ -46,7 +46,7 @@ jobs:
       working-directory: jaq-play
 
     - name: Install jotdown
-      run: cargo install jotdown@0.8.1 --locked
+      run: cargo install jotdown@0.10.0 --features=cli --locked
     - name: Generate documentation
       working-directory: docs
       run: make JAQ="cargo run --" MANUAL.xhtml
