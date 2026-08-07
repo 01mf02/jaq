@@ -6,7 +6,7 @@ allows for much faster parsing than Markdown.
 This requires `jotdown`. To install it:
 
 ```
-cargo install jotdown@0.8.1 --locked
+cargo install jotdown@0.10.0 --features=cli --locked
 ```
 
 To generate HTML and man versions of the manual, run `make -j`.
