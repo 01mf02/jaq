@@ -34,13 +34,6 @@ nav a {
     text-decoration: none;
 }
 
-h1 > a,
-h2 > a,
-h3 > a {
-    text-decoration: inherit;
-    color: inherit;
-}
-
 section#main {
     flex: 3;
 }

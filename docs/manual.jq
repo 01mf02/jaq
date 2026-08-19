@@ -18,7 +18,11 @@ def li:
   ]};
 
 def transform_section_headers:
-  (.. | select(.t? == "section") | .a.id) |= ascii_downcase;
+  (.. | select(.t? == "section")) |= (
+    .a.id       |= ascii_downcase |
+    # transform h1 to h2, h2 to h3, ...
+    .c[1].t[1:] |= (tonumber + 1 | tostring)
+  );
 
 def transform_code:
   # XML encoding of `-->`
