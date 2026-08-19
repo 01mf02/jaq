@@ -67,9 +67,7 @@ function receiveFromWorker(data) {
 }
 
 function showRunButton(show) {
-    const display = b => b ? "visible" : "hidden";
-    document.getElementById("run" ).style.visibility = display(show);
-    document.getElementById("stop").style.visibility = display(!show);
+    document.getElementById("run-stop").className = show ? "" : "running";
 }
 
 function stopWorker() {
@@ -80,7 +78,7 @@ function stopWorker() {
 }
 
 document.getElementById("run-stop").onclick = async () => {
-    if (document.getElementById("run").style.visibility === "visible") {
+    if (document.getElementById("run-stop").className !== "running") {
         startWorker()
     } else {
         stopWorker()
