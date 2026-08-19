@@ -13,8 +13,8 @@
   <header class="top">
     <img class="logo" src="./jaq.svg" alt="jaq logo"/>
     <button id="run-stop" title="Run/Stop filter">
-      <div id="run">▶️ Run</div>
-      <div id="stop">⏹️ Stop</div>
+      <span id="run">▶️ Run</span>
+      <span id="stop">⏹️ Stop</span>
     </button>
     <div class="settings">
       <button>⚙️  Settings</button>
@@ -74,7 +74,7 @@
     </button>
     <div class="about">
       <a href="https://github.com/01mf02/jaq" target="_blank">
-        <img src="./github-mark-white.svg" height="32px"/>
+        <img src="./github-mark-white.svg" alt="GitHub" height="32"/>
       </a>
     </div>
   </header>
@@ -92,7 +92,7 @@
 
     <section class="output">
       <header><h1>Output</h1></header>
-      <pre id="output"></div>
+      <pre id="output"></pre>
     </section>
   </div>
   <!--
@@ -102,7 +102,7 @@
     import init from "./pkg/jaq_play.js";
     await init();
   </script>
-  <script type="module" src="./src/main.js" defer></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 
 </html>
