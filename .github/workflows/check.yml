@@ -18,6 +18,11 @@ jobs:
     steps:
     - uses: actions/checkout@v6
 
+    - name: Install a `no_std` Rust toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        target: thumbv7em-none-eabihf
+
     - uses: actions/cache/restore@v5
       with:
         path: |
@@ -30,15 +35,15 @@ jobs:
 
     - name: Check jaq-core without default features
       working-directory: jaq-core
-      run: cargo check --no-default-features
+      run: cargo check --target thumbv7em-none-eabihf --no-default-features
 
     - name: Check jaq-std without default features
       working-directory: jaq-std
-      run: cargo check --no-default-features
+      run: cargo check --target thumbv7em-none-eabihf --no-default-features
 
     - name: Check jaq-json without default features
       working-directory: jaq-json
-      run: cargo check --no-default-features
+      run: cargo check --target thumbv7em-none-eabihf --no-default-features
 
     - name: Check jaq-core fuzzing target compilation
       working-directory: jaq-core/fuzz

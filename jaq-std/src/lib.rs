@@ -361,6 +361,117 @@ fn once_or_empty<'a, T: 'a, E: 'a>(r: Result<Option<T>, E>) -> BoxIter<'a, Resul
     Box::new(r.transpose().into_iter())
 }
 
+// Primitive float rounding methods are unavailable without `std`.
+// These can be dropped after `core_float_math` lands: https://github.com/rust-lang/rust/issues/137578
+fn floor(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    return x.floor();
+    #[cfg(not(feature = "std"))]
+    return no_std_float::floor(x);
+}
+
+fn round(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    return x.round();
+    #[cfg(not(feature = "std"))]
+    return no_std_float::round(x);
+}
+
+fn ceil(x: f64) -> f64 {
+    #[cfg(feature = "std")]
+    return x.ceil();
+    #[cfg(not(feature = "std"))]
+    return no_std_float::ceil(x);
+}
+
+#[cfg(any(not(feature = "std"), test))]
+mod no_std_float {
+    const SIGN_MASK: u64 = 1 << 63;
+    const SIG_BITS: i32 = 52;
+    const SIG_MASK: u64 = (1 << SIG_BITS) - 1;
+    const EXPONENT_BIAS: i32 = 1023;
+
+    // Adapted from Rust's MIT-licensed `libm` implementation:
+    // https://github.com/rust-lang/compiler-builtins/blob/5c5f07851b1878013ac81e129b0517feaaf8661d/libm/src/math/generic/trunc.rs
+    fn trunc(x: f64) -> f64 {
+        let xi = x.to_bits();
+        let e = ((xi >> SIG_BITS) & 0x7ff) as i32 - EXPONENT_BIAS;
+        if e >= SIG_BITS {
+            return x;
+        }
+        let clear_mask = if e < 0 { !SIGN_MASK } else { SIG_MASK >> e };
+        let cleared = xi & clear_mask;
+        f64::from_bits(xi ^ cleared)
+    }
+
+    pub fn floor(x: f64) -> f64 {
+        let trunc = trunc(x);
+        if x < trunc {
+            trunc - 1.0
+        } else {
+            trunc
+        }
+    }
+
+    pub fn round(x: f64) -> f64 {
+        let trunc = trunc(x);
+        let fract = x - trunc;
+        if fract >= 0.5 {
+            trunc + 1.0
+        } else if fract <= -0.5 {
+            trunc - 1.0
+        } else {
+            trunc
+        }
+    }
+
+    pub fn ceil(x: f64) -> f64 {
+        let trunc = trunc(x);
+        if x > trunc {
+            trunc + 1.0
+        } else {
+            trunc
+        }
+    }
+
+    #[cfg(all(test, feature = "std"))]
+    mod tests {
+        #[track_caller]
+        fn assert_same(actual: f64, expected: f64) {
+            if expected.is_nan() {
+                assert!(actual.is_nan());
+            } else {
+                assert_eq!(actual.to_bits(), expected.to_bits());
+            }
+        }
+
+        #[test]
+        fn matches_std() {
+            let values = [
+                f64::NEG_INFINITY,
+                -((1_u64 << 53) as f64),
+                -1.5,
+                -0.5,
+                -f64::from_bits(1),
+                -0.0,
+                0.0,
+                f64::from_bits(1),
+                0.5,
+                1.5,
+                (1_u64 << 53) as f64,
+                f64::INFINITY,
+                f64::NAN,
+            ];
+            for x in values {
+                assert_same(super::trunc(x), x.trunc());
+                assert_same(super::floor(x), x.floor());
+                assert_same(super::round(x), x.round());
+                assert_same(super::ceil(x), x.ceil());
+            }
+        }
+    }
+}
+
 #[allow(clippy::unit_arg)]
 fn base_run<D: DataT>() -> Box<[Filter<RunPtr<D>>]>
 where
@@ -368,9 +479,9 @@ where
 {
     let f = || [Bind::Fun(())].into();
     Box::new([
-        ("floor", v(0), |cv| bome(cv.1.round(f64::floor))),
-        ("round", v(0), |cv| bome(cv.1.round(f64::round))),
-        ("ceil", v(0), |cv| bome(cv.1.round(f64::ceil))),
+        ("floor", v(0), |cv| bome(cv.1.round(floor))),
+        ("round", v(0), |cv| bome(cv.1.round(round))),
+        ("ceil", v(0), |cv| bome(cv.1.round(ceil))),
         ("utf8bytelength", v(0), |cv| {
             bome(cv.1.try_as_utf8_bytes().map(|s| (s.len() as isize).into()))
         }),
@@ -426,13 +537,13 @@ where
             unary(cv, |v, suf| v.strip_fix(&suf, <[u8]>::strip_suffix))
         }),
         ("trim", v(0), |cv| {
-            bome(cv.1.trim_utf8_with(ByteSlice::trim))
+            bome(cv.1.trim_utf8_with(|s| s.trim_with(char::is_whitespace)))
         }),
         ("ltrim", v(0), |cv| {
-            bome(cv.1.trim_utf8_with(ByteSlice::trim_start))
+            bome(cv.1.trim_utf8_with(|s| s.trim_start_with(char::is_whitespace)))
         }),
         ("rtrim", v(0), |cv| {
-            bome(cv.1.trim_utf8_with(ByteSlice::trim_end))
+            bome(cv.1.trim_utf8_with(|s| s.trim_end_with(char::is_whitespace)))
         }),
         ("escape_sh", v(0), |cv| {
             bome(
