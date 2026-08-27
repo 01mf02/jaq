@@ -8,26 +8,29 @@ body {
 
 .container {
     display: flex;
-    max-width: 1320px;
-    /* center */
-    margin: 0 auto; 
 }
 
 .container > * {
-    margin: 0 10px;
+    padding: 0 10px;
     overflow: auto;
 }
 
 nav {
-    flex: 1;
+    flex: 0 1 25ch;
     position: sticky;
     top: 0px;
     /* necessary for scrolling inside nav */
     max-height: 100vh;
+    background: #f8f8f8;
+    border-right: 1px solid #e7e7e7;
 }
 
 nav > ul {
     padding-left: 0px;
+}
+
+nav ul {
+    list-style-type: none;
 }
 
 nav a {
@@ -35,7 +38,9 @@ nav a {
 }
 
 section#main {
-    flex: 3;
+    flex: 0 1 75ch;
+    /* center */
+    margin: auto;
 }
 
 .run-example::before {
@@ -63,9 +68,13 @@ pre > .run-example {
     right: 0px;
 }
 
+pre > code {
+    display: block;
+}
+
 
 code {
-    background-color: #eee;
+    background-color: #f2f2f2;
     white-space: pre-wrap;
     font-variant-ligatures: none;
 }
