@@ -25,12 +25,21 @@ mod regex;
 #[cfg(feature = "time")]
 mod time;
 
-use alloc::string::{String, ToString};
+#[cfg(feature = "std")]
+use alloc::string::String;
+#[cfg(feature = "format")]
+use alloc::string::ToString;
 use alloc::{boxed::Box, vec::Vec};
-use bstr::{BStr, ByteSlice};
+#[cfg(feature = "log")]
+use bstr::BStr;
+use bstr::ByteSlice;
 use jaq_core::box_iter::{box_once, BoxIter};
 use jaq_core::native::{bome, run, unary, v, Filter, Fun};
-use jaq_core::{load, Bind, Cv, DataT, Error, Exn, RunPtr, ValR, ValT as _, ValX, ValXs};
+#[cfg(feature = "regex")]
+use jaq_core::Cv;
+#[cfg(any(feature = "regex", feature = "std"))]
+use jaq_core::ValT as _;
+use jaq_core::{load, Bind, DataT, Error, Exn, RunPtr, ValR, ValX, ValXs};
 
 /// Definitions of the standard library.
 pub fn defs() -> impl Iterator<Item = load::parse::Def<&'static str>> {
@@ -201,6 +210,7 @@ trait ValTx: ValT + Sized {
 
     /// If the value is interpreted as UTF-8 string,
     /// return its `str` representation.
+    #[cfg(any(feature = "regex", feature = "time"))]
     fn try_as_str(&self) -> Result<&str, Error<Self>> {
         self.try_as_utf8_bytes()
             .and_then(|s| core::str::from_utf8(s).map_err(Error::str))
