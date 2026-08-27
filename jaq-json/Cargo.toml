@@ -21,7 +21,7 @@ serde = ["serde_core"]
 jaq-core = { workspace = true }
 jaq-std  = { workspace = true }
 
-bstr = { version = "1", default-features = false, features = ["alloc"] }
+bstr = { version = "1.6", default-features = false, features = ["alloc", "unicode"] }
 bytes = { version = "1", default-features = false }
 foldhash = { version = "0.1", default-features = false }
 hifijson = { version = "0.5.0", default-features = false, features = ["alloc"] }

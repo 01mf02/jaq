@@ -537,13 +537,13 @@ where
             unary(cv, |v, suf| v.strip_fix(&suf, <[u8]>::strip_suffix))
         }),
         ("trim", v(0), |cv| {
-            bome(cv.1.trim_utf8_with(|s| s.trim_with(char::is_whitespace)))
+            bome(cv.1.trim_utf8_with(ByteSlice::trim))
         }),
         ("ltrim", v(0), |cv| {
-            bome(cv.1.trim_utf8_with(|s| s.trim_start_with(char::is_whitespace)))
+            bome(cv.1.trim_utf8_with(ByteSlice::trim_start))
         }),
         ("rtrim", v(0), |cv| {
-            bome(cv.1.trim_utf8_with(|s| s.trim_end_with(char::is_whitespace)))
+            bome(cv.1.trim_utf8_with(ByteSlice::trim_end))
         }),
         ("escape_sh", v(0), |cv| {
             bome(
