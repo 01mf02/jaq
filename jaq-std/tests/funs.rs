@@ -254,6 +254,7 @@ fn trim() {
     give(json!(" foo  "), "trim", json!("foo"));
     give(json!("  foo  "), "trim", json!("foo"));
     give(json!("foo  "), "trim", json!("foo"));
+    give(json!("\u{2003}foo\u{2003}"), "trim", json!("foo"));
     give(json!(" اَلْعَرَبِيَّةُ "), "trim", json!("اَلْعَرَبِيَّةُ"));
 }
 
@@ -266,6 +267,7 @@ fn ltrim() {
     give(json!(" foo  "), "ltrim", json!("foo  "));
     give(json!("  foo  "), "ltrim", json!("foo  "));
     give(json!("foo  "), "ltrim", json!("foo  "));
+    give(json!("\u{2003}foo\u{2003}"), "ltrim", json!("foo\u{2003}"));
     give(json!(" اَلْعَرَبِيَّةُ "), "ltrim", json!("اَلْعَرَبِيَّةُ "));
 }
 
@@ -278,5 +280,6 @@ fn rtrim() {
     give(json!("  foo "), "rtrim", json!("  foo"));
     give(json!("  foo  "), "rtrim", json!("  foo"));
     give(json!("  foo"), "rtrim", json!("  foo"));
+    give(json!("\u{2003}foo\u{2003}"), "rtrim", json!("\u{2003}foo"));
     give(json!(" اَلْعَرَبِيَّةُ "), "rtrim", json!(" اَلْعَرَبِيَّةُ"));
 }
