@@ -1,5 +1,6 @@
 # build jaq and get the path of jaq executable
 JAQ=$(shell cargo --quiet --config "target.'cfg(true)'.runner = 'echo'" run --release)
+JOTDOWN=jotdown
 FILES=intro.dj cli.dj corelang.dj stdlib.dj advanced.dj formats.dj examples.dj
 
 all: MANUAL.xhtml jaq.1 tests cli-tests broken-links
@@ -7,10 +8,10 @@ clean:
 	rm `cat .gitignore`
 
 body.xhtml: header.html $(FILES)
-	(echo '<body>' && cat header.html && cat $(FILES) | jotdown && echo '</body>') > $@
+	(echo '<body>' && cat header.html && cat $(FILES) | $(JOTDOWN) && echo '</body>') > $@
 
 %.xhtml: %.dj
-	(echo "<body>" && jotdown $< && echo "</body>") > $@
+	(echo "<body>" && $(JOTDOWN) $< && echo "</body>") > $@
 
 MANUAL.xhtml: manual.jq body.xhtml style.css template.xhtml
 	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
