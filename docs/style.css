@@ -33,6 +33,11 @@ nav ul {
     list-style-type: none;
 }
 
+/* TOC entries for h3 */
+nav ul ul ul {
+    display: none;    
+}
+
 nav a {
     text-decoration: none;
 }
