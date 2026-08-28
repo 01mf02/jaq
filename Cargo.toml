@@ -12,9 +12,9 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-jaq-core = { version = "3.1.0", path = "jaq-core", default-features = false }
-jaq-std  = { version = "3.0.2", path = "jaq-std" , default-features = false }
-jaq-json = { version = "2.0.2", path = "jaq-json", default-features = false }
+jaq-core = { version = "3.1.1", path = "jaq-core", default-features = false }
+jaq-std  = { version = "3.0.3", path = "jaq-std" , default-features = false }
+jaq-json = { version = "2.0.3", path = "jaq-json", default-features = false }
 jaq-fmts = { version = "0.1.1", path = "jaq-fmts", default-features = false }
 jaq-all  = { version = "0.3.0", path = "jaq-all" , default-features = false }
 
