@@ -18,26 +18,55 @@ fn ws_tk<L: Lex>(lexer: &mut L) -> Option<u8> {
     }
 }
 
-/// Parse error.
+/// Parse error with line and column information.
 #[derive(Debug)]
-pub struct Error(usize, hifijson::Error);
+pub struct Error {
+    line: usize,
+    column: usize,
+    inner: hifijson::Error,
+}
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "byte offset {}: {}", self.0, self.1)
+        write!(
+            f,
+            "at line {}, column {}: {}",
+            self.line, self.column, self.inner
+        )
     }
 }
 
 #[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
+/// Convert a byte offset in a slice to a (line, column) pair (both 1-based).
+/// Column counts Unicode characters, not bytes.
+fn byte_offset_to_position(slice: &[u8], offset: usize) -> (usize, usize) {
+    let before = &slice[..offset];
+    let line = before.iter().filter(|&&byte| byte == b'\n').count() + 1;
+    let last_newline = before.iter().rposition(|&byte| byte == b'\n');
+    let line_start = last_newline.map_or(before, |pos| &before[pos + 1..]);
+    // TODO: replace with `!byte.is_utf8_continuation()` once stable.
+    let column = line_start
+        .iter()
+        .filter(|&&byte| byte & 0xC0 != 0x80)
+        .count()
+        + 1;
+    (line, column)
+}
+
 /// Parse exactly one JSON value.
 pub fn parse_single(slice: &[u8]) -> Result<Val, Error> {
     let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
     let mut lexer = SliceLexer::new(slice);
-    lexer
-        .exactly_one(ws_tk, parse)
-        .map_err(|e| Error(offset(lexer.as_slice()), e))
+    lexer.exactly_one(ws_tk, parse).map_err(|inner| {
+        let (line, column) = byte_offset_to_position(slice, offset(lexer.as_slice()));
+        Error {
+            line,
+            column,
+            inner,
+        }
+    })
 }
 
 /// Parse a sequence of JSON values.
@@ -45,19 +74,68 @@ pub fn parse_many(slice: &[u8]) -> impl Iterator<Item = Result<Val, Error>> + '_
     let offset = |rest: &[u8]| rest.as_ptr() as usize - slice.as_ptr() as usize;
     let mut lexer = SliceLexer::new(slice);
     core::iter::from_fn(move || {
-        Some(parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|e| Error(offset(lexer.as_slice()), e)))
+        Some(parse(ws_tk(&mut lexer)?, &mut lexer).map_err(|inner| {
+            let (line, column) = byte_offset_to_position(slice, offset(lexer.as_slice()));
+            Error {
+                line,
+                column,
+                inner,
+            }
+        }))
     })
+}
+
+#[cfg(feature = "std")]
+/// Wrapper iterator that tracks line and column position as bytes flow through.
+struct PositionTracker<I> {
+    inner: I,
+    position: alloc::rc::Rc<core::cell::Cell<(usize, usize)>>,
+}
+
+#[cfg(feature = "std")]
+impl<I: Iterator<Item = io::Result<u8>>> Iterator for PositionTracker<I> {
+    type Item = io::Result<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.inner.next()?;
+        if let Ok(byte) = &result {
+            let (mut line, mut column) = self.position.get();
+            if *byte == b'\n' {
+                line += 1;
+                column = 0;
+            } else if *byte & 0xC0 != 0x80 {
+                // TODO: replace with `!byte.is_utf8_continuation()` once stable.
+                column += 1;
+            }
+            self.position.set((line, column));
+        }
+        Some(result)
+    }
 }
 
 #[cfg(feature = "std")]
 /// Read a sequence of JSON values.
 pub fn read_many<'a>(read: impl io::BufRead + 'a) -> impl Iterator<Item = io::Result<Val>> + 'a {
-    let invalid_data = |e| io::Error::new(io::ErrorKind::InvalidData, e);
-    let mut lexer = hifijson::IterLexer::new(read.bytes());
+    let invalid_data = |error| io::Error::new(io::ErrorKind::InvalidData, error);
+    let position = alloc::rc::Rc::new(core::cell::Cell::new((1usize, 0usize)));
+    let tracker = PositionTracker {
+        inner: read.bytes(),
+        position: alloc::rc::Rc::clone(&position),
+    };
+    let mut lexer = hifijson::IterLexer::new(tracker);
     core::iter::from_fn(move || {
-        let v = ws_tk(&mut lexer).map(|next| parse(next, &mut lexer).map_err(invalid_data));
-        // always return I/O error if present, regardless of the output value!
-        lexer.error.take().map(Err).or(v)
+        let value = ws_tk(&mut lexer).map(|next| {
+            parse(next, &mut lexer).map_err(|inner| {
+                let (line, column) = position.get();
+                invalid_data(Error {
+                    line,
+                    column,
+                    inner,
+                })
+            })
+        });
+        // Always return I/O error if present, regardless of the output value.
+        lexer.error.take().map(Err).or(value)
     })
 }
 
