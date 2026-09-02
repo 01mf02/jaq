@@ -49,6 +49,16 @@ section#main {
     margin: auto;
 }
 
+/* anchor links after headings */
+:is(h2, h3, h4) a {
+    margin-left: 0.4em;
+    opacity: 0;
+}
+:is(h2, h3, h4):hover a,
+:is(h2, h3, h4) a:focus {
+    opacity: 1;
+}
+
 .run-example::before {
     margin-left: 0.25em;
     content: "▶️";

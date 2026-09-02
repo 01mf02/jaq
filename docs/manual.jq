@@ -13,13 +13,15 @@ def sections:
 
 def li:
   {t: "li", c: [
-    {t: "a", a: {"href": "#" + .a.id}, c: .c[0].c},
+    {t: "a", a: {"href": "#" + .a.id}, c: .c[0].c[0]},
     {t: "ul", c: .c[1:] | map(li)}
   ]};
 
 def transform_section_headers:
   (.. | select(.t? == "section")) |= (
     .a.id       |= ascii_downcase |
+    # append anchor link
+    .c[1].c     += [{t: "a", a: {href: "#" + .a.id}, c: ["#"]}] |
     # transform h1 to h2, h2 to h3, ...
     .c[1].t[1:] |= (tonumber + 1 | tostring)
   );
