@@ -3,7 +3,7 @@ JAQ=$(shell cargo --quiet --config "target.'cfg(true)'.runner = 'echo'" run --re
 JOTDOWN=jotdown
 FILES=intro.dj cli.dj corelang.dj stdlib.dj advanced.dj formats.dj examples.dj
 
-all: MANUAL.xhtml jaq.1 tests cli-tests broken-links
+all: MANUAL.xhtml MANUAL.shl.xhtml jaq.1 tests cli-tests broken-links
 clean:
 	rm `cat .gitignore`
 
@@ -15,6 +15,15 @@ body.xhtml: header.html $(FILES)
 
 MANUAL.xhtml: manual.jq body.xhtml style.css template.xhtml
 	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
+
+jq-filters: MANUAL.xhtml
+	$(JAQ) --raw-output0 '.. | select(.t? == "code" and .a.lang == "jq").c[] | @htmld' $< > $@
+
+jq-asts: jq-filters
+	cargo run --example syn-highlight < $< > $@
+
+MANUAL.shl.xhtml: syn-highlight.jq MANUAL.xhtml jq-asts
+	$(JAQ) -f syn-highlight.jq --rawfile manual MANUAL.xhtml jq-asts --to xml > $@
 
 %.man: %.xhtml man.jq
 	$(JAQ) -f man.jq $< -j > $@

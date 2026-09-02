@@ -47,9 +47,11 @@ def transform_code:
      c: [],
     };
 
+  def code($lang): {t: "code", a: {$lang}, c: .};
+
   # get contents of all code tags without attributes
   (.. | select(is_test)) |= [
-    (.c[] |= (split($arrow) | .[0] + " ⟼ " + .[1])),
+    (.c[] |= (split($arrow) | [(.[0] | code("jq")), " ⟼ ", (.[1] | code("xjon"))])),
     (.c[] |   split($arrow) | .[0] | @htmld | play_link)
   ];
 

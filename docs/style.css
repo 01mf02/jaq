@@ -88,11 +88,23 @@ pre > code {
     display: block;
 }
 
-
 code {
     background-color: #f2f2f2;
     white-space: pre-wrap;
     font-variant-ligatures: none;
+}
+
+.string  { color: green; }
+.escape  { color: red; }
+.number  { color: darkorange; }
+.boolean { color: blue; }
+.null    { color: magenta; }
+.keyword { font-weight: bold; }
+.comment { color: gray; }
+
+.block:has(> :first-child:hover),
+.block:has(> :last-child:hover) {
+  color: red;
 }
 
 table {

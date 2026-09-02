@@ -1,5 +1,8 @@
 body.xhtml
 MANUAL.xhtml
+MANUAL.shl.xhtml
 *.man
 jaq.1
+jq-asts
+jq-filters
 shelltest
