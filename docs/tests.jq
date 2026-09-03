@@ -5,8 +5,4 @@
 @htmld |
 split("-->") |
 select(length > 1) |
-# remove comments
-.[0] |= gsub("#[^\n]*"; "") |
-# remove newlines
-.[ ] |= (gsub("\n"; "") | trim) |
-.[0], "null", .[1], ""
+{filter: .[0], output: .[1]}

@@ -3,6 +3,6 @@ MANUAL.xhtml
 MANUAL.shl.xhtml
 *.man
 jaq.1
-jq-asts
-jq-filters
+jq-asts.json
+tests.json
 shelltest
