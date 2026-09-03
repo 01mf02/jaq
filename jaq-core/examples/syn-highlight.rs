@@ -29,10 +29,7 @@ fn str(s: impl Into<String>) -> Val {
     Val::from(s.into())
 }
 
-fn obj<I>(fields: I) -> Val
-where
-    I: IntoIterator<Item = (&'static str, Val)>,
-{
+fn obj(fields: impl IntoIterator<Item = (&'static str, Val)>) -> Val {
     Val::obj(fields.into_iter().map(|(k, v)| (str(k), v)).collect())
 }
 
