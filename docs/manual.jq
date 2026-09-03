@@ -47,7 +47,12 @@ def transform_code:
      c: [],
     };
 
-  def code($lang): {t: "code", a: {$lang}, c: .};
+  def rec:
+      if isobject then {t: "span", a: {"class": .t}, c: .c | rec}
+    elif isarray then .[] |= rec
+    elif isstring then @html end;
+
+  def code($lang): {t: "code", a: {$lang}, c: $hl[0][$lang][. | @htmld] | rec};
 
   # get contents of all code tags without attributes
   (.. | select(is_test)) |= [

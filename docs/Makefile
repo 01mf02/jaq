@@ -3,7 +3,7 @@ JAQ=$(shell cargo --quiet --config "target.'cfg(true)'.runner = 'echo'" run --re
 JOTDOWN=jotdown
 FILES=intro.dj cli.dj corelang.dj stdlib.dj advanced.dj formats.dj examples.dj
 
-all: MANUAL.xhtml MANUAL.shl.xhtml jaq.1 tests cli-tests broken-links
+all: MANUAL.xhtml jaq.1 tests cli-tests broken-links
 clean:
 	rm `cat .gitignore`
 
@@ -13,14 +13,20 @@ body.xhtml: header.html $(FILES)
 %.xhtml: %.dj
 	(echo "<body>" && $(JOTDOWN) $< && echo "</body>") > $@
 
-MANUAL.xhtml: manual.jq body.xhtml style.css template.xhtml
-	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
+MANUAL.xhtml: manual.jq body.xhtml style.css hl.json template.xhtml
+	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css --slurpfile hl hl.json template.xhtml --to xml > $@
 
-jq-asts.json: tests.json
-	$(JAQ) --raw-output0 '.filter' $< | cargo run --example syn-highlight > $@
+hl.json: hl-jq.json hl-xjon.json
+	$(JAQ) -n --slurpfile hl_jq hl-jq.json --slurpfile hl_xjon hl-xjon.json \
+	   	'{"jq": $$hl_jq | add, "xjon": $$hl_xjon | add}' > $@
 
-MANUAL.shl.xhtml: syn-highlight.jq MANUAL.xhtml jq-asts.json
-	$(JAQ) -n -f syn-highlight.jq --rawfile manual MANUAL.xhtml jq-asts.json --to xml > $@
+hl-jq.json: tests.json
+	$(JAQ) --raw-output0 '.filter' $< | cargo run --example syn-highlight | \
+		$(JAQ) -n --slurpfile tests $< '$$tests[].filter | {(.): first(inputs)}' > $@
+
+hl-xjon.json: tests.json
+	$(JAQ) --raw-output0 '.output' $< | cargo run --example xjon-syn-highlight | \
+		$(JAQ) -n --slurpfile tests $< '$$tests[].output | {(.): first(inputs)}' > $@
 
 %.man: %.xhtml man.jq
 	$(JAQ) -f man.jq $< -j > $@
