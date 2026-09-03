@@ -109,7 +109,7 @@ fn highlight_token(token: Token<&str>) -> Val {
 
             out.push(quote());
 
-            span_many("string-block", out)
+            span_many("block", out)
         }
     }
 }
