@@ -104,7 +104,7 @@ code {
 
 .block:has(> :first-child:hover),
 .block:has(> :last-child:hover) {
-  color: red;
+    background: lavender;
 }
 
 table {
