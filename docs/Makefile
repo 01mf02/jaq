@@ -34,7 +34,7 @@ hl.json: snippets.json hl-jq.json hl-xjon.json
 jq-tests: snippets.json
 	$(JAQ) --to raw -f jq-tests.jq $< | $(JAQ) --run-tests
 
-# substitute `jaq` in command lines (starting with `# `) by $(JAQ)
+# substitute `jaq` in command lines (starting with `$ `) by $(JAQ)
 shell-tests: body.xhtml shelltest
 	$(JAQ) -j -f shell-tests.jq $< | sed '/^$ /s|jaq|$(JAQ)|g' | (cd .. && docs/shelltest)
 
