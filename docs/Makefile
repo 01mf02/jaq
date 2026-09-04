@@ -3,7 +3,7 @@ JAQ=$(shell cargo --quiet --config "target.'cfg(true)'.runner = 'echo'" run --re
 JOTDOWN=jotdown
 FILES=intro.dj cli.dj corelang.dj stdlib.dj advanced.dj formats.dj examples.dj
 
-all: MANUAL.xhtml jaq.1 tests cli-tests broken-links
+all: MANUAL.xhtml jaq.1 jq-tests shell-tests broken-links
 clean:
 	rm `cat .gitignore`
 
@@ -13,20 +13,8 @@ body.xhtml: header.html $(FILES)
 %.xhtml: %.dj
 	(echo "<body>" && $(JOTDOWN) $< && echo "</body>") > $@
 
-MANUAL.xhtml: manual.jq body.xhtml style.css hl.json template.xhtml
-	$(JAQ) -f manual.jq --rawfile body body.xhtml --rawfile style style.css --slurpfile hl hl.json template.xhtml --to xml > $@
-
-hl.json: hl-jq.json hl-xjon.json
-	$(JAQ) -n --slurpfile hl_jq hl-jq.json --slurpfile hl_xjon hl-xjon.json \
-	   	'{"jq": $$hl_jq | add, "xjon": $$hl_xjon | add}' > $@
-
-hl-jq.json: tests.json
-	$(JAQ) --raw-output0 '.filter' $< | cargo run --example syn-highlight | \
-		$(JAQ) -n --slurpfile tests $< '$$tests[].filter | {(.): first(inputs)}' > $@
-
-hl-xjon.json: tests.json
-	$(JAQ) --raw-output0 '.output' $< | cargo run --example xjon-syn-highlight | \
-		$(JAQ) -n --slurpfile tests $< '$$tests[].output | {(.): first(inputs)}' > $@
+MANUAL.xhtml: manual.jq body.xhtml style.css hl.json template.xhtml hl.json
+	$(JAQ) -L . -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
 
 %.man: %.xhtml man.jq
 	$(JAQ) -f man.jq $< -j > $@
@@ -34,15 +22,21 @@ hl-xjon.json: tests.json
 jaq.1: header.1 man-prologue.man body.man man-epilogue.man
 	cat $^ > $@
 
-tests.json: body.xhtml tests.jq
-	$(JAQ) -f tests.jq $< > $@
+snippets.json: body.xhtml snippets.jq
+	$(JAQ) -f snippets.jq $< > $@
 
-tests: tests.json
+hl-%.json: snippets.json
+	$(JAQ) --raw-output0 '.$*' $< | cargo run --example $*-syn-highlight > $@
+
+hl.json: snippets.json hl-jq.json hl-xjon.json
+	$(JAQ) -n -L . -f hl.jq $< > $@
+
+jq-tests: snippets.json
 	$(JAQ) --to raw -f jq-tests.jq $< | $(JAQ) --run-tests
 
 # substitute `jaq` in command lines (starting with `# `) by $(JAQ)
-cli-tests: body.xhtml shelltest
-	$(JAQ) -j -f cli-tests.jq $< | sed '/^$ /s|jaq|$(JAQ)|g' | (cd .. && docs/shelltest)
+shell-tests: body.xhtml shelltest
+	$(JAQ) -j -f shell-tests.jq $< | sed '/^$ /s|jaq|$(JAQ)|g' | (cd .. && docs/shelltest)
 
 broken-links: MANUAL.xhtml
 	$(JAQ) -s -f ../examples/broken-links.jq $<

@@ -4,6 +4,10 @@
 # - Make automatic heading identifiers lowercase
 # - Add playground links to documentation tests
 
+import "hl" as $hl_arr;
+reduce $hl_arr[] as {$lang, $code, $ast}
+  ({}; . * {($lang): {($code): $ast}}) as $hl |
+
 def sections:
   select(.t? == "section") |
   # remove whitespace
@@ -47,12 +51,12 @@ def transform_code:
      c: [],
     };
 
-  def rec:
-      if isobject then {t: "span", a: {"class": .t}, c: .c | rec}
-    elif isarray then .[] |= rec
+  def ast_to_html:
+      if isobject then {t: "span", a: {"class": .t}, c: .c | ast_to_html}
+    elif isarray then .[] |= ast_to_html
     elif isstring then @html end;
 
-  def code($lang): {t: "code", a: {$lang}, c: $hl[0][$lang][. | @htmld] | rec};
+  def code($lang): {t: "code", a: {$lang}, c: $hl[$lang][. | @htmld] | ast_to_html};
 
   # get contents of all code tags without attributes
   (.. | select(is_test)) |= [
