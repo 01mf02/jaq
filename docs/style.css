@@ -107,6 +107,9 @@ code {
     background: lavender;
 }
 
+.prompt  { color: #008080; }
+.command { color: maroon; }
+
 table {
     border: 1px solid;
 }

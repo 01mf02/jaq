@@ -1,31 +1,45 @@
-use std::io::{self, Read};
+use std::io::{self, BufRead, Read};
 
 fn main() -> io::Result<()> {
-    let stdin = io::read_to_string(io::stdin())?;
-    let tests = parse(stdin.lines());
     let mut passed = 0;
     let mut failed = 0;
-    for (cmd, out_exp) in tests {
-        let cmd = cmd.join("");
-        println!("Test: {cmd}");
-        let (mut reader, writer) = io::pipe()?;
-        let mut child = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .stdout(writer.try_clone()?)
-            .stderr(writer)
-            .spawn()?;
-        let mut out_rec = String::new();
-        reader.read_to_string(&mut out_rec)?;
-        // wait on the child to avoid zombies
-        let exit = child.wait()?;
-        if exit.success() && out_rec.lines().eq(out_exp.iter().map(|s| *s)) {
-            passed += 1;
-        } else {
-            eprintln!("Fail: expected {out_exp:?}, received {out_rec}");
-            failed += 1;
+
+    let highlight = std::env::args().skip(1).any(|arg| arg == "--highlight");
+
+    for tests in io::stdin().lock().split(b'\0') {
+        let tests = tests?;
+        let tests = core::str::from_utf8(&tests)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let tests = parse(tests.lines());
+
+        let mut first = true;
+        for test in tests {
+            if highlight {
+                if core::mem::take(&mut first) {
+                    print!("[")
+                } else {
+                    print!(",")
+                }
+                print_test(&test);
+                continue;
+            }
+
+            if run_test(&test)? {
+                passed += 1
+            } else {
+                failed += 1
+            };
+        }
+
+        if highlight {
+            println!("]");
         }
     }
+
+    if highlight {
+        return Ok(());
+    }
+
     let total = passed + failed;
     println!("{passed}/{total} tests passed");
     (failed == 0)
@@ -34,6 +48,39 @@ fn main() -> io::Result<()> {
 }
 
 type Test<S> = (Vec<S>, Vec<S>);
+
+fn print_test((cmd, out_exp): &Test<&str>) {
+    let tok = |typ, content| format!("{{\"t\": {typ:?}, \"c\": {content:?}}}");
+    let out_exp = out_exp.iter().map(|s| (*s).to_owned() + "\n");
+    print!(
+        "[{}, {}, {}]",
+        tok("prompt", "$ "),
+        tok("command", &(cmd.join("\\\n") + "\n")),
+        tok("output", &(out_exp.collect::<Vec<_>>().concat()))
+    );
+}
+
+fn run_test((cmd, out_exp): &Test<&str>) -> io::Result<bool> {
+    let cmd = cmd.join("");
+    println!("Test: {cmd}");
+    let (mut reader, writer) = io::pipe()?;
+    let mut child = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .stdout(writer.try_clone()?)
+        .stderr(writer)
+        .spawn()?;
+    let mut out_rec = String::new();
+    reader.read_to_string(&mut out_rec)?;
+    // wait on the child to avoid zombies
+    let exit = child.wait()?;
+    if exit.success() && out_rec.lines().eq(out_exp.iter().map(|s| *s)) {
+        Ok(true)
+    } else {
+        eprintln!("Fail: expected {out_exp:?}, received {out_rec}");
+        Ok(false)
+    }
+}
 
 fn parse<'a>(mut lines: impl Iterator<Item = &'a str>) -> impl Iterator<Item = Test<&'a str>> {
     let mut cmd = None;

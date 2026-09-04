@@ -25,18 +25,21 @@ jaq.1: header.1 man-prologue.man body.man man-epilogue.man
 snippets.json: body.xhtml snippets.jq
 	$(JAQ) -f snippets.jq $< > $@
 
-hl-%.json: snippets.json
-	$(JAQ) --raw-output0 '.$*' $< | cargo run --example $*-syn-highlight > $@
+hl-shell.json: snippets.json shelltest
+	$(JAQ) --raw-output0 '.shell // empty' $< | ./shelltest --highlight > $@
 
-hl.json: snippets.json hl-jq.json hl-xjon.json
+hl-%.json: snippets.json
+	$(JAQ) --raw-output0 '.$* // empty' $< | cargo run --example $*-syn-highlight > $@
+
+hl.json: snippets.json hl-jq.json hl-xjon.json hl-shell.json
 	$(JAQ) -n -L . -f hl.jq $< > $@
 
 jq-tests: snippets.json
 	$(JAQ) --to raw -f jq-tests.jq $< | $(JAQ) --run-tests
 
 # substitute `jaq` in command lines (starting with `$ `) by $(JAQ)
-shell-tests: body.xhtml shelltest
-	$(JAQ) -j -f shell-tests.jq $< | sed '/^$ /s|jaq|$(JAQ)|g' | (cd .. && docs/shelltest)
+shell-tests: snippets.json shelltest
+	$(JAQ) --raw-output0 '.shell // empty' $< | sed '/^$ /s|jaq|$(JAQ)|g' | (cd .. && docs/shelltest)
 
 broken-links: MANUAL.xhtml
 	$(JAQ) -s -f ../examples/broken-links.jq $<
