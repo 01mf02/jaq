@@ -101,6 +101,7 @@ code {
 .null    { color: magenta; }
 .keyword { font-weight: bold; }
 .comment { color: gray; }
+.variable { color: blueviolet; }
 
 .block:has(> :first-child:hover),
 .block:has(> :last-child:hover) {
