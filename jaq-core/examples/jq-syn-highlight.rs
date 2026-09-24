@@ -69,6 +69,9 @@ const KEYWORDS: &[&str] = &[
     "as", "and", "or", "if", "then", "else", "elif", "end", "try", "catch", "label", "break",
     "reduce", "foreach", "def",
 ];
+const CMP: &[&str] = &["<", ">", "<=", ">=", "==", "!="];
+const UPD: &[&str] = &["=", "|=", "+=", "-=", "*=", "/=", "%=", "//="];
+const MATH: &[&str] = &["+", "-", "*", "/", "%"];
 
 fn highlight_token(token: Token<&str>) -> Val {
     let Token(src, tok) = token;
@@ -81,6 +84,9 @@ fn highlight_token(token: Token<&str>) -> Val {
         Tok::Var => span("variable", src),
         Tok::Fmt => span("format", src),
         Tok::Num => span("number", src),
+        Tok::Sym if CMP.contains(&src) => span("compare", src),
+        Tok::Sym if UPD.contains(&src) => span("update", src),
+        Tok::Sym if MATH.contains(&src) => span("math", src),
         Tok::Sym => span("symbol", src),
         Tok::Block(tokens) => {
             let open = core::iter::once(span("symbol", &src[..1]));

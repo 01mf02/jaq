@@ -102,6 +102,7 @@ code {
 .keyword { font-weight: bold; }
 .comment { color: gray; }
 .variable { color: blueviolet; }
+.math, .compare, .update { color: tomato; }
 
 .block:has(> :first-child:hover),
 .block:has(> :last-child:hover) {
