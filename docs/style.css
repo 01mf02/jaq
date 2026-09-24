@@ -1,4 +1,5 @@
 html {
+    font-family: 'Helvetica', 'Arial', sans-serif;
     font-size: 135%;
 }
 
@@ -48,6 +49,16 @@ section#main {
     margin: auto;
 }
 
+/* anchor links after headings */
+:is(h2, h3, h4) a {
+    margin-left: 0.4em;
+    opacity: 0;
+}
+:is(h2, h3, h4):hover a,
+:is(h2, h3, h4) a:focus {
+    opacity: 1;
+}
+
 .run-example::before {
     margin-left: 0.25em;
     content: "▶️";
@@ -77,12 +88,29 @@ pre > code {
     display: block;
 }
 
-
 code {
     background-color: #f2f2f2;
     white-space: pre-wrap;
     font-variant-ligatures: none;
 }
+
+.string  { color: green; }
+.escape  { color: red; }
+.number  { color: darkorange; }
+.boolean { color: blue; }
+.null    { color: magenta; }
+.keyword { font-weight: bold; }
+.comment { color: gray; }
+.variable { color: blueviolet; }
+.math, .compare, .update { color: tomato; }
+
+.block:has(> :first-child:hover),
+.block:has(> :last-child:hover) {
+    background: lavender;
+}
+
+.prompt  { color: #008080; }
+.command { color: maroon; }
 
 table {
     border: 1px solid;

@@ -1707,12 +1707,7 @@ yields a corresponding text string.
   "c": ["Hello HTML!"]
 }]}
 ] | toxml -->
-"<?xml version=\"1.0\"?>
-<html>
-<body xmlns=\"http://www.w3.org/1999/xhtml\">
-Hello HTML!
-</body>
-</html>"
+"<?xml version=\"1.0\"?><html><body xmlns=\"http://www.w3.org/1999/xhtml\">Hello HTML!</body></html>"
 ```
 
 ### `fromcsv`, `tocsv`
