@@ -13,7 +13,7 @@ body.xhtml: header.html $(FILES)
 %.xhtml: %.dj
 	(echo "<body>" && $(JOTDOWN) $< && echo "</body>") > $@
 
-MANUAL.xhtml: manual.jq body.xhtml style.css hl.json template.xhtml hl.json
+MANUAL.xhtml: manual.jq body.xhtml style.css template.xhtml hl.json
 	$(JAQ) -L . -f manual.jq --rawfile body body.xhtml --rawfile style style.css template.xhtml --to xml > $@
 
 %.man: %.xhtml man.jq
@@ -28,13 +28,15 @@ snippets.json: body.xhtml snippets.jq
 hl-shell.json: snippets.json shelltest
 	$(JAQ) --raw-output0 '.shell // empty' $< | ./shelltest --highlight > $@
 
+# used for jq and xjon
 hl-%.json: snippets.json
 	$(JAQ) --raw-output0 '.$* // empty' $< | cargo run --example $*-syn-highlight > $@
 
-hl.json: snippets.json hl-jq.json hl-xjon.json hl-shell.json
+# ASTs for all highlighted languages
+hl.json: snippets.json hl.jq hl-jq.json hl-xjon.json hl-shell.json
 	$(JAQ) -n -L . -f hl.jq $< > $@
 
-jq-tests: snippets.json
+jq-tests: snippets.json jq-tests.jq
 	$(JAQ) --to raw -f jq-tests.jq $< | $(JAQ) --run-tests
 
 # substitute `jaq` in command lines (starting with `$ `) by $(JAQ)
