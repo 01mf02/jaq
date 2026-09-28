@@ -511,14 +511,14 @@ impl Id {
                 bind_run(pat, r, cv, y, |f, cv| f.run(cv))
             }),
             Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.run(cv))),
-            Ast::Alt(l, r) => {
-                let mut l = l
-                    .run(cv.clone())
-                    .filter(|v| v.as_ref().map_or(true, ValT::as_bool));
-                match l.next() {
-                    Some(head) => Box::new(once(head).chain(l)),
-                    None => r.run(cv),
-                }
+            Ast::Alt(init, last) => {
+                let init = init.iter().find_map(|l| {
+                    let mut l = l
+                        .run(cv.clone())
+                        .filter(|v| v.as_ref().map_or(true, ValT::as_bool));
+                    Some(Box::new(once(l.next()?).chain(l)) as _)
+                });
+                init.unwrap_or_else(|| last.run(cv))
             }
             Ast::Ite(if_, then_, else_) => pipe(if_, cv, move |cv, v| {
                 if v.as_bool() { then_ } else { else_ }.run(cv)
@@ -622,11 +622,12 @@ impl Id {
                 })
             }
             Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.paths(cv))),
-            Ast::Alt(l, r) => {
-                let any_true = l
-                    .run(proj_cv(&cv))
-                    .any(|v| v.as_ref().map_or(true, ValT::as_bool));
-                if any_true { l } else { r }.paths(cv)
+            Ast::Alt(init, last) => {
+                let init = init.iter().find(|l| {
+                    l.run(proj_cv(&cv))
+                        .any(|v| v.as_ref().map_or(true, ValT::as_bool))
+                });
+                init.unwrap_or(last).paths(cv)
             }
             Ast::Ite(if_, then_, else_) => {
                 flat_map_then_with(if_.run(proj_cv(&cv)), cv, move |v, cv| {
@@ -720,9 +721,11 @@ impl Id {
             Ast::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
             }),
-            Ast::Alt(l, r) => {
-                let some_true = l.run(cv.clone()).any(|y| y.map_or(true, |y| y.as_bool()));
-                if some_true { l } else { r }.update(cv, f)
+            Ast::Alt(init, last) => {
+                let init = init
+                    .iter()
+                    .find(|l| l.run(cv.clone()).any(|y| y.map_or(true, |y| y.as_bool())));
+                init.unwrap_or(last).update(cv, f)
             }
             Ast::Fold(xs, pat, init, update, fold_type) => {
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, cv.clone(), pat));

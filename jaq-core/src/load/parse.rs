@@ -104,6 +104,8 @@ pub enum Term<S> {
     BinOp(Box<Self>, BinaryOp<S>, Box<Self>),
     /// Concatenation, e.g. `a, b, c, d`
     Concat(Vec<Self>),
+    /// Alternation, e.g. `f // g`
+    Alt(Vec<Self>, Box<Self>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
@@ -890,7 +892,12 @@ impl<S> prec_climb::Expr<BinaryOp<S>> for Term<S> {
                 lhs.push(rhs);
                 Self::Concat(lhs)
             }
+            (Self::Alt(mut init, last), BinaryOp::Alt) => {
+                init.push(*last);
+                Self::Alt(init, Box::new(rhs))
+            }
             (lhs, BinaryOp::Comma) => Self::Concat(Vec::from([lhs, rhs])),
+            (lhs, BinaryOp::Alt) => Self::Alt(Vec::from([lhs]), Box::new(rhs)),
             (lhs, op) => Self::BinOp(Box::new(lhs), op, Box::new(rhs)),
         }
     }
