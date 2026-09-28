@@ -116,8 +116,9 @@ pub(crate) enum Term<T = TermId> {
     /// Variable binding (`f as $x | g`) if identifier (`x`) is given, otherwise
     /// application (`f | g`)
     Pipe(T, Option<Pattern<T>>, T),
+
     /// Concatenation (`f, g`)
-    Comma(T, T),
+    Concat(Box<[T]>),
     /// Assignment (`f = g`)
     Assign(T, T),
     /// Update-assignment (`f |= g`)
@@ -696,14 +697,18 @@ impl<'s, F> Compiler<&'s str, F> {
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
+            Concat(f) => {
+                let (f, tr): (Vec<_>, Vec<_>) = f.into_iter().map(|f| self.iterm_tr(f, tr)).unzip();
+                let tr = tr.iter().fold(Tr::default(), |mut union, tr| {
+                    union.extend(tr);
+                    union
+                });
+                return (Term::Concat(f.into()), tr);
+            }
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
                 let (l, (r, tr_)) = match op {
-                    Comma => {
-                        let (l, trl) = self.iterm_tr(*l, tr);
-                        let (r, trr) = self.iterm_tr(*r, tr);
-                        (l, (r, trl.union(&trr).copied().collect()))
-                    }
+                    Comma => panic!(),
                     Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
                     Pipe(ref pat) => {
                         let l = self.iterm(*l);
@@ -714,7 +719,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 };
                 let t = match op {
                     Pipe(pat) => Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r),
-                    Comma => Term::Comma(l, r),
+                    Comma => panic!(),
                     Math(op) => Term::Math(l, op, r),
                     Assign => Term::Assign(l, r),
                     Update => Term::Update(l, r),
