@@ -100,8 +100,9 @@ pub enum Term<S> {
     /// Negation
     Neg(Box<Self>),
 
-    /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
+    /// Binary operation, e.g. `1 + 2` or `3 * 4`
     BinOp(Box<Self>, BinaryOp<S>, Box<Self>),
+    /// Concatenation, e.g. `a, b, c, d`
     Concat(Vec<Self>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
