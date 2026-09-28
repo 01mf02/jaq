@@ -512,10 +512,9 @@ impl Id {
             }),
             Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.run(cv))),
             Ast::Alt(init, last) => {
+                let found = |v: &ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
                 let init = init.iter().find_map(|l| {
-                    let mut l = l
-                        .run(cv.clone())
-                        .filter(|v| v.as_ref().map_or(true, ValT::as_bool));
+                    let mut l = l.run(cv.clone()).filter(found);
                     Some(Box::new(once(l.next()?).chain(l)) as _)
                 });
                 init.unwrap_or_else(|| last.run(cv))
@@ -623,10 +622,8 @@ impl Id {
             }
             Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.paths(cv))),
             Ast::Alt(init, last) => {
-                let init = init.iter().find(|l| {
-                    l.run(proj_cv(&cv))
-                        .any(|v| v.as_ref().map_or(true, ValT::as_bool))
-                });
+                let found = |v: ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
+                let init = init.iter().find(|l| l.run(proj_cv(&cv)).any(found));
                 init.unwrap_or(last).paths(cv)
             }
             Ast::Ite(if_, then_, else_) => {
@@ -722,9 +719,8 @@ impl Id {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
             }),
             Ast::Alt(init, last) => {
-                let init = init
-                    .iter()
-                    .find(|l| l.run(cv.clone()).any(|y| y.map_or(true, |y| y.as_bool())));
+                let found = |v: ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
+                let init = init.iter().find(|l| l.run(cv.clone()).any(found));
                 init.unwrap_or(last).update(cv, f)
             }
             Ast::Fold(xs, pat, init, update, fold_type) => {
