@@ -713,8 +713,7 @@ impl<'s, F> Compiler<&'s str, F> {
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
                 let (l, (r, tr_)) = match op {
-                    Comma => panic!(),
-                    Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
+                    Comma | Alt => panic!(),
                     Pipe(ref pat) => {
                         let l = self.iterm(*l);
                         let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
@@ -724,7 +723,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 };
                 let t = match op {
                     Pipe(pat) => Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r),
-                    Comma => panic!(),
+                    Comma | Alt => panic!(),
                     Math(op) => Term::Math(l, op, r),
                     Assign => Term::Assign(l, r),
                     Update => Term::Update(l, r),
@@ -732,7 +731,6 @@ impl<'s, F> Compiler<&'s str, F> {
                     Cmp(op) => Term::Cmp(l, op, r),
                     Or => Term::Logic(l, true, r),
                     And => Term::Logic(l, false, r),
-                    Alt => panic!(),
                     UpdateAlt => Term::UpdateAlt(l, r),
                 };
                 return (t, tr_);
