@@ -102,6 +102,7 @@ pub enum Term<S> {
 
     /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
     BinOp(Box<Self>, BinaryOp<S>, Box<Self>),
+    Concat(Vec<Self>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
@@ -883,6 +884,13 @@ impl<S> prec_climb::Op for BinaryOp<S> {
 
 impl<S> prec_climb::Expr<BinaryOp<S>> for Term<S> {
     fn from_op(lhs: Self, op: BinaryOp<S>, rhs: Self) -> Self {
-        Self::BinOp(Box::new(lhs), op, Box::new(rhs))
+        match (lhs, op) {
+            (Self::Concat(mut lhs), BinaryOp::Comma) => {
+                lhs.push(rhs);
+                Self::Concat(lhs)
+            }
+            (lhs, BinaryOp::Comma) => Self::Concat(Vec::from([lhs, rhs])),
+            (lhs, op) => Self::BinOp(Box::new(lhs), op, Box::new(rhs)),
+        }
     }
 }

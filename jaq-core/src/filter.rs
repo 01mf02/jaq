@@ -308,6 +308,22 @@ fn cartesian<'a, D: DataT>(l: &'a Id, r: &'a Id, cv: Cv<'a, D>) -> Pairs<'a, Val
     })
 }
 
+fn concat_update<'a, D: DataT>(
+    fs: &'a [Id],
+    cv: Cv<'a, D>,
+    f: BoxUpdate<'a, D::V<'a>>,
+) -> ValXs<'a, D::V<'a>> {
+    match fs.split_first() {
+        None => box_once(Ok(cv.1)),
+        Some((l, [])) => l.update(cv, f),
+        Some((l, r)) => flat_map_then_with(
+            l.update((cv.0.clone(), cv.1), f.clone()),
+            (cv.0, f),
+            move |v, (ctx, f)| concat_update(r, (ctx, v), f),
+        ),
+    }
+}
+
 fn fold_update<'a, D: DataT>(
     fold_type: &'a Fold<Id>,
     path: &'a Id,
@@ -382,16 +398,21 @@ where
     Box::new(fold(xs, init, f, |_| (), |_, _| None, Some))
 }
 
-fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
-    core::iter::once_with(f).flatten()
-}
+fn zip_with_cloned<T, U: Clone>(mut xs: &[T], y: U) -> impl Iterator<Item = (&T, U)> {
+    let mut y = Some(y);
 
-#[test]
-fn lazy_is_lazy() {
-    let f = || panic!();
-    let mut iter = core::iter::once(0).chain(lazy(|| box_once(f())));
-    assert_eq!(iter.size_hint(), (1, None));
-    assert_eq!(iter.next(), Some(0));
+    std::iter::from_fn(move || {
+        let (x, rest) = xs.split_first()?;
+        xs = rest;
+
+        let y = if rest.is_empty() {
+            y.take()?
+        } else {
+            y.as_ref()?.clone()
+        };
+
+        Some((x, y))
+    })
 }
 
 /// Runs `def recurse(f): ., (f? | recurse(f)); v | recurse(f)`.
@@ -490,7 +511,7 @@ impl Id {
             Ast::Pipe(l, Some(pat), r) => pipe(l, cv, move |cv, y| {
                 bind_run(pat, r, cv, y, |f, cv| f.run(cv))
             }),
-            Ast::Comma(l, r) => Box::new(l.run(cv.clone()).chain(lazy(|| r.run(cv)))),
+            Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.run(cv))),
             Ast::Alt(l, r) => {
                 let mut l = l
                     .run(cv.clone())
@@ -601,7 +622,7 @@ impl Id {
                     bind_run(pat, r, cv, y, |f, cv| f.paths(cv))
                 })
             }
-            Ast::Comma(l, r) => Box::new(l.paths(cv.clone()).chain(lazy(|| r.paths(cv)))),
+            Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.paths(cv))),
             Ast::Alt(l, r) => {
                 let any_true = l
                     .run(proj_cv(&cv))
@@ -696,11 +717,7 @@ impl Id {
                 cv.1,
                 move |ctx, v| r.update((ctx, v), f.clone()),
             ),
-            Ast::Comma(l, r) => flat_map_then_with(
-                l.update((cv.0.clone(), cv.1), f.clone()),
-                (cv.0, f),
-                move |v, (ctx, f)| r.update((ctx, v), f),
-            ),
+            Ast::Concat(fs) => concat_update(fs, cv, f),
             Ast::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
             }),

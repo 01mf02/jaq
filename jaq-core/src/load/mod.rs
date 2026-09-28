@@ -215,7 +215,7 @@ impl<S: PartialEq> Term<S> {
 
     fn unconcat(&self) -> Box<dyn Iterator<Item = &Self> + '_> {
         match self {
-            Self::BinOp(l, parse::BinaryOp::Comma, r) => Box::new(l.unconcat().chain(r.unconcat())),
+            Self::Concat(xs) => Box::new(xs.iter().flat_map(|x| x.unconcat())),
             _ => Box::new(core::iter::once(self)),
         }
     }
