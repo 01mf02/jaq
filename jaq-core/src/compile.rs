@@ -134,7 +134,7 @@ pub(crate) enum Term<T = TermId> {
     /// Comparison operation (`f < g`, `f <= g`, `f > g`, `f >= g`, `f == g`, `f != g`)
     Cmp(T, ops::Cmp, T),
     /// Alternation (`f // g`)
-    Alt(T, T),
+    Alt(Box<[T]>, T),
     /// Try-catch (`try f catch g`)
     TryCatch(T, T),
     /// If-then-else (`if f then g else h end`)
@@ -705,6 +705,11 @@ impl<'s, F> Compiler<&'s str, F> {
                 });
                 return (Term::Concat(f.into()), tr);
             }
+            Alt(init, last) => {
+                let init = init.into_iter().map(|f| self.iterm(f)).collect();
+                let (last, tr_) = self.iterm_tr(*last, tr);
+                return (Term::Alt(init, last), tr_);
+            }
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
                 let (l, (r, tr_)) = match op {
@@ -727,7 +732,7 @@ impl<'s, F> Compiler<&'s str, F> {
                     Cmp(op) => Term::Cmp(l, op, r),
                     Or => Term::Logic(l, true, r),
                     And => Term::Logic(l, false, r),
-                    Alt => Term::Alt(l, r),
+                    Alt => panic!(),
                     UpdateAlt => Term::UpdateAlt(l, r),
                 };
                 return (t, tr_);
