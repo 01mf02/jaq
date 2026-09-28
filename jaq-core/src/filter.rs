@@ -400,8 +400,7 @@ where
 
 fn zip_with_cloned<T, U: Clone>(mut xs: &[T], y: U) -> impl Iterator<Item = (&T, U)> {
     let mut y = Some(y);
-
-    std::iter::from_fn(move || {
+    core::iter::from_fn(move || {
         let (x, rest) = xs.split_first()?;
         xs = rest;
 
