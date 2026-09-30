@@ -266,6 +266,49 @@ fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<'a, T, V>> + 'a>(
     }))
 }
 
+fn bla<'a, D: DataT, T: Clone + 'a>(
+    mut fs: &'a [(Id, Option<Pattern<Id>>)],
+    last: &'a Id,
+    mut cv: Cv<'a, D, T>,
+    run: IdRunFn<'a, D, T>,
+    proj: fn(&T) -> D::V<'a>,
+) -> ValXs<'a, T, D::V<'a>> {
+    use crate::box_iter::then;
+    //std::dbg!(fs.len());
+    while let Some(((f, pat), rest)) = fs.split_first() {
+        fs = rest;
+        if let Some(pat) = pat {
+            //std::dbg!("pat");
+            let cv_ = (cv.0, proj(&cv.1));
+            let mut ctxs = run_and_bind(f, cv_, pat);
+            if let Some(ctx) = box_iter::next_if_one(&mut ctxs) {
+                //std::dbg!("inline");
+                cv.0 = match ctx {
+                    Ok(ctx) => ctx,
+                    Err(e) => return box_once(Err(e)),
+                };
+            } else {
+                let f = move |r| then(r, |ctx| bla(fs, last, (ctx, cv.1.clone()), run, proj));
+                return Box::new(ctxs.flat_map(f));
+            }
+        } else {
+            //std::dbg!("normal");
+            let mut ys = run(f, (cv.0.clone(), cv.1));
+            if let Some(y) = box_iter::next_if_one(&mut ys) {
+                //std::dbg!("inline");
+                cv.1 = match y {
+                    Ok(y) => y,
+                    e => return box_once(e),
+                };
+            } else {
+                let f = move |r| then(r, |y| bla(fs, last, (cv.0.clone(), y), run, proj));
+                return Box::new(ys.flat_map(f));
+            }
+        }
+    }
+    run(last, cv)
+}
+
 fn fold_run<'a, D: DataT, T: Clone + 'a>(
     xs: impl Iterator<Item = ValX<'a, Ctx<'a, D>, D::V<'a>>> + Clone + 'a,
     cv: Cv<'a, D, T>,
@@ -510,6 +553,7 @@ impl Id {
             Ast::Pipe(l, Some(pat), r) => pipe(l, cv, move |cv, y| {
                 bind_run(pat, r, cv, y, |f, cv| f.run(cv))
             }),
+            Ast::Pipe2(init, last) => bla(init, last, cv, |f, cv| f.run(cv), Clone::clone),
             Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.run(cv))),
             Ast::Alt(init, last) => {
                 let found = |v: &ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
@@ -620,6 +664,7 @@ impl Id {
                     bind_run(pat, r, cv, y, |f, cv| f.paths(cv))
                 })
             }
+            Ast::Pipe2(init, last) => bla(init, last, cv, |f, cv| f.paths(cv), proj_val),
             Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.paths(cv))),
             Ast::Alt(init, last) => {
                 let found = |v: ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
@@ -714,6 +759,7 @@ impl Id {
                 cv.1,
                 move |ctx, v| r.update((ctx, v), f.clone()),
             ),
+            Ast::Pipe2(init, last) => todo!(),
             Ast::Concat(fs) => concat_update(fs, cv, f),
             Ast::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())

@@ -117,6 +117,8 @@ pub(crate) enum Term<T = TermId> {
     /// application (`f | g`)
     Pipe(T, Option<Pattern<T>>, T),
 
+    Pipe2(Box<[(T, Option<Pattern<T>>)]>, T),
+
     /// Concatenation (`f, g`)
     Concat(Box<[T]>),
     /// Assignment (`f = g`)
@@ -696,6 +698,24 @@ impl<'s, F> Compiler<&'s str, F> {
                     }
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
+            }
+            Pipe(init, last) => {
+                let mut tgt = Vec::new();
+                let mut all_vars = Vec::new();
+                for (f, pat) in init.into_iter().rev() {
+                    let new_vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
+                    tgt.push((self.iterm(f), pat.map(|pat| self.pattern(pat))));
+                    all_vars.extend(new_vars.clone());
+                    new_vars
+                        .iter()
+                        .for_each(|v| self.locals.vars.push(Bind::Var(v)));
+                }
+                let (last, tr_) = self.iterm_tr(*last, tr);
+                all_vars
+                    .iter()
+                    .rev()
+                    .for_each(|v| self.locals.vars.pop(&Bind::Var(v)));
+                return (Term::Pipe2(tgt.into(), last), tr_);
             }
             Concat(f) => {
                 let (f, tr): (Vec<_>, Vec<_>) = f.into_iter().map(|f| self.iterm_tr(f, tr)).unzip();
