@@ -101,11 +101,7 @@ pub enum Term<S> {
     Neg(Box<Self>),
 
     /// Binary operation, e.g. `1 + 2` or `3 * 4`
-    BinOp(Box<Self>, BinaryOp<S>, Box<Self>),
-    /// Concatenation, e.g. `a, b, c, d`
-    Concat(Vec<Self>),
-    /// Alternation, e.g. `f // g`
-    Alt(Vec<Self>, Box<Self>),
+    BinOp(Box<Self>, Vec<(BinaryOp<S>, Self)>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
@@ -193,11 +189,27 @@ impl<S> Term<S> {
         // `{}[]`
         Term::Path(obj.into(), Path(Vec::from([path])))
     }
+}
 
+pub(crate) enum BinTree<S> {
+    Leaf(Term<S>),
+    Concat(Vec<Self>),
+    Alt(Vec<Self>, Box<Self>),
+    Pipe(Box<Self>, Option<Pattern<S>>, Box<Self>),
+    Logic(Box<Self>, bool, Box<Self>),
+    Math(Box<Self>, ops::Math, Box<Self>),
+    Cmp(Box<Self>, ops::Cmp, Box<Self>),
+    Assign(Box<Self>, Box<Self>),
+    Update(Box<Self>, Box<Self>),
+    UpdateMath(Box<Self>, ops::Math, Box<Self>),
+    UpdateAlt(Box<Self>, Box<Self>),
+}
+
+impl<S> BinTree<S> {
     /// Perform precedence climbing of a term followed by operator-term pairs.
     ///
     /// Ensures that `... as $x | ...` is handled like `... as $x | (...)`.
-    fn climb(self, tail: &mut impl Iterator<Item = (BinaryOp<S>, Self)>) -> Self {
+    pub(crate) fn climb(self, tail: &mut impl Iterator<Item = (BinaryOp<S>, Self)>) -> Self {
         let tail = core::iter::from_fn(|| {
             tail.next().map(|(op, tm)| match op {
                 BinaryOp::Pipe(Some(_)) => (op, tm.climb(tail)),
@@ -466,7 +478,11 @@ impl<'s, 't> Parser<'s, 't> {
         while let Some(op) = self.op(with_comma)? {
             tail.push((op, self.atom()?))
         }
-        Ok(head.climb(&mut tail.into_iter()))
+        Ok(if tail.is_empty() {
+            head
+        } else {
+            Term::BinOp(Box::new(head), tail)
+        })
     }
 
     /// Parse an atomic term.
@@ -885,7 +901,7 @@ impl<S> prec_climb::Op for BinaryOp<S> {
     }
 }
 
-impl<S> prec_climb::Expr<BinaryOp<S>> for Term<S> {
+impl<S> prec_climb::Expr<BinaryOp<S>> for BinTree<S> {
     fn from_op(lhs: Self, op: BinaryOp<S>, rhs: Self) -> Self {
         match (lhs, op) {
             (Self::Concat(mut lhs), BinaryOp::Comma) => {
@@ -898,7 +914,15 @@ impl<S> prec_climb::Expr<BinaryOp<S>> for Term<S> {
             }
             (lhs, BinaryOp::Comma) => Self::Concat(Vec::from([lhs, rhs])),
             (lhs, BinaryOp::Alt) => Self::Alt(Vec::from([lhs]), Box::new(rhs)),
-            (lhs, op) => Self::BinOp(Box::new(lhs), op, Box::new(rhs)),
+            (lhs, BinaryOp::Pipe(pat)) => Self::Pipe(Box::new(lhs), pat, Box::new(rhs)),
+            (lhs, BinaryOp::Or) => Self::Logic(Box::new(lhs), true, Box::new(rhs)),
+            (lhs, BinaryOp::And) => Self::Logic(Box::new(lhs), false, Box::new(rhs)),
+            (lhs, BinaryOp::Math(op)) => Self::Math(Box::new(lhs), op, Box::new(rhs)),
+            (lhs, BinaryOp::Cmp(op)) => Self::Cmp(Box::new(lhs), op, Box::new(rhs)),
+            (lhs, BinaryOp::Assign) => Self::Assign(Box::new(lhs), Box::new(rhs)),
+            (lhs, BinaryOp::Update) => Self::Update(Box::new(lhs), Box::new(rhs)),
+            (lhs, BinaryOp::UpdateMath(op)) => Self::UpdateMath(Box::new(lhs), op, Box::new(rhs)),
+            (lhs, BinaryOp::UpdateAlt) => Self::UpdateAlt(Box::new(lhs), Box::new(rhs)),
         }
     }
 }
