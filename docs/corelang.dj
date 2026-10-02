@@ -1190,7 +1190,7 @@ For example:
 ```
 def iter_map(f): .[] | f;
 def double: .+.;
-3 as $threshold  |
+3 as $threshold |
 label $lbl |
 [1, 2, 3] | iter_map(if . < $threshold then double else break $lbl end) -->
  2  4
