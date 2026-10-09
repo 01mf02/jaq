@@ -427,6 +427,7 @@ impl<'a, T, U: Clone> Iterator for ZipWithCloned<'a, T, U> {
     }
 }
 
+/// More efficient version of `xs.iter().zip(core::iter::repeat_n(y, xs.len()))`.
 fn zip_with_cloned<T, U: Clone>(xs: &[T], y: U) -> impl Iterator<Item = (&T, U)> {
     ZipWithCloned { xs, y: Some(y) }
 }
