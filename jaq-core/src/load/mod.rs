@@ -214,9 +214,11 @@ impl<S: PartialEq> Term<S> {
     }
 
     fn unconcat(&self) -> Box<dyn Iterator<Item = &Self> + '_> {
+        use core::iter::once;
         match self {
-            Self::BinOp(l, parse::BinaryOp::Comma, r) => Box::new(l.unconcat().chain(r.unconcat())),
-            _ => Box::new(core::iter::once(self)),
+            // TODO: this accepts any sequence of operators! only accept commas?
+            Self::BinOp(head, tail) => Box::new(once(&**head).chain(tail.iter().map(|(_op, t)| t))),
+            _ => Box::new(once(self)),
         }
     }
 }
