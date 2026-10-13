@@ -84,6 +84,13 @@ fn logic() {
     give(tf, "[.[] or .[]]", json!([true, true, false]));
 }
 
+// Check whether the right-hand side of concatenation receives an uncloned value.
+yields!(
+    concat_uncloned_right,
+    "reduce range(100000) as $x ([]; empty, . + [$x])",
+    (0..100_000).collect::<Vec<_>>()
+);
+
 #[test]
 fn alt() {
     give(json!([]), ".[] // 0", json!(0));
