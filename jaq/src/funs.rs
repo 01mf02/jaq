@@ -31,13 +31,16 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
 }
 
 fn eval(runner: &Runner, code: String, input: Val) -> Result<(), Error> {
-    let (ctx, filter) =
-        filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
-    let ctx = Vars::new(ctx);
+    let var_val = [("!input_filename".to_string(), Val::Null)];
+    let (var_names, mut vars): (Vec<String>, Vec<Val>) = var_val.into_iter().unzip();
+    let (var_vals, filter) =
+        filter::parse_compile(&"<repl>".into(), &code, &var_names, &[]).map_err(Error::Report)?;
+    vars.extend(var_vals);
+    let vars = Vars::new(vars);
     let inputs = core::iter::once(Ok(input));
     let writer = &runner.writer;
     with_stdout(&mut std::io::stdout(), |out| {
-        run(runner, &filter, ctx, inputs, |v| write(out, writer, &v))
+        run(runner, &filter, vars, inputs, |v| write(out, writer, &v))
     })?;
     Ok(())
 }
