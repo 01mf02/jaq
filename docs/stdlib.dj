@@ -2000,9 +2000,15 @@ For example:
 The filter `scan` yields all parts of the input that match the regular expression.
 For example:
 
-- `"v2.0, v3.0" | scan("v[0-9]+\\.[0-9]+"     ) --> "v2.0"`
-- `"v2.0, v3.0" | scan("v[0-9]+\\.[0-9]+"; "g") --> "v2.0" "v3.0"`
-- `"V2.0"       | scan("v[0-9]+\\.[0-9]+") -->` (no output)
+- `"V2.0"       | scan("v[0-9]+\\.[0-9]+"     ) -->` (no output)
+- `"V2.0"       | scan("v[0-9]+\\.[0-9]+"; "i") --> "V2.0"`
+- `"v2.0, v3.0" | scan("v[0-9]+\\.[0-9]+"     ) --> "v2.0" "v3.0"`
+
+If the regex contains capture groups, then
+for each part of the input that matches the regular expression,
+`scan` yields an array containing the parts matched by capture groups:
+
+- `"v2.0, v3.0" | scan("v([0-9]+)\\.([0-9]+)" ) --> ["2", "0"] ["3", "0"]`
 
 ### `match`
 
