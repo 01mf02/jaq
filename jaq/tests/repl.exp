@@ -1,0 +1,76 @@
+#!/usr/bin/expect -f
+
+proc color {col value} {
+    expect -exact "\[${col}m${value}\[0m"
+}
+
+proc prompt {indent} {
+    set spaces [string repeat " " $indent]
+    set cursor [expr {$indent + 2}]
+    expect -exact "\[?2004h\r\[K${spaces}"
+    color 1 >
+    expect -exact " \r\[${cursor}C"
+}
+
+proc empty {} {
+    expect -exact "\[?2004l\r\n"
+}
+
+proc output {col value} {
+    empty
+    color $col $value
+    expect -exact "\r"
+}
+
+proc ctrld {} {
+    send -- "\004"
+}
+
+set timeout -1
+spawn {*}$argv -n repl
+
+prompt 0
+send -- ".\r"
+output 90 null
+
+prompt 0
+send -- ".+1\r"
+output 39 1
+
+prompt 0
+send -- "2 | repl\r"
+empty
+
+prompt 2
+send -- ".\r"
+output 39 2
+
+prompt 2
+send -- "repl\r"
+empty
+
+prompt 4
+ctrld
+empty
+
+prompt 2
+send -- "repl\r"
+empty
+
+prompt 4
+ctrld
+empty
+
+prompt 2
+ctrld
+empty
+
+prompt 0
+send -- ".\r"
+output 90 null
+
+prompt 0
+ctrld
+empty
+
+expect eof
