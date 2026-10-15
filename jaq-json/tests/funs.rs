@@ -10,6 +10,25 @@ yields!(bsearch_absent2, "[1, 3] | bsearch(2)", -2);
 yields!(bsearch_absent3, "[1, 3] | bsearch(4)", -3);
 yields!(bsearch_present, "[1, 3] | [bsearch(1, 3)]", [0, 1]);
 
+// https://github.com/01mf02/jaq/issues/436: `del` must not change the
+// order of the remaining object keys.
+yields!(
+    del_obj_key_order,
+    r#"{"a": 1, "b": 2, "c": 3, "d": 4} | del(.b)"#,
+    json!({"a": 1, "c": 3, "d": 4})
+);
+yields!(
+    del_obj_first,
+    r#"{"a": 1, "b": 2} | del(.a)"#,
+    json!({"b": 2})
+);
+yields!(
+    del_obj_last,
+    r#"{"a": 1, "b": 2} | del(.b)"#,
+    json!({"a": 1})
+);
+yields!(del_obj_absent, r#"{"a": 1} | del(.x)"#, json!({"a": 1}));
+
 yields!(
     fromjson_inf,
     r#""Infinity +Infinity -Infinity" | [fromjson | tostring]"#,

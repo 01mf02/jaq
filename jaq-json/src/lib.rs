@@ -213,9 +213,9 @@ impl jaq_core::ValT for Val {
                         let v = core::mem::take(e.get_mut());
                         match f(v).next().transpose()? {
                             Some(y) => e.insert(y),
-                            // this runs in constant time, at the price of
-                            // changing the order of the elements
-                            None => e.swap_remove(),
+                            // this is in O(n), but it preserves the order
+                            // of the remaining elements
+                            None => e.shift_remove(),
                         };
                     }
                     Vacant(e) => {
