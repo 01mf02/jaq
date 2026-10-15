@@ -26,6 +26,8 @@ pub struct Data<'a> {
     pub lut: &'a Lut<DataKind>,
     /// input values
     pub inputs: Inputs<'a, Val>,
+    /// filename of input, or `"<stdin>"`
+    pub input_filename: Val,
 }
 
 impl<'a> data::HasLut<'a, DataKind> for &'a Data<'a> {
@@ -101,6 +103,7 @@ pub fn run<E>(
         runner,
         lut: &filter.lut,
         inputs: &RcIter::new(inputs),
+        input_filename: Val::Null,
     };
     let ctx = Ctx::new(&data, vars);
 

@@ -1,7 +1,7 @@
-use crate::{filter, run, with_stdout, write, Error, ErrorColor, Runner, Val};
+use crate::{filter, with_stdout, write, Error, ErrorColor, Runner, Val};
 use jaq_all::data::DataKind;
 use jaq_all::jaq_core::native::{self, v, Filter, Fun};
-use jaq_all::jaq_core::{RunPtr, Vars};
+use jaq_all::jaq_core::{Exn, RunPtr, Vars};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -18,11 +18,12 @@ static REPL_KILL_DEPTH: AtomicUsize = AtomicUsize::new(0);
 pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
         let depth = REPL_DEPTH.fetch_add(1, Ordering::Relaxed);
-        let mut runner = cv.0.data().runner.clone();
-        runner.null_input = false;
-        repl_with(&runner, depth, |s| match eval(&runner, s, cv.1.clone()) {
-            Ok(()) => (),
-            Err(e) => eprint!("{}", ErrorColor::new(&e, runner.color_err)),
+        let runner = &cv.0.data().runner;
+        repl_with(runner, depth, |s| {
+            match eval(cv.0.data(), s, cv.1.clone()) {
+                Ok(()) => (),
+                Err(e) => eprint!("{}", ErrorColor::new(&e, cv.0.data().runner.color_err)),
+            }
         })
         .unwrap();
         REPL_DEPTH.fetch_sub(1, Ordering::Relaxed);
@@ -31,19 +32,31 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
     })
 }
 
-fn eval(runner: &Runner, code: String, input: Val) -> Result<(), Error> {
+use jaq_all::data::Data;
+fn eval(data: &Data, code: String, input: Val) -> Result<(), Error> {
     let var_val = [("!input_filename".to_string(), Val::Null)];
     let (var_names, mut vars): (Vec<String>, Vec<Val>) = var_val.into_iter().unzip();
     let (var_vals, filter) =
         filter::parse_compile(&"<repl>".into(), &code, &var_names, &[]).map_err(Error::Report)?;
     vars.extend(var_vals);
     let vars = Vars::new(vars);
-    let inputs = core::iter::once(Ok(input));
-    let writer = &runner.writer;
+    let data = jaq_all::data::Data {
+        runner: data.runner,
+        lut: &filter.lut,
+        inputs: data.inputs,
+        input_filename: data.input_filename.clone(),
+    };
+    use jaq_all::data::Ctx;
+
+    let ctx = || Ctx::new(&data, vars);
+
     with_stdout(&mut std::io::stdout(), |out| {
-        run(runner, &filter, vars, inputs, |v| write(out, writer, &v))
-    })?;
-    Ok(())
+        filter.id.run((ctx(), input)).try_for_each(|v| {
+            let halt = |e: Exn<_>| Error::Halt(e.get_halt().ok().unwrap());
+            let v = v.map_err(|e| e.get_err().map_or_else(halt, Error::Jaq))?;
+            Ok(write(out, &data.runner.writer, &v)?)
+        })
+    })
 }
 
 fn repl_with(runner: &Runner, depth: usize, f: impl Fn(String)) -> Result<(), ReadlineError> {

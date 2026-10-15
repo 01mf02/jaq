@@ -55,7 +55,7 @@ pub(crate) fn run(
         let v = v.map_err(|e| e.get_err().map_or_else(halt, Error::Jaq))?;
 
         last = Some(v.as_bool());
-        f(v).map_err(Into::into)
+        Ok(f(v)?)
     })?;
     Ok(last)
 }
