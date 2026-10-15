@@ -23,7 +23,7 @@ pub use funs::funs;
 use std::io::{self, IsTerminal, Write};
 
 /// Write options.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Writer {
     /// output format
     pub format: crate::Format,
