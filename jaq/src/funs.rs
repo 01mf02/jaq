@@ -42,11 +42,10 @@ fn eval(data: &Data, code: String, input: Val) -> Result<(), Error> {
         inputs: data.inputs,
         input_filename: data.input_filename,
     };
-
-    let ctx = || Ctx::new(&data, vars);
+    let ctx = Ctx::new(&data, vars);
 
     with_stdout(&mut std::io::stdout(), |out| {
-        filter.id.run((ctx(), input)).try_for_each(|v| {
+        filter.id.run((ctx, input)).try_for_each(|v| {
             let halt = |e: Exn<_>| Error::Halt(e.get_halt().ok().unwrap());
             let v = v.map_err(|e| e.get_err().map_or_else(halt, Error::Jaq))?;
             Ok(write(out, &data.runner.writer, &v)?)
