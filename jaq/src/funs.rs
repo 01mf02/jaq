@@ -1,5 +1,5 @@
 use crate::{filter, with_stdout, write, Error, ErrorColor, Runner, Val};
-use jaq_all::data::DataKind;
+use jaq_all::data::{Ctx, Data, DataKind};
 use jaq_all::jaq_core::native::{self, v, Filter, Fun};
 use jaq_all::jaq_core::{Exn, RunPtr, Vars};
 use rustyline::error::ReadlineError;
@@ -32,21 +32,16 @@ pub fn repl() -> Filter<RunPtr<DataKind>> {
     })
 }
 
-use jaq_all::data::Data;
 fn eval(data: &Data, code: String, input: Val) -> Result<(), Error> {
-    let var_val = [("!input_filename".to_string(), Val::Null)];
-    let (var_names, mut vars): (Vec<String>, Vec<Val>) = var_val.into_iter().unzip();
-    let (var_vals, filter) =
-        filter::parse_compile(&"<repl>".into(), &code, &var_names, &[]).map_err(Error::Report)?;
-    vars.extend(var_vals);
+    let (vars, filter) =
+        filter::parse_compile(&"<repl>".into(), &code, &[], &[]).map_err(Error::Report)?;
     let vars = Vars::new(vars);
-    let data = jaq_all::data::Data {
+    let data = Data {
         runner: data.runner,
         lut: &filter.lut,
         inputs: data.inputs,
         input_filename: data.input_filename,
     };
-    use jaq_all::data::Ctx;
 
     let ctx = || Ctx::new(&data, vars);
 

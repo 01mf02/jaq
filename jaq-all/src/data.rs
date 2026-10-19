@@ -43,7 +43,7 @@ impl<'a> input::HasInputs<'a, Val> for &'a Data<'a> {
 }
 
 /// Run options.
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct Runner {
     /// pass `null` as input
     pub null_input: bool,
