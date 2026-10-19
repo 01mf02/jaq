@@ -1,5 +1,5 @@
 //! Commonly used data for filter compilation & execution.
-use jaq_core::{data, DataT, Lut, Vars};
+use jaq_core::{data, native::v, DataT, Lut, Vars};
 use jaq_fmts::write::Writer;
 use jaq_json::{Val, ValX};
 use jaq_std::input::{self, Inputs, RcIter};
@@ -27,7 +27,7 @@ pub struct Data<'a> {
     /// input values
     pub inputs: Inputs<'a, Val>,
     /// filename of input, or `"<stdin>"`
-    pub input_filename: Val,
+    pub input_filename: &'a Val,
 }
 
 impl<'a> data::HasLut<'a, DataKind> for &'a Data<'a> {
@@ -67,6 +67,10 @@ pub fn base_funs() -> impl Iterator<Item = crate::Fun<DataKind>> {
     let core = jaq_core::funs::<DataKind>();
     let std = jaq_std::funs::<DataKind>();
     let input = input::funs::<DataKind>().into_vec().into_iter().map(run);
+    let input_filename = run(("input_filename", v(0), |cv| {
+        Box::new(core::iter::once(Ok(cv.0.data().input_filename.clone())))
+    }));
+    let input = input.chain([input_filename]);
     core.chain(std).chain(jaq_json::funs()).chain(input)
 }
 
@@ -90,7 +94,7 @@ pub fn run<E>(
     runner: &Runner,
     filter: &Filter,
     vars: Vars<Val>,
-    inputs: impl Iterator<Item = Result<Val, impl ToString>>,
+    (input_filename, inputs): (&Val, impl Iterator<Item = Result<Val, impl ToString>>),
     fi: impl Fn(String) -> E,
     mut f: impl FnMut(ValX) -> Result<(), E>,
 ) -> Result<(), E> {
@@ -102,8 +106,8 @@ pub fn run<E>(
     let data = Data {
         runner,
         lut: &filter.lut,
+        input_filename,
         inputs: &RcIter::new(inputs),
-        input_filename: Val::Null,
     };
     let ctx = Ctx::new(&data, vars);
 

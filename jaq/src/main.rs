@@ -114,9 +114,7 @@ impl Cli {
 }
 
 fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<ExitCode, Error> {
-    let mut var_val = binds(cli)?;
-    let input_filename_idx = var_val.len();
-    var_val.push(("!input_filename".to_string(), Val::Null));
+    let var_val = binds(cli)?;
     let (var_names, mut vars): (Vec<String>, Vec<Val>) = var_val.into_iter().unzip();
 
     let (var_vals, filter) = match &cli.filter {
@@ -138,20 +136,20 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
 
     let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or_default();
     let last = if cli.files.is_empty() {
-        vars[input_filename_idx] = Val::utf8_str("<stdin>");
+        let input_filename = Val::utf8_str("<stdin>");
         let vars = Vars::new(vars);
 
         let format = unwrap_or_json(cli.from);
         let s = read::read_string(format, inp.lock())?;
         let inputs = read::read(format, inp.lock(), &s, cli.slurp);
+        let input = (&input_filename, inputs);
         with_stdout(out, |out| {
-            run(runner, &filter, vars, inputs, |v| write(out, writer, &v))
+            run(runner, &filter, vars, input, |v| write(out, writer, &v))
         })?
     } else {
         let mut last = None;
         for file in &cli.files {
-            vars[input_filename_idx] =
-                Val::utf8_str(file.as_os_str().to_string_lossy().into_owned());
+            let input_filename = Val::utf8_str(file.as_os_str().to_string_lossy().into_owned());
             let vars = Vars::new(vars.clone());
 
             let path = Path::new(file);
@@ -160,6 +158,7 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
             let format = unwrap_or_json(cli.from.or_else(|| Format::determine(path)));
             let s = read::bytes_str(format, &bytes)?;
             let inputs = read::parse(format, &bytes, s, cli.slurp);
+            let input = (&input_filename, inputs);
 
             if cli.in_place {
                 // create a temporary file where output is written to
@@ -168,7 +167,7 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
                     .prefix("jaq")
                     .tempfile_in(location)?;
 
-                last = run(runner, &filter, vars.clone(), inputs, |output| {
+                last = run(runner, &filter, vars.clone(), input, |output| {
                     write(tmp.as_file_mut(), writer, &output)
                 })?;
 
@@ -179,7 +178,7 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
                 std::fs::set_permissions(path, perms)?;
             } else {
                 last = with_stdout(out, |out| {
-                    run(runner, &filter, vars.clone(), inputs, |v| {
+                    run(runner, &filter, vars.clone(), input, |v| {
                         write(out, writer, &v)
                     })
                 })?;

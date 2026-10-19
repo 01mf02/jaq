@@ -44,7 +44,7 @@ fn eval(data: &Data, code: String, input: Val) -> Result<(), Error> {
         runner: data.runner,
         lut: &filter.lut,
         inputs: data.inputs,
-        input_filename: data.input_filename.clone(),
+        input_filename: data.input_filename,
     };
     use jaq_all::data::Ctx;
 
