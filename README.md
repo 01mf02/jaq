@@ -173,6 +173,7 @@ That means that jaq may take unlimited time, memory, or stack space.
 For example, this may lead to stack overflows when:
 
 - Reading input data: `jaq -nr 'repeat("[")' | jaq`
+- Writing output data: `jaq -nc 'nth(1000000; recurse([.]))'`
 - Running jq filters: `jaq -n 'def f: 1+f; f'`
 
 jaq's core has been audited by
