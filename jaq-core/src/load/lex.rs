@@ -92,7 +92,12 @@ pub type Error<S> = (Expect<S>, S);
 
 /// Lexer for jq files.
 pub struct Lexer<S> {
+    /// remaining lexer input
+    ///
+    /// When replacing `i` by a value `i'`, `i'` must be a suffix of `i`.
+    /// That is, there is some `n` such that `core::ptr::eq(&i[n..], i')`.
     i: S,
+    /// errors accumulated during lexing
     e: Vec<Error<S>>,
 }
 
@@ -160,7 +165,8 @@ impl<'a> Lexer<&'a str> {
             }
             // ignore all lines that end with an odd number of backslashes
             loop {
-                let (before, after) = self.i.split_once('\n').unwrap_or((self.i, ""));
+                let no_newline = || (self.i, &self.i[self.i.len()..]);
+                let (before, after) = self.i.split_once('\n').unwrap_or_else(no_newline);
                 let before = before.strip_suffix('\r').unwrap_or(before);
                 self.i = after;
                 // does the line end with an even number of backslashes?
