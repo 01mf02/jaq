@@ -18,12 +18,10 @@ static REPL_KILL_DEPTH: AtomicUsize = AtomicUsize::new(0);
 pub fn repl() -> Filter<RunPtr<DataKind>> {
     ("repl", v(0), |cv| {
         let depth = REPL_DEPTH.fetch_add(1, Ordering::Relaxed);
-        let runner = &cv.0.data().runner;
-        repl_with(runner, depth, |s| {
-            match eval(cv.0.data(), s, cv.1.clone()) {
-                Ok(()) => (),
-                Err(e) => eprint!("{}", ErrorColor::new(&e, cv.0.data().runner.color_err)),
-            }
+        let data = cv.0.data();
+        repl_with(data.runner, depth, |s| match eval(data, s, cv.1.clone()) {
+            Ok(()) => (),
+            Err(e) => eprint!("{}", ErrorColor::new(&e, data.runner.color_err)),
         })
         .unwrap();
         REPL_DEPTH.fetch_sub(1, Ordering::Relaxed);
