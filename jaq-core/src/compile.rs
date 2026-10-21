@@ -116,8 +116,11 @@ pub(crate) enum Term<T = TermId> {
     /// Variable binding (`f as $x | g`) if identifier (`x`) is given, otherwise
     /// application (`f | g`)
     Pipe(T, Option<Pattern<T>>, T),
+
+    Pipe2(Box<[(T, Option<Pattern<T>>)]>, T),
+
     /// Concatenation (`f, g`)
-    Comma(T, T),
+    Concat(Box<[T]>),
     /// Assignment (`f = g`)
     Assign(T, T),
     /// Update-assignment (`f |= g`)
@@ -133,7 +136,7 @@ pub(crate) enum Term<T = TermId> {
     /// Comparison operation (`f < g`, `f <= g`, `f > g`, `f >= g`, `f == g`, `f != g`)
     Cmp(T, ops::Cmp, T),
     /// Alternation (`f // g`)
-    Alt(T, T),
+    Alt(Box<[T]>, T),
     /// Try-catch (`try f catch g`)
     TryCatch(T, T),
     /// If-then-else (`if f then g else h end`)
@@ -696,15 +699,41 @@ impl<'s, F> Compiler<&'s str, F> {
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
+            Pipe(init, last) => {
+                let mut tgt = Vec::new();
+                let mut all_vars = Vec::new();
+                for (f, pat) in init.into_iter().rev() {
+                    let new_vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
+                    tgt.push((self.iterm(f), pat.map(|pat| self.pattern(pat))));
+                    all_vars.extend(new_vars.clone());
+                    new_vars
+                        .iter()
+                        .for_each(|v| self.locals.vars.push(Bind::Var(v)));
+                }
+                let (last, tr_) = self.iterm_tr(*last, tr);
+                all_vars
+                    .iter()
+                    .rev()
+                    .for_each(|v| self.locals.vars.pop(&Bind::Var(v)));
+                return (Term::Pipe2(tgt.into(), last), tr_);
+            }
+            Concat(f) => {
+                let (f, tr): (Vec<_>, Vec<_>) = f.into_iter().map(|f| self.iterm_tr(f, tr)).unzip();
+                let tr = tr.iter().fold(Tr::default(), |mut union, tr| {
+                    union.extend(tr);
+                    union
+                });
+                return (Term::Concat(f.into()), tr);
+            }
+            Alt(init, last) => {
+                let init = init.into_iter().map(|f| self.iterm(f)).collect();
+                let (last, tr_) = self.iterm_tr(*last, tr);
+                return (Term::Alt(init, last), tr_);
+            }
             BinOp(l, op, r) => {
                 use parse::BinaryOp::*;
                 let (l, (r, tr_)) = match op {
-                    Comma => {
-                        let (l, trl) = self.iterm_tr(*l, tr);
-                        let (r, trr) = self.iterm_tr(*r, tr);
-                        (l, (r, trl.union(&trr).copied().collect()))
-                    }
-                    Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
+                    Comma | Alt => panic!(),
                     Pipe(ref pat) => {
                         let l = self.iterm(*l);
                         let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
@@ -714,7 +743,7 @@ impl<'s, F> Compiler<&'s str, F> {
                 };
                 let t = match op {
                     Pipe(pat) => Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r),
-                    Comma => Term::Comma(l, r),
+                    Comma | Alt => panic!(),
                     Math(op) => Term::Math(l, op, r),
                     Assign => Term::Assign(l, r),
                     Update => Term::Update(l, r),
@@ -722,7 +751,6 @@ impl<'s, F> Compiler<&'s str, F> {
                     Cmp(op) => Term::Cmp(l, op, r),
                     Or => Term::Logic(l, true, r),
                     And => Term::Logic(l, false, r),
-                    Alt => Term::Alt(l, r),
                     UpdateAlt => Term::UpdateAlt(l, r),
                 };
                 return (t, tr_);
