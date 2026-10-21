@@ -116,8 +116,9 @@ pub(crate) enum Term<T = TermId> {
     /// Variable binding (`f as $x | g`) if identifier (`x`) is given, otherwise
     /// application (`f | g`)
     Pipe(T, Option<Pattern<T>>, T),
+
     /// Concatenation (`f, g`)
-    Comma(T, T),
+    Concat(Box<[T]>),
     /// Assignment (`f = g`)
     Assign(T, T),
     /// Update-assignment (`f |= g`)
@@ -133,7 +134,7 @@ pub(crate) enum Term<T = TermId> {
     /// Comparison operation (`f < g`, `f <= g`, `f > g`, `f >= g`, `f == g`, `f != g`)
     Cmp(T, ops::Cmp, T),
     /// Alternation (`f // g`)
-    Alt(T, T),
+    Alt(Box<[T]>, T),
     /// Try-catch (`try f catch g`)
     TryCatch(T, T),
     /// If-then-else (`if f then g else h end`)
@@ -696,36 +697,10 @@ impl<'s, F> Compiler<&'s str, F> {
                     _ => self.fail(name, Undefined::Filter(arity)),
                 }
             }
-            BinOp(l, op, r) => {
-                use parse::BinaryOp::*;
-                let (l, (r, tr_)) = match op {
-                    Comma => {
-                        let (l, trl) = self.iterm_tr(*l, tr);
-                        let (r, trr) = self.iterm_tr(*r, tr);
-                        (l, (r, trl.union(&trr).copied().collect()))
-                    }
-                    Alt => (self.iterm(*l), self.iterm_tr(*r, tr)),
-                    Pipe(ref pat) => {
-                        let l = self.iterm(*l);
-                        let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
-                        (l, self.with_vars(&vars, |c| c.iterm_tr(*r, tr)))
-                    }
-                    _ => (self.iterm(*l), (self.iterm(*r), Tr::new())),
-                };
-                let t = match op {
-                    Pipe(pat) => Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r),
-                    Comma => Term::Comma(l, r),
-                    Math(op) => Term::Math(l, op, r),
-                    Assign => Term::Assign(l, r),
-                    Update => Term::Update(l, r),
-                    UpdateMath(op) => Term::UpdateMath(l, op, r),
-                    Cmp(op) => Term::Cmp(l, op, r),
-                    Or => Term::Logic(l, true, r),
-                    And => Term::Logic(l, false, r),
-                    Alt => Term::Alt(l, r),
-                    UpdateAlt => Term::UpdateAlt(l, r),
-                };
-                return (t, tr_);
+            BinOp(head, tail) => {
+                use parse::BinTree::Leaf;
+                let mut tail = tail.into_iter().map(|(op, t)| (op, Leaf(t)));
+                return self.bintree(Leaf(*head).climb(&mut tail), tr);
             }
             Path(t, path) => {
                 let t = self.iterm(*t);
@@ -755,6 +730,41 @@ impl<'s, F> Compiler<&'s str, F> {
         (t, Tr::new())
     }
 
+    fn bintree(&mut self, t: parse::BinTree<&'s str>, tr: &Tr) -> (Term, Tr) {
+        use parse::BinTree::*;
+        let t = match t {
+            Leaf(t) => return self.term(t, tr),
+            Pipe(l, pat, r) => {
+                let l = self.ibintree(*l);
+                let vars: Vec<_> = pat.iter().flat_map(|p| p.vars()).copied().collect();
+                let (r, tr_) = self.with_vars(&vars, |c| c.ibintree_tr(*r, tr));
+                return (Term::Pipe(l, pat.map(|pat| self.pattern(pat)), r), tr_);
+            }
+            Concat(f) => {
+                let (f, tr): (Vec<_>, Vec<_>) =
+                    f.into_iter().map(|f| self.ibintree_tr(f, tr)).unzip();
+                let tr = tr.iter().fold(Tr::default(), |mut union, tr| {
+                    union.extend(tr);
+                    union
+                });
+                return (Term::Concat(f.into()), tr);
+            }
+            Alt(init, last) => {
+                let init = init.into_iter().map(|f| self.ibintree(f)).collect();
+                let (last, tr_) = self.ibintree_tr(*last, tr);
+                return (Term::Alt(init, last), tr_);
+            }
+            Logic(l, b, r) => Term::Logic(self.ibintree(*l), b, self.ibintree(*r)),
+            Math(l, op, r) => Term::Math(self.ibintree(*l), op, self.ibintree(*r)),
+            Cmp(l, op, r) => Term::Cmp(self.ibintree(*l), op, self.ibintree(*r)),
+            UpdateMath(l, op, r) => Term::UpdateMath(self.ibintree(*l), op, self.ibintree(*r)),
+            Assign(l, r) => Term::Assign(self.ibintree(*l), self.ibintree(*r)),
+            Update(l, r) => Term::Update(self.ibintree(*l), self.ibintree(*r)),
+            UpdateAlt(l, r) => Term::UpdateAlt(self.ibintree(*l), self.ibintree(*r)),
+        };
+        (t, Tr::new())
+    }
+
     /// Compile a term in a context that does *not* permit tail-recursion.
     ///
     /// One example of such a term is `t` in `1 + t` or `t | .+1`.
@@ -763,8 +773,20 @@ impl<'s, F> Compiler<&'s str, F> {
     }
 
     fn iterm_tr(&mut self, t: parse::Term<&'s str>, tr: &Tr) -> (TermId, Tr) {
+        self.with_tr(tr, |c| c.term(t, tr))
+    }
+
+    fn ibintree(&mut self, t: parse::BinTree<&'s str>) -> TermId {
+        self.ibintree_tr(t, &Tr::new()).0
+    }
+
+    fn ibintree_tr(&mut self, t: parse::BinTree<&'s str>, tr: &Tr) -> (TermId, Tr) {
+        self.with_tr(tr, |c| c.bintree(t, tr))
+    }
+
+    fn with_tr(&mut self, tr: &Tr, f: impl FnOnce(&mut Self) -> (Term, Tr)) -> (TermId, Tr) {
         let id = self.lut.insert_term(Term::default());
-        let (t, tr_) = self.term(t, tr);
+        let (t, tr_) = f(self);
         debug_assert!(tr_.is_subset(tr));
         self.lut.terms[id.0] = t;
         (id, tr_)
