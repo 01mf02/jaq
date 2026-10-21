@@ -75,6 +75,19 @@ For example, `{a: 1, b: 2} | to_entries | from_entries --> {"a": 1, "b": 2}`.
 The filter `with_entries(f)` is equivalent to `to_entries | map(f) | from_entries`.
 For example, `{"a": 1, "b": 2} | with_entries(.key |= ascii_upcase) --> {"A": 1, "B": 2}`
 
+::: Compatibility
+`jq` equally interprets the following keys in `from_entries`:
+
+- `"key"`, `"Key"`, `"name"`, `"Name"`
+- `"value"`, `"Value"`
+
+In contrast, jaq only considers `"key"` and `"value"`.
+However, you can easily transform input before passing it to `from_entries`:
+
+- `[{name: "foo", value: "bar"}] | from_entries --> {null: "bar"}` (yields `{"foo": "bar"}` in jq)
+- `[{name: "foo", value: "bar"}] | map({key: .name, value}) | from_entries --> {"foo": "bar"}`
+:::
+
 
 ## Stream consumers
 
