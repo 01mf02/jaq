@@ -143,7 +143,7 @@ th, td {
     margin: 20px 0;
 }
 
-@media(max-width: 660px) {
+@media (max-width: 660px), print {
     nav {
         display: none;
     }
