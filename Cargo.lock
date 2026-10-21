@@ -315,7 +315,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "jaq"
-version = "3.1.1"
+version = "3.1.2"
 dependencies = [
  "dirs",
  "env_logger",
@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-all"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "codesnake",
  "jaq-core",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "3.1.1"
+version = "3.1.2"
 dependencies = [
  "arbitrary",
  "dyn-clone",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "jaq-std"
-version = "3.0.3"
+version = "3.0.4"
 dependencies = [
  "aho-corasick",
  "base64",
