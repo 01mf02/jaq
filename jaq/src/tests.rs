@@ -50,7 +50,9 @@ fn run_test(test: Test<String>) -> Result<(Val, Val), Error> {
     let filter =
         compile(&test.filter).map_err(|e| Error::Report(e.into_iter().map(path).collect()))?;
     let vars = Default::default();
-    let input = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
+    let input_filename = Val::utf8_str("<stdin>");
+    let inputs = core::iter::once(parse_single(test.input.as_bytes()).map_err(|e| e.to_string()));
+    let input = (&input_filename, inputs);
     run(runner, &filter, vars, input, Error::Parse, |v| {
         let halt = |e: Exn<_>| Error::Halt(e.get_halt().ok().unwrap());
         obtain.push(v.map_err(|e| e.get_err().map_or_else(halt, Error::Jaq))?);

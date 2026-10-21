@@ -160,13 +160,13 @@ pub fn run(filter: &str, input: &str, settings: &JsValue, scope: &Scope) {
         Ok(())
     };
     let vars = Default::default();
-    let inputs = read_str(&settings, input);
+    let input = (&Val::utf8_str("<stdin>"), read_str(&settings, input));
 
     match compile(filter) {
         Err(file_reports) => file_reports
             .iter()
             .for_each(|fr| post(format!("{}", FileReportsDisp::new(fr).with_paint(color)))),
-        Ok(filter) => match data::run(runner, &filter, vars, inputs, Error::Hifijson, post_value) {
+        Ok(filter) => match data::run(runner, &filter, vars, input, Error::Hifijson, post_value) {
             Ok(()) => (),
             Err(Error::Hifijson(e)) => post(format!("Parse error: {}", escape_str(&e.to_string()))),
             Err(Error::Jaq(e)) => post(format!("Error: {}", escape_str(&e.to_string()))),

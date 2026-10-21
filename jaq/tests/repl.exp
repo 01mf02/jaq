@@ -1,0 +1,52 @@
+#!/usr/bin/expect -f
+
+proc prompt {indent} {
+    expect -exact [string repeat " " $indent]
+    expect -exact >
+}
+
+proc ctrld {} {
+    send -- "\004"
+}
+
+set timeout -1
+spawn {*}$argv -n repl
+
+prompt 0
+send -- ".\r"
+expect -exact null
+
+prompt 0
+send -- ".+1\r"
+expect 1
+
+prompt 0
+send -- "2 | repl\r"
+
+prompt 2
+send -- ".\r"
+expect 2
+
+prompt 2
+send -- "repl\r"
+
+prompt 4
+ctrld
+
+prompt 2
+send -- "repl\r"
+
+prompt 4
+ctrld
+
+prompt 2
+ctrld
+
+prompt 0
+send -- ".\r"
+expect -exact null
+
+prompt 0
+ctrld
+
+expect eof

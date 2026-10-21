@@ -43,5 +43,11 @@ jobs:
       with:
         target: ${{ matrix.target }}
 
+    - name: Install expect
+      run: sudo apt-get install expect
+
     - name: Run tests
       run: cargo test --verbose
+
+    - name: Run REPL test
+      run: jaq/tests/repl.exp cargo run --

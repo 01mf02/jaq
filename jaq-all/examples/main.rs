@@ -11,14 +11,16 @@ fn main() -> io::Result<()> {
             .for_each(|fr| eprint!("{}", load::FileReportsDisp::new(fr)));
         Error::from(ErrorKind::InvalidInput)
     })?;
+    let input_filename = "<stdin>".to_string().into();
     let inputs = fmts::read::json::read_many(io::stdin().lock());
+    let input = (&input_filename, inputs);
     let stdout = &mut io::stdout().lock();
 
     let runner = Default::default();
     let vars = Default::default();
     let fi = |e| Error::new(ErrorKind::InvalidData, e);
 
-    data::run(&runner, &filter, vars, inputs, fi, |v| {
+    data::run(&runner, &filter, vars, input, fi, |v| {
         let v = unwrap_valr(v).map_err(|e| Error::new(ErrorKind::Other, e.to_string()));
         fmts::write::write(stdout, &runner.writer, &v?)
     })
