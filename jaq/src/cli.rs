@@ -18,6 +18,7 @@ pub struct Cli {
 
     // Output options
     pub to: Option<Format>,
+    pub output_file: Option<PathBuf>,
     pub compact_output: bool,
     /// This flag enables `--raw-output`.
     pub join_output: bool,
@@ -95,6 +96,7 @@ impl Cli {
             "slurp" => self.short('s', args)?,
 
             "to" => self.to = Some(parse_format("--to", args)?),
+            "output-file" => self.short('o', args)?,
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
             "raw-output0" => self.to = Some(Format::Raw0),
@@ -139,6 +141,7 @@ impl Cli {
             's' => self.slurp = true,
 
             'r' => self.to = Some(Format::Raw),
+            'o' => self.output_file = Some(args.next().ok_or(Error::Path("-o"))?.into()),
             'c' => self.compact_output = true,
             'j' => {
                 self.join_output = true;
@@ -196,7 +199,7 @@ impl Cli {
     }
 
     pub fn color_output(&self) -> bool {
-        self.color_if(|| io::stdout().is_terminal() && !self.in_place)
+        self.color_if(|| io::stdout().is_terminal() && !self.in_place && self.output_file.is_none())
     }
 
     pub fn color_errors(&self) -> bool {
