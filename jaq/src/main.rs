@@ -88,7 +88,7 @@ impl Cli {
     fn writer(&self) -> Writer {
         Writer {
             pp: self.pp(),
-            format: self.to.unwrap_or_default(),
+            format: self.output_format(),
             join: self.join_output,
         }
     }
@@ -98,7 +98,7 @@ impl Cli {
             indent: (!self.compact_output).then(|| self.indent()),
             sort_keys: self.sort_keys,
             styles: self.styles(),
-            sep_space: !self.compact_output || matches!(self.to, Some(Format::Yaml)),
+            sep_space: !self.compact_output || matches!(self.output_format(), Format::Yaml),
         }
     }
 

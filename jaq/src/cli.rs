@@ -206,6 +206,12 @@ impl Cli {
         self.color_if(|| io::stderr().is_terminal())
     }
 
+    pub fn output_format(&self) -> Format {
+        self.to
+            .or_else(|| self.output_file.as_deref().and_then(Format::determine))
+            .unwrap_or_default()
+    }
+
     pub fn indent(&self) -> String {
         if self.tab {
             "\t".into()
