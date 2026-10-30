@@ -17,17 +17,17 @@ pub struct Cli {
     pub slurp: bool,
 
     // Output options
-    pub to: Option<Format>,
+    to: Option<Format>,
     pub output_file: Option<PathBuf>,
     pub compact_output: bool,
     /// This flag enables `--raw-output`.
     pub join_output: bool,
     pub in_place: bool,
     pub sort_keys: bool,
-    pub color_output: bool,
-    pub monochrome_output: bool,
-    pub tab: bool,
-    pub indent: Option<usize>,
+    color_output: bool,
+    monochrome_output: bool,
+    tab: bool,
+    indent: Option<usize>,
 
     // Compilation options
     pub from_file: bool,
