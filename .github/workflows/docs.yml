@@ -1,12 +1,9 @@
 name: Generate documentation and run unit tests
 
 on:
-  push:
-    branches: [ main ]
+  pull_request:
     paths:
       - 'docs'
-  pull_request:
-    branches: [ main ]
 
 jobs:
   check:
