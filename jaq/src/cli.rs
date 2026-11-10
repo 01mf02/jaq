@@ -96,7 +96,7 @@ impl Cli {
             "slurp" => self.short('s', args)?,
 
             "to" => self.to = Some(parse_format("--to", args)?),
-            "output-file" => self.short('o', args)?,
+            "output" => self.short('o', args)?,
             "compact-output" => self.short('c', args)?,
             "raw-output" => self.short('r', args)?,
             "raw-output0" => self.to = Some(Format::Raw0),
