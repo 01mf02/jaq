@@ -266,6 +266,49 @@ fn try_catch_run<'a, T: 'a, V: 'a, I: Iterator<Item = ValX<'a, T, V>> + 'a>(
     }))
 }
 
+fn bla<'a, D: DataT, T: Clone + 'a>(
+    mut fs: &'a [(Id, Option<Pattern<Id>>)],
+    last: &'a Id,
+    mut cv: Cv<'a, D, T>,
+    run: IdRunFn<'a, D, T>,
+    proj: fn(&T) -> D::V<'a>,
+) -> ValXs<'a, T, D::V<'a>> {
+    use crate::box_iter::then;
+    //std::dbg!(fs.len());
+    while let Some(((f, pat), rest)) = fs.split_first() {
+        fs = rest;
+        if let Some(pat) = pat {
+            //std::dbg!("pat");
+            let cv_ = (cv.0, proj(&cv.1));
+            let mut ctxs = run_and_bind(f, cv_, pat);
+            if let Some(ctx) = box_iter::next_if_one(&mut ctxs) {
+                //std::dbg!("inline");
+                cv.0 = match ctx {
+                    Ok(ctx) => ctx,
+                    Err(e) => return box_once(Err(e)),
+                };
+            } else {
+                let f = move |r| then(r, |ctx| bla(fs, last, (ctx, cv.1.clone()), run, proj));
+                return Box::new(ctxs.flat_map(f));
+            }
+        } else {
+            //std::dbg!("normal");
+            let mut ys = run(f, (cv.0.clone(), cv.1));
+            if let Some(y) = box_iter::next_if_one(&mut ys) {
+                //std::dbg!("inline");
+                cv.1 = match y {
+                    Ok(y) => y,
+                    e => return box_once(e),
+                };
+            } else {
+                let f = move |r| then(r, |y| bla(fs, last, (cv.0.clone(), y), run, proj));
+                return Box::new(ys.flat_map(f));
+            }
+        }
+    }
+    run(last, cv)
+}
+
 fn fold_run<'a, D: DataT, T: Clone + 'a>(
     xs: impl Iterator<Item = ValX<'a, Ctx<'a, D>, D::V<'a>>> + Clone + 'a,
     cv: Cv<'a, D, T>,
@@ -306,6 +349,22 @@ fn cartesian<'a, D: DataT>(l: &'a Id, r: &'a Id, cv: Cv<'a, D>) -> Pairs<'a, Val
     flat_map_with(l.run(cv.clone()), cv, move |l, cv| {
         map_with(r.run(cv), l, |r, l| (l, r))
     })
+}
+
+fn concat_update<'a, D: DataT>(
+    fs: &'a [Id],
+    cv: Cv<'a, D>,
+    f: BoxUpdate<'a, D::V<'a>>,
+) -> ValXs<'a, D::V<'a>> {
+    match fs.split_first() {
+        None => box_once(Ok(cv.1)),
+        Some((l, [])) => l.update(cv, f),
+        Some((l, r)) => flat_map_then_with(
+            l.update((cv.0.clone(), cv.1), f.clone()),
+            (cv.0, f),
+            move |v, (ctx, f)| concat_update(r, (ctx, v), f),
+        ),
+    }
 }
 
 fn fold_update<'a, D: DataT>(
@@ -382,16 +441,20 @@ where
     Box::new(fold(xs, init, f, |_| (), |_, _| None, Some))
 }
 
-fn lazy<I: Iterator, F: FnOnce() -> I>(f: F) -> impl Iterator<Item = I::Item> {
-    core::iter::once_with(f).flatten()
-}
+fn zip_with_cloned<T, U: Clone>(mut xs: &[T], y: U) -> impl Iterator<Item = (&T, U)> {
+    let mut y = Some(y);
+    core::iter::from_fn(move || {
+        let (x, rest) = xs.split_first()?;
+        xs = rest;
 
-#[test]
-fn lazy_is_lazy() {
-    let f = || panic!();
-    let mut iter = core::iter::once(0).chain(lazy(|| box_once(f())));
-    assert_eq!(iter.size_hint(), (1, None));
-    assert_eq!(iter.next(), Some(0));
+        let y = if rest.is_empty() {
+            y.take()?
+        } else {
+            y.as_ref()?.clone()
+        };
+
+        Some((x, y))
+    })
 }
 
 /// Runs `def recurse(f): ., (f? | recurse(f)); v | recurse(f)`.
@@ -490,15 +553,15 @@ impl Id {
             Ast::Pipe(l, Some(pat), r) => pipe(l, cv, move |cv, y| {
                 bind_run(pat, r, cv, y, |f, cv| f.run(cv))
             }),
-            Ast::Comma(l, r) => Box::new(l.run(cv.clone()).chain(lazy(|| r.run(cv)))),
-            Ast::Alt(l, r) => {
-                let mut l = l
-                    .run(cv.clone())
-                    .filter(|v| v.as_ref().map_or(true, ValT::as_bool));
-                match l.next() {
-                    Some(head) => Box::new(once(head).chain(l)),
-                    None => r.run(cv),
-                }
+            Ast::Pipe2(init, last) => bla(init, last, cv, |f, cv| f.run(cv), Clone::clone),
+            Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.run(cv))),
+            Ast::Alt(init, last) => {
+                let found = |v: &ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
+                let init = init.iter().find_map(|l| {
+                    let mut l = l.run(cv.clone()).filter(found);
+                    Some(Box::new(once(l.next()?).chain(l)) as _)
+                });
+                init.unwrap_or_else(|| last.run(cv))
             }
             Ast::Ite(if_, then_, else_) => pipe(if_, cv, move |cv, v| {
                 if v.as_bool() { then_ } else { else_ }.run(cv)
@@ -601,12 +664,12 @@ impl Id {
                     bind_run(pat, r, cv, y, |f, cv| f.paths(cv))
                 })
             }
-            Ast::Comma(l, r) => Box::new(l.paths(cv.clone()).chain(lazy(|| r.paths(cv)))),
-            Ast::Alt(l, r) => {
-                let any_true = l
-                    .run(proj_cv(&cv))
-                    .any(|v| v.as_ref().map_or(true, ValT::as_bool));
-                if any_true { l } else { r }.paths(cv)
+            Ast::Pipe2(init, last) => bla(init, last, cv, |f, cv| f.paths(cv), proj_val),
+            Ast::Concat(f) => Box::new(zip_with_cloned(f, cv).flat_map(|(f, cv)| f.paths(cv))),
+            Ast::Alt(init, last) => {
+                let found = |v: ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
+                let init = init.iter().find(|l| l.run(proj_cv(&cv)).any(found));
+                init.unwrap_or(last).paths(cv)
             }
             Ast::Ite(if_, then_, else_) => {
                 flat_map_then_with(if_.run(proj_cv(&cv)), cv, move |v, cv| {
@@ -696,17 +759,15 @@ impl Id {
                 cv.1,
                 move |ctx, v| r.update((ctx, v), f.clone()),
             ),
-            Ast::Comma(l, r) => flat_map_then_with(
-                l.update((cv.0.clone(), cv.1), f.clone()),
-                (cv.0, f),
-                move |v, (ctx, f)| r.update((ctx, v), f),
-            ),
+            Ast::Pipe2(init, last) => todo!(),
+            Ast::Concat(fs) => concat_update(fs, cv, f),
             Ast::Ite(if_, then_, else_) => reduce(if_.run(cv.clone()), cv.1, move |x, v| {
                 if x.as_bool() { then_ } else { else_ }.update((cv.0.clone(), v), f.clone())
             }),
-            Ast::Alt(l, r) => {
-                let some_true = l.run(cv.clone()).any(|y| y.map_or(true, |y| y.as_bool()));
-                if some_true { l } else { r }.update(cv, f)
+            Ast::Alt(init, last) => {
+                let found = |v: ValX<_>| v.as_ref().map_or(true, ValT::as_bool);
+                let init = init.iter().find(|l| l.run(cv.clone()).any(found));
+                init.unwrap_or(last).update(cv, f)
             }
             Ast::Fold(xs, pat, init, update, fold_type) => {
                 let xs = rc_lazy_list::List::from_iter(run_and_bind(xs, cv.clone(), pat));

@@ -100,8 +100,14 @@ pub enum Term<S> {
     /// Negation
     Neg(Box<Self>),
 
-    /// Sequence of binary operations, e.g. `1 + 2 - 3 * 4`
+    /// Binary operation, e.g. `1 + 2` or `3 * 4`
     BinOp(Box<Self>, BinaryOp<S>, Box<Self>),
+
+    Pipe(Vec<(Self, Option<Pattern<S>>)>, Box<Self>),
+    /// Concatenation, e.g. `a, b, c, d`
+    Concat(Vec<Self>),
+    /// Alternation, e.g. `f // g`
+    Alt(Vec<Self>, Box<Self>),
 
     /// Control flow variable declaration, e.g. `label $x | ...`
     Label(S, Box<Self>),
@@ -883,6 +889,23 @@ impl<S> prec_climb::Op for BinaryOp<S> {
 
 impl<S> prec_climb::Expr<BinaryOp<S>> for Term<S> {
     fn from_op(lhs: Self, op: BinaryOp<S>, rhs: Self) -> Self {
-        Self::BinOp(Box::new(lhs), op, Box::new(rhs))
+        match (lhs, op, rhs) {
+            (lhs, BinaryOp::Pipe(pat), Self::Pipe(mut init, last)) => {
+                init.push((lhs, pat));
+                Self::Pipe(init, last)
+            }
+            (Self::Concat(mut lhs), BinaryOp::Comma, rhs) => {
+                lhs.push(rhs);
+                Self::Concat(lhs)
+            }
+            (Self::Alt(mut init, last), BinaryOp::Alt, rhs) => {
+                init.push(*last);
+                Self::Alt(init, Box::new(rhs))
+            }
+            (lhs, BinaryOp::Pipe(pat), rhs) => Self::Pipe(Vec::from([(lhs, pat)]), Box::new(rhs)),
+            (lhs, BinaryOp::Comma, rhs) => Self::Concat(Vec::from([lhs, rhs])),
+            (lhs, BinaryOp::Alt, rhs) => Self::Alt(Vec::from([lhs]), Box::new(rhs)),
+            (lhs, op, rhs) => Self::BinOp(Box::new(lhs), op, Box::new(rhs)),
+        }
     }
 }
