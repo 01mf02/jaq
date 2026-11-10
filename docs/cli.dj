@@ -195,6 +195,31 @@ $ echo [] | jaq --to toml 2>/dev/null; echo $?
 `jq` does not have this option.
 :::
 
+{#--output}
+### `-o`, `--output` _FILE_
+
+Write all output values to the given _FILE_.
+
+This infers the output format from the file extension,
+similar to what jaq does for [reading input files](#input).
+For example:
+
+```
+$ jaq -n '{a: 1}' -o foo.toml; cat foo.toml; rm foo.toml
+a = 1
+$ jaq -n '{a: 1}' -o foo.json; cat foo.json; rm foo.json
+{
+  "a": 1
+}
+```
+
+::: Compatibility
+At the time of writing,
+`jq` does not have this option,
+but there is ongoing work to implement it,
+see [#3410](https://github.com/jqlang/jq/pull/3410).
+:::
+
 {#--compact-output}
 ### `-c`, `--compact-output`
 
