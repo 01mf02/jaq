@@ -200,6 +200,11 @@ $ echo [] | jaq --to toml 2>/dev/null; echo $?
 
 Write all output values to the given _FILE_.
 
+This creates a temporary file in the same directory as _FILE_,
+writes all output values to that temporary file, then
+renames the temporary file to _FILE_ if jaq did not produce any error.
+This is similar to [`--in-place`](#--in-place).
+
 This infers the output format from the file extension,
 similar to what jaq does for [reading input files](#input).
 For example:
