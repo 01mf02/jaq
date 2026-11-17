@@ -88,7 +88,7 @@ impl Cli {
     fn writer(&self) -> Writer {
         Writer {
             pp: self.pp(),
-            format: self.to.unwrap_or_default(),
+            format: self.output_format(),
             join: self.join_output,
         }
     }
@@ -98,7 +98,7 @@ impl Cli {
             indent: (!self.compact_output).then(|| self.indent()),
             sort_keys: self.sort_keys,
             styles: self.styles(),
-            sep_space: !self.compact_output || matches!(self.to, Some(Format::Yaml)),
+            sep_space: !self.compact_output || matches!(self.output_format(), Format::Yaml),
         }
     }
 
@@ -110,6 +110,17 @@ impl Cli {
                 Ok(s) => c.parse(&s),
             })
             .unwrap_or_default()
+    }
+}
+
+fn with_output<T>(
+    stdout: &mut io::Stdout,
+    file: Option<&mut std::fs::File>,
+    f: impl FnOnce(&mut dyn Write) -> T,
+) -> T {
+    match file {
+        Some(file) => f(file),
+        None => with_stdout(stdout, f),
     }
 }
 
@@ -134,6 +145,14 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
     let runner = &cli.runner();
     let writer = &runner.writer;
 
+    let tmp = cli.output_file.as_ref().map(|file| {
+        let location = file.parent().unwrap();
+        let tmp = tempfile::Builder::new().prefix("jaq").tempfile_in(location);
+        tmp.map(|tmp| (file, tmp))
+    });
+    let mut tmp = tmp.transpose()?;
+    let mut output_file = tmp.as_mut().map(|(_file, tmp)| tmp.as_file_mut());
+
     let unwrap_or_json = |fmt: Option<Format>| fmt.unwrap_or_default();
     let last = if cli.files.is_empty() {
         let input_filename = Val::utf8_str("<stdin>");
@@ -143,7 +162,7 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
         let s = read::read_string(format, inp.lock())?;
         let inputs = read::read(format, inp.lock(), &s, cli.slurp);
         let input = (&input_filename, inputs);
-        with_stdout(out, |out| {
+        with_output(out, output_file, |out| {
             run(runner, &filter, vars, input, |v| write(out, writer, &v))
         })?
     } else {
@@ -177,7 +196,7 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
                 tmp.persist(path).map_err(|e| Error::Io(None, e.into()))?;
                 std::fs::set_permissions(path, perms)?;
             } else {
-                last = with_stdout(out, |out| {
+                last = with_output(out, output_file.as_deref_mut(), |out| {
                     run(runner, &filter, vars.clone(), input, |v| {
                         write(out, writer, &v)
                     })
@@ -186,6 +205,10 @@ fn real_main(cli: &Cli, inp: &mut io::Stdin, out: &mut io::Stdout) -> Result<Exi
         }
         last
     };
+
+    if let Some((path, tmp)) = tmp {
+        tmp.persist(path).map_err(|e| Error::Io(None, e.into()))?;
+    }
 
     if cli.exit_status {
         last.map_or_else(

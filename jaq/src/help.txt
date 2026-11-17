@@ -25,6 +25,7 @@ Output options:
       --tab                 Use tabs for indentation rather than spaces
       --indent <N>          Use N spaces for indentation [default: 2]
       --to <FORMAT>         Write output in given format, e.g. cbor
+  -o, --output <FILE>       Write output to given file
 
 Compilation options:
   -f, --from-file           Read filter from a file given by filter argument
