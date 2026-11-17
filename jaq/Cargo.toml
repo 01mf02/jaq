@@ -17,7 +17,7 @@ default = ["mimalloc"]
 [dependencies]
 jaq-all  = { workspace = true, features = ["formats", "std-all"] }
 
-dirs = { version = "6.0" }
+dirs = { version = "7.0" }
 env_logger = { version = "0.10.0", default-features = false }
 log = { version = "0.4.17" }
 mimalloc = { version = "0.1.29", default-features = false, optional = true }
