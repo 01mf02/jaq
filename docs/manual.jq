@@ -56,7 +56,7 @@ def transform_code:
     elif isarray then .[] |= ast_to_html
     elif isstring then @html end;
 
-  def code($lang): {t: "code", a: {$lang}, c: $hl[$lang][. | @htmld] | ast_to_html};
+  def code($lang): {t: "code", a: {"data-lang": $lang}, c: $hl[$lang][. | @htmld] | ast_to_html};
 
   # get contents of all code tags without attributes
   (.. | select(.t? == "code")) |= if is_test then [
