@@ -41,7 +41,7 @@ pub fn then<'a, T, U: 'a, E: 'a>(
 ///
 /// To see the impact of this function, you can replace its implementation with just `None`.
 /// This preserves correctness, but can result in severely degraded performance.
-fn next_if_one<T>(iter: &mut impl Iterator<Item = T>) -> Option<T> {
+pub(crate) fn next_if_one<T>(iter: &mut impl Iterator<Item = T>) -> Option<T> {
     if iter.size_hint().1 == Some(1) {
         let ly = iter.next()?;
         // the Rust documentation states that
