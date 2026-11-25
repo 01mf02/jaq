@@ -73,9 +73,9 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Pai
                 if quoted {
                     val.push(c);
                 } else {
-                    break
+                    break;
                 }
-            },
+            }
             Some(c @ b'\\') => {
                 if escape {
                     val.push(c);
@@ -90,6 +90,9 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Pai
                         } else {
                             break;
                         }
+                    } else {
+                        valid = false;
+                        break;
                     }
                 } else {
                     if escape {
