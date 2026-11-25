@@ -2,23 +2,24 @@
 name = "jaq-fmts"
 version = "0.1.1"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
-edition = "2021"
+edition = "2024"
 license = "MIT"
 readme = "../README.md"
 description = "Multi-format support for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["jq"]
-rust-version = "1.70"
+rust-version = "1.85.0"
 
 [features]
 default = ["all"]
-all = ["cbor", "toml", "xml", "yaml", "tabular"]
+all = ["cbor", "toml", "xml", "yaml", "tabular", "logfmt"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
 toml = ["toml-span"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser", "base64"]
 tabular = ["aho-corasick"]
+logfmt = []
 
 [dependencies]
 jaq-core = { workspace = true }

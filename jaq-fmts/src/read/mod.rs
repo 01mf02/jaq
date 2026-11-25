@@ -1,6 +1,8 @@
 //! Read values in different formats.
 #[cfg(feature = "cbor")]
 pub mod cbor;
+#[cfg(feature = "logfmt")]
+pub mod logfmt;
 pub mod tabular;
 #[cfg(feature = "toml")]
 pub mod toml;

@@ -1,11 +1,11 @@
-use super::{cbor, tabular, toml, xml, yaml};
+use super::{cbor, logfmt, tabular, toml, xml, yaml};
 use alloc::boxed::Box;
 use bytes::Bytes;
 use core::fmt;
-use jaq_core::box_iter::{then, BoxIter};
-use jaq_core::native::{bome, v, Filter};
+use jaq_core::box_iter::{BoxIter, then};
+use jaq_core::native::{Filter, bome, v};
 use jaq_core::{DataT, Exn, RunPtr};
-use jaq_json::{bytes_valrs, Error, Val, ValR, ValX};
+use jaq_json::{Error, Val, ValR, ValX, bytes_valrs};
 use jaq_std::ValT as _;
 
 /// Deserialisation filters.
@@ -45,6 +45,13 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
             bmme(then(cv.1.try_as_bytes_owned(), |s| {
                 bytes_valrs(s, |s| {
                     Box::new(tabular::read_tsv(s.iter().copied().map(Ok)))
+                })
+            }))
+        }),
+        ("fromlogfmt", v(0), |cv| {
+            bmme(then(cv.1.try_as_bytes_owned(), |s| {
+                bytes_valrs(s, |s| {
+                    Box::new(logfmt::read_logfmt(s.iter().copied().map(Ok)))
                 })
             }))
         }),
