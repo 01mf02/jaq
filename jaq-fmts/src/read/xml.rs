@@ -156,6 +156,7 @@ fn make_obj<T: Into<Val>, const N: usize>(arr: [(&str, Option<T>); N]) -> Val {
 fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
     let ss_val = |ss: StrSpan| ss.as_str().to_owned().into();
     let singleton = |k: &str, v| Val::obj(core::iter::once((k.to_string().into(), v)).collect());
+    let yesno = |b| if b { "yes" } else { "no" }.to_string();
 
     Ok(match tk {
         Token::Declaration {
@@ -168,7 +169,7 @@ fn parse(tk: Token, tokens: &mut Tokenizer) -> Result<Val, Error> {
             make_obj([
                 ("version", Some(ss_val(version))),
                 ("encoding", encoding.map(ss_val)),
-                ("standalone", standalone.map(|b| b.into())),
+                ("standalone", standalone.map(|b| yesno(b).into())),
             ]),
         ),
         Token::ProcessingInstruction {
