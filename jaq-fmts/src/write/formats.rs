@@ -32,6 +32,7 @@ pub fn write(w: &mut dyn Write, writer: &Writer, val: &Val) -> Result {
         (_, Format::Xml) => map_err_to_string(xml::Xml::try_from(val))?.write(w)?,
         (_, Format::Csv) => map_err_to_string(tabular::Row::try_from(val))?.write_csv(w)?,
         (_, Format::Tsv) => map_err_to_string(tabular::Row::try_from(val))?.write_tsv(w)?,
+        (_, Format::LogFmt) => logfmt::write_logfmt(w, val)?,
     };
 
     w.write_all(match format {

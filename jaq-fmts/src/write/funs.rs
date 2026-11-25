@@ -1,4 +1,4 @@
-use super::{cbor, tabular, toml, xml, yaml};
+use super::{cbor, logfmt, tabular, toml, xml, yaml};
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::fmt;
 use jaq_core::box_iter::box_once;
@@ -44,6 +44,15 @@ pub fn funs<D: for<'a> DataT<V<'a> = Val>>() -> Box<[Filter<RunPtr<D>>]> {
         ("totsv", v(0), |cv| ser!(cv, "TSV", tabular::Row, write_tsv)),
         ("@csv", v(0), |cv| ser!(cv, "CSV", tabular::Row, write_csv)),
         ("@tsv", v(0), |cv| ser!(cv, "TSV", tabular::Row, write_tsv)),
+        ("tologfmt", v(0), |cv| {
+            let mut buf = Vec::new();
+            let ser = if let Err(e) = logfmt::write_logfmt(&mut buf, &cv.1) {
+                Err(serialise_fail(&cv.1, "logfmt", e))
+            } else {
+                Ok(Val::utf8_str(buf))
+            };
+            bome(ser)
+        }),
     ])
 }
 

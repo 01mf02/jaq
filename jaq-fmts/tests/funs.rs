@@ -44,3 +44,15 @@ yields!(
     r"255 | tobytes | tostring | toyaml | explode",
     [-255]
 );
+
+// logfmt
+yields!(
+    fromlogfmt_keys,
+    r#""ignore prefix a=1  im_wrong   b=\"hello, world!\" \"ignore this\"   c=3.14  d=\"x=x\"" | fromlogfmt | keys"#,
+    json!(["a", "b", "c", "d"])
+);
+yields!(
+    fromlogfmt_values,
+    r#""ignore prefix a=1  im_wrong   b=\"hello, world!\" \"ignore this\"   c=3.14  d=\"x=x\"" | fromlogfmt | [.a, .b, .c, .d]"#,
+    json!([1, "hello, world!", 3.14, "x=x"])
+);

@@ -341,6 +341,20 @@ Finally, we can extract all text from an XML file (discarding CDATA blocks):
 def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
 ```
 
+## logfmt
+
+[logfmt](https://www.brandur.org/logfmt) is data format for structured logs.
+The log fields are formatted as key/value pairs. Any value other than a key/value
+pair is ignored. For example:
+
+```
+at=info method=GET path=/ host=mutelight.org fwd="124.133.52.161"
+  dyno=web.2 connect=4ms service=8ms status=200 bytes=1653
+```
+
+jaq supports reading logfmt data to objects and serializing objects as logfmt.
+When serializing, logfmt keys cannot contain whitespaces or "=" characters.
+
 ### Other values
 
 - Strings are neither escaped nor unescaped; that means,
@@ -539,9 +553,9 @@ Let's see ... in which courses did Ferris get a B+ as first grade? Anyone? Anyon
 $ jaq -L examples 'include "table"; with_table(map(select(.["Grade 1"] == "B+")))' \
   -s examples/ferris-courses.tsv --to tsv
 Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
-01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
-14-19	MTWF	Gym	Carlyle	127	B+	A-		
-30-32	MTWF	Euro Hist	Rice	334	B+	B+		
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A
+14-19	MTWF	Gym	Carlyle	127	B+	A-
+30-32	MTWF	Euro Hist	Rice	334	B+	B+
 ```
 
 Yeah, Ferris ... you still got a bit of work ahead of you on the database.
@@ -560,12 +574,11 @@ Putting this together, we can rewrite the previous example:
 $ jaq -L examples 'include "table"; ., . as $header | from_row(inputs) | select(.["Grade 1"] == "B+") | to_row($header)' \
   examples/ferris-courses.tsv --to tsv
 Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
-01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
-14-19	MTWF	Gym	Carlyle	127	B+	A-		
-30-32	MTWF	Euro Hist	Rice	334	B+	B+		
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A
+14-19	MTWF	Gym	Carlyle	127	B+	A-
+30-32	MTWF	Euro Hist	Rice	334	B+	B+
 ```
 
 This concludes our little Ferris Bueller arc.
 If you do not know the film yet, I greatly recommend you to change that.
 And remember: "Life moves pretty fast. If you don't stop and look around once in a while, you could miss it."
-

@@ -47,11 +47,13 @@ pub enum Format {
     Csv,
     /// Tab-Separated Values
     Tsv,
+    /// logfmt
+    LogFmt,
 }
 
 impl Format {
     /// List of all currently supported formats.
-    pub const ALL: &str = "raw, raw0, json, cbor, yaml, toml, xml, csv, tsv";
+    pub const ALL: &str = "raw, raw0, json, cbor, yaml, toml, xml, csv, tsv, logfmt";
 
     /// Determine a file format from a path.
     pub fn determine(path: &std::path::Path) -> Option<Self> {
@@ -63,6 +65,7 @@ impl Format {
             "json" => Some(Format::Json),
             "csv" => Some(Format::Csv),
             "tsv" => Some(Format::Tsv),
+            "logfmt" => Some(Format::LogFmt),
             _ => None,
         }
     }
@@ -79,6 +82,7 @@ impl Format {
             "yaml" => Some(Format::Yaml),
             "csv" => Some(Format::Csv),
             "tsv" => Some(Format::Tsv),
+            "logfmt" => Some(Format::LogFmt),
             _ => None,
         }
     }
