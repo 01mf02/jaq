@@ -160,3 +160,13 @@ fn xml() {
     let xml2: Vec<_> = json_val.iter().map(serialise).collect();
     assert_eq!(xml, xml2.concat());
 }
+
+#[test]
+fn logfmt() {
+    let logfmt = include_bytes!("logfmt/test.log");
+    let json = include_bytes!("logfmt/test.json");
+
+    let logfmt_val = unwrap_collect(read::logfmt::read_logfmt(logfmt.iter().copied().map(Ok::<_, core::convert::Infallible>)));
+    let json_val = unwrap_collect(read::json::parse_many(json));
+    assert_eq!(logfmt_val, json_val);
+}

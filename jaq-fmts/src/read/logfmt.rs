@@ -12,6 +12,7 @@ use std::rc::Rc;
 struct KeyVal {
     key: Vec<u8>,
     val: Vec<u8>,
+    eol: bool,
 }
 
 fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<KeyVal>, E> {
@@ -56,6 +57,13 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
                     std::mem::swap(&mut kv.key, &mut acc);
                     key = false;
                 }
+                b'\n' if !quoted => {
+                    kv.eol = true;
+                    if key {
+                        return Ok(Some(kv));
+                    }
+                    done = true;
+                }
                 _ if c.is_ascii_whitespace() => {
                     if quoted {
                         acc.push(c);
@@ -91,6 +99,12 @@ fn row<E, I: Iterator<Item = Result<u8, E>>>(iter: &mut I) -> Option<Result<Val,
             Ok(None) => break,
             Err(msg) => return Some(Err(msg)),
         };
+        if pair.eol && pair.key.is_empty() {
+            if map.is_empty() {
+                continue;
+            }
+            break;
+        }
         let key = Val::utf8_str(pair.key);
         let val = if pair.val.is_empty() {
             Val::Null
@@ -104,6 +118,9 @@ fn row<E, I: Iterator<Item = Result<u8, E>>>(iter: &mut I) -> Option<Result<Val,
             Val::utf8_str(pair.val)
         };
         map.insert(key, val);
+        if pair.eol {
+            break;
+        }
     }
     if map.is_empty() {
         return None;
