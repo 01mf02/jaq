@@ -1,4 +1,4 @@
-use super::{cbor, logfmt, tabular, toml, xml, yaml};
+use super::{cbor, tabular, toml, xml, yaml};
 use alloc::boxed::Box;
 use bytes::Bytes;
 use core::fmt;
