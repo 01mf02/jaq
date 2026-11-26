@@ -2,13 +2,13 @@
 name = "jaq-fmts"
 version = "0.1.1"
 authors = ["Michael Färber <michael.faerber@gedenkt.at>"]
-edition = "2024"
+edition = "2021"
 license = "MIT"
 readme = "../README.md"
 description = "Multi-format support for jaq"
 repository = "https://github.com/01mf02/jaq"
 keywords = ["jq"]
-rust-version = "1.85.0"
+rust-version = "1.70"
 
 [features]
 default = ["all"]

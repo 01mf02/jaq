@@ -5,7 +5,7 @@
 //! https://grafana.com/docs/loki/latest/query/log_queries/#logfmt
 //! https://docs.appsignal.com/logging/formatting/logfmt
 
-use jaq_json::{Map, Val, read::parse_single_num};
+use jaq_json::{read::parse_single_num, Map, Val};
 use std::rc::Rc;
 
 #[derive(Default)]
