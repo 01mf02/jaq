@@ -12,14 +12,13 @@ rust-version = "1.85.0"
 
 [features]
 default = ["all"]
-all = ["cbor", "toml", "xml", "yaml", "tabular", "logfmt"]
+all = ["cbor", "toml", "xml", "yaml", "tabular"]
 
 cbor = ["ciborium-ll", "ciborium-io"]
 toml = ["toml-span"]
 xml = ["xmlparser"]
 yaml = ["saphyr-parser", "base64"]
 tabular = ["aho-corasick"]
-logfmt = []
 
 [dependencies]
 jaq-core = { workspace = true }
