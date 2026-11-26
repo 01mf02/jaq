@@ -1,5 +1,5 @@
 //! CSV and TSV support.
-use jaq_json::{read::parse_single_num, Val};
+use jaq_json::{Val, read::parse_single_num};
 
 #[derive(Debug, Default)]
 struct Field {
@@ -64,18 +64,20 @@ where
 }
 
 fn csv_field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Field, E> {
-    field(iter, b',', b'"', |iter, field| loop {
-        match iter.next().transpose()? {
-            Some(b'"') => match iter.next().transpose()? {
-                Some(b'"') => field.bytes.push(b'"'),
-                c @ Some(_) => {
-                    field.next = c;
-                    return Ok(());
-                }
+    field(iter, b',', b'"', |iter, field| {
+        loop {
+            match iter.next().transpose()? {
+                Some(b'"') => match iter.next().transpose()? {
+                    Some(b'"') => field.bytes.push(b'"'),
+                    c @ Some(_) => {
+                        field.next = c;
+                        return Ok(());
+                    }
+                    None => return Ok(()),
+                },
+                Some(c) => field.bytes.push(c),
                 None => return Ok(()),
-            },
-            Some(c) => field.bytes.push(c),
-            None => return Ok(()),
+            }
         }
     })
 }

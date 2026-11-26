@@ -2,9 +2,9 @@ use super::{cbor, logfmt, tabular, toml, xml, yaml};
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::fmt;
 use jaq_core::box_iter::box_once;
-use jaq_core::native::{bome, v, Filter};
+use jaq_core::native::{Filter, bome, v};
 use jaq_core::{DataT, RunPtr};
-use jaq_json::{write::Pp, Error, Val};
+use jaq_json::{Error, Val, write::Pp};
 
 /// Convert a value fallibly and write the result.
 macro_rules! ser {

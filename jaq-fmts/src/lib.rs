@@ -11,7 +11,7 @@ pub mod read;
 pub mod write;
 
 #[cfg(feature = "all")]
-use jaq_core::native::{run, Fun};
+use jaq_core::native::{Fun, run};
 
 #[cfg(feature = "all")]
 /// (De-)Serialisation filters, such as `fromyaml`, `toxml`.

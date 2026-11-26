@@ -1,7 +1,7 @@
 //! XML support.
 use alloc::{boxed::Box, string::ToString, vec::Vec};
 use core::fmt::{self, Formatter};
-use jaq_json::{bstr, Map, Val};
+use jaq_json::{Map, Val, bstr};
 
 /// Serialisation error.
 #[derive(Debug)]

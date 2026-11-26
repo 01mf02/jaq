@@ -1,7 +1,7 @@
-use super::{cbor, collect_if, json, tabular, toml, xml, yaml, logfmt, Result};
-use crate::{invalid_data, map_invalid_data, Format};
+use super::{Result, cbor, collect_if, json, logfmt, tabular, toml, xml, yaml};
+use crate::{Format, invalid_data, map_invalid_data};
 use bytes::Bytes;
-use jaq_core::box_iter::{box_once, BoxIter};
+use jaq_core::box_iter::{BoxIter, box_once};
 use jaq_json::Val;
 use std::io::{self, Read};
 

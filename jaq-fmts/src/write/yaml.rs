@@ -1,6 +1,6 @@
 //! YAML support.
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use jaq_json::{write, write_utf8, Num, Val};
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use jaq_json::{Num, Val, write, write_utf8};
 use std::io;
 
 macro_rules! format_yaml {
@@ -74,9 +74,7 @@ macro_rules! format_yaml {
 macro_rules! write_yaml {
     ($w:ident, $pp:ident, $level:ident, $v:ident, $f:expr) => {{
         macro_rules! style {
-            ($style:ident, $g:expr) => {{
-                jaq_json::style!($w, $pp, $style, $g)
-            }};
+            ($style:ident, $g:expr) => {{ jaq_json::style!($w, $pp, $style, $g) }};
         }
         match $v {
             Val::TStr(b) if !must_quote(b) => style!(str, $w.write_all(b)),

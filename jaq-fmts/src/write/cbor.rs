@@ -11,7 +11,7 @@
 //! They can be pasted directly into the command above.
 use alloc::string::String;
 use ciborium_io::Write;
-use ciborium_ll::{simple, tag, Encoder, Header};
+use ciborium_ll::{Encoder, Header, simple, tag};
 use jaq_json::{Num, Val};
 
 /// Write a value as CBOR.

@@ -1,5 +1,5 @@
 use jaq_json::{Error, Val, ValR};
-use serde_json::{from_value, Value};
+use serde_json::{Value, from_value};
 
 fn yields(x: Val, code: &str, ys: impl Iterator<Item = ValR>) {
     use jaq_core::load::{Arena, File, Loader};
