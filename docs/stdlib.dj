@@ -1829,9 +1829,8 @@ The filter `fromlogfmt` takes a string and yields each logfmt row as an object.
 Any value other than a key/value pair is ignored.
 For example, `"one=1 two=2 ignore_me" | fromlogfmt --> {"one": 1, "two": 2}`.
 
-The filter `tologfmt` takes an object and yields a logfmt string. Since logfmt
-keys cannot contain whitespaces or "=" characters, serializing would fail if
-an object contains such keys.
+The filter `tologfmt` takes an object and yields a logfmt string.
+For example, `"{one: 1, two: 2} | tologfmt --> "one=1 two=2"`.
 
 ## Date & Time
 

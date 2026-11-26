@@ -353,7 +353,6 @@ at=info method=GET path=/ host=mutelight.org fwd="124.133.52.161"
 ```
 
 jaq supports reading logfmt data to objects and serializing objects as logfmt.
-When serializing, logfmt keys cannot contain whitespaces or "=" characters.
 
 ### Other values
 
