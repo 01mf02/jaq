@@ -2,10 +2,10 @@ use super::{cbor, tabular, toml, xml, yaml};
 use alloc::boxed::Box;
 use bytes::Bytes;
 use core::fmt;
-use jaq_core::box_iter::{BoxIter, then};
-use jaq_core::native::{Filter, bome, v};
+use jaq_core::box_iter::{then, BoxIter};
+use jaq_core::native::{bome, v, Filter};
 use jaq_core::{DataT, Exn, RunPtr};
-use jaq_json::{Error, Val, ValR, ValX, bytes_valrs};
+use jaq_json::{bytes_valrs, Error, Val, ValR, ValX};
 use jaq_std::ValT as _;
 
 /// Deserialisation filters.
