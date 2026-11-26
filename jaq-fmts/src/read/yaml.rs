@@ -1,6 +1,6 @@
 //! YAML support.
 use alloc::{borrow::Cow, format, string::String, vec::Vec};
-use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use core::fmt::{self, Formatter};
 use jaq_json::{Num, Val};
 use saphyr_parser::{Event, Input, Parser, ScalarStyle, ScanError, Tag};

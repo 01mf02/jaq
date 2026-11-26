@@ -2,7 +2,7 @@
 use alloc::vec::Vec;
 use bytes::Bytes;
 use core::fmt::{self, Display, Formatter};
-use jaq_json::{Num, Val, bstr, write_utf8};
+use jaq_json::{bstr, write_utf8, Num, Val};
 
 /// Serialisation error.
 #[derive(Debug)]
