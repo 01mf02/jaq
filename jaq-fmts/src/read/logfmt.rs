@@ -23,63 +23,63 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
     let mut escaped = false;
 
     loop {
-        if let Some(c) = iter.next().transpose()? {
-            if escaped {
-                if c != b'"' {
-                    acc.push(b'\\');
-                }
-                acc.push(c);
-                escaped = false;
-                continue;
-            }
-
-            match c {
-                b'"' => {
-                    if quoted {
-                        if key {
-                            quoted = false;
-                            escaped = false;
-                        } else {
-                            break;
-                        }
-                    } else if !key && !acc.is_empty() {
-                        break;
-                    } else {
-                        acc.clear();
-                        quoted = true;
-                    }
-                }
-                b'\\' if quoted => {
-                    escaped = true;
-                }
-                b'=' if !quoted => {
-                    std::mem::swap(&mut kv.key, &mut acc);
-                    key = false;
-                }
-                b'\n' if !quoted => {
-                    kv.eol = true;
-                    if key {
-                        return Ok(Some(kv));
-                    }
-                    break;
-                }
-                _ if c.is_ascii_whitespace() => {
-                    if quoted {
-                        acc.push(c);
-                    } else if key {
-                        acc.clear();
-                    } else {
-                        break;
-                    }
-                }
-                _ => acc.push(c),
-            }
-        } else {
+        let Some(c) = iter.next().transpose()? else {
             if key {
                 return Ok(None);
             } else {
                 break;
             }
+        };
+
+        if escaped {
+            if c != b'"' {
+                acc.push(b'\\');
+            }
+            acc.push(c);
+            escaped = false;
+            continue;
+        }
+
+        match c {
+            b'"' => {
+                if quoted {
+                    if key {
+                        quoted = false;
+                        escaped = false;
+                    } else {
+                        break;
+                    }
+                } else if !key && !acc.is_empty() {
+                    break;
+                } else {
+                    acc.clear();
+                    quoted = true;
+                }
+            }
+            b'\\' if quoted => {
+                escaped = true;
+            }
+            b'=' if !quoted => {
+                std::mem::swap(&mut kv.key, &mut acc);
+                key = false;
+            }
+            b'\n' if !quoted => {
+                kv.eol = true;
+                if key {
+                    return Ok(Some(kv));
+                }
+                break;
+            }
+            _ if c.is_ascii_whitespace() => {
+                if quoted {
+                    acc.push(c);
+                } else if key {
+                    acc.clear();
+                } else {
+                    break;
+                }
+            }
+            _ => acc.push(c),
         }
     }
     std::mem::swap(&mut kv.val, &mut acc);
