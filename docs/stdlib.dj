@@ -772,7 +772,7 @@ For example:
 ::: Compatibility
 In `jq`,
 the `$paths` are interpreted relative to the _original_ input value, whereas
-in jaq, they are interpreted relative to the _current_ value.
+in jaq, they are interpreted relative to the _current_ value. 
 For example,
 `[1, 2, 3] | delpaths([[0], [0]]) --> [3]` in jaq, because
 it first deletes the `0`-th element `1` (yielding `[2, 3]`),
@@ -853,7 +853,7 @@ We can obtain the boolean value of a value by `not | not`; i.e.
 
 ### `toboolean`
 
-The filter `toboolean` is for booleans what [`tonumber`](#tonumber) is for numbers.
+The filter `toboolean` is for booleans what [`tonumber`](#tonumber) is for numbers. 
 For example:
 
 - `  true   | toboolean --> true`
@@ -1394,7 +1394,7 @@ The inverse filter of `explode` is `implode`:
 
 ::: Compatibility
 `jq` does not permit invalid code units in text strings, so it
-returns and accepts only natural numbers in `explode` and `implode`.
+returns and accepts only natural numbers in `explode` and `implode`. 
 :::
 
 {#split}
@@ -2035,8 +2035,8 @@ for each part of the input that matches the regular expression,
 
 The filter `match` yields an object for every part of the input that matches the regular expression, containing:
 
-- `"offset"`: the character index of the start of the match
-- `"length"`: the number of characters of the match
+- `"offset"`: the character index of the start of the match 
+- `"length"`: the number of characters of the match 
 - `"string"`: the contents of the match
 - `"captures"`: an array with an object for every capture group, containing:
 
