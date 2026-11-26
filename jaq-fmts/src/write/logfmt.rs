@@ -10,21 +10,24 @@ use jaq_json::Val;
 use std::io;
 
 fn pair_to_string(k: &Val, v: &Val) -> io::Result<String> {
-    let k = if let Val::TStr(k) = k
-        && k.iter().all(|c| c.is_ascii_alphanumeric())
-    {
-        String::from_utf8_lossy(k)
-    } else {
-        return Err(invalid_data(format!(
-            "expected alphanumeric key, found {k}"
-        )));
-    };
-    let mut v = v.to_string();
-    if v.starts_with('"') && v.chars().all(|c| c != '=' && !c.is_whitespace()) {
-        v.remove(0);
-        v.pop();
-    }
+    let k = val_to_string(k);
+    let v = val_to_string(v);
     Ok(format!("{k}={v}"))
+}
+
+fn val_to_string(val: &Val) -> String {
+    match val {
+        Val::Null | Val::Num(_) | Val::Bool(_) => val.to_string(),
+        Val::TStr(v) | Val::BStr(v) => {
+            let s = String::from_utf8_lossy(v);
+            if v.iter().any(|c| *c == b'"' || *c == b'=') {
+                format!("\"{}\"", s.replace("\"", "\\\""))
+            } else {
+                s.to_string()
+            }
+        }
+        other => format!("\"{}\"", other.to_string().replace("\"", "\\\"")),
+    }
 }
 
 pub(crate) fn write_logfmt(w: &mut dyn io::Write, val: &Val) -> io::Result<()> {
