@@ -9,10 +9,22 @@ use crate::invalid_data;
 use jaq_json::Val;
 use std::io;
 
-fn pair_to_string(k: &Val, v: &Val) -> io::Result<String> {
-    let k = val_to_string(k);
-    let v = val_to_string(v);
-    Ok(format!("{k}={v}"))
+pub(crate) fn write_logfmt(w: &mut dyn io::Write, val: &Val) -> io::Result<()> {
+    match val {
+        Val::Obj(map) => {
+            let s = map
+                .iter()
+                .map(|(k, v)| {
+                    let k = val_to_string(k);
+                    let v = val_to_string(v);
+                    format!("{k}={v}")
+                })
+                .collect::<Vec<String>>()
+                .join(" ");
+            write!(w, "{s}")
+        }
+        v => Err(invalid_data(format!("expected table row (map), found {v}"))),
+    }
 }
 
 fn val_to_string(val: &Val) -> String {
@@ -29,20 +41,6 @@ fn val_to_string(val: &Val) -> String {
             }
         }
         other => format!("\"{}\"", other.to_string().replace("\"", "\\\"")),
-    }
-}
-
-pub(crate) fn write_logfmt(w: &mut dyn io::Write, val: &Val) -> io::Result<()> {
-    match val {
-        Val::Obj(map) => {
-            let s = map
-                .iter()
-                .map(|(k, v)| pair_to_string(k, v))
-                .collect::<io::Result<Vec<String>>>()?
-                .join(" ");
-            write!(w, "{s}")
-        }
-        v => Err(invalid_data(format!("expected table row (map), found {v}"))),
     }
 }
 
