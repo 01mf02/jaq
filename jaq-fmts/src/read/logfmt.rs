@@ -9,102 +9,77 @@ use jaq_json::{Map, Val, read::parse_single_num};
 use std::rc::Rc;
 
 #[derive(Default)]
-struct Pair {
+struct KeyVal {
     key: Vec<u8>,
     val: Vec<u8>,
-    valid: bool,
 }
 
-fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Pair>, E> {
-    let mut key = Vec::new();
-    let mut val = Vec::new();
-    let mut valid = true;
+fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<KeyVal>, E> {
+    let mut kv = KeyVal::default();
+    let mut acc = Vec::new();
+    let mut key = true;
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut done = false;
 
-    // key
     loop {
-        match iter.next().transpose()? {
-            Some(c) if c.is_ascii_whitespace() => {}
-            Some(c) => {
-                key.push(c);
-                if c == b'"' || c == b'=' {
-                    valid = false;
+        if let Some(c) = iter.next().transpose()? {
+            if escaped {
+                if c != b'"' {
+                    acc.push(b'\\');
                 }
-                break;
+                acc.push(c);
+                escaped = false;
+                continue;
             }
-            None => return Ok(None),
-        }
-    }
-    loop {
-        match iter.next().transpose()? {
-            Some(b'=') => break,
-            Some(c) if c.is_ascii_whitespace() || c == b'"' => {
-                valid = false;
-                break;
-            }
-            Some(c) => {
-                key.push(c);
-            }
-            None => {
-                valid = false;
-                break;
-            }
-        }
-    }
-    if !valid {
-        return Ok(Some(Pair { key, val, valid }));
-    }
 
-    // val
-    let quoted = match iter.next().transpose()? {
-        Some(c) if c.is_ascii_whitespace() => return Ok(Some(Pair { key, val, valid })),
-        None => return Ok(Some(Pair { key, val, valid })),
-        Some(b'"') => true,
-        Some(c) => {
-            val.push(c);
-            false
-        }
-    };
-
-    let mut escape = false;
-    loop {
-        match iter.next().transpose()? {
-            None => break,
-            Some(c) if c.is_ascii_whitespace() => {
-                if quoted {
-                    val.push(c);
-                } else {
-                    break;
-                }
-            }
-            Some(c @ b'\\') => {
-                if escape {
-                    val.push(c);
-                }
-                escape = !escape
-            }
-            Some(c) => {
-                if c == b'"' {
+            match c {
+                b'"' => {
                     if quoted {
-                        if escape {
-                            escape = false;
+                        if key {
+                            quoted = false;
+                            escaped = false;
                         } else {
-                            break;
+                            done = true;
                         }
+                    } else if !key && !acc.is_empty() {
+                        done = true;
                     } else {
-                        valid = false;
-                        break;
-                    }
-                } else {
-                    if escape {
-                        val.push(b'\\');
-                        escape = false;
+                        acc.clear();
+                        quoted = true;
                     }
                 }
-                val.push(c);
+                b'\\' if quoted => {
+                    escaped = true;
+                }
+                b'=' if !quoted => {
+                    std::mem::swap(&mut kv.key, &mut acc);
+                    key = false;
+                }
+                _ if c.is_ascii_whitespace() => {
+                    if quoted {
+                        acc.push(c);
+                    } else if key {
+                        acc.clear();
+                    } else {
+                        done = true;
+                    }
+                }
+                _ => acc.push(c),
+            }
+        } else {
+            if key {
+                return Ok(None);
+            } else {
+                done = true;
             }
         }
+
+        if done {
+            std::mem::swap(&mut kv.val, &mut acc);
+            return Ok(Some(kv));
+        }
     }
-    Ok(Some(Pair { key, val, valid }))
 }
 
 /// Read single table row.
@@ -116,9 +91,6 @@ fn row<E, I: Iterator<Item = Result<u8, E>>>(iter: &mut I) -> Option<Result<Val,
             Ok(None) => break,
             Err(msg) => return Some(Err(msg)),
         };
-        if !pair.valid {
-            continue;
-        }
         let key = Val::utf8_str(pair.key);
         let val = if pair.val.is_empty() {
             Val::Null
@@ -144,4 +116,67 @@ pub fn read_logfmt<E>(
     mut iter: impl Iterator<Item = Result<u8, E>>,
 ) -> impl Iterator<Item = Result<Val, E>> {
     core::iter::from_fn(move || row(&mut iter))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::field;
+    use std::io;
+
+    #[test]
+    fn simple() {
+        let mut iter = b"the_key=val".iter().cloned().map(io::Result::Ok);
+        let kv = field(&mut iter).unwrap().unwrap();
+        assert_eq!(kv.key, b"the_key");
+        assert_eq!(kv.val, b"val");
+    }
+
+    #[test]
+    fn with_spaces() {
+        let mut iter = b"\t\t   key=val \t\t  ".iter().cloned().map(io::Result::Ok);
+        let kv = field(&mut iter).unwrap().unwrap();
+        assert_eq!(kv.key, b"key");
+        assert_eq!(kv.val, b"val");
+    }
+
+    #[test]
+    fn with_garbage() {
+        let mut iter = b" \"not this\"  WRONG PI=3.1415 also_incorrect  "
+            .iter()
+            .cloned()
+            .map(io::Result::Ok);
+        let kv = field(&mut iter).unwrap().unwrap();
+        assert_eq!(kv.key, b"PI");
+        assert_eq!(kv.val, b"3.1415");
+    }
+
+    #[test]
+    fn quoted_value() {
+        let mut iter = b"message=\"hello, world!\""
+            .iter()
+            .cloned()
+            .map(io::Result::Ok);
+        let kv = field(&mut iter).unwrap().unwrap();
+        assert_eq!(kv.key, b"message");
+        assert_eq!(kv.val, b"hello, world!");
+    }
+
+    #[test]
+    fn quoted_key() {
+        let mut iter = b"\"first name\"=Tim".iter().cloned().map(io::Result::Ok);
+        let kv = field(&mut iter).unwrap().unwrap();
+        assert_eq!(kv.key, b"first name");
+        assert_eq!(kv.val, b"Tim");
+    }
+
+    #[test]
+    fn mixed_quotes() {
+        let mut iter = b"WRONG\"key\"=val\"INCORRECT\""
+            .iter()
+            .cloned()
+            .map(io::Result::Ok);
+        let kv = field(&mut iter).unwrap().unwrap();
+        assert_eq!(kv.key, b"key");
+        assert_eq!(kv.val, b"val");
+    }
 }
