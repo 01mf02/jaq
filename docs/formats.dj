@@ -552,9 +552,9 @@ Let's see ... in which courses did Ferris get a B+ as first grade? Anyone? Anyon
 $ jaq -L examples 'include "table"; with_table(map(select(.["Grade 1"] == "B+")))' \
   -s examples/ferris-courses.tsv --to tsv
 Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
-01-04	MTWF	Eng Comp	Hollndr	221	B+	A
-14-19	MTWF	Gym	Carlyle	127	B+	A-
-30-32	MTWF	Euro Hist	Rice	334	B+	B+
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
+14-19	MTWF	Gym	Carlyle	127	B+	A-		
+30-32	MTWF	Euro Hist	Rice	334	B+	B+		
 ```
 
 Yeah, Ferris ... you still got a bit of work ahead of you on the database.
@@ -573,11 +573,12 @@ Putting this together, we can rewrite the previous example:
 $ jaq -L examples 'include "table"; ., . as $header | from_row(inputs) | select(.["Grade 1"] == "B+") | to_row($header)' \
   examples/ferris-courses.tsv --to tsv
 Perds	Days	Course	Teacher	Rm	Grade 1	Grade 2	Grade 3	Grade EX
-01-04	MTWF	Eng Comp	Hollndr	221	B+	A
-14-19	MTWF	Gym	Carlyle	127	B+	A-
-30-32	MTWF	Euro Hist	Rice	334	B+	B+
+01-04	MTWF	Eng Comp	Hollndr	221	B+	A		
+14-19	MTWF	Gym	Carlyle	127	B+	A-		
+30-32	MTWF	Euro Hist	Rice	334	B+	B+		
 ```
 
 This concludes our little Ferris Bueller arc.
 If you do not know the film yet, I greatly recommend you to change that.
 And remember: "Life moves pretty fast. If you don't stop and look around once in a while, you could miss it."
+
