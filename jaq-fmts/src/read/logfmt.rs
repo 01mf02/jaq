@@ -21,7 +21,6 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
     let mut key = true;
     let mut quoted = false;
     let mut escaped = false;
-    let mut done = false;
 
     loop {
         if let Some(c) = iter.next().transpose()? {
@@ -41,10 +40,10 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
                             quoted = false;
                             escaped = false;
                         } else {
-                            done = true;
+                            break;
                         }
                     } else if !key && !acc.is_empty() {
-                        done = true;
+                        break;
                     } else {
                         acc.clear();
                         quoted = true;
@@ -62,7 +61,7 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
                     if key {
                         return Ok(Some(kv));
                     }
-                    done = true;
+                    break;
                 }
                 _ if c.is_ascii_whitespace() => {
                     if quoted {
@@ -70,7 +69,7 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
                     } else if key {
                         acc.clear();
                     } else {
-                        done = true;
+                        break;
                     }
                 }
                 _ => acc.push(c),
@@ -79,15 +78,12 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
             if key {
                 return Ok(None);
             } else {
-                done = true;
+                break;
             }
         }
-
-        if done {
-            std::mem::swap(&mut kv.val, &mut acc);
-            return Ok(Some(kv));
-        }
     }
+    std::mem::swap(&mut kv.val, &mut acc);
+    Ok(Some(kv))
 }
 
 /// Read single table row.
