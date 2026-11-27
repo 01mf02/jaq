@@ -29,25 +29,10 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
         }
     }
 
-    fn quoted(&mut self, acc: &mut Vec<u8>) -> Result<bool, E> {
-        acc.clear();
-        let mut escaped = false;
-        while let Some(c) = self.iter.next().transpose()? {
-            match c {
-                b'\\' if core::mem::take(&mut escaped) => acc.push(b'\\'),
-                b'\\' => escaped = true,
-                b'\n' => return Ok(false),
-                b'"' if !escaped => return Ok(true),
-                _ => acc.push(c),
-            }
-        }
-        Ok(false)
-    }
-
     fn field(&mut self) -> Result<Option<KeyVal>, E> {
         let mut kv = KeyVal::default();
 
-        if self.open_quote && !self.quoted(&mut kv.key)? {
+        if self.open_quote && !quoted(&mut self.iter, &mut kv.key)? {
             return Ok(None);
         }
 
@@ -66,7 +51,9 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                     self.open_quote = true;
                     break;
                 }
-                b'"' if !self.quoted(kv.val.as_mut().unwrap_or(&mut kv.key))? => continue,
+                b'"' if !quoted(&mut self.iter, kv.val.as_mut().unwrap_or(&mut kv.key))? => {
+                    continue
+                }
                 b'"' => (),
                 b'=' => kv.val = Some(Vec::new()),
                 b'\n' => {
@@ -112,6 +99,21 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
         }
         Some(Ok(Val::Obj(Rc::new(map))))
     }
+}
+
+fn quoted<E>(iter: &mut impl Iterator<Item = Result<u8, E>>, acc: &mut Vec<u8>) -> Result<bool, E> {
+    acc.clear();
+    let mut escaped = false;
+    while let Some(c) = iter.next().transpose()? {
+        match c {
+            b'\\' if core::mem::take(&mut escaped) => acc.push(b'\\'),
+            b'\\' => escaped = true,
+            b'\n' => return Ok(false),
+            b'"' if !escaped => return Ok(true),
+            _ => acc.push(c),
+        }
+    }
+    Ok(false)
 }
 
 fn parse_val(val: Vec<u8>) -> Val {
