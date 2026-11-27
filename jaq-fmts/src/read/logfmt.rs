@@ -47,10 +47,8 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
     fn field(&mut self) -> Result<Option<KeyVal>, E> {
         let mut kv = KeyVal::default();
 
-        if self.open_quote {
-            if !self.quoted(&mut kv.key)? {
-                return Ok(None);
-            }
+        if self.open_quote && !self.quoted(&mut kv.key)? {
+            return Ok(None);
         }
 
         loop {
@@ -63,15 +61,13 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
             };
 
             match c {
-                b'"' => {
-                    if kv.val.as_ref().is_some_and(|v| !v.is_empty()) {
-                        // quote in value
-                        self.open_quote = true;
-                        break;
-                    } else if !self.quoted(kv.val.as_mut().unwrap_or(&mut kv.key))? {
-                        continue;
-                    }
+                b'"' if kv.val.as_ref().is_some_and(|v| !v.is_empty()) => {
+                    // quote in value
+                    self.open_quote = true;
+                    break;
                 }
+                b'"' if !self.quoted(kv.val.as_mut().unwrap_or(&mut kv.key))? => continue,
+                b'"' => (),
                 b'=' => kv.val = Some(Vec::new()),
                 b'\n' => {
                     self.done = true;
