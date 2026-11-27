@@ -29,28 +29,26 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
         }
     }
 
-    fn quoted(&mut self) -> Result<Option<Vec<u8>>, E> {
-        let mut acc = Vec::new();
+    fn quoted(&mut self, acc: &mut Vec<u8>) -> Result<bool, E> {
+        acc.clear();
         let mut escaped = false;
         while let Some(c) = self.iter.next().transpose()? {
             match c {
                 b'\\' if core::mem::take(&mut escaped) => acc.push(b'\\'),
                 b'\\' => escaped = true,
-                b'\n' => return Ok(None),
-                b'"' if !escaped => return Ok(Some(acc)),
+                b'\n' => return Ok(false),
+                b'"' if !escaped => return Ok(true),
                 _ => acc.push(c),
             }
         }
-        Ok(None)
+        Ok(false)
     }
 
     fn field(&mut self) -> Result<Option<KeyVal>, E> {
         let mut kv = KeyVal::default();
 
         if self.open_quote {
-            if let Some(v) = self.quoted()? {
-                kv.key = v;
-            } else {
+            if !self.quoted(&mut kv.key)? {
                 return Ok(None);
             }
         }
@@ -70,23 +68,18 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                         // quote in value
                         self.open_quote = true;
                         break;
-                    } else if let Some(v) = self.quoted()? {
-                        *kv.val.as_mut().unwrap_or(&mut kv.key) = v;
-                    } else {
+                    } else if !self.quoted(kv.val.as_mut().unwrap_or(&mut kv.key))? {
                         continue;
                     }
                 }
                 b'=' => kv.val = Some(Vec::new()),
                 b'\n' => {
                     self.done = true;
-                    if kv.val.is_none() {
-                        return Ok(Some(kv));
-                    }
                     break;
                 }
                 c if c.is_ascii_whitespace() => {
                     if kv.val.is_none() {
-                        kv.key = Vec::new();
+                        kv.key = Vec::new()
                     } else {
                         break;
                     }
