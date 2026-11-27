@@ -106,7 +106,10 @@ fn cbor() {
     jc("[]", "80");
     jc("[1, 2, 3]", "83010203");
     jc("[1, [2, 3], [4, 5]]", "8301820203820405");
-    jc("[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]", "98190102030405060708090a0b0c0d0e0f101112131415161718181819");
+    jc(
+        "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]",
+        "98190102030405060708090a0b0c0d0e0f101112131415161718181819",
+    );
     jc("{}", "a0");
     jc("{1: 2, 3: 4}", "a201020304");
     jc("{\"a\": 1, \"b\": [2, 3]}", "a26161016162820203");
@@ -159,4 +162,19 @@ fn xml() {
     let serialise = |v| format!("{}\n", write::xml::Xml::try_from(v).unwrap());
     let xml2: Vec<_> = json_val.iter().map(serialise).collect();
     assert_eq!(xml, xml2.concat());
+}
+
+#[test]
+fn logfmt() {
+    let logfmt = include_bytes!("logfmt/test.log");
+    let json = include_bytes!("logfmt/test.json");
+
+    let logfmt_val = unwrap_collect(read::logfmt::read_logfmt(
+        logfmt
+            .iter()
+            .copied()
+            .map(Ok::<_, core::convert::Infallible>),
+    ));
+    let json_val = unwrap_collect(read::json::parse_many(json));
+    assert_eq!(logfmt_val, json_val);
 }

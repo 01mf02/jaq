@@ -341,6 +341,19 @@ Finally, we can extract all text from an XML file (discarding CDATA blocks):
 def xml_text: if isstring then . else .c[]? | xml_text end; [xml_text]
 ```
 
+## logfmt
+
+[logfmt](https://www.brandur.org/logfmt) is data format for structured logs.
+The log fields are formatted as key/value pairs. Any value other than a key/value
+pair is ignored. For example:
+
+```
+at=info method=GET path=/ host=mutelight.org fwd="124.133.52.161"
+  dyno=web.2 connect=4ms service=8ms status=200 bytes=1653
+```
+
+jaq supports reading logfmt data to objects and serializing objects as logfmt.
+
 ### Other values
 
 - Strings are neither escaped nor unescaped; that means,
