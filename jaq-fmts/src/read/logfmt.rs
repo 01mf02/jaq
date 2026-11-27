@@ -46,12 +46,10 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
 
     fn field(&mut self) -> Result<Option<KeyVal>, E> {
         let mut kv = KeyVal::default();
-        let mut acc = Vec::new();
-        let mut key = true;
 
         if self.open_quote {
             if let Some(v) = self.quoted()? {
-                acc = v;
+                kv.key = v;
             } else {
                 return Ok(None);
             }
@@ -59,7 +57,7 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
 
         loop {
             let Some(c) = self.iter.next().transpose()? else {
-                if key {
+                if kv.val.is_none() {
                     return Ok(None);
                 } else {
                     break;
@@ -68,44 +66,34 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
 
             match c {
                 b'"' => {
-                    if !key && !acc.is_empty() {
+                    if kv.val.as_ref().is_some_and(|v| !v.is_empty()) {
                         // quote in value
                         self.open_quote = true;
                         break;
                     } else if let Some(v) = self.quoted()? {
-                        acc = v;
+                        *kv.val.as_mut().unwrap_or(&mut kv.key) = v;
                     } else {
                         continue;
                     }
                 }
-                b'=' => {
-                    std::mem::swap(&mut kv.key, &mut acc);
-                    key = false;
-                }
+                b'=' => kv.val = Some(Vec::new()),
                 b'\n' => {
                     self.done = true;
-                    if key {
+                    if kv.val.is_none() {
                         return Ok(Some(kv));
                     }
                     break;
                 }
                 c if c.is_ascii_whitespace() => {
-                    if key {
-                        acc.clear();
-                        // instead we could do:
-                        //
-                        //   std::mem::swap(&mut kv.key, &mut acc);
-                        //   return Ok(Some(kv));
-                        //
-                        // so kv.ok remains false, and handle the garbage values downstream
+                    if kv.val.is_none() {
+                        kv.key = Vec::new();
                     } else {
                         break;
                     }
                 }
-                c => acc.push(c),
+                c => kv.val.as_mut().unwrap_or(&mut kv.key).push(c),
             }
         }
-        kv.val = Some(acc);
         Ok(Some(kv))
     }
 
