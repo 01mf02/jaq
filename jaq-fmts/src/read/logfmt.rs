@@ -11,9 +11,7 @@ use std::rc::Rc;
 #[derive(Default)]
 struct KeyVal {
     key: Vec<u8>,
-    val: Vec<u8>,
-    /// is the key/value pair valid
-    ok: bool,
+    val: Option<Vec<u8>>,
 }
 
 struct Reader<'a, E, I: Iterator<Item = Result<u8, E>>> {
@@ -104,13 +102,10 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                         break;
                     }
                 }
-                c => {
-                    acc.push(c);
-                }
+                c => acc.push(c),
             }
         }
-        kv.val = acc;
-        kv.ok = true;
+        kv.val = Some(acc);
         Ok(Some(kv))
     }
 
@@ -123,7 +118,7 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                 Ok(None) => break,
                 Err(msg) => return Some(Err(msg)),
             };
-            if self.done && !pair.ok {
+            if self.done && pair.val.is_none() {
                 if map.is_empty() {
                     self.done = false;
                     continue;
@@ -131,23 +126,28 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                 break;
             }
             let key = Val::utf8_str(pair.key);
-            let val = if pair.val.is_empty() {
-                Val::Null
-            } else if pair.val == b"true" {
-                Val::Bool(true)
-            } else if pair.val == b"false" {
-                Val::Bool(false)
-            } else if let Some(num) = parse_single_num(&pair.val) {
-                Val::Num(num)
-            } else {
-                Val::utf8_str(pair.val)
-            };
+            // TODO: what to do if val is None here?
+            let val = parse_val(pair.val.unwrap());
             map.insert(key, val);
         }
         if map.is_empty() {
             return None;
         }
         Some(Ok(Val::Obj(Rc::new(map))))
+    }
+}
+
+fn parse_val(val: Vec<u8>) -> Val {
+    if val.is_empty() {
+        Val::Null
+    } else if val == b"true" {
+        Val::Bool(true)
+    } else if val == b"false" {
+        Val::Bool(false)
+    } else if let Some(num) = parse_single_num(&val) {
+        Val::Num(num)
+    } else {
+        Val::utf8_str(val)
     }
 }
 
@@ -168,7 +168,7 @@ mod tests {
         let mut iter = b"the_key=val".iter().cloned().map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"the_key");
-        assert_eq!(kv.val, b"val");
+        assert_eq!(kv.val.unwrap(), b"val");
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod tests {
         let mut iter = b"\t\t   key=val \t\t  ".iter().cloned().map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"key");
-        assert_eq!(kv.val, b"val");
+        assert_eq!(kv.val.unwrap(), b"val");
     }
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
             .map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"PI");
-        assert_eq!(kv.val, b"3.1415");
+        assert_eq!(kv.val.unwrap(), b"3.1415");
     }
 
     #[test]
@@ -198,7 +198,7 @@ mod tests {
             .map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"message");
-        assert_eq!(kv.val, b"hello, world!");
+        assert_eq!(kv.val.unwrap(), b"hello, world!");
     }
 
     #[test]
@@ -206,7 +206,7 @@ mod tests {
         let mut iter = b"\"first name\"=Tim".iter().cloned().map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"first name");
-        assert_eq!(kv.val, b"Tim");
+        assert_eq!(kv.val.unwrap(), b"Tim");
     }
 
     #[test]
@@ -217,7 +217,7 @@ mod tests {
             .map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"key");
-        assert_eq!(kv.val, b"val");
+        assert_eq!(kv.val.unwrap(), b"val");
     }
 
     #[test]
@@ -237,6 +237,6 @@ mod tests {
         let mut iter = b"\"\"=val".iter().cloned().map(io::Result::Ok);
         let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"");
-        assert_eq!(kv.val, b"val");
+        assert_eq!(kv.val.unwrap(), b"val");
     }
 }
