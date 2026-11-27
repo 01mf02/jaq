@@ -51,10 +51,9 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                     self.open_quote = true;
                     break;
                 }
-                b'"' if !quoted(&mut self.iter, kv.val.as_mut().unwrap_or(&mut kv.key))? => {
-                    continue
+                b'"' => {
+                    quoted(&mut self.iter, kv.val.as_mut().unwrap_or(&mut kv.key))?;
                 }
-                b'"' => (),
                 b'=' => kv.val = Some(Vec::new()),
                 b'\n' => {
                     self.done = true;
@@ -62,7 +61,7 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                 }
                 c if c.is_ascii_whitespace() => {
                     if kv.val.is_none() {
-                        kv.key = Vec::new()
+                        kv.key.clear();
                     } else {
                         break;
                     }
