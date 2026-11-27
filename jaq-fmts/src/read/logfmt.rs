@@ -34,24 +34,16 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
     fn quoted(&mut self) -> Result<Option<Vec<u8>>, E> {
         let mut acc = Vec::new();
         let mut escaped = false;
-        loop {
-            let Some(c) = self.iter.next().transpose()? else {
-                return Ok(None);
-            };
+        while let Some(c) = self.iter.next().transpose()? {
             match c {
-                b'\\' => {
-                    if escaped {
-                        acc.push(b'\\');
-                    }
-                    escaped = !escaped;
-                }
+                b'\\' if core::mem::take(&mut escaped) => acc.push(b'\\'),
+                b'\\' => escaped = true,
                 b'\n' => return Ok(None),
-                b'"' if !escaped => break,
-                _ => {}
+                b'"' if !escaped => return Ok(Some(acc)),
+                _ => acc.push(c),
             }
-            acc.push(c);
         }
-        Ok(Some(acc))
+        Ok(None)
     }
 
     fn field(&mut self) -> Result<Option<KeyVal>, E> {
