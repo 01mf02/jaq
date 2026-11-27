@@ -12,134 +12,169 @@ use std::rc::Rc;
 struct KeyVal {
     key: Vec<u8>,
     val: Vec<u8>,
-    eol: bool,
+    /// is the key/value pair valid
+    ok: bool,
 }
 
-fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<KeyVal>, E> {
-    let mut kv = KeyVal::default();
-    let mut acc = Vec::new();
-    let mut key = true;
-    let mut quoted = false;
-    let mut escaped = false;
+struct Reader<'a, E, I: Iterator<Item = Result<u8, E>>> {
+    iter: &'a mut I,
+    open_quote: bool,
+    done: bool,
+}
 
-    loop {
-        let Some(c) = iter.next().transpose()? else {
-            if key {
+impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
+    fn new(iter: &'a mut I) -> Self {
+        Reader {
+            iter,
+            open_quote: false,
+            done: false,
+        }
+    }
+
+    fn quoted(&mut self) -> Result<Option<Vec<u8>>, E> {
+        let mut acc = Vec::new();
+        let mut escaped = false;
+        loop {
+            let Some(c) = self.iter.next().transpose()? else {
                 return Ok(None);
-            } else {
-                break;
-            }
-        };
-
-        if escaped {
-            if c != b'"' {
-                acc.push(b'\\');
+            };
+            match c {
+                b'\\' => {
+                    if escaped {
+                        acc.push(b'\\');
+                    }
+                    escaped = !escaped;
+                }
+                b'\n' => return Ok(None),
+                b'"' if !escaped => break,
+                _ => {}
             }
             acc.push(c);
-            escaped = false;
-            continue;
+        }
+        Ok(Some(acc))
+    }
+
+    fn field(&mut self) -> Result<Option<KeyVal>, E> {
+        let mut kv = KeyVal::default();
+        let mut acc = Vec::new();
+        let mut key = true;
+
+        if self.open_quote {
+            if let Some(v) = self.quoted()? {
+                acc = v;
+            } else {
+                return Ok(None);
+            }
         }
 
-        match c {
-            b'"' => {
-                if quoted {
+        loop {
+            let Some(c) = self.iter.next().transpose()? else {
+                if key {
+                    return Ok(None);
+                } else {
+                    break;
+                }
+            };
+
+            match c {
+                b'"' => {
+                    if !key && !acc.is_empty() {
+                        // quote in value
+                        self.open_quote = true;
+                        break;
+                    } else if let Some(v) = self.quoted()? {
+                        acc = v;
+                    } else {
+                        continue;
+                    }
+                }
+                b'=' => {
+                    std::mem::swap(&mut kv.key, &mut acc);
+                    key = false;
+                }
+                b'\n' => {
+                    self.done = true;
                     if key {
-                        quoted = false;
-                        escaped = false;
+                        return Ok(Some(kv));
+                    }
+                    break;
+                }
+                c if c.is_ascii_whitespace() => {
+                    if key {
+                        acc.clear();
+                        // instead we could do:
+                        //
+                        //   std::mem::swap(&mut kv.key, &mut acc);
+                        //   return Ok(Some(kv));
+                        //
+                        // so kv.ok remains false, and handle the garbage values downstream
                     } else {
                         break;
                     }
-                } else if !key && !acc.is_empty() {
-                    break;
-                } else {
-                    acc.clear();
-                    quoted = true;
+                }
+                c => {
+                    acc.push(c);
                 }
             }
-            b'\\' if quoted => {
-                escaped = true;
-            }
-            b'=' if !quoted => {
-                std::mem::swap(&mut kv.key, &mut acc);
-                key = false;
-            }
-            b'\n' if !quoted => {
-                kv.eol = true;
-                if key {
-                    return Ok(Some(kv));
+        }
+        kv.val = acc;
+        kv.ok = true;
+        Ok(Some(kv))
+    }
+
+    /// Read single log row.
+    fn row(&mut self) -> Option<Result<Val, E>> {
+        let mut map = Map::default();
+        while !self.done {
+            let pair = match self.field() {
+                Ok(Some(pair)) => pair,
+                Ok(None) => break,
+                Err(msg) => return Some(Err(msg)),
+            };
+            if self.done && !pair.ok {
+                if map.is_empty() {
+                    self.done = false;
+                    continue;
                 }
                 break;
             }
-            _ if c.is_ascii_whitespace() => {
-                if quoted {
-                    acc.push(c);
-                } else if key {
-                    acc.clear();
-                } else {
-                    break;
-                }
-            }
-            _ => acc.push(c),
+            let key = Val::utf8_str(pair.key);
+            let val = if pair.val.is_empty() {
+                Val::Null
+            } else if pair.val == b"true" {
+                Val::Bool(true)
+            } else if pair.val == b"false" {
+                Val::Bool(false)
+            } else if let Some(num) = parse_single_num(&pair.val) {
+                Val::Num(num)
+            } else {
+                Val::utf8_str(pair.val)
+            };
+            map.insert(key, val);
         }
-    }
-    kv.val = acc;
-    Ok(Some(kv))
-}
-
-/// Read single table row.
-fn row<E, I: Iterator<Item = Result<u8, E>>>(iter: &mut I) -> Option<Result<Val, E>> {
-    let mut map = Map::default();
-    loop {
-        let pair = match field(iter) {
-            Ok(Some(pair)) => pair,
-            Ok(None) => break,
-            Err(msg) => return Some(Err(msg)),
-        };
-        if pair.eol && pair.key.is_empty() {
-            if map.is_empty() {
-                continue;
-            }
-            break;
+        if map.is_empty() {
+            return None;
         }
-        let key = Val::utf8_str(pair.key);
-        let val = if pair.val.is_empty() {
-            Val::Null
-        } else if pair.val == b"true" {
-            Val::Bool(true)
-        } else if pair.val == b"false" {
-            Val::Bool(false)
-        } else if let Some(num) = parse_single_num(&pair.val) {
-            Val::Num(num)
-        } else {
-            Val::utf8_str(pair.val)
-        };
-        map.insert(key, val);
-        if pair.eol {
-            break;
-        }
+        Some(Ok(Val::Obj(Rc::new(map))))
     }
-    if map.is_empty() {
-        return None;
-    }
-    Some(Ok(Val::Obj(Rc::new(map))))
 }
 
 /// Read rows of a logfmt file.
 pub fn read_logfmt<E>(
     mut iter: impl Iterator<Item = Result<u8, E>>,
 ) -> impl Iterator<Item = Result<Val, E>> {
-    core::iter::from_fn(move || row(&mut iter))
+    core::iter::from_fn(move || Reader::new(&mut iter).row())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::field;
+    use super::Reader;
     use std::io;
 
     #[test]
     fn simple() {
         let mut iter = b"the_key=val".iter().cloned().map(io::Result::Ok);
-        let kv = field(&mut iter).unwrap().unwrap();
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"the_key");
         assert_eq!(kv.val, b"val");
     }
@@ -147,7 +182,7 @@ mod tests {
     #[test]
     fn with_spaces() {
         let mut iter = b"\t\t   key=val \t\t  ".iter().cloned().map(io::Result::Ok);
-        let kv = field(&mut iter).unwrap().unwrap();
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"key");
         assert_eq!(kv.val, b"val");
     }
@@ -158,7 +193,7 @@ mod tests {
             .iter()
             .cloned()
             .map(io::Result::Ok);
-        let kv = field(&mut iter).unwrap().unwrap();
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"PI");
         assert_eq!(kv.val, b"3.1415");
     }
@@ -169,7 +204,7 @@ mod tests {
             .iter()
             .cloned()
             .map(io::Result::Ok);
-        let kv = field(&mut iter).unwrap().unwrap();
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"message");
         assert_eq!(kv.val, b"hello, world!");
     }
@@ -177,7 +212,7 @@ mod tests {
     #[test]
     fn quoted_key() {
         let mut iter = b"\"first name\"=Tim".iter().cloned().map(io::Result::Ok);
-        let kv = field(&mut iter).unwrap().unwrap();
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"first name");
         assert_eq!(kv.val, b"Tim");
     }
@@ -188,8 +223,28 @@ mod tests {
             .iter()
             .cloned()
             .map(io::Result::Ok);
-        let kv = field(&mut iter).unwrap().unwrap();
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
         assert_eq!(kv.key, b"key");
+        assert_eq!(kv.val, b"val");
+    }
+
+    #[test]
+    fn missing_spaces() {
+        // edge case: quoted fields are mixed with non-quoted and delimiting spaces are missing
+        let mut iter = b"\"key1\"=val1\"key2\"=val2"
+            .iter()
+            .cloned()
+            .map(io::Result::Ok);
+        let row = Reader::new(&mut iter).row().unwrap().unwrap();
+        assert_eq!(row.to_string(), "{\"key1\":\"val1\",\"key2\":\"val2\"}")
+    }
+
+    #[test]
+    fn empty_key() {
+        // edge case
+        let mut iter = b"\"\"=val".iter().cloned().map(io::Result::Ok);
+        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        assert_eq!(kv.key, b"");
         assert_eq!(kv.val, b"val");
     }
 }
