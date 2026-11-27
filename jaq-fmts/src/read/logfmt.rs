@@ -5,14 +5,15 @@
 //! https://grafana.com/docs/loki/latest/query/log_queries/#logfmt
 //! https://docs.appsignal.com/logging/formatting/logfmt
 
-use jaq_json::{read::parse_single_num, Map, Val};
-use std::rc::Rc;
+use jaq_json::{read::parse_single_num, Val};
 
 #[derive(Default)]
 struct KeyVal {
     key: Vec<u8>,
     val: Option<Vec<u8>>,
 }
+
+type Row = Vec<KeyVal>;
 
 struct Reader<'a, E, I: Iterator<Item = Result<u8, E>>> {
     iter: &'a mut I,
@@ -73,8 +74,8 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
     }
 
     /// Read single log row.
-    fn row(&mut self) -> Option<Result<Val, E>> {
-        let mut map = Map::default();
+    fn row(&mut self) -> Option<Result<Row, E>> {
+        let mut row = Vec::new();
         while !self.done {
             let pair = match self.field() {
                 Ok(Some(pair)) => pair,
@@ -82,21 +83,18 @@ impl<'a, E, I: Iterator<Item = Result<u8, E>>> Reader<'a, E, I> {
                 Err(msg) => return Some(Err(msg)),
             };
             if self.done && pair.val.is_none() {
-                if map.is_empty() {
+                if row.is_empty() {
                     self.done = false;
                     continue;
                 }
                 break;
             }
-            let key = Val::utf8_str(pair.key);
-            // TODO: what to do if val is None here?
-            let val = parse_val(pair.val.unwrap());
-            map.insert(key, val);
+            row.push(pair);
         }
-        if map.is_empty() {
+        if row.is_empty() {
             return None;
         }
-        Some(Ok(Val::Obj(Rc::new(map))))
+        Some(Ok(row))
     }
 }
 
@@ -133,7 +131,14 @@ fn parse_val(val: Vec<u8>) -> Val {
 pub fn read_logfmt<E>(
     mut iter: impl Iterator<Item = Result<u8, E>>,
 ) -> impl Iterator<Item = Result<Val, E>> {
-    core::iter::from_fn(move || Reader::new(&mut iter).row())
+    let from_pair = |pair: KeyVal| {
+        let key = Val::utf8_str(pair.key);
+        // TODO: what to do if val is None here?
+        let val = parse_val(pair.val.unwrap());
+        (key, val)
+    };
+    let from_row = move |row: Row| Val::obj(row.into_iter().map(from_pair).collect());
+    core::iter::from_fn(move || Reader::new(&mut iter).row().map(|row| row.map(from_row)))
 }
 
 #[cfg(test)]
@@ -198,7 +203,13 @@ mod tests {
         // edge case: quoted fields are mixed with non-quoted and delimiting spaces are missing
         let input = b"\"key1\"=val1\"key2\"=val2";
         let row = Reader::new(&mut chars(input)).row().unwrap().unwrap();
-        assert_eq!(row.to_string(), "{\"key1\":\"val1\",\"key2\":\"val2\"}")
+        let mut kvs = row.into_iter();
+        let kv = kvs.next().unwrap();
+        assert_eq!(kv.key, b"key1");
+        assert_eq!(kv.val.unwrap(), b"val1");
+        let kv = kvs.next().unwrap();
+        assert_eq!(kv.key, b"key2");
+        assert_eq!(kv.val.unwrap(), b"val2");
     }
 
     #[test]
