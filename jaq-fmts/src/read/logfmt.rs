@@ -82,7 +82,7 @@ fn field<E>(iter: &mut impl Iterator<Item = Result<u8, E>>) -> Result<Option<Key
             _ => acc.push(c),
         }
     }
-    std::mem::swap(&mut kv.val, &mut acc);
+    kv.val = acc;
     Ok(Some(kv))
 }
 
