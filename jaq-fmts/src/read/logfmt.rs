@@ -141,59 +141,54 @@ mod tests {
     use super::Reader;
     use std::io;
 
+    fn chars(s: &[u8]) -> impl Iterator<Item = io::Result<u8>> + '_ {
+        s.iter().cloned().map(io::Result::Ok)
+    }
+
     #[test]
     fn simple() {
-        let mut iter = b"the_key=val".iter().cloned().map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b"the_key=val";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"the_key");
         assert_eq!(kv.val.unwrap(), b"val");
     }
 
     #[test]
     fn with_spaces() {
-        let mut iter = b"\t\t   key=val \t\t  ".iter().cloned().map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b"\t\t   key=val \t\t  ";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"key");
         assert_eq!(kv.val.unwrap(), b"val");
     }
 
     #[test]
     fn with_garbage() {
-        let mut iter = b" \"not this\"  WRONG PI=3.1415 also_incorrect  "
-            .iter()
-            .cloned()
-            .map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b" \"not this\"  WRONG PI=3.1415 also_incorrect  ";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"PI");
         assert_eq!(kv.val.unwrap(), b"3.1415");
     }
 
     #[test]
     fn quoted_value() {
-        let mut iter = b"message=\"hello, world!\""
-            .iter()
-            .cloned()
-            .map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b"message=\"hello, world!\"";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"message");
         assert_eq!(kv.val.unwrap(), b"hello, world!");
     }
 
     #[test]
     fn quoted_key() {
-        let mut iter = b"\"first name\"=Tim".iter().cloned().map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b"\"first name\"=Tim";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"first name");
         assert_eq!(kv.val.unwrap(), b"Tim");
     }
 
     #[test]
     fn mixed_quotes() {
-        let mut iter = b"WRONG\"key\"=val\"INCORRECT\""
-            .iter()
-            .cloned()
-            .map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b"WRONG\"key\"=val\"INCORRECT\"";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"key");
         assert_eq!(kv.val.unwrap(), b"val");
     }
@@ -201,19 +196,16 @@ mod tests {
     #[test]
     fn missing_spaces() {
         // edge case: quoted fields are mixed with non-quoted and delimiting spaces are missing
-        let mut iter = b"\"key1\"=val1\"key2\"=val2"
-            .iter()
-            .cloned()
-            .map(io::Result::Ok);
-        let row = Reader::new(&mut iter).row().unwrap().unwrap();
+        let input = b"\"key1\"=val1\"key2\"=val2";
+        let row = Reader::new(&mut chars(input)).row().unwrap().unwrap();
         assert_eq!(row.to_string(), "{\"key1\":\"val1\",\"key2\":\"val2\"}")
     }
 
     #[test]
     fn empty_key() {
         // edge case
-        let mut iter = b"\"\"=val".iter().cloned().map(io::Result::Ok);
-        let kv = Reader::new(&mut iter).field().unwrap().unwrap();
+        let input = b"\"\"=val";
+        let kv = Reader::new(&mut chars(input)).field().unwrap().unwrap();
         assert_eq!(kv.key, b"");
         assert_eq!(kv.val.unwrap(), b"val");
     }
